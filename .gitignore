@@ -1,10 +1,14 @@
 node_modules/
-dist/
+/dist/
 *.log
 .zerokit/
 # Tauri 构建产物
 apps/desktop/src-tauri/target/
-apps/desktop/dist/
-# Tauri 由 tauri-build 生成，不入库
+# 注意：apps/desktop/dist/ **不是**构建产物，是手写的「正在启动内核…」占位页，
+# 由 tauri.conf.json 的 frontendDist 直接指向。原来这里写的是没有前导斜杠的
+# `dist/`，那条规则匹配任意层级，把它一并忽略了——后果是**新 clone 下来构建不了
+# 原生壳**（frontendDist 指向一个不存在的目录，Tauri 会直接构建失败）。
+# 所以这里锚定到根目录：`/dist/`。
+# tauri-build 自己生成的只有 gen/schemas/：
 apps/desktop/src-tauri/gen/schemas/
 .cdp-profile-*/

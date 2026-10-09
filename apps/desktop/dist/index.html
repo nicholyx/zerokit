@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>zerokit</title>
+<style>
+  html, body {
+    margin: 0; height: 100%;
+    background: #0e1013; color: #8b93a1;
+    font: 14px system-ui, "Microsoft YaHei", sans-serif;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .box { text-align: center; }
+  .dot {
+    width: 10px; height: 10px; border-radius: 50%; background: #5aa9ff;
+    display: inline-block; margin-right: 8px; animation: pulse 1s infinite alternate;
+  }
+  @keyframes pulse { from { opacity: .35 } to { opacity: 1 } }
+</style>
+</head>
+<body>
+  <!-- 这个文件只在「内核还没起来」时短暂显示。窗口真正加载的是本地内核的地址。 -->
+  <div class="box"><span class="dot"></span>正在启动 zerokit 内核…</div>
+</body>
+</html>
