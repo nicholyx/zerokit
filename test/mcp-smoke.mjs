@@ -1,12 +1,33 @@
 // 裸 JSON-RPC 客户端：不依赖 MCP SDK，直接走 stdio 协议。
 // 目的是独立验证「任何 AI 客户端都能拉起这个 server」这件事，
 // 而不是只验证 SDK 和 SDK 之间能通。
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+// 自包含准备：临时数据目录 + 预装示例插件。
+// 原来直接继承真实环境的 ~/.zerokit——本机装过插件就能过，CI 的全新
+// runner 上它是空的，tools/list 于是返回空工具列表（实测踩过）。
+const ROOT = path.resolve(import.meta.dirname, '..');
+const TMP_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'zerokit-mcp-smoke-'));
+const setup = spawnSync(process.execPath, ['src/cli.ts', 'plugin', 'bundled'], {
+  cwd: ROOT,
+  env: { ...process.env, ZEROKIT_HOME: TMP_HOME },
+  encoding: 'utf8', timeout: 60000, windowsHide: true,
+});
+if (setup.status !== 0) {
+  console.log('FAIL  准备临时数据目录失败：'
+    + `${setup.stderr || setup.stdout || ''}`.trim().slice(0, 300));
+  console.log(`\n${'='.repeat(60)}\n通过 0 / 1`);
+  process.exit(1);
+}
 
 const serverPath = process.argv[2];
 const child = spawn(process.execPath, [serverPath, 'serve'], {
   stdio: ['pipe', 'pipe', 'pipe'],
   windowsHide: true,
+  env: { ...process.env, ZEROKIT_HOME: TMP_HOME },
 });
 
 let stdoutBuf = '';
@@ -132,6 +153,7 @@ try {
   fail('异常：' + e.message);
 } finally {
   child.kill('SIGKILL');
+  fs.rmSync(TMP_HOME, { recursive: true, force: true });
   // 日志只应出现在 stderr；需要看的话加 ZEROKIT_VERBOSE=1
   if (stderrOut.trim() && process.env['ZEROKIT_VERBOSE']) {
     console.log('\n--- server stderr ---');
