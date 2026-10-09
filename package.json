@@ -14,7 +14,7 @@
   "scripts": {
     "zkit": "node src/cli.ts",
     "mcp": "node src/mcp.ts",
-    "test": "node --test test/",
+    "test": "node scripts/test-all.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

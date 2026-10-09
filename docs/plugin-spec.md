@@ -44,7 +44,7 @@ plugins/jlc-proxy/
 | `description` | | 长说明 |
 | `keywords` | | 字符串数组。同时供模糊搜索和模型判断 |
 | `author` / `homepage` / `license` | | 元信息 |
-| `runtime` | | `spawn`（默认，起子进程，最通用）或 `worker`（见下） |
+| `runtime` | | `spawn`（默认，起子进程，最通用）、`worker`（node 快 5 倍）、`host`（常驻解释器，python 快 21 倍）。见下 |
 
 ### `runtime = "worker"`：让 node 插件快 5 倍
 
@@ -69,8 +69,33 @@ const data = fs.readFileSync('./data.json');   // ❌ worker 下会找不到
 不满足条件时（不是 node、不是 .js 文件、脚本不存在）会自动退回子进程，
 不会因此失败。所以开它是安全的，只是要注意上面那条相对路径的约定。
 
-> 其它语言（python 等）暂时用不上这条路——worker 是 Node 特有的。
-> 要让它们也快起来得做「常驻 host」，那需要插件配合一个协议，还没做。
+> 其它语言（python 等）用不上 worker——它是 Node 特有的。它们走下面的 `host`。
+
+### `runtime = "host"`：让 python 插件快 21 倍
+
+```toml
+[plugin]
+runtime = "host"      # 只对「用 {python} 跑一个 .py 文件」的动作生效
+```
+
+`host` 是一个**常驻解释器**：脚本在同一个 python 进程里被反复执行，所以解释器
+启动和 `import` 的成本只付一次。实测 `proxy.py status` 从 **476ms → 22ms**。
+
+原理是「同一个进程里反复 exec」：每次执行用全新的 `globals`（模块级变量不跨调用串味），
+但 `sys.modules` 保留（这正是快的来源）。执行前会把脚本所在目录放进 `sys.path[0]`，
+所以插件 `import` 自己的同级模块和 `python script.py` 行为一致。
+
+**代价得说清楚**，所以它是显式选择而不是自动优化：
+
+- 模块级状态在多次调用之间**会保留**（`import` 的模块是同一个）
+- 脚本**不能读 stdin**（那条通道被协议占了）
+- 不能用 `os.write(1, ...)` 直接写文件描述符（会污染协议）
+- `os.chdir` 会改变宿主的工作目录（每次调用前会重新 `chdir` 回去）
+
+只适合**无状态的一次性任务**。常驻宿主会出现在「运行中」里（可查看、可结束），
+空闲 5 分钟自动退出。一次性的 CLI 调用不会启用它——那种场景宿主的冷启动反而更慢。
+
+不满足条件时同样自动退回 `spawn`。
 
 > `id` 为什么必须是 ASCII：MCP 规范要求工具名匹配 `^[A-Za-z0-9._-]{1,128}$`，
 > 而工具名是 `<id>__<action id>` 拼出来的。中文请放 `name`。
@@ -251,6 +276,7 @@ cwd         = "D:/software/proxy"
 | `{plugin_dir}` | 插件目录的绝对路径 |
 | `{data_dir}` | 插件私有的持久化目录（跨更新保留） |
 | `{home}` | zerokit 数据根目录 |
+| `{kit}` | zerokit 自身的安装根目录（用来定位随内核分发的辅助脚本，例如 uTools 兼容层的运行时） |
 
 参数占位符用参数名，例如 `{domain}`。
 
@@ -304,6 +330,45 @@ risk   = "read"
 **2. 跑本地命令（`type = "exec"`）** —— 任意语言，通过 stdout 交流。
 
 **3. 带网页（可选 `web/index.html`）** —— 需要富交互时用，启动器会打开页面而不是结果卡片。
+
+**4. uTools 插件（零改造接入）** —— 见下一节。
+
+## uTools 插件兼容
+
+目录里有 `plugin.json` 且带 `pluginName` / `features` 的，会被**自动识别**并就地翻译成
+zerokit 的清单（只读，不写你的目录）。丢进插件目录即可，不需要先转格式。
+
+翻译的是 uTools 那份干净的部分——`features[].cmds`：
+
+| uTools `cmds` 写法 | 翻成 | 说明 |
+|---|---|---|
+| `"关键字"` | 关键字 | 进搜索索引，**自动支持拼音首字母** |
+| `"regex:^\\d+$"` | `regex` 匹配 | 直接搬正则 |
+| `{ "type": "over" }` | `text` 匹配 | 划词/选中文本 |
+| `{ "type": "files" }` | `files` 匹配 | `fileType: image` 会转成扩展名白名单 |
+| `{ "type": "img" }` | 仅关键字 | 我们没有图片输入，会给出警告 |
+| `{ "type": "window" }` | 不支持 | 依赖 OS 级能力，会给出警告 |
+
+运行时由 `src/core/utools-runtime.mjs` 提供 `utools.*` 全局。**复刻的是无界面也能完成的那部分**：
+
+- 生命周期：`onPluginEnter` / `onPluginReady` / `onPluginOut` / `outPlugin` / `hideMainWindow`
+- 输出：`showNotification` / `showMessageBox` —— 映射到 **stdout**（CLI 直接看到、启动器渲染成结果卡片、MCP 客户端拿到文本）
+- 存储：`dbStorage`（get/set/remove）、`db`（put/get/remove/allDocs）→ 落在插件的 `{data_dir}`
+- 系统：`shellOpenExternal` / `shellOpenPath` / `copyText` / `getPath` / `isWindows|MacOS|Linux`
+- 降级：`setSubInput` 系列（没有 UI，退化成"直接给值并走一遍回调"）
+
+**明确没有的**（被调用时抛的是"这依赖 uTools 本体"这种能看懂的错）：
+
+- 一切 Electron 窗口/视图：`createBrowserWindow` / `getCurrentWindow` / `redirect` …
+- OS 级能力：`simulateKeyboardTap` / `getCursorScreenPoint` / 读活动窗口
+- **渲染进程**：没有 `document` / `window` 的 DOM。碰到 `document.body.innerHTML = …`
+  这类写法会得到一个说清楚原因的错误，而不是静默失败或 `undefined is not a function`
+
+代价要说白：**纯界面型的 uTools 插件在这里跑不出结果**。适配层服务的是"命令型"插件
+（读输入 → 算 → 给结果），这也是能映射到 CLI / MCP 的那一类。
+
+另外，翻译出来的动作 `risk` 一律是 `mutate`——跑的是第三方插件的任意代码，
+默认"首次执行需确认"是唯一诚实的默认值。
 
 ## 四个面怎么派生
 

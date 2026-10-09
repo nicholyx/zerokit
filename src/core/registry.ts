@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { type Plugin, loadPlugin } from './manifest.ts';
 import { BUNDLED_PLUGINS_DIR, PLUGINS_DIR, ensureDirs } from './paths.ts';
+import { adaptUtoolsPlugin, looksLikeUtoolsPlugin } from './utools.ts';
 
 /** 插件发现与装卸。插件就是 PLUGINS_DIR 下的一个个目录，目录即插件、复制即迁移。 */
 
@@ -13,6 +14,21 @@ export interface PluginEntry {
   warnings: string[];
 }
 
+/**
+ * 加载一个插件目录。
+ *
+ * 先按原生格式找 plugin.toml；没有的话看它是不是 uTools 插件（有 plugin.json
+ * 且带 uTools 标志字段），是就地**翻译**成 zerokit 的清单。翻译在内存里完成，
+ * 不写任何文件，所以既不用用户先转格式，也不污染别人的仓库——删掉目录就等于卸载。
+ */
+export function loadDir(dir: string) {
+  const native = loadPlugin(dir);
+  if (native.plugin || !looksLikeUtoolsPlugin(dir)) return native;
+  const adapted = adaptUtoolsPlugin(dir);
+  // 适配的问题也是问题：原样带出去，让 zkit doctor / 启动器能显示出来
+  return adapted;
+}
+
 export function listPlugins(): PluginEntry[] {
   ensureDirs();
   if (!fs.existsSync(PLUGINS_DIR)) return [];
@@ -20,7 +36,9 @@ export function listPlugins(): PluginEntry[] {
   for (const name of fs.readdirSync(PLUGINS_DIR).sort()) {
     const dir = path.join(PLUGINS_DIR, name);
     if (!fs.statSync(dir).isDirectory()) continue;
-    const result = loadPlugin(dir);
+    // 忽略安装过程中的临时目录（.tmp-xxx / .tmp-pack-xxx）
+    if (name.startsWith('.tmp-')) continue;
+    const result = loadDir(dir);
     const entry: PluginEntry = { dir, errors: result.errors, warnings: result.warnings };
     if (result.plugin) entry.plugin = result.plugin;
     entries.push(entry);
@@ -70,14 +88,19 @@ export interface AddResult {
   warnings: string[];
 }
 
-/** 从本地目录安装插件 */
+/** 从本地目录安装插件（原生 plugin.toml 或 uTools plugin.json 都收） */
 export function addFromDir(source: string): AddResult {
   ensureDirs();
   const abs = path.resolve(source);
-  if (!fs.existsSync(path.join(abs, 'plugin.toml'))) {
-    return { ok: false, message: `${abs} 下没有 plugin.toml`, warnings: [] };
+  const utools = looksLikeUtoolsPlugin(abs);
+  if (!fs.existsSync(path.join(abs, 'plugin.toml')) && !utools) {
+    return {
+      ok: false,
+      message: `${abs} 下既没有 plugin.toml，也不像 uTools 插件（缺 plugin.json）`,
+      warnings: [],
+    };
   }
-  const result = loadPlugin(abs);
+  const result = loadDir(abs);
   if (!result.plugin) {
     return { ok: false, message: `清单校验没通过：\n  - ${result.errors.join('\n  - ')}`, warnings: result.warnings };
   }
@@ -86,7 +109,8 @@ export function addFromDir(source: string): AddResult {
     return { ok: false, message: `插件 "${result.plugin.id}" 已存在，先 zkit plugin remove ${result.plugin.id}`, warnings: result.warnings };
   }
   fs.cpSync(abs, dst, { recursive: true });
-  return { ok: true, id: result.plugin.id, dir: dst, message: `已安装 ${result.plugin.name}`, warnings: result.warnings };
+  const note = utools ? '（按 uTools 插件兼容运行）' : '';
+  return { ok: true, id: result.plugin.id, dir: dst, message: `已安装 ${result.plugin.name}${note}`, warnings: result.warnings };
 }
 
 /** 从 git 仓库安装（信任边界之外，装完必须让人确认） */

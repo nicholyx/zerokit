@@ -1,7 +1,42 @@
 {
-  "name": "zerokit 官方集市",
-  "description": "zerokit 自带的示例插件",
+  "name": "zerokit",
+  "description": "",
   "plugins": [
+    {
+      "id": "clipboard",
+      "name": "剪贴板历史",
+      "summary": "记录剪贴板历史，可搜索、可把旧内容放回剪贴板，后台常驻监听",
+      "version": "1.0.0",
+      "tags": [
+        "剪贴板",
+        "clipboard",
+        "历史",
+        "history",
+        "复制",
+        "粘贴",
+        "clip",
+        "粘贴板"
+      ],
+      "source": "path:plugins/clipboard"
+    },
+    {
+      "id": "filesearch",
+      "name": "文件搜索",
+      "summary": "给指定目录建一份文件名索引，之后按文件名或路径秒级查找，并可定位到文件",
+      "version": "1.0.0",
+      "tags": [
+        "搜索",
+        "文件",
+        "文件名",
+        "查找",
+        "检索",
+        "定位",
+        "find",
+        "filesearch",
+        "everything"
+      ],
+      "source": "path:plugins/filesearch"
+    },
     {
       "id": "ip",
       "name": "出口 IP",
@@ -30,6 +65,22 @@
         "出网"
       ],
       "source": "path:plugins/jlc-proxy"
+    },
+    {
+      "id": "quick",
+      "name": "小工具",
+      "summary": "认出你粘进来的东西：链接、时间戳、颜色、Base64 文本",
+      "version": "1.0.0",
+      "tags": [
+        "工具",
+        "转换",
+        "链接",
+        "时间戳",
+        "颜色",
+        "base64",
+        "quick"
+      ],
+      "source": "path:plugins/quick"
     },
     {
       "id": "sysinfo",
