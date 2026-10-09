@@ -10,6 +10,7 @@ import {
   addFromDir, addFromGit, exportPlugin, importPlugin, installBundled,
   listPlugins, removePlugin, requirePlugin,
 } from './core/registry.ts';
+import { applyUpdate, checkUpdate, listUpdateStates } from './core/update.ts';
 import { checkRequires, resolveTool } from './core/resolve.ts';
 import { killAllProcesses, killProcess, listProcesses } from './core/runtime.ts';
 import { listServices, stopService } from './core/services.ts';
@@ -52,6 +53,7 @@ ${c.bold('基本')}
 ${c.bold('插件')}
   plugin install <插件id>     从集市安装（会先摊开它的全部能力让你确认）
   plugin add <目录|git地址>   从本地目录或 git 仓库安装
+  plugin update [插件]        列出可更新的；带插件 id 则检查并更新（来源处拉新版）
   plugin remove <插件>        卸载
   plugin bundled              安装仓库自带的示例插件
   plugin export <插件>        打包成单个 .toolpack 文件
@@ -313,6 +315,68 @@ async function cmdRun(args: string[]): Promise<number> {
   return result.ok ? 0 : 1;
 }
 
+/**
+ * zkit plugin update [id]：不带 id 列出全部插件的可更新状态，带 id 则检查并更新。
+ *
+ * 更新 = 从当初的安装来源拉新版替换目录。替换前把「版本变化 + 动作增删」
+ * 摊开让人确认——更新本质上和装一个新插件一样，能力面变了就该再看一眼。
+ */
+async function cmdPluginUpdate(args: string[]): Promise<number> {
+  const id = args.find((a) => !a.startsWith('-'));
+  const yes = args.includes('--yes');
+
+  if (!id) {
+    const list = listUpdateStates();
+    process.stdout.write(c.bold(`已装 ${list.length} 个插件：\n`));
+    for (const u of list) {
+      const state = u.available
+        ? c.yellow(`有更新（来源处是 ${u.latest ?? '?'}）`)
+        : c.dim(u.reason ?? '已是最新');
+      process.stdout.write(`  ${pad(u.id, 16)} ${pad('v' + u.current, 12)} ${pad(u.sourceText, 30)} ${state}\n`);
+    }
+    process.stdout.write(c.dim('\n检查并更新某一个：zkit plugin update <插件id>\n'));
+    return 0;
+  }
+
+  const check = checkUpdate(id);
+  if (!check.source) {
+    process.stderr.write(c.red(`✗ ${id}：${check.reason ?? '无法更新'}\n`));
+    return 1;
+  }
+  process.stdout.write(`${c.bold(check.name)} ${c.dim(id)}  ${check.sourceText}\n`);
+  process.stdout.write(`  当前版本 v${check.current}\n`);
+  if (!check.available) {
+    process.stdout.write(c.green(`✓ ${check.reason ?? '已是最新版本'}\n`));
+    return 0;
+  }
+  process.stdout.write(`  最新版本 ${c.bold('v' + (check.latest ?? '?'))}\n`);
+  if (check.addedActions.length > 0) {
+    process.stdout.write(c.green(`  新增动作：${check.addedActions.join(', ')}\n`));
+  }
+  if (check.removedActions.length > 0) {
+    process.stdout.write(c.yellow(`  移除动作：${check.removedActions.join(', ')}\n`));
+  }
+  process.stdout.write(c.dim('  插件目录会被整体替换；持久数据放在数据目录里不受影响。\n'));
+
+  if (!yes) {
+    if (!process.stdin.isTTY) {
+      process.stderr.write(c.red('✗ 更新会替换插件代码，非交互环境需要 --yes 确认。\n'));
+      return 1;
+    }
+    process.stderr.write('继续更新？(y/N) ');
+    const answer = await readLine();
+    if (!/^y(es)?$/i.test(answer.trim())) {
+      process.stderr.write('已取消。\n');
+      return 1;
+    }
+  }
+
+  const result = applyUpdate(id);
+  for (const w of result.warnings) process.stderr.write(c.yellow(`! ${w}`) + '\n');
+  process.stdout.write(result.ok ? c.green(`✓ ${result.message}\n`) : c.red(`✗ ${result.message}\n`));
+  return result.ok ? 0 : 1;
+}
+
 async function cmdPlugin(args: string[]): Promise<number> {
   const sub = args[0];
   if (sub === 'bundled') {
@@ -342,7 +406,10 @@ async function cmdPlugin(args: string[]): Promise<number> {
       && (/^(https?:\/\/|git@)/.test(source) || /^[\w.-]+\/[\w.-]+$/.test(source));
     const result = isGit
       ? addFromGit(/^[\w.-]+\/[\w.-]+$/.test(source) ? `https://github.com/${source}.git` : source)
-      : addFromDir(source);
+      : addFromDir(source, {
+        // 本地目录也记来源：update 时如实提示「去源目录改完重新 add」而不是瞎猜
+        source: { type: 'dir', installedAt: new Date().toISOString(), installedVersion: '' },
+      });
     for (const w of result.warnings) process.stderr.write(c.yellow(`! ${w}`) + '\n');
     process.stdout.write(result.ok ? c.green(`✓ ${result.message}\n`) : c.red(`✗ ${result.message}\n`));
     if (result.ok && result.id) {
@@ -378,6 +445,9 @@ async function cmdPlugin(args: string[]): Promise<number> {
   if (sub === 'install') {
     return cmdPluginInstall(args.slice(1));
   }
+  if (sub === 'update' || sub === 'outdated') {
+    return cmdPluginUpdate(args.slice(1));
+  }
   if (sub === 'import') {
     const file = args[1];
     if (!file) {
@@ -389,7 +459,7 @@ async function cmdPlugin(args: string[]): Promise<number> {
     process.stdout.write(result.ok ? c.green(`✓ ${result.message}\n`) : c.red(`✗ ${result.message}\n`));
     return result.ok ? 0 : 1;
   }
-  process.stderr.write('用法：zkit plugin <install|add|remove|bundled|export|import>\n');
+  process.stderr.write('用法：zkit plugin <install|add|update|remove|bundled|export|import>\n');
   return 2;
 }
 

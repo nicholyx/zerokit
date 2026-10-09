@@ -259,7 +259,7 @@ export function previewInstall(pluginId: string, marketName?: string): InstallPr
   };
 }
 
-export function installFromMarket(pluginId: string, marketName?: string): AddResult {
+export function installFromMarket(pluginId: string, marketName?: string, opts: { replace?: boolean } = {}): AddResult {
   const preview = previewInstall(pluginId, marketName);
   if (!preview) return { ok: false, message: `所有集市里都没有插件 "${pluginId}"`, warnings: [] };
   if (!preview.load.plugin || !preview.dir) {
@@ -269,7 +269,16 @@ export function installFromMarket(pluginId: string, marketName?: string): AddRes
       warnings: preview.load.warnings,
     };
   }
-  const result = addFromDir(preview.dir);
+  // 记下来源（哪个集市）：以后 plugin update 就是「refresh 后按集市索引重装」
+  const result = addFromDir(preview.dir, {
+    replace: opts.replace,
+    source: {
+      type: 'market',
+      market: preview.market,
+      installedAt: new Date().toISOString(),
+      installedVersion: preview.load.plugin.version,
+    },
+  });
   if (result.ok && result.id) {
     // 存一份安装时的清单快照，之后被改动可以发现（对应 rug pull 风险）
     try {
