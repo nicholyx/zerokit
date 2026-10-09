@@ -20,6 +20,13 @@
   `sysinfo` 的进程列表支持 BSD ps（macOS 按内存排序，应用名提取不再截断）。
 - http 动作的网络错误在检测到代理环境变量时附一句说明（Node 内置 fetch
   不走 `http_proxy`/`https_proxy`，直连失败时提示先 `unset`）。
+- 插件更新：安装时记录来源（git / 集市 / 自带 / 本地目录），`zkit plugin
+  update [id]` 检查并更新——版本变化与**动作增删**摊开确认后替换安装（备份式，
+  失败回滚；插件数据目录不受影响）。本地 HTTP 面同步提供 `/api/plugin/install`
+  （能力摊开 + 确认令牌）、`/api/plugin/check`、`/api/plugin/update`。
+- 动作执行时给插件注入 `ZEROKIT_PLUGIN_DATA_DIR` / `ZEROKIT_HOME` 环境变量
+  （`{data_dir}` 占位符的环境变量等价物）；`proxy` 示例的配置与日志迁到数据目录，
+  老位置自动兼容沿用。
 - GitHub 项目基建：CI（测试矩阵 / 工作流静态检查 / 提交规范 / 安全扫描）、
   Issue 与 PR 模板、Dependabot、自动打标、Stale 清理、OSSF Scorecard。
 - 治理文件：LICENSE（MIT）、CONTRIBUTING、CODE_OF_CONDUCT、SECURITY、MAINTAINERS。

@@ -300,6 +300,9 @@ cwd         = "D:/software/proxy"
 
 参数占位符用参数名，例如 `{domain}`。
 
+不想改 argv 的脚本也可以读环境变量（动作执行时内核会注入）：
+`ZEROKIT_PLUGIN_DATA_DIR`（等价 `{data_dir}`）与 `ZEROKIT_HOME`（等价 `{home}`）。
+
 两条细则：
 
 - 若一个元素**整体**就是 `{可选参数}` 且该参数没给值，**整个元素会被丢掉**，
