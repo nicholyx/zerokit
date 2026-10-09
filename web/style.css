@@ -74,6 +74,14 @@ button.ghost:hover { color: var(--fg); border-color: #364050; }
   position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
   color: #55606e; font-size: 11px;
 }
+.clip-btn {
+  position: absolute; right: 46px; top: 50%; transform: translateY(-50%);
+  font-size: 11.5px;
+}
+
+/* 智能匹配的条目：左边的竖条换色，一眼看出"这条是它认出了内容" */
+.item.smart { border-left: 3px solid var(--accent); }
+.badge.smart-badge { color: var(--accent); border-color: #2b4a6b; }
 
 /* ---------------- 列表 ---------------- */
 main { flex: 1; overflow-y: auto; margin-top: 14px; }

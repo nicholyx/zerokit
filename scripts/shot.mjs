@@ -94,7 +94,23 @@ try {
     }
   };
 
-  await send('Page.enable');
+  // 页面里的异常一定要打出来：模块求值阶段抛错会让整页静默变白，
+// 只看截图会以为"没渲染"，其实是有报错。这个坑踩过。
+const pageErrors = [];
+ws.addEventListener('message', (ev) => {
+  try {
+    const msg = JSON.parse(ev.data);
+    if (msg.method === 'Runtime.exceptionThrown') {
+      const d = msg.params?.exceptionDetails;
+      pageErrors.push(d?.exception?.description ?? d?.text ?? '未知异常');
+    } else if (msg.method === 'Runtime.consoleAPICalled' && msg.params?.type === 'error') {
+      pageErrors.push((msg.params.args ?? []).map((a) => a.value ?? a.description ?? '').join(' '));
+    }
+  } catch { /* 忽略 */ }
+});
+
+await send('Runtime.enable');
+await send('Page.enable');
   await send('Emulation.setDeviceMetricsOverride', {
     width: Number(width), height: Number(height), deviceScaleFactor: 1, mobile: false,
   });
@@ -116,7 +132,13 @@ try {
     }
   }
 
-  const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
+  if (pageErrors.length > 0) {
+  console.error('页面里有 ' + pageErrors.length + ' 条错误：');
+  for (const e of pageErrors.slice(0, 5)) console.error('  ' + String(e).split('\n')[0].slice(0, 200));
+  process.exitCode = 1;
+}
+
+const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
   fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true });
   fs.writeFileSync(out, Buffer.from(shot.data, 'base64'));
   console.log(`已截图：${out}`);

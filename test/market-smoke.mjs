@@ -52,7 +52,9 @@ r = cli(['market', 'add', marketDir]);
 check('添加本地集市目录', r.code === 0 && /已添加集市/.test(r.out), r.out);
 
 r = cli(['market', 'list']);
-check('列出集市并显示插件数', /测试集市/.test(r.out) && /3 个插件/.test(r.out), r.out);
+// 不写死个数：仓库里的示例插件会增减，写死了每加一个插件测试就红一次
+const listed = Number(/测试集市\s+(\d+) 个插件/.exec(r.out)?.[1] ?? 0);
+check('列出集市并显示插件数', /测试集市/.test(r.out) && listed >= 3, r.out);
 
 r = cli(['market', 'search', '代理']);
 check('按中文关键词搜到插件', /jlc-proxy/.test(r.out) && /白名单代理/.test(r.out), r.out);

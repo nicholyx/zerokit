@@ -23,6 +23,25 @@ export type OutputKind = 'text' | 'json' | 'markdown' | 'table' | 'file' | 'html
 export type RenderKind = 'text' | 'table' | 'json' | 'markdown' | 'keyvalue' | 'image' | 'link';
 export type ActionType = 'exec' | 'http';
 
+/**
+ * 内容智能匹配：输入框里的东西（或剪贴板内容）**像什么**，就自动推荐对应动作。
+ *
+ * uTools 的「超级面板」就是这个思路——选中一个链接直接出「打开」，选中时间戳
+ * 直接出「转成日期」。我们这里做的是同一个东西，只不过内容来自输入框/剪贴板。
+ */
+export interface ActionMatch {
+  /** url=像链接 | files=文件 | regex=自定义正则 | text=任意非空文本 */
+  type: 'url' | 'files' | 'regex' | 'text';
+  /** 命中后把内容填进哪个参数（必须是本动作声明过的参数） */
+  fills: string;
+  /** type=regex 时的正则 */
+  pattern?: string;
+  /** type=files 时的扩展名白名单，例如 ["png","jpg"]，留空表示任意文件 */
+  extensions?: string[];
+  /** 展示用标签，例如"链接"。不写就按 type 取默认 */
+  label?: string;
+}
+
 export interface ActionParam {
   name: string;
   type: ParamType;
@@ -62,6 +81,8 @@ export interface Action {
   /** 风险等级。必填：它决定确认策略和 MCP 的 annotations */
   risk: RiskLevel;
   params: ActionParam[];
+  /** 内容智能匹配声明（可选） */
+  match?: ActionMatch;
   /** 超时秒数 */
   timeout: number;
   /** 子进程输出的字符编码。默认 utf8；非 UTF-8 的输出（比如老工具用 GBK）要在这里声明 */
@@ -374,6 +395,46 @@ function parseAction(raw: unknown, errors: string[], warnings: string[]): Action
       Object.entries(asRecord(a['env'])).map(([k, v]) => [k, String(v)]),
     ),
   };
+  const matchRaw = a['match'];
+  if (matchRaw !== undefined) {
+    const m = asRecord(matchRaw);
+    const type = asString(m['type']) as ActionMatch['type'] | undefined;
+    const fills = asString(m['fills']);
+    const MATCH_TYPES: ActionMatch['type'][] = ['url', 'files', 'regex', 'text'];
+    if (!type || !MATCH_TYPES.includes(type)) {
+      errors.push(`动作 ${id}: match.type "${type ?? ''}" 不支持（可选 ${MATCH_TYPES.join(' / ')}）`);
+      return undefined;
+    }
+    if (!fills) {
+      errors.push(`动作 ${id}: 声明了 match 就必须给 fills（命中后把内容填进哪个参数）`);
+      return undefined;
+    }
+    if (!action.params.some((p) => p.name === fills)) {
+      errors.push(`动作 ${id}: match.fills 指向的参数 "${fills}" 不存在，先声明它`);
+      return undefined;
+    }
+    const match: ActionMatch = { type, fills };
+    if (type === 'regex') {
+      const pattern = asString(m['pattern']);
+      if (!pattern) {
+        errors.push(`动作 ${id}: match.type = "regex" 时必须给 pattern`);
+        return undefined;
+      }
+      try {
+        new RegExp(pattern);
+      } catch (e) {
+        errors.push(`动作 ${id}: match.pattern 不是合法正则（${(e as Error).message}）`);
+        return undefined;
+      }
+      match.pattern = pattern;
+    }
+    const exts = asStringArray(m['extensions']);
+    if (exts.length > 0) match.extensions = exts.map((e) => e.toLowerCase().replace(/^\./, ''));
+    const label = asString(m['label']);
+    if (label) match.label = label;
+    action.match = match;
+  }
+
   if (url) action.url = url;
   if (a['body'] !== undefined) action.body = a['body'];
   const cwd = asString(a['cwd']);

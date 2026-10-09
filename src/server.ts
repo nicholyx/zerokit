@@ -85,6 +85,8 @@ function wirePlugins(): WiredPlugin[] {
         fields: toFormFields(a),
         inputSchema: toJsonSchema(a),
         needsConfirm: confirmPolicy(a.risk) === 'always',
+        // 内容智能匹配的声明：前端据此判断"输入像什么"然后推荐
+        match: a.match ?? null,
       })),
     });
   }

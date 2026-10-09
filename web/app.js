@@ -3,6 +3,7 @@
 // 所有来自插件的文本都经过 esc() 转义再插入 DOM——插件内容属于不可信输入。
 
 import { romanize, scorePinyin } from './pinyin.js';
+import { detectContent, matchFires } from './match.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
 const $ = (id) => document.getElementById(id);
@@ -10,13 +11,14 @@ const $ = (id) => document.getElementById(id);
 const el = {
   q: $('q'), list: $('list'), empty: $('empty'), count: $('count'), searchRow: $('searchRow'),
   listView: $('listView'), detailView: $('detailView'), workbench: $('workbench'),
-  psView: $('psView'), psBtn: $('psBtn'), psCount: $('psCount'),
+  psView: $('psView'), psBtn: $('psBtn'), psCount: $('psCount'), clipBtn: $('clipBtn'),
   modeLabel: $('modeLabel'), modeDot: $('modeDot'), reload: $('reloadBtn'),
 };
 
 let plugins = [];
 let entries = [];       // 扁平化的动作索引
 let filtered = [];
+let filteredSmart = new Map();   // entry.order -> 命中的内容类型标签
 let active = 0;
 let detail = null;      // { plugin, action }
 let mode = 'command';
@@ -40,6 +42,39 @@ async function api(path, options = {}) {
   const data = await res.json().catch(() => ({ error: '返回内容不是 JSON' }));
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
+}
+
+// 内容智能匹配的判定逻辑在 match.js 里（纯函数，可以脱离浏览器直接测）。
+
+// ---------------------------------------------------------------- 最近使用
+//
+// 纯本地（localStorage）：启动器高频用的是"就那几个"，让它们待在顺手的位置。
+// 全在浏览器里，不经过服务端。
+
+const RECENT_KEY = 'zerokit.recent';
+const RECENT_MAX = 30;
+
+function loadRecent() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]');
+    return Array.isArray(raw) ? raw.filter((x) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberRecent(pluginId, actionId) {
+  const key = `${pluginId}.${actionId}`;
+  const list = loadRecent().filter((x) => x !== key);
+  list.unshift(key);
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, RECENT_MAX)));
+  } catch { /* 隐私模式下写不了，忽略 */ }
+}
+
+function recentRank(entry) {
+  const idx = loadRecent().indexOf(`${entry.plugin.id}.${entry.action.id}`);
+  return idx < 0 ? -1 : idx;
 }
 
 // ---------------------------------------------------------------- 搜索
@@ -111,8 +146,20 @@ function scoreEntry(entry, token) {
 }
 
 function search(query) {
-  const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) return entries.map((e) => ({ entry: e, score: 0 }));
+  const content = query.trim();
+  const sniffed = detectContent(content);
+  const tokens = content.toLowerCase().split(/\s+/).filter(Boolean);
+
+  // 空输入：把最近用过的排前面。启动器高频用的就是那几个，让它们待在顺手的位置。
+  if (tokens.length === 0) {
+    const out = entries.map((entry) => {
+      const rank = recentRank(entry);
+      return { entry, score: rank < 0 ? 0 : 1000 - rank };
+    });
+    out.sort((x, y) => y.score - x.score || x.entry.order - y.entry.order);
+    return out;
+  }
+
   const out = [];
   for (const entry of entries) {
     let total = 0;
@@ -122,8 +169,29 @@ function search(query) {
       if (s <= 0) { ok = false; break; }
       total += s;
     }
-    if (ok) out.push({ entry, score: total });
+    if (!ok) continue;
+    const rank = recentRank(entry);
+    if (rank >= 0) total += Math.max(0, 12 - rank);   // 用过的略微加分
+    out.push({ entry, score: total });
   }
+
+  // 内容智能匹配：命中就置顶。注意它**不依赖文字匹配**——
+  // 往框里粘一个链接时，"在浏览器打开"这几个字压根匹配不上那串 URL，
+  // 所以这里要单独扫一遍，把漏掉的补进来。
+  if (sniffed) {
+    const already = new Map(out.map((item) => [item.entry.order, item]));
+    for (const entry of entries) {
+      if (!matchFires(entry.action.match, content, sniffed)) continue;
+      const existing = already.get(entry.order);
+      if (existing) {
+        existing.smart = sniffed.label;
+        existing.score += 500;
+      } else {
+        out.push({ entry, score: 400, smart: sniffed.label });
+      }
+    }
+  }
+
   // 并列时按清单里的顺序——那是作者对外的意图顺序，比按 id 字母序有意义
   out.sort((x, y) => y.score - x.score
     || x.entry.plugin.name.localeCompare(y.entry.plugin.name, 'zh')
@@ -142,7 +210,9 @@ function renderList() {
   el.listView.classList.remove('hidden');
   if (detail) el.detailView.classList.remove('hidden');
 
-  filtered = search(q).map((r) => r.entry);
+  const results = search(q);
+  filtered = results.map((r) => r.entry);
+  filteredSmart = new Map(results.filter((r) => r.smart).map((r) => [r.entry.order, r.smart]));
   if (active >= filtered.length) active = Math.max(0, filtered.length - 1);
 
   el.empty.classList.toggle('hidden', filtered.length > 0);
@@ -150,13 +220,15 @@ function renderList() {
     const a = entry.action;
     const p = entry.plugin;
     const dep = p.requiresOk ? '' : `<span class="badge destructive">缺依赖</span>`;
-    return `<li class="item${i === active ? ' active' : ''}" data-i="${i}" role="option">
+    const smart = filteredSmart.get(entry.order);
+    return `<li class="item${i === active ? ' active' : ''}${smart ? ' smart' : ''}" data-i="${i}" role="option">
       <span class="plugin">${esc(p.name)}</span>
       <span class="title">
         <span class="name">${esc(a.title)}</span>
-        <span class="desc">${esc(a.description || p.summary || '')}</span>
+        <span class="desc">${smart ? `内容看起来是${esc(smart)}，可以直接用` : esc(a.description || p.summary || '')}</span>
       </span>
       <span class="aid">${esc(a.id)}</span>
+      ${smart ? `<span class="badge smart-badge">智能匹配</span>` : ''}
       ${dep}
       <span class="badge ${esc(a.risk)}">${esc(RISK_TEXT[a.risk] || a.risk)}</span>
     </li>`;
@@ -171,7 +243,9 @@ function renderList() {
   });
   el.count.textContent = q.trim()
     ? `${filtered.length} / ${entries.length} 个动作`
-    : `${plugins.length} 个插件 · ${entries.length} 个动作`;
+    : (loadRecent().length > 0
+      ? `最近使用优先 · 共 ${entries.length} 个动作`
+      : `${plugins.length} 个插件 · ${entries.length} 个动作`);
 }
 
 function paintActive() {
@@ -185,10 +259,17 @@ function paintActive() {
 
 function openActive() {
   const entry = filtered[active];
-  if (entry) openDetail(entry.plugin, entry.action);
+  if (!entry) return;
+  // 智能匹配的条目：把输入框里的内容直接填进它声明的那个参数，
+  // 用户按回车就能用，不用再复制粘贴一遍
+  const smart = filteredSmart.get(entry.order);
+  const prefill = smart && entry.action.match
+    ? { [entry.action.match.fills]: el.q.value.trim() }
+    : undefined;
+  openDetail(entry.plugin, entry.action, prefill);
 }
 
-function openDetail(plugin, action) {
+function openDetail(plugin, action, prefill) {
   detail = { plugin, action };
   // 深链：CLI / MCP / 别人的消息里可以直接给 #/插件/动作 让界面跳到这一条
   const wanted = `#/${plugin.id}/${action.id}`;
@@ -218,7 +299,8 @@ function openDetail(plugin, action) {
         </select>${help}</div>`;
     }
     const type = f.type === 'number' ? 'number' : 'text';
-    const def = f.default === undefined ? '' : ` value="${esc(f.default)}"`;
+    const given = prefill && prefill[f.name] !== undefined ? prefill[f.name] : f.default;
+    const def = given === undefined ? '' : ` value="${esc(given)}"`;
     return `<div class="field"><label>${esc(f.name)}${req}</label>
       <input id="f_${esc(f.name)}" type="${type}"${def} autocomplete="off">${help}</div>`;
   }).join('');
@@ -297,6 +379,7 @@ async function submit(remember) {
       });
     }
     renderResult(res);
+    rememberRecent(plugin.id, action.id);
     // 刚跑完的动作可能拉起了一个后台进程/服务，徽标要跟着变
     refreshPsCount();
   } catch (e) {
@@ -855,6 +938,22 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'Escape') {
     el.q.value = '';
     renderList();
+  }
+});
+
+el.clipBtn.addEventListener('click', async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text.trim()) {
+      el.count.textContent = '剪贴板是空的';
+      return;
+    }
+    el.q.value = text.trim();
+    active = 0;
+    renderList();
+  } catch {
+    // 浏览器要求授权才能读剪贴板；直接说清楚，别静默失败
+    el.count.textContent = '读剪贴板被浏览器拒绝了，请允许剪贴板权限';
   }
 });
 

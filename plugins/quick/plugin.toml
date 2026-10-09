@@ -1,0 +1,95 @@
+# 演示「内容智能匹配」：往输入框里粘一个链接/时间戳/颜色值，
+# 对应的动作会自动冒出来并把内容填好，回车即用。
+#
+# 这正是 uTools 超级面板那个思路——你不需要先找到插件，插件会认出你手里的东西。
+
+[plugin]
+id       = "quick"
+name     = "小工具"
+version  = "1.0.0"
+summary  = "认出你粘进来的东西：链接、时间戳、颜色、Base64 文本"
+keywords = ["工具", "转换", "链接", "时间戳", "颜色", "base64", "quick"]
+license  = "MIT"
+runtime  = "worker"
+
+[[action]]
+id          = "open-url"
+title       = "用浏览器打开这个链接"
+description = "在默认浏览器里打开粘进来的网址。手上有个链接、不想先复制再切浏览器时用这个。"
+run         = ["{node}", "quick.mjs", "open-url", "{url}"]
+output      = "text"
+risk        = "mutate"
+
+  [[action.param]]
+  name        = "url"
+  type        = "string"
+  required    = true
+  description = "要打开的网址（只接受 http/https）"
+
+  [action.match]
+  type   = "url"
+  fills  = "url"
+  label  = "链接"
+
+[[action]]
+id          = "ts2date"
+title       = "时间戳转成日期"
+description = "把 10 位（秒）或 13 位（毫秒）的时间戳转成本地时间、UTC 和 ISO 格式。看到一串数字不知道是哪天时用这个。"
+run         = ["{node}", "quick.mjs", "ts2date", "{ts}"]
+output      = "json"
+render      = "keyvalue"
+risk        = "read"
+
+  [[action.param]]
+  name        = "ts"
+  type        = "string"
+  required    = true
+  description = "时间戳，10 位表示秒、13 位表示毫秒"
+
+  [action.match]
+  type    = "regex"
+  pattern = "^\\d{10}$|^\\d{13}$"
+  fills   = "ts"
+  label   = "时间戳"
+
+[[action]]
+id          = "color"
+title       = "看清这个颜色"
+description = "把 #RRGGBB 或 RRGGBB 拆成 RGB 与 HSL，并给出一行色块预览。"
+run         = ["{node}", "quick.mjs", "color", "{hex}"]
+output      = "json"
+render      = "keyvalue"
+risk        = "read"
+
+  [[action.param]]
+  name        = "hex"
+  type        = "string"
+  required    = true
+  description = "十六进制颜色，例如 #5aa9ff 或 5aa9ff"
+
+  [action.match]
+  type    = "regex"
+  pattern = "^#?[0-9a-fA-F]{6}$"
+  fills   = "hex"
+  label   = "颜色"
+
+[[action]]
+id          = "b64"
+title       = "Base64 编解码"
+description = "把文本编成 Base64，或把 Base64 解回文本。自动判断方向。"
+run         = ["{node}", "quick.mjs", "b64", "{text}"]
+output      = "json"
+render      = "keyvalue"
+risk        = "read"
+
+  [[action.param]]
+  name        = "text"
+  type        = "string"
+  required    = true
+  description = "要处理的文本"
+
+  [action.match]
+  type  = "regex"
+  pattern = "^(?:[A-Za-z0-9+/]{4}){3,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+  fills = "text"
+  label = "Base64"
