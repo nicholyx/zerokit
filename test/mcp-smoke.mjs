@@ -49,8 +49,10 @@ function notify(method) {
   child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method }) + '\n');
 }
 
-const fail = (msg) => { console.log('FAIL  ' + msg); process.exitCode = 1; };
-const pass = (msg) => console.log('PASS  ' + msg);
+let passed = 0;
+let failed = 0;
+const fail = (msg) => { failed++; console.log('FAIL  ' + msg); process.exitCode = 1; };
+const pass = (msg) => { passed++; console.log('PASS  ' + msg); };
 
 try {
   const init = await request('initialize', {
@@ -130,8 +132,13 @@ try {
   fail('异常：' + e.message);
 } finally {
   child.kill('SIGKILL');
-  if (stderrOut.trim()) {
-    console.log('\n--- server stderr（应包含日志）---');
+  // 日志只应出现在 stderr；需要看的话加 ZEROKIT_VERBOSE=1
+  if (stderrOut.trim() && process.env['ZEROKIT_VERBOSE']) {
+    console.log('\n--- server stderr ---');
     console.log(stderrOut.trim().split('\n').slice(0, 6).join('\n'));
   }
 }
+
+// 和其它测试保持一致的统计行
+console.log('\n' + '='.repeat(60));
+console.log(`通过 ${passed} / ${passed + failed}`);

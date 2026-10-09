@@ -10,9 +10,16 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const [url, out, waitMs = '4000', width = '900', height = '820'] = process.argv.slice(2);
+// 参数解析：先把带值的开关挑出去，剩下的按位置取，
+// 这样 --eval 放在哪都不会把位置参数挤乱。
+const rawArgs = process.argv.slice(2);
+const evalIdx = rawArgs.indexOf('--eval');
+const evalExpr = evalIdx >= 0 ? rawArgs[evalIdx + 1] : undefined;
+const positional = rawArgs.filter((_, i) => i !== evalIdx && i !== evalIdx + 1);
+
+const [url, out, waitMs = '4000', width = '900', height = '820'] = positional;
 if (!url || !out) {
-  console.error('用法：node scripts/shot.mjs <url> <输出.png> [等待毫秒] [宽] [高]');
+  console.error('用法：node scripts/shot.mjs <url> <输出.png> [等待毫秒] [宽] [高] [--eval "<js>"]');
   process.exit(2);
 }
 
@@ -87,6 +94,21 @@ try {
   });
   await send('Page.navigate', { url });
   await sleep(Number(waitMs));
+
+  // 顺手能执行一段 JS 并打印结果——排查界面问题时比反复截图快得多
+  if (evalExpr) {
+    const result = await send('Runtime.evaluate', {
+      expression: evalExpr,
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    const value = result?.result?.value;
+    console.log('eval ->', typeof value === 'string' ? value : JSON.stringify(value, null, 2));
+    if (result?.exceptionDetails) {
+      console.error('eval 抛错：', result.exceptionDetails.text, result.exceptionDetails.exception?.description ?? '');
+      process.exitCode = 1;
+    }
+  }
 
   const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
   fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true });

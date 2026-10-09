@@ -2,6 +2,8 @@
 // 纯静态、无构建步骤，所以浏览器和 Tauri 壳用的是同一份代码。
 // 所有来自插件的文本都经过 esc() 转义再插入 DOM——插件内容属于不可信输入。
 
+import { romanize, scorePinyin } from './pinyin.js';
+
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
 const $ = (id) => document.getElementById(id);
 
@@ -63,20 +65,48 @@ function scoreOne(text, token) {
 }
 
 /** 一条动作在某个词下的得分：取各字段加权后的最大值 */
+/**
+ * 一条动作在某个词下的得分。
+ *
+ * 刻意分成**两层**：动作自己这一层，和插件这一层。
+ * 原因是一个实测出来的坑：插件的 keywords 里通常列着插件级的关键词
+ * （例如「代理 proxy 网络 …」），它的拼音首字母正好以 dl 开头拿到 60 分，
+ * 于是同一插件下**所有**动作都得到一样的分，排序立刻退化成字母序，
+ * 「查看代理状态」反而排在只是插件沾边的动作后面。
+ *
+ * 所以：动作级命中直接胜出；只命中插件级的整体降一档。
+ */
 function scoreEntry(entry, token) {
   const p = entry.plugin;
   const a = entry.action;
-  const fields = [
-    [a.id, 1.0], [a.title, 1.05], [p.id, 0.95], [p.name, 1.0],
-    [a.description, 0.55], [p.summary, 0.5], [(p.keywords || []).join(' '), 0.7],
-    [entry.hayId, 0.9],
-  ];
-  let best = 0;
-  for (const [text, weight] of fields) {
-    const s = scoreOne(text, token) * weight;
-    if (s > best) best = s;
-  }
-  return best;
+  const best = (...pairs) => {
+    let m = 0;
+    for (const [value, weight] of pairs) if (value * weight > m) m = value * weight;
+    return m;
+  };
+
+  // 动作自己这一层：名字里直接命中，"打开这个动作"的意图最明确
+  const own = best(
+    [scoreOne(a.id, token), 1.0],
+    [scoreOne(a.title, token), 1.05],
+    [scoreOne(entry.hayId, token), 0.9],
+    [scorePinyin(entry.py.title, token), 1.05],
+  );
+  if (own > 0) return own;
+
+  // 插件这一层：命中说明整个插件都相关，但整体降一档
+  // 拼音只拿「短而有意图」的字段（插件名、关键词），**不碰 summary/description**：
+  // 用首字母去匹配长句子会过松——实测「系统信息」的简介里恰好有「读 du / 零 ling」
+  // 两个声母，结果打 dl 把它的三个动作全捞了出来。
+  return 0.85 * best(
+    [scoreOne(p.id, token), 0.8],
+    [scoreOne(p.name, token), 0.85],
+    [scoreOne((p.keywords || []).join(' '), token), 0.9],
+    [scoreOne(p.summary, token), 0.5],
+    [scoreOne(a.description, token), 0.55],
+    [scorePinyin(entry.py.name, token), 1.0],
+    [scorePinyin(entry.py.keywords, token), 0.9],
+  );
 }
 
 function search(query) {
@@ -93,9 +123,10 @@ function search(query) {
     }
     if (ok) out.push({ entry, score: total });
   }
+  // 并列时按清单里的顺序——那是作者对外的意图顺序，比按 id 字母序有意义
   out.sort((x, y) => y.score - x.score
     || x.entry.plugin.name.localeCompare(y.entry.plugin.name, 'zh')
-    || x.entry.action.id.localeCompare(y.entry.action.id));
+    || x.entry.order - y.entry.order);
   return out;
 }
 
@@ -687,7 +718,14 @@ async function load(notify) {
       for (const a of p.actions) {
         entries.push({
           plugin: p, action: a,
+          order: entries.length,     // 清单顺序，用于并列时的兜底排序
           hayId: `${p.id}.${a.id} ${p.id} ${a.id}`,
+          // 拼音形式在装载时算一次，之后每次按键直接用（不重复转换）
+          py: {
+            name: romanize(p.name),
+            title: romanize(a.title),
+            keywords: romanize((p.keywords || []).join(' ')),
+          },
         });
       }
     }
@@ -701,6 +739,15 @@ async function load(notify) {
 
 /** 支持 #/插件/动作 深链直达 */
 function applyHash() {
+  // #/q=...  带一个初始搜索词（命令行、通知、别的程序都能给这么个链接）
+  const qHash = /^#\/q=(.*)$/.exec(location.hash || '');
+  if (qHash) {
+    el.q.value = decodeURIComponent(qHash[1]);
+    active = 0;
+    renderList();
+    return;
+  }
+
   // #/workbench?q=...  直接进工作台并把这个问句发出去
   const wbHash = /^#\/workbench(?:\?(.*))?$/.exec(location.hash || '');
   if (wbHash) {
@@ -716,6 +763,14 @@ function applyHash() {
 }
 
 window.addEventListener('hashchange', () => { if (!detail) applyHash(); });
+
+// 把内部状态挂出来，便于排查，也方便以后用 CDP 做界面自动化测试
+window.__zerokit = {
+  get entries() { return entries; },
+  get filtered() { return filtered; },
+  get mode() { return mode; },
+  scoreEntry, search, romanize, scorePinyin, renderList,
+};
 
 load();
 el.q.focus();
