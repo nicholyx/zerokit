@@ -1,0 +1,57 @@
+name: 📖 文档问题
+description: 文档写错了、看不懂、或者缺少内容
+title: "[Docs] "
+labels:
+  - documentation
+body:
+  - type: markdown
+    attributes:
+      value: |
+        文档也是代码：写错一行命令和写错一行代码一样耽误人。
+        感谢你帮忙指出来。
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已搜索过现有 Issue，确认没有重复
+          required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 问题类型
+      options:
+        - 内容有误（命令跑不通、说法过时、与实际行为不符）
+        - 看不懂（缺上下文、术语没有解释）
+        - 缺内容（某个主题没有覆盖到）
+        - 链接失效
+    validations:
+      required: true
+
+  - type: textarea
+    id: location
+    attributes:
+      label: 出问题的位置
+      description: 哪个文件、哪一节、哪句话
+      placeholder: |
+        START-HERE.md「二、启动」一节，第 3 步的命令
+    validations:
+      required: true
+
+  - type: textarea
+    id: detail
+    attributes:
+      label: 问题描述
+      description: 哪里不对 / 哪里没看懂 / 缺了什么。如果是内容有误，请写出实际的输出
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: 你建议怎么改
+      description: 可选。如果你心里已有更好的表述，直接写下来
+    validations:
+      required: false

@@ -1,0 +1,26 @@
+# CODEOWNERS
+#
+# 语法说明：https://docs.github.com/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+# 每一行的所有者会在对应文件被改动时自动收到 review 请求。
+
+# 兜底规则：所有文件的默认所有者
+*                       @nicholyx
+
+# 工作流文件持有打标与自动化的权限，任何改动都需要维护者亲自过目
+/.github/workflows/     @nicholyx
+
+# 安全策略与许可证属于治理文件，变更需维护者确认
+/SECURITY.md            @nicholyx
+/LICENSE                @nicholyx
+
+# 内核路由与插件清单的「契约」文件
+/src/cli.ts             @nicholyx
+/market.json            @nicholyx
+
+# 插件目录：每个 plugin.toml 都会派生出对外暴露的 MCP 工具
+/plugins/               @nicholyx
+
+# 供贡献者参考：改动 README 与文档时请同步核对内链
+/README.md              @nicholyx
+/START-HERE.md          @nicholyx
+/docs/                  @nicholyx

@@ -1,0 +1,266 @@
+# 工作流名称
+name: CI
+# 工作流运行时显示名称
+run-name: CI · ${{ github.event_name }} · ${{ github.ref_name }}
+
+# 怎样触发工作流
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# 只读权限就够了：CI 不写回仓库，这是最小权限原则的体现。
+# 需要写权限的工作流（labeler / stale 等）在各自文件里单独声明。
+permissions:
+  contents: read
+
+# 同一分支连推多次时，取消掉旧的运行，省额度也省等待
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # 固定版本以保证 CI 结果可复现
+  ACTIONLINT_VERSION: "1.7.12"
+  # zizmor 容器镜像同样按版本 pin——扫描器本身也是供应链的一环
+  ZIZMOR_IMAGE: "ghcr.io/zizmorcore/zizmor:1.30.1"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 工作流静态检查
+  # actionlint 能发现 YAML 层面看不出、但运行时会炸的问题：
+  # 表达式拼写错误、上下文用错、run 块里的 shell 问题等。
+  # ---------------------------------------------------------------------------
+  actionlint:
+    name: 工作流静态检查
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repos
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # CI 用不到 git 凭证，不持久化，
+          # 让 checkout 之后的任何脚本都拿不到 GITHUB_TOKEN
+          persist-credentials: false
+
+      - name: 安装 actionlint
+        run: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+          url="https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -sSfL "$url" | tar -xz actionlint
+          ./actionlint --version
+
+      - name: 运行 actionlint
+        run: ./actionlint -color
+
+  # ---------------------------------------------------------------------------
+  # YAML 风格检查
+  # ---------------------------------------------------------------------------
+  yamllint:
+    name: YAML 风格检查
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repos
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: 安装 yamllint
+        run: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+          pipx install yamllint
+
+      - name: 运行 yamllint
+        run: yamllint -c .yamllint .github/ market.json
+
+  # ---------------------------------------------------------------------------
+  # 测试矩阵
+  #
+  # zerokit 没有构建步骤：Node 原生跑 TypeScript 源码，装完依赖就能测。
+  # 只跑 windows-latest：示例插件深度绑定 Windows（clipboard 用 PowerShell、
+  # filesearch 用 explorer /select），Linux/macOS 的适配是进行中的平台债
+  # （见 Issue 列表），能在多平台跑之前不放宽矩阵——红色的 CI 不如不跑。
+  # Node 测两个大版本：最低支持版本 22.x 与当前 LTS 之后的 24.x。
+  # ---------------------------------------------------------------------------
+  test:
+    name: 测试（Node ${{ matrix.node-version }}）
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [22, 24]
+    steps:
+      - name: Checkout Repos
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: 安装 Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: 安装依赖
+        run: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+          npm ci
+
+      - name: 环境自检
+        run: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+          node src/cli.ts doctor
+
+      - name: 跑全量测试
+        run: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+          node scripts/test-all.mjs
+
+  # ---------------------------------------------------------------------------
+  # 提交信息规范
+  # 校验 PR 里的每一个提交与 PR 标题（squash 合并后标题即提交信息）。
+  # push 事件没有 base/head 对，只在 pull_request 里跑。
+  # ---------------------------------------------------------------------------
+  commit-messages:
+    name: 提交信息规范
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout Repos
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          # 需要完整的提交历史才能校验区间内的所有提交
+          fetch-depth: 0
+
+      - name: 校验 PR 中的提交信息
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: ./scripts/check-commit-msg.sh --range "${BASE_SHA}..${HEAD_SHA}"
+
+      - name: 校验 PR 标题
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: ./scripts/check-commit-msg.sh --message "$PR_TITLE"
+
+  # ---------------------------------------------------------------------------
+  # 工作流安全扫描
+  # zizmor 专查 GitHub Actions 的已知反模式：凭证持久化、危险触发器、
+  # 依赖未锁定等。豁免项集中放在 .github/zizmor.yml，每条写明理由。
+  # ---------------------------------------------------------------------------
+  zizmor:
+    name: 工作流安全扫描
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repos
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: 运行 zizmor
+        run: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+          # 挂载只读（:ro）：扫描器没有理由改动被扫描的文件
+          docker run --rm -v "$PWD":/repo:ro \
+            "${ZIZMOR_IMAGE}" /repo --no-online-audits
+
+  # ---------------------------------------------------------------------------
+  # CI 总览
+  # 汇总各检查项到 Step Summary，并保证汇总表与 needs 列表不脱节：
+  # 增删检查项时漏改任何一处，这个 job 自己会红。
+  # ---------------------------------------------------------------------------
+  ci-summary:
+    name: CI 总览
+    runs-on: ubuntu-latest
+    needs: [actionlint, yamllint, test, commit-messages, zizmor]
+    if: always()
+    steps:
+      - name: Checkout Repos
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # 只读 ci.yml 用（needs 自证断言），不持久化凭证
+          persist-credentials: false
+
+      - name: 汇总各检查结果
+        env:
+          R_ACTIONLINT: ${{ needs.actionlint.result }}
+          R_YAMLLINT: ${{ needs.yamllint.result }}
+          R_TEST: ${{ needs.test.result }}
+          R_COMMIT_MESSAGES: ${{ needs.commit-messages.result }}
+          R_ZIZMOR: ${{ needs.zizmor.result }}
+        run: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          # jobs 数组是「job id:显示名」的清单——汇总表用它生成。
+          # 下面三条断言保证它不与 ci.yml 脱节：
+          #   1. 数组里的 id 集合 == ci.yml 中本 job 的 needs 集合
+          #      （比集合不比顺序，增删检查时漏改这里会红）
+          #   2. 每个 id 都有对应的 R_* env（进了 needs 但没进判据会红）
+          #   3. env 名由 id 机械派生（tr 'a-z-' 'A-Z_'），不受手误影响
+          declare -a jobs=(
+            "actionlint:工作流静态检查"
+            "yamllint:YAML 风格检查"
+            "test:测试矩阵"
+            "commit-messages:提交信息规范"
+            "zizmor:工作流安全扫描"
+          )
+
+          # 断言 1：needs 集合与数组一致。只取本 job 那行数组式 needs
+          # （其他 job 的 needs 是单值形式，不会被这行 grep 匹配到）
+          cfg_ids="$(grep -m1 '^    needs: \[' .github/workflows/ci.yml \
+            | sed 's/.*\[//; s/\].*//' | tr ',' '\n' | tr -d ' ' | grep . | sort)"
+          arr_ids="$(printf '%s\n' "${jobs[@]}" | cut -d: -f1 | sort)"
+          if [[ "$cfg_ids" != "$arr_ids" ]]; then
+            echo "::error::汇总表与 ci.yml 的 needs 不一致："
+            echo "::error::needs 有而汇总表没有：$(comm -13 <(printf '%s\n' "$arr_ids") <(printf '%s\n' "$cfg_ids") | tr '\n' ' ')"
+            echo "::error::汇总表有而 needs 没有：$(comm -13 <(printf '%s\n' "$cfg_ids") <(printf '%s\n' "$arr_ids") | tr '\n' ' ')"
+            exit 1
+          fi
+
+          failed=0
+
+          {
+            echo "## CI 检查结果"
+            echo ""
+            echo "| 检查项 | 结果 |"
+            echo "| --- | :---: |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for spec in "${jobs[@]}"; do
+            id="${spec%%:*}"; name="${spec#*:}"
+            var="R_$(printf '%s' "$id" | tr 'a-z-' 'A-Z_')"
+            result="${!var:-}"
+            # 断言 2：每个 id 都有对应 env，缺了就是「进了 needs 但没进判据」
+            if [[ -z "$result" ]]; then
+              echo "::error::needs 里有 $id 但没有 env $var——这一项的失败不会让 CI 总览变红"
+              failed=1
+              icon="❓"
+            else
+              case "$result" in
+                success) icon="✅" ;;
+                # PR 之外的触发方式会跳过提交信息检查，属于正常
+                skipped) icon="⏭️" ;;
+                *)       icon="❌"; failed=1 ;;
+              esac
+            fi
+            printf '| %s | %s |\n' "$name" "$icon" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$failed" -ne 0 ]]; then
+            echo "❌ 存在未通过的检查，请查看上方各任务的日志。" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::CI 未能全部通过"
+            exit 1
+          fi
+
+          echo "✅ 全部检查通过。" >> "$GITHUB_STEP_SUMMARY"

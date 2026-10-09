@@ -1,0 +1,16 @@
+# Issue 模板选择器的配置
+# 文档：https://docs.github.com/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository
+blank_issues_enabled: false
+
+contact_links:
+  - name: 🔒 报告安全漏洞
+    url: https://github.com/nicholyx/zerokit/security/advisories/new
+    about: 请勿通过公开 Issue 报告安全漏洞，使用这个私有渠道。
+
+  - name: 🚀 快速上手
+    url: https://github.com/nicholyx/zerokit/blob/main/START-HERE.md
+    about: 从零到跑通的三步指南，环境问题先看这里。
+
+  - name: 🔌 怎么写插件
+    url: https://github.com/nicholyx/zerokit/blob/main/docs/plugin-spec.md
+    about: 插件清单（plugin.toml）的完整规范与示例。

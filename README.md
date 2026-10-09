@@ -1,5 +1,9 @@
 # zerokit
 
+[![CI](https://github.com/nicholyx/zerokit/actions/workflows/ci.yml/badge.svg)](https://github.com/nicholyx/zerokit/actions/workflows/ci.yml)
+[![OSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/nicholyx/zerokit/badge.svg)](https://securityscorecards.dev/viewer/?uri=github.com/nicholyx/zerokit)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 > 一份清单，四个面：**启动器 / CLI / MCP / Web**。不绑定宿主的插件集市。
 
 zerokit 解决的问题是：**你为某个工具写的扩展，被锁死在那个工具里了**。
