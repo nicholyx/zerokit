@@ -20,7 +20,8 @@ start_proxy.bat 只做两件事：找到 Python、把参数原样交给本文件
     python proxy.py help               查看全部命令
 
 配置文件
-    与本文件同目录的 my_config.json，首次运行自动生成。
+    由 zerokit 拉起时放在插件数据目录（跨插件更新保留）；直接 python
+    proxy.py 跑时与本文件同目录。首次运行自动生成。
     允许域名、允许端口、鉴权方式与密钥、监听地址端口、日志目录都在里面，
     不用改本文件。改完后「域名 / 端口 / 鉴权」在 2 秒内自动生效，
     「监听地址端口 / 日志目录」需要 restart。
@@ -54,13 +55,35 @@ from urllib.parse import urlparse
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SCRIPT_PATH = os.path.abspath(__file__)
 
-# 配置文件位置，可用环境变量 PROXY_CONFIG 指到别处（测试用）
-CONFIG_PATH = os.path.abspath(os.environ.get('PROXY_CONFIG')
-                              or os.path.join(BASE_DIR, 'my_config.json'))
+
+def _resolve_config_path():
+    """配置文件位置。
+
+    优先级：PROXY_CONFIG（测试用）> ZEROKIT_PLUGIN_DATA_DIR（zerokit 注入的
+    插件数据目录，跨更新保留）> 本文件目录（直接 python proxy.py 跑时）。
+
+    老版本把配置放在插件目录里：发现新位置还没有、老位置有，就继续用老的
+    （不搬家），避免升级 zerokit 后配置「消失」。
+    """
+    env = os.environ.get('PROXY_CONFIG')
+    if env:
+        return os.path.abspath(env)
+    data_dir = os.environ.get('ZEROKIT_PLUGIN_DATA_DIR')
+    if data_dir:
+        fresh = os.path.join(data_dir, 'my_config.json')
+        legacy = os.path.join(BASE_DIR, 'my_config.json')
+        if not os.path.exists(fresh) and os.path.exists(legacy):
+            return legacy
+        return fresh
+    return os.path.join(BASE_DIR, 'my_config.json')
+
+
+CONFIG_PATH = _resolve_config_path()
 # pid 文件跟配置文件放一起，互不干扰
 PID_FILE = os.path.join(os.path.dirname(CONFIG_PATH), 'proxy.pid')
 
-DEFAULT_LOG_DIR = os.path.join(BASE_DIR, 'logs')
+# 日志也跟着配置走：配置在数据目录时日志也在那里（跨更新保留）
+DEFAULT_LOG_DIR = os.path.join(os.path.dirname(CONFIG_PATH), 'logs')
 BUF = 65536
 RUN_LOG_BACKUP_DAYS = 30        # proxy.log 保留天数
 CONFIG_RELOAD_INTERVAL = 2.0    # 两次检查配置变动的最小间隔（秒）

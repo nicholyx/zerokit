@@ -161,6 +161,7 @@ zkit market refresh         拉取最新索引
 zkit market index [目录]    把一个插件目录生成为集市索引
 zkit plugin install <id>    从集市安装（先摊开全部能力再确认）
 zkit plugin add <目录|git>  从本地目录或 git 仓库安装
+zkit plugin update [插件]   列出来源与可更新状态；带插件 id 检查并更新
 zkit plugin export <插件>   打包成单个 .toolpack
 zkit plugin import <文件>   从 .toolpack 安装
 

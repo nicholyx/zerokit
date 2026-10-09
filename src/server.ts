@@ -14,7 +14,9 @@ import { checkAiReady, loadSettings } from './core/settings.ts';
 // 一起拉进来，光加载就 240ms，而启动器绝大多数时候用不到它。
 // Workbench 与工具清单在 agent.ts 里，那一支不碰任何模型 SDK，可以静态导入。
 import { Workbench, collectToolDefs } from './ai/agent.ts';
-import { listPlugins } from './core/registry.ts';
+import { addFromDir, addFromGit, listPlugins, previewAdd } from './core/registry.ts';
+import { applyUpdate, checkUpdate } from './core/update.ts';
+import { describeSource, readSource } from './core/sources.ts';
 import { checkRequires } from './core/resolve.ts';
 import { applyDefaults, coerceParam, toFormFields, toJsonSchema } from './core/schema.ts';
 import { buildArgv, confirmPolicy, displayCommand, runAction } from './core/runner.ts';
@@ -56,6 +58,10 @@ interface WiredPlugin {
   keywords: string[];
   requiresOk: boolean;
   missingDeps: string[];
+  /** 安装来源（git / 集市 / 自带 / 本地目录 / 未知），前端据此展示「能不能更新」 */
+  sourceType: string;
+  sourceText: string;
+  installedAt: string;
   actions: Array<Record<string, unknown>>;
 }
 
@@ -65,6 +71,7 @@ function wirePlugins(): WiredPlugin[] {
     const p: Plugin | undefined = entry.plugin;
     if (!p) continue;
     const reqs = checkRequires(p.requires);
+    const source = readSource(entry.dir);
     out.push({
       id: p.id,
       name: p.name,
@@ -73,6 +80,9 @@ function wirePlugins(): WiredPlugin[] {
       keywords: p.keywords,
       requiresOk: reqs.every((r) => r.ok),
       missingDeps: reqs.filter((r) => !r.ok).map((r) => r.name),
+      sourceType: source?.type ?? 'unknown',
+      sourceText: describeSource(source),
+      installedAt: source?.installedAt ?? '',
       actions: p.actions.map((a) => ({
         id: a.id,
         title: a.title,
@@ -97,6 +107,11 @@ function wirePlugins(): WiredPlugin[] {
 function confirmToken(pluginId: string, actionId: string, values: Record<string, unknown>): string {
   const payload = `${pluginId}|${actionId}|${JSON.stringify(values)}`;
   return crypto.createHmac('sha256', CONFIRM_SECRET).update(payload).digest('hex');
+}
+
+/** 安装/更新的确认令牌：和「这条来源 + 这个插件」绑定，防「确认的是 A、装的是 B」 */
+function installToken(kind: 'install' | 'update', key: string): string {
+  return crypto.createHmac('sha256', CONFIRM_SECRET).update(`${kind}|${key}`).digest('hex');
 }
 
 function sameToken(a: string, b: string): boolean {
@@ -309,6 +324,91 @@ export function createServer(): http.Server {
           }
         }
         json(res, 200, { ok: results.every((r) => r.ok), results });
+        return;
+      }
+
+      // ---------------------------------------------------------------- 插件安装 / 更新
+      //
+      // 装第三方插件是高权限动作，和跑 mutate 动作同级：先摊开能力（preview），
+      // 用户确认拿到令牌后才落地。令牌绑「来源字符串」，安装时重新拉取——
+      // 确认的含义是「我看过这个来源的能力并同意装它」。
+
+      if (url.pathname === '/api/plugin/install' && req.method === 'POST') {
+        const body = await readBody(req);
+        const source = String(body['source'] ?? '').trim();
+        if (!source) {
+          json(res, 400, { error: '缺少来源：给一个 git 仓库地址或本地目录' });
+          return;
+        }
+        const preview = previewAdd(source);
+        if (!preview.ok || !preview.load.plugin) {
+          json(res, 400, {
+            error: preview.message ?? `清单没通过校验：${preview.load.errors.join('；')}`,
+          });
+          return;
+        }
+        const p = preview.load.plugin;
+        if (typeof body['confirm'] !== 'string') {
+          // 第一步：摊开全部能力让人审查（和集市 install 的原则一致）
+          json(res, 200, {
+            needConfirm: true,
+            confirm: installToken('install', preview.source),
+            plugin: {
+              id: p.id, name: p.name, version: p.version, summary: p.summary,
+              requires: Object.keys(p.requires),
+              actions: p.actions.map((a) => ({
+                id: a.id, title: a.title, risk: a.risk,
+                command: a.type === 'http' ? `${a.method} ${a.url ?? ''}` : a.run.join(' '),
+              })),
+            },
+            warnings: preview.load.warnings,
+          });
+          return;
+        }
+        if (!sameToken(body['confirm'], installToken('install', preview.source))) {
+          json(res, 403, { error: '确认令牌不对：请重新预览后再确认' });
+          return;
+        }
+        const isLocal = !/^(https?:\/\/|git@)/.test(preview.source)
+          && (() => { try { return fs.statSync(preview.source).isDirectory(); } catch { return false; } })();
+        const result = isLocal
+          ? addFromDir(preview.source, { source: { type: 'dir', installedAt: new Date().toISOString(), installedVersion: '' } })
+          : addFromGit(preview.source);
+        json(res, 200, {
+          ok: result.ok,
+          message: result.message,
+          warnings: result.warnings,
+          // 前端收到后重新拉 /api/plugins
+        });
+        return;
+      }
+
+      if (url.pathname === '/api/plugin/check' && req.method === 'POST') {
+        const body = await readBody(req);
+        const id = String(body['id'] ?? '');
+        const check = checkUpdate(id);
+        json(res, 200, {
+          id: check.id, current: check.current, latest: check.latest,
+          available: check.available, sourceType: check.source?.type ?? null,
+          sourceText: check.sourceText,
+          addedActions: check.addedActions, removedActions: check.removedActions,
+          reason: check.reason ?? null,
+          // 有更新时带上确认令牌：更新同样要先看一眼能力变化
+          confirm: check.available ? installToken('update', check.id) : null,
+        });
+        return;
+      }
+
+      if (url.pathname === '/api/plugin/update' && req.method === 'POST') {
+        const body = await readBody(req);
+        const id = String(body['id'] ?? '');
+        const confirm = typeof body['confirm'] === 'string' ? body['confirm'] : '';
+        if (!confirm || !sameToken(confirm, installToken('update', id))) {
+          json(res, 403, { error: '缺少或错误的确认令牌：先 POST /api/plugin/check 看能力变化' });
+          return;
+        }
+        const result = applyUpdate(id);
+        json(res, 200, { ok: result.ok, message: result.message, warnings: result.warnings });
         return;
       }
 

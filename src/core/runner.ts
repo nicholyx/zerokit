@@ -491,7 +491,14 @@ export async function runAction(
   }
 
   const cwd = action.cwd ? path.resolve(plugin.dir, action.cwd) : plugin.dir;
-  const env = childEnv({ ...process.env, ...action.env }, argv[0]!);
+  // 给插件的两个环境变量：清单里 {data_dir} 占位符的等价物（脚本不想改 argv 就读它），
+  // 以及数据根目录。放在 action.env 之前，插件自己的 env 声明可以覆盖。
+  const env = childEnv({
+    ...process.env,
+    ZEROKIT_PLUGIN_DATA_DIR: pluginDataDir(plugin.id),
+    ZEROKIT_HOME: HOME,
+    ...action.env,
+  }, argv[0]!);
   const command = displayCommand(action, argv);
 
   // background 动作：拉起长期运行的进程，不等它退出，交给内核托管，
