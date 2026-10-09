@@ -1,0 +1,186 @@
+# 剪贴板历史：把复制过的东西记下来，之后能搜、能再复制回去。
+#
+# 它和别的插件不一样的地方是**有个常驻的监听进程**：剪贴板不会主动通知你，
+# 只能轮询。每次读剪贴板都新起一个 powershell 要 ~200ms，所以监听做成
+# "一个常驻 PowerShell 进程 + 进程内循环轮询"（见 watch.ps1 里的说明），
+# 空闲时 CPU 占用约等于 0。
+#
+# 只用 Windows 的能力（PowerShell 5.1 + System.Windows.Forms.Clipboard），
+# 不联网、不依赖任何第三方包。
+#
+# 目录里的东西：
+#   clipboard.mjs  动作实现（worker 线程跑的 CLI）
+#   history.mjs    历史的纯逻辑：去重、条数上限、截断、搜索（可脱离剪贴板单独测）
+#   watch.ps1      轮询器，被 clipboard.mjs watch-start 拉起
+#   history.jsonl  历史数据，落在 {data_dir}，不在插件目录里（跨更新保留）
+#   clipboard.pid  监听进程的 PID，给 [[service]] 检测用（在插件目录里，见下）
+
+[plugin]
+id       = "clipboard"
+name     = "剪贴板历史"
+version  = "1.0.0"
+summary  = "记录剪贴板历史，可搜索、可把旧内容放回剪贴板，后台常驻监听"
+description = """
+后台监听剪贴板，把每次复制的内容按时间记成一串历史（自动去重、只留最近 500 条）。
+之后可以列出、按关键词搜索，并把其中任意一条重新放回剪贴板。
+只用 Windows 自带的 PowerShell，不联网、不装依赖。
+"""
+keywords = ["剪贴板", "clipboard", "历史", "history", "复制", "粘贴", "clip", "粘贴板"]
+
+# list / search / clear / copy 都是一次性的短任务，没有相对路径依赖
+# （定位自身文件一律用 import.meta.dirname），用 worker 省掉整个进程创建。
+# watch-start 是 background 动作，本来就走真进程，不受这里影响。
+runtime  = "worker"
+
+[requires]
+node = ">=22"
+
+# 声明的常驻服务就是那个轮询进程。
+#
+# 用 pidFile 而不是 port：它不监听任何端口，没有端口可查。
+# pidFile 相对**插件目录**解析（services.ts 里就是这么拼的），
+# 由监听到自己写进去（内容只有一行 PID，不能是 JSON——那边是直接 Number() 的）。
+#
+# 为什么不靠 zerokit 的 background 托管来"替你记"：background 只是把进程登记到
+# running.json 里，**不会**为插件生成 pid 文件；服务检测走的是系统事实（这个 PID
+# 还在不在），所以文件必须由监听进程自己写。好处是从终端手动起的监听也照样能被看见。
+[[service]]
+id          = "watcher"
+title       = "剪贴板监听"
+description = "常驻轮询剪贴板的进程，负责把新内容写进历史"
+pidFile     = "clipboard.pid"
+# 这里写死的 "clipboard.pid" 和上面的 pidFile 是同一个文件。
+# 注意不能写成 {pid_file} 占位符：services.ts 拼停止命令时传的是空的参数表，
+# 占位符会被整段丢掉，命令就跑了空。
+stop        = ["{node}", "clipboard.mjs", "watch-stop", "clipboard.pid"]
+
+# ---------------------------------------------------------------- 读
+
+# 注意：**第一个动作必须是非后台动作**。services.ts 拼 [[service]].stop 的命令时，
+# 会拿 plugin.actions[0] 当模板再替换 run；如果第一个动作带 background = true，
+# 停止命令会被当成后台任务拉起来（立刻返回、什么也没停）。所以 list 排在最前面。
+[[action]]
+id          = "list"
+title       = "最近的剪贴板历史"
+description = """
+按时间倒序列出最近复制的文本，带序号、时间、长度和内容预览。
+想找刚才复制过的东西、或者想知道监听到底有没有在记时用这个。
+序号可以直接喂给 copy 放回剪贴板。"""
+run         = ["{node}", "clipboard.mjs", "list", "{data_dir}", "{limit}", "{full}"]
+output      = "json"
+render      = "table"
+risk        = "read"
+
+  [[action.param]]
+  name        = "limit"
+  type        = "integer"
+  default     = 20
+  description = "列出最近多少条，默认 20"
+
+  [[action.param]]
+  name        = "full"
+  type        = "boolean"
+  default     = false
+  description = "false（默认）只显示前 60 个字符，够看清是什么；true 显示完整内容（长文本会在表格里很长）"
+
+[[action]]
+id          = "search"
+title       = "搜索剪贴板历史"
+description = """
+在历史里按关键词搜索，大小写不敏感。想找回前几天复制过的一段文字、一条命令时用这个。
+结果里的序号同样可以直接喂给 copy。"""
+run         = ["{node}", "clipboard.mjs", "search", "{data_dir}", "{keyword}", "{limit}"]
+output      = "json"
+render      = "table"
+risk        = "read"
+
+  [[action.param]]
+  name        = "keyword"
+  type        = "string"
+  required    = true
+  description = "要搜的关键词，例如 docker（大小写不敏感）"
+
+  [[action.param]]
+  name        = "limit"
+  type        = "integer"
+  default     = 20
+  description = "最多返回多少条，默认 20"
+
+# ---------------------------------------------------------------- 写
+
+[[action]]
+id          = "copy"
+title       = "把某条历史放回剪贴板"
+description = """
+把 list/search 里看到的那一条重新复制到剪贴板，之后在别处 Ctrl+V 就能粘出来。
+想重用之前复制过的内容时用这个。序号从 1 开始，1 是最新的一条；越界会被拒绝。"""
+run         = ["{node}", "clipboard.mjs", "copy", "{data_dir}", "{index}"]
+output      = "json"
+render      = "keyvalue"
+risk        = "mutate"
+
+  [[action.param]]
+  name        = "index"
+  type        = "integer"
+  required    = true
+  description = "要放回剪贴板的是第几条，来自 list/search 显示的最左列序号（1 = 最新）"
+
+[[action]]
+id          = "clear"
+title       = "清空剪贴板历史"
+description = """
+删掉全部历史记录（包括磁盘上的 history.jsonl）。剪贴板里当前的内容不受影响，监听也不会停。
+确认记录里没有还想留的东西时用这个。"""
+run         = ["{node}", "clipboard.mjs", "clear", "{data_dir}"]
+output      = "text"
+risk        = "destructive"
+
+[[action]]
+id          = "watch-start"
+title       = "开始监听剪贴板（后台运行）"
+description = """
+启动常驻监听，把之后复制的每条内容记进历史。它由 zerokit 托管，会出现在「运行中」里，
+可以随时结束。已经在跑时不会重复启动（会报错退出）。"""
+run         = ["{node}", "clipboard.mjs", "watch-start", "{data_dir}", "{pid_file}", "{max_entries}", "{max_length}", "{interval_ms}"]
+output      = "text"
+risk        = "mutate"
+background  = true
+timeout     = 20
+
+  [[action.param]]
+  name        = "pid_file"
+  type        = "string"
+  default     = "clipboard.pid"
+  description   = "记录监听进程 PID 的文件，相对插件目录。默认就好，除非同时要跑多个互不干扰的监听"
+
+  [[action.param]]
+  name        = "max_entries"
+  type        = "integer"
+  default     = 500
+  description = "历史最多保留多少条，超了就丢掉最旧的，默认 500"
+
+  [[action.param]]
+  name        = "max_length"
+  type        = "integer"
+  default     = 32000
+  description = "单条最多存多少个字符，超出部分截断（长度仍按原文记录），默认 32000"
+
+  [[action.param]]
+  name        = "interval_ms"
+  type        = "integer"
+  default     = 400
+  description = "轮询间隔毫秒数，默认 400。调小更灵敏、调大更省电"
+
+[[action]]
+id          = "watch-stop"
+title       = "停止监听剪贴板"
+description = "停掉正在运行的剪贴板监听（连同它的轮询进程一起结束）。发现监听在跑但不想让它继续时用这个。"
+run         = ["{node}", "clipboard.mjs", "watch-stop", "{pid_file}"]
+output      = "text"
+risk        = "mutate"
+
+  [[action.param]]
+  name        = "pid_file"
+  type        = "string"
+  default     = "clipboard.pid"
+  description = "PID 文件，和 watch-start 用的要保持一致"

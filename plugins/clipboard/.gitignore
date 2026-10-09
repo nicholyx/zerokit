@@ -1,0 +1,8 @@
+# 运行期产物，不该进仓库：
+#   clipboard.pid  监听进程的 PID（服务检测用），每次启动都变
+#   history.jsonl  剪贴板历史，纯用户数据
+# 正式安装的插件在 ~/.zerokit/plugins/ 下，这个文件用不上；
+# 这里是防止在本仓库里直接 `zkit run clipboard watch-start` 时污染 git status。
+clipboard.pid
+history.jsonl
+history.jsonl.tmp

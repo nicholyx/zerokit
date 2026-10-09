@@ -1,0 +1,93 @@
+# 文件搜索插件：先建一次文件名索引，之后按文件名/路径快速查。
+#
+# 为什么是「索引 + 查询」两步而不是每次现搜：递归遍历整盘要几十秒到几分钟，
+# 而搜索必须秒回（启动器里每敲一个字都要重查）。所以把慢的部分显式摊给用户，
+# 让 index 这一个动作承担，search 就只是在内存里过一遍已建好的清单。
+
+[plugin]
+id       = "filesearch"
+name     = "文件搜索"
+version  = "1.0.0"
+summary  = "给指定目录建一份文件名索引，之后按文件名或路径秒级查找，并可定位到文件"
+description = "递归遍历你指定的目录，把文件路径存成本地索引；之后用 search 做不区分大小写的子串匹配（优先命中文件名），用 open 在资源管理器里定位到该文件。索引不跨机器、不上传，全在本地。"
+keywords = ["搜索", "文件", "文件名", "查找", "检索", "定位", "find", "filesearch", "everything"]
+license  = "MIT"
+
+# worker：省掉整个进程创建（实测 116ms → 34ms）。
+# worker 不能单独设工作目录，所以脚本里一律不用相对路径，
+# 索引位置由清单把 {data_dir} 传进去（插件自己不该去猜 zerokit 的内部布局）。
+runtime  = "worker"
+
+[requires]
+node = ">=22"
+
+[[action]]
+id          = "index"
+title       = "建立/更新文件索引"
+description = "递归遍历给定目录并为文件名建立索引，写入本插件的数据目录；已有索引会被整体替换。遍历会跳过 node_modules、.git、回收站、System Volume Information、AppData\\Local\\Temp 以及读不动的目录。第一次使用本插件、或者目录内容变化较大时，先跑这个。"
+run         = ["{node}", "filesearch.mjs", "index", "--data-dir={data_dir}", "--dirs={dirs}", "--max={max}"]
+output      = "json"
+render      = "keyvalue"
+# 会写文件（覆盖索引），所以是 mutate，不是 read
+risk        = "mutate"
+# 大目录（几十万个文件）在冷缓存上可能要几分钟，60 秒不够
+timeout     = 300
+
+  [[action.param]]
+  name        = "dirs"
+  type        = "string"
+  description = "要索引哪些目录，多个目录用逗号或分号分隔，例如 D:\\work,E:\\downloads。不填则沿用上一次索引过的目录"
+  short       = "d"
+
+  [[action.param]]
+  name        = "max"
+  type        = "integer"
+  default     = 200000
+  description = "最多索引多少个文件，达到上限就停止遍历，默认 20 万"
+
+[[action]]
+id          = "search"
+title       = "按文件名搜索"
+description = "在已建好的索引里做不区分大小写的子串匹配，文件名命中的排在路径命中的前面。返回文件名、完整路径、大小和修改时间。想找某个文件但记不清放在哪时用这个；索引还不存在时会提示你先跑 index。"
+run         = ["{node}", "filesearch.mjs", "search", "--data-dir={data_dir}", "--keyword={keyword}", "--limit={limit}"]
+output      = "json"
+render      = "table"
+risk        = "read"
+
+  [[action.param]]
+  name        = "keyword"
+  type        = "string"
+  required    = true
+  description = "要查找的关键词，不区分大小写，按子串匹配文件名与路径"
+  short       = "k"
+
+  [[action.param]]
+  name        = "limit"
+  type        = "integer"
+  default     = 20
+  description = "最多返回多少条结果，默认 20"
+
+[[action]]
+id          = "status"
+title       = "查看索引概况"
+description = "显示索引里有多少文件、什么时候建的、覆盖哪些根目录、索引文件占多大，以及上次是否因达到上限而提前停止。想确认索引是否还是新的时用这个。"
+run         = ["{node}", "filesearch.mjs", "status", "--data-dir={data_dir}"]
+output      = "json"
+render      = "keyvalue"
+risk        = "read"
+
+[[action]]
+id          = "open"
+title       = "在资源管理器里定位文件"
+description = "在文件管理器里打开该文件所在的目录并选中它。参数应先由 search 得到（或用绝对路径），路径不存在、不在索引里、或含控制字符时一律拒绝执行。"
+run         = ["{node}", "filesearch.mjs", "open", "--data-dir={data_dir}", "--path={path}"]
+output      = "json"
+render      = "keyvalue"
+# 会拉起 explorer 改变桌面前的窗口状态，属于有副作用，但可重复执行
+risk        = "mutate"
+
+  [[action.param]]
+  name        = "path"
+  type        = "path"
+  required    = true
+  description = "要定位的文件的完整路径（通常直接来自 search 的结果）"
