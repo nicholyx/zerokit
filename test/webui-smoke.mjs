@@ -174,6 +174,35 @@ async function get(p, raw = false) {
   }
 }
 
+// ---------------------------------------------------------------- 3.5 插件卸载 API（两步确认）
+
+{
+  const res = await fetch(BASE + '/api/plugins');
+  const data = await res.json();
+  const demo = (data.plugins ?? []).find((p) => p.id === 'webdemo');
+  check('API：/api/plugins 带来源信息（sourceType/sourceText）',
+    demo?.sourceType === 'unknown' && typeof demo?.sourceText === 'string',
+    JSON.stringify(demo?.sourceType));
+
+  const token = /name="zk-token" content="([0-9a-f]+)"/.exec(await (await fetch(BASE + '/')).text())?.[1];
+  const H = { 'x-zerokit-token': token, 'content-type': 'application/json' };
+  const step1 = await (await fetch(BASE + '/api/plugin/remove', {
+    method: 'POST', headers: H, body: JSON.stringify({ id: 'webdemo' }),
+  })).json();
+  check('API：卸载第一步返回确认令牌', step1.needConfirm === true && typeof step1.confirm === 'string',
+    JSON.stringify(step1));
+  const bad = await (await fetch(BASE + '/api/plugin/remove', {
+    method: 'POST', headers: H, body: JSON.stringify({ id: 'webdemo', confirm: 'nope' }),
+  })).json();
+  check('API：卸载的错误令牌被拒', bad.error?.includes('令牌'), JSON.stringify(bad));
+  const done = await (await fetch(BASE + '/api/plugin/remove', {
+    method: 'POST', headers: H, body: JSON.stringify({ id: 'webdemo', confirm: step1.confirm }),
+  })).json();
+  const after = (await (await fetch(BASE + '/api/plugins')).json()).plugins ?? [];
+  check('API：带正确令牌完成卸载，插件从列表消失',
+    done.ok === true && !after.some((p) => p.id === 'webdemo'), JSON.stringify(done));
+}
+
 // ---------------------------------------------------------------- 4. 桥协议（node 模拟浏览器）
 
 {

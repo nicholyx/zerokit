@@ -12,6 +12,7 @@ const el = {
   q: $('q'), list: $('list'), empty: $('empty'), count: $('count'), searchRow: $('searchRow'),
   listView: $('listView'), detailView: $('detailView'), workbench: $('workbench'),
   psView: $('psView'), psBtn: $('psBtn'), psCount: $('psCount'), clipBtn: $('clipBtn'),
+  plugView: $('plugView'), plugBtn: $('plugBtn'), plugCount: $('plugCount'),
   modeLabel: $('modeLabel'), modeDot: $('modeDot'), reload: $('reloadBtn'),
 };
 
@@ -201,12 +202,53 @@ function search(query) {
 
 // ---------------------------------------------------------------- 列表渲染
 
+/**
+ * 插件多的时候，扁平���动作列表会变成一锅粥。空输入（浏览态）按插件分组：
+ * 组头是插件名 + 版本 + 动作数，组内保持排序。搜索时保持扁平——
+ * 搜的时候用户找的是「那条动作」，分组反而碍事。
+ * 键盘导航不受影响：filtered 仍是扁平序，.item 的 data-i 对应它。
+ */
+const COLLAPSE_KEY = 'zerokit.collapsed';
+
+function loadCollapsed() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(COLLAPSE_KEY) ?? '[]'));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveCollapsed(set) {
+  try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...set])); } catch { /* 隐私模式 */ }
+}
+
+function itemHtml(entry, i, showPlugin) {
+  const a = entry.action;
+  const p = entry.plugin;
+  const dep = p.requiresOk ? '' : `<span class="badge destructive">缺依赖</span>`;
+  const smart = filteredSmart.get(entry.order);
+  // 搜索态跨插件，条目里带上插件名；浏览态有分组头就不重复了
+  const who = showPlugin ? `<span class="plugin">${esc(p.name)}</span>` : '';
+  return `<li class="item${i === active ? ' active' : ''}${smart ? ' smart' : ''}" data-i="${i}" role="option">
+    ${who}
+    <span class="title">
+      <span class="name">${esc(a.title)}</span>
+      <span class="desc">${smart ? `内容看起来是${esc(smart)}，可以直接用` : esc(a.description || p.summary || '')}</span>
+    </span>
+    <span class="aid">${esc(a.id)}</span>
+    ${smart ? `<span class="badge smart-badge">智能匹配</span>` : ''}
+    ${dep}
+    <span class="badge ${esc(a.risk)}">${esc(RISK_TEXT[a.risk] || a.risk)}</span>
+  </li>`;
+}
+
 function renderList() {
   const q = el.q.value;
   mode = 'command';
   el.modeLabel.textContent = '命令';
   el.modeDot.classList.remove('workbench');
   el.workbench.classList.add('hidden');
+  el.plugView.classList.add('hidden');
   el.listView.classList.remove('hidden');
   if (detail) el.detailView.classList.remove('hidden');
 
@@ -216,23 +258,40 @@ function renderList() {
   if (active >= filtered.length) active = Math.max(0, filtered.length - 1);
 
   el.empty.classList.toggle('hidden', filtered.length > 0);
-  el.list.innerHTML = filtered.map((entry, i) => {
-    const a = entry.action;
-    const p = entry.plugin;
-    const dep = p.requiresOk ? '' : `<span class="badge destructive">缺依赖</span>`;
-    const smart = filteredSmart.get(entry.order);
-    return `<li class="item${i === active ? ' active' : ''}${smart ? ' smart' : ''}" data-i="${i}" role="option">
-      <span class="plugin">${esc(p.name)}</span>
-      <span class="title">
-        <span class="name">${esc(a.title)}</span>
-        <span class="desc">${smart ? `内容看起来是${esc(smart)}，可以直接用` : esc(a.description || p.summary || '')}</span>
-      </span>
-      <span class="aid">${esc(a.id)}</span>
-      ${smart ? `<span class="badge smart-badge">智能匹配</span>` : ''}
-      ${dep}
-      <span class="badge ${esc(a.risk)}">${esc(RISK_TEXT[a.risk] || a.risk)}</span>
-    </li>`;
-  }).join('');
+
+  if (q.trim() === '' && filtered.length > 0) {
+    // 浏览态：按插件分组（组顺序 = 该插件第一个动作在排序里的位置）
+    const collapsed = loadCollapsed();
+    const groups = new Map();
+    results.forEach((r, i) => {
+      const id = r.entry.plugin.id;
+      if (!groups.has(id)) groups.set(id, []);
+      groups.get(id).push([r.entry, i]);
+    });
+    el.list.innerHTML = [...groups.entries()].map(([id, items]) => {
+      const p = items[0][0].plugin;
+      const isCollapsed = collapsed.has(id);
+      const dep = p.requiresOk ? '' : `<span class="badge destructive">缺依赖</span>`;
+      return `<li class="group-head${isCollapsed ? ' collapsed' : ''}" data-group="${esc(id)}">
+          <span class="g-arrow">${isCollapsed ? '▸' : '▾'}</span>
+          <span class="g-name">${esc(p.name)}</span>
+          <span class="g-meta">${esc(p.id)} · v${esc(p.version)} · ${items.length} 个动作</span>
+          ${dep}
+        </li>`
+        + (isCollapsed ? '' : items.map(([entry, i]) => itemHtml(entry, i, false)).join(''));
+    }).join('');
+    el.list.querySelectorAll('.group-head').forEach((head) => {
+      head.addEventListener('click', () => {
+        const id = head.dataset.group;
+        const set = loadCollapsed();
+        set.has(id) ? set.delete(id) : set.add(id);
+        saveCollapsed(set);
+        renderList();
+      });
+    });
+  } else {
+    el.list.innerHTML = filtered.map((entry, i) => itemHtml(entry, i, true)).join('');
+  }
 
   el.list.querySelectorAll('.item').forEach((node) => {
     node.addEventListener('click', () => { active = Number(node.dataset.i); openActive(); });
@@ -244,7 +303,7 @@ function renderList() {
   el.count.textContent = q.trim()
     ? `${filtered.length} / ${entries.length} 个动作`
     : (loadRecent().length > 0
-      ? `最近使用优先 · 共 ${entries.length} 个动作`
+      ? `最近使用优先 · ${plugins.length} 个插件 · ${entries.length} 个动作`
       : `${plugins.length} 个插件 · ${entries.length} 个动作`);
 }
 
@@ -598,7 +657,236 @@ function renderTable(rows) {
 
 // ---------------------------------------------------------------- 工作台（占位）
 
-// ---------------------------------------------------------------- 运行中
+// ---------------------------------------------------------------- 插件管理
+//
+// 「装了什么、从哪装的、能不能更新」的入口。装第三方插件是高权限动作，
+// 后端把能力摊开 + 确认令牌（/api/plugin/install），这里只做展示与转发——
+// 确认按钮永远弹在摊开的能力清单下面，用户看得到自己刚同意了什么。
+
+function exitPlugins() {
+  mode = 'command';
+  el.plugView.classList.add('hidden');
+  el.searchRow.classList.remove('hidden');
+  el.listView.classList.remove('hidden');
+  el.modeLabel.textContent = '命令';
+  history.replaceState(null, '', location.pathname);
+  renderList();
+  el.q.focus();
+}
+
+async function showPlugins() {
+  mode = 'plugins';
+  el.modeLabel.textContent = '插件';
+  el.searchRow.classList.add('hidden');
+  el.listView.classList.add('hidden');
+  el.detailView.classList.add('hidden');
+  el.workbench.classList.add('hidden');
+  el.psView.classList.add('hidden');
+  el.plugView.classList.remove('hidden');
+  if (location.hash !== '#/plugins') history.replaceState(null, '', '#/plugins');
+  await renderPlugins();
+}
+
+async function renderPlugins() {
+  let plugins = [];
+  try {
+    plugins = (await api('/api/plugins')).plugins ?? [];
+  } catch (e) {
+    el.plugView.innerHTML = `<div class="ps-empty">读不到插件列表：${esc(e.message)}</div>
+      <div class="actions"><button class="primary" id="plugBack">返回</button></div>`;
+    $('plugBack').addEventListener('click', exitPlugins);
+    return;
+  }
+
+  el.plugCount.textContent = String(plugins.length);
+  el.plugView.innerHTML = `
+    <div class="ps-head">
+      <h2>插件（${plugins.length}）</h2>
+      <span class="sub">来源与版本 · 安装 · 更新</span>
+    </div>
+    <div class="plug-install">
+      <input id="installSrc" placeholder="粘贴 git 仓库地址（https://github.com/…）或本地目录，回车安装"
+             autocomplete="off" spellcheck="false">
+      <button class="primary" id="installBtn">安装</button>
+    </div>
+    <div id="installBox"></div>
+    ${plugins.map((p) => `
+      <div class="plug-card" data-id="${esc(p.id)}">
+        <div class="plug-card-head">
+          <b>${esc(p.name)}</b>
+          <span class="aid">${esc(p.id)} · v${esc(p.version)}</span>
+          <span class="badge">${esc(p.sourceText)}</span>
+          ${p.requiresOk ? '' : '<span class="badge destructive">缺依赖</span>'}
+          <span class="plug-ops">
+            <button class="ghost" data-op="check">检查更新</button>
+            <button class="ghost" data-op="remove">卸载</button>
+          </span>
+        </div>
+        <div class="plug-card-body">${esc(p.summary || '')} · ${p.actions.length} 个动作</div>
+        <div class="plug-card-foot" hidden></div>
+      </div>`).join('')}
+    <div class="actions"><button class="primary" id="plugBack">返回</button></div>`;
+
+  $('installSrc').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); doInstall(); }
+  });
+  $('installBtn').addEventListener('click', doInstall);
+  $('plugBack').addEventListener('click', exitPlugins);
+
+  el.plugView.querySelectorAll('.plug-card').forEach((card) => {
+    card.querySelector('[data-op="check"]').addEventListener('click', () => doCheck(card));
+    card.querySelector('[data-op="remove"]').addEventListener('click', () => doRemove(card));
+  });
+}
+
+/** 安装：预览摊开 → 确认 → 落地。预览卡固定在安装框下面，确认前看得见全部能力 */
+async function doInstall() {
+  const input = $('installSrc');
+  const box = $('installBox');
+  const source = input.value.trim();
+  if (!source) return;
+  input.value = '';
+  box.innerHTML = '<div class="plug-card"><div class="plug-card-body">正在解析来源…</div></div>';
+  try {
+    const pv = await api('/api/plugin/install', { method: 'POST', body: { source } });
+    if (!pv.needConfirm) throw new Error(pv.error || '预览失败');
+    const p = pv.plugin;
+    box.innerHTML = `
+      <div class="plug-card installing">
+        <div class="plug-card-head">
+          <b>${esc(p.name)}</b>
+          <span class="aid">${esc(p.id)} · v${esc(p.version)}</span>
+          <span class="plug-ops">
+            <button class="primary" id="pvOk">确认安装</button>
+            <button class="ghost" id="pvCancel">取消</button>
+          </span>
+        </div>
+        <div class="plug-card-body">${esc(p.summary || '')}</div>
+        <table class="grid">
+          <thead><tr><th>动作</th><th>风险</th><th>真实命令</th></tr></thead>
+          <tbody>${p.actions.map((a) => `
+            <tr>
+              <td>${esc(a.id)} · ${esc(a.title)}</td>
+              <td><span class="badge ${esc(a.risk)}">${esc(RISK_TEXT[a.risk] || a.risk)}</span></td>
+              <td class="cmd-inline">${esc(a.command)}</td>
+            </tr>`).join('')}</tbody>
+        </table>
+        ${(pv.warnings ?? []).length ? `<div class="plug-warn">${pv.warnings.map((w) => `! ${esc(w)}`).join('<br>')}</div>` : ''}
+      </div>`;
+    $('pvCancel').addEventListener('click', () => { box.innerHTML = ''; });
+    $('pvOk').addEventListener('click', async () => {
+      $('pvOk').disabled = true;
+      $('pvOk').textContent = '安装中…';
+      try {
+        const r = await api('/api/plugin/install', {
+          method: 'POST', body: { source, confirm: pv.confirm },
+        });
+        if (!r.ok) throw new Error(r.message || '安装失败');
+        box.innerHTML = `<div class="plug-card"><div class="plug-card-body">✓ ${esc(r.message)}</div></div>`;
+        await load(true);
+        await renderPlugins();
+      } catch (e) {
+        $('pvOk').disabled = false;
+        $('pvOk').textContent = '确认安装';
+        box.querySelector('.plug-warn')?.remove();
+        box.insertAdjacentHTML('beforeend', `<div class="plug-warn">${esc(e.message)}</div>`);
+      }
+    });
+  } catch (e) {
+    box.innerHTML = `<div class="plug-card"><div class="plug-warn">✗ ${esc(e.message)}</div></div>`;
+  }
+}
+
+/** 检查更新：结果与「更新」按钮放在卡片底部的展开区里 */
+async function doCheck(card) {
+  const id = card.dataset.id;
+  const foot = card.querySelector('.plug-card-foot');
+  const btn = card.querySelector('[data-op="check"]');
+  btn.disabled = true;
+  btn.textContent = '检查中…';
+  foot.hidden = false;
+  foot.innerHTML = '<div class="plug-card-body">正在检查来源处的版本…</div>';
+  try {
+    const c = await api('/api/plugin/check', { method: 'POST', body: { id } });
+    if (!c.available) {
+      foot.innerHTML = `<div class="plug-card-body">✓ ${esc(c.reason || '已是最新版本')}</div>`;
+      return;
+    }
+    const diffBits = [
+      c.addedActions?.length ? `<span class="ok">新增动作：${esc(c.addedActions.join(', '))}</span>` : '',
+      c.removedActions?.length ? `<span style="color:var(--bad)">移除动作：${esc(c.removedActions.join(', '))}</span>` : '',
+    ].filter(Boolean).join('<br>');
+    foot.innerHTML = `
+      <div class="plug-card-body">
+        有更新：v${esc(c.current)} → <b>v${esc(c.latest)}</b>
+        ${diffBits ? `<br>${diffBits}` : ''}
+      </div>
+      <div class="plug-ops">
+        <button class="primary" id="updOk">更新到 v${esc(c.latest)}</button>
+      </div>`;
+    $('updOk').addEventListener('click', async () => {
+      const b = $('updOk');
+      b.disabled = true;
+      b.textContent = '更新中…';
+      try {
+        const r = await api('/api/plugin/update', { method: 'POST', body: { id, confirm: c.confirm } });
+        if (!r.ok) throw new Error(r.message || '更新失败');
+        await load(true);
+        await renderPlugins();
+      } catch (e) {
+        b.disabled = false;
+        b.textContent = '重试更新';
+        foot.insertAdjacentHTML('beforeend', `<div class="plug-warn">✗ ${esc(e.message)}</div>`);
+      }
+    });
+  } catch (e) {
+    foot.innerHTML = `<div class="plug-warn">✗ ${esc(e.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '检查更新';
+  }
+}
+
+/** 卸载：两步确认（后端令牌 + 前端弹窗），删的是整个插件目录 */
+async function doRemove(card) {
+  const id = card.dataset.id;
+  const ok = await new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'overlay';
+    overlay.innerHTML = `
+      <div class="modal">
+        <h3>卸载插件</h3>
+        <div class="risk-note">插件目录会被整个删掉；数据目录里的历史数据保留。</div>
+        <div class="cmd-line">${esc(id)}</div>
+        <div class="actions">
+          <button class="ghost" id="rmCancel">取消</button>
+          <button class="primary" id="rmOk">确认卸载</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const done = (v) => { overlay.remove(); resolve(v); };
+    overlay.querySelector('#rmCancel').addEventListener('click', () => done(false));
+    overlay.querySelector('#rmOk').addEventListener('click', () => done(true));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) done(false); });
+    overlay.querySelector('#rmOk').focus();
+  });
+  if (!ok) return;
+  try {
+    const first = await api('/api/plugin/remove', { method: 'POST', body: { id } });
+    const token = first.needConfirm ? first.confirm : null;
+    const r = token
+      ? await api('/api/plugin/remove', { method: 'POST', body: { id, confirm: token } })
+      : first;
+    if (!r.ok) throw new Error(r.message || '卸载失败');
+    await load(true);
+    await renderPlugins();
+  } catch (e) {
+    card.querySelector('.plug-card-foot').hidden = false;
+    card.querySelector('.plug-card-foot').innerHTML = `<div class="plug-warn">✗ ${esc(e.message)}</div>`;
+  }
+}
+
+
 //
 // 「启动了三个插件的服务，我得能看见是哪三个、并且能结束它们」——
 // 这是启动器和「一堆快捷方式」的分界线。
@@ -643,6 +931,7 @@ async function showPs() {
   el.listView.classList.add('hidden');
   el.detailView.classList.add('hidden');
   el.workbench.classList.add('hidden');
+  el.plugView.classList.add('hidden');
   el.psView.classList.remove('hidden');
   if (location.hash !== '#/ps') history.replaceState(null, '', '#/ps');
 
@@ -785,6 +1074,8 @@ function showWorkbench(question) {
   el.listView.classList.add('hidden');
   el.detailView.classList.add('hidden');
   el.workbench.classList.remove('hidden');
+  el.plugView.classList.add('hidden');
+  el.psView.classList.add('hidden');
   el.searchRow.classList.add('hidden'); // 工作台有自己的输入框，别和搜索框并排打架
 
   if (!wb.log) {
@@ -998,6 +1289,10 @@ async function wbSend() {
 // ---------------------------------------------------------------- 键盘
 
 document.addEventListener('keydown', (e) => {
+  if (mode === 'plugins') {
+    if (e.key === 'Escape') { e.preventDefault(); exitPlugins(); }
+    return;
+  }
   if (mode === 'ps') {
     if (e.key === 'Escape') { e.preventDefault(); exitPs(); }
     return;
@@ -1062,6 +1357,7 @@ el.q.addEventListener('input', () => {
 });
 el.reload.addEventListener('click', () => { load(true); refreshPsCount(); });
 el.psBtn.addEventListener('click', () => { if (mode === 'ps') exitPs(); else showPs(); });
+el.plugBtn.addEventListener('click', () => { if (mode === 'plugins') exitPlugins(); else showPlugins(); });
 
 // ---------------------------------------------------------------- 启动
 
@@ -1088,6 +1384,7 @@ async function load(notify) {
     if (notify) { active = 0; }
     renderList();
     refreshPsCount();   // 顺手把「运行中」徽标更新一下
+    el.plugCount.textContent = String(plugins.length);
     applyHash();
   } catch (e) {
     el.count.textContent = `加载失败：${e.message}`;
@@ -1099,6 +1396,12 @@ function applyHash() {
   // #/ps  直接打开「运行中」
   if ((location.hash || '') === '#/ps') {
     showPs();
+    return;
+  }
+
+  // #/plugins  直接打开「插件管理」
+  if ((location.hash || '') === '#/plugins') {
+    showPlugins();
     return;
   }
 

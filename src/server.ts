@@ -14,7 +14,7 @@ import { checkAiReady, loadSettings } from './core/settings.ts';
 // 一起拉进来，光加载就 240ms，而启动器绝大多数时候用不到它。
 // Workbench 与工具清单在 agent.ts 里，那一支不碰任何模型 SDK，可以静态导入。
 import { Workbench, collectToolDefs } from './ai/agent.ts';
-import { addFromDir, addFromGit, listPlugins, previewAdd } from './core/registry.ts';
+import { addFromDir, addFromGit, listPlugins, previewAdd, removePlugin } from './core/registry.ts';
 import { applyUpdate, checkUpdate } from './core/update.ts';
 import { describeSource, readSource } from './core/sources.ts';
 import { checkRequires } from './core/resolve.ts';
@@ -109,8 +109,8 @@ function confirmToken(pluginId: string, actionId: string, values: Record<string,
   return crypto.createHmac('sha256', CONFIRM_SECRET).update(payload).digest('hex');
 }
 
-/** 安装/更新的确认令牌：和「这条来源 + 这个插件」绑定，防「确认的是 A、装的是 B」 */
-function installToken(kind: 'install' | 'update', key: string): string {
+/** 安装/更新/卸载的确认令牌：和「这条来源 + 这个插件」绑定，防「确认的是 A、操作的是 B」 */
+function installToken(kind: 'install' | 'update' | 'remove', key: string): string {
   return crypto.createHmac('sha256', CONFIRM_SECRET).update(`${kind}|${key}`).digest('hex');
 }
 
@@ -409,6 +409,28 @@ export function createServer(): http.Server {
         }
         const result = applyUpdate(id);
         json(res, 200, { ok: result.ok, message: result.message, warnings: result.warnings });
+        return;
+      }
+
+      // 卸载是删除操作，和更新同级的两步确认：先拿令牌，用户点了「确认卸载」再带回来
+      if (url.pathname === '/api/plugin/remove' && req.method === 'POST') {
+        const body = await readBody(req);
+        const id = String(body['id'] ?? '');
+        if (!listPlugins().some((e) => e.plugin?.id === id)) {
+          json(res, 404, { error: `没有插件 ${id}` });
+          return;
+        }
+        const confirm = typeof body['confirm'] === 'string' ? body['confirm'] : '';
+        if (!confirm) {
+          json(res, 200, { needConfirm: true, confirm: installToken('remove', id) });
+          return;
+        }
+        if (!sameToken(confirm, installToken('remove', id))) {
+          json(res, 403, { error: '确认令牌不对' });
+          return;
+        }
+        const ok = removePlugin(id);
+        json(res, 200, { ok, message: ok ? `已卸载 ${id}` : `没有插件 ${id}` });
         return;
       }
 
