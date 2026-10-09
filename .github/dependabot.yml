@@ -26,6 +26,17 @@ updates:
     commit-message:
       prefix: "build"
       include: "scope"
+    # major 升级单独排期，不与日常更新混在一起：
+    # - typescript 7 是世代更替（原生 Go 实现），typecheck 行为差异要单独评估
+    # - @types/node 应对齐 engines 的最低支持版本（22），升 major 会让
+    #   类型检查按新 Node 的 API 放行，而运行环境 22 没有那些 API
+    ignore:
+      - dependency-name: "typescript"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "@types/node"
+        update-types:
+          - "version-update:semver-major"
     # 同一个依赖生态的 minor/patch 合并成一个 PR，避免 PR 数量爆炸
     groups:
       npm-minor-patch:
