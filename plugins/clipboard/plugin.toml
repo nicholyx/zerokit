@@ -56,9 +56,9 @@ stop        = ["{node}", "clipboard.mjs", "watch-stop", "clipboard.pid"]
 
 # ---------------------------------------------------------------- 读
 
-# 注意：**第一个动作必须是非后台动作**。services.ts 拼 [[service]].stop 的命令时，
-# 会拿 plugin.actions[0] 当模板再替换 run；如果第一个动作带 background = true，
-# 停止命令会被当成后台任务拉起来（立刻返回、什么也没停）。所以 list 排在最前面。
+# 动作的顺序**没有隐含要求**：services.ts 拼 [[service]].stop 的命令时会显式把
+# background 关掉，所以第一个动作是不是后台动作都不影响停止命令。
+# （曾经必须"把非后台动作排第一"，那个陷阱已经在 services.ts 里堵掉了。）
 [[action]]
 id          = "list"
 title       = "最近的剪贴板历史"
