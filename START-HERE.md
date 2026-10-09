@@ -13,7 +13,7 @@ zerokit 是一个**不绑定宿主**的插件运行器：插件是一份纯文�
 
 | | 必须要吗 | 说明 |
 |---|---|---|
-| **Node.js ≥ 22.18** | **必须** | 项目直接用 Node 原生的 TypeScript 类型擦除，**没有构建步骤**，`node src/cli.ts` 就是跑源码。<br>查版本：`node -v`。不够就 `winget install OpenJS.NodeJS.LTS` |
+| **Node.js ≥ 22.18** | **必须** | 项目直接用 Node 原生的 TypeScript 类型擦除，**没有构建步骤**，`node src/cli.ts` 就是跑源码。<br>查版本：`node -v`。不够就装：Windows `winget install OpenJS.NodeJS.LTS`；macOS `brew install node`；Linux `nvm install 22` |
 | git | 可选 | 只有从 git 仓库装插件（集市）时用 |
 | Python 3.10+ | 可选 | 只有示例插件 `proxy` 需要；其余插件不需要 |
 | Rust 工具链 | 可选 | 只有编译**原生桌面壳**时需要；用浏览器界面不需要 |
@@ -117,8 +117,9 @@ cargo run
 重开一次会重建。里面包括装好的插件、配置、日志、审计记录。
 
 **跑 python 插件报找不到 python？**
-`winget install Python.Python.3.13`。注意微软商店会塞一个假的 `python.exe` 占位程序，
-这个项目会主动跳过它，所以别从商店装。
+Windows：`winget install Python.Python.3.13`。注意微软商店会塞一个假的
+`python.exe` 占位程序，这个项目会主动跳过它，所以别从商店装。
+macOS：`brew install python`；Linux：用系统包管理器装 python3 即可。
 
 **端口每次都不一样？**
 `zkit ui` 默认随机端口（避免撞车）。要固定就 `--port 28970`。
