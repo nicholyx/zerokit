@@ -71,7 +71,7 @@ const row = (name, ms, note = '') => {
 
   for (const [plugin, action, note] of [
     ['sysinfo', 'overview', 'node 脚本'],
-    ['jlc-proxy', 'status', 'python 脚本（跨语言）'],
+    ['proxy', 'status', 'python 脚本（跨语言）'],
   ]) {
     const s = await timeAction(plugin, action);
     row(`动作 ${plugin}.${action}`, s[0], `${note}；3 次：${s.map((x) => x.toFixed(0)).join('/')}`);

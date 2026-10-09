@@ -76,7 +76,7 @@ zkit mcp serve                   # 手动以 stdio 方式跑起来看看
 **安全默认**：MCP 侧**只读动作默认放行，有副作用的动作必须先显式授权一次**：
 
 ```bash
-zkit mcp allow jlc-proxy.allow-domain     # 授权这一个动作
+zkit mcp allow proxy.allow-domain     # 授权这一个动作
 zkit mcp allow                            # 看已授权哪些
 ```
 
@@ -211,7 +211,7 @@ mcp-allow.json      已授权给 AI 调用的有副作用动作
       python 动作 476→22 ms（**常驻解释器**，声明 `runtime = "host"` 开启，21 倍）
 - [x] **uTools 插件兼容层**：带 `plugin.json` 的存量插件丢进插件目录即可用，自动翻译
       `features[].cmds`（关键字 / `regex:` / 划词 / 文件），同时获得 CLI + MCP + 启动器四个面
-- [x] 示例插件：`sysinfo`（只读零依赖）、`ip`（**零代码**）、`jlc-proxy`（接入已有工具）、
+- [x] 示例插件：`sysinfo`（只读零依赖）、`ip`（**零代码**）、`proxy`（接入已有工具）、
       `quick`（内容智能匹配）、`clipboard`（剪贴板历史 + 常驻监听）、`filesearch`（文件名索引）
 
 测试（都不联网、不花钱）：

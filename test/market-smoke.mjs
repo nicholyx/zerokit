@@ -57,13 +57,13 @@ const listed = Number(/测试集市\s+(\d+) 个插件/.exec(r.out)?.[1] ?? 0);
 check('列出集市并显示插件数', /测试集市/.test(r.out) && listed >= 3, r.out);
 
 r = cli(['market', 'search', '代理']);
-check('按中文关键词搜到插件', /jlc-proxy/.test(r.out) && /白名单代理/.test(r.out), r.out);
+check('按中文关键词搜到插件', /proxy/.test(r.out) && /白名单代理/.test(r.out), r.out);
 
 r = cli(['market', 'search', 'sysinfo']);
 check('按 id/keywords 也能搜到', /sysinfo/.test(r.out), r.out);
 
 // 非交互环境下不给 --yes 必须拒绝（失败要往安全的一侧倒）
-r = cli(['plugin', 'install', 'jlc-proxy']);
+r = cli(['plugin', 'install', 'proxy']);
 check('非交互环境下拒绝安装并要求显式确认', r.code === 1 && /无法确认/.test(r.out), r.out);
 
 // 审查输出必须把每个动作的真实命令和风险等级摊开
@@ -73,17 +73,17 @@ const reviewOk = /共 7 个动作/.test(r.out)
   && /auth/.test(r.out);
 check('安装前把全部动作的真实命令与风险等级摊开', reviewOk, r.out);
 
-r = cli(['plugin', 'install', 'jlc-proxy', '--yes']);
+r = cli(['plugin', 'install', 'proxy', '--yes']);
 check('显式确认后安装成功', r.code === 0 && /已安装/.test(r.out), r.out);
 
 r = cli(['list']);
-check('安装后在插件列表里可见', /jlc-proxy/.test(r.out) && /allow-domain/.test(r.out), r.out);
+check('安装后在插件列表里可见', /proxy/.test(r.out) && /allow-domain/.test(r.out), r.out);
 
 check('留下了安装快照（用于发现装后偷改）',
-  fs.existsSync(path.join(HOME, 'installed', 'jlc-proxy.json')),
+  fs.existsSync(path.join(HOME, 'installed', 'proxy.json')),
   fs.readdirSync(path.join(HOME, 'installed')).join(','));
 
-r = cli(['plugin', 'install', 'jlc-proxy', '--yes']);
+r = cli(['plugin', 'install', 'proxy', '--yes']);
 check('重复安装被拒并给出卸载指引', r.code === 1 && /已存在/.test(r.out), r.out);
 
 r = cli(['plugin', 'install', '根本没有这个', '--yes']);

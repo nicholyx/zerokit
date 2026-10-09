@@ -484,12 +484,16 @@ export async function cli(args: string[]): Promise<number> {
   // 机器可读的就绪行，放在最后一行：宿主解析这一行比猜中文提示稳妥
   process.stdout.write(`zerokit-ready ${JSON.stringify({ url, pid: process.pid })}\n`);
   if (args.includes('--open')) {
-    try {
-      const { spawn } = await import('node:child_process');
-      spawn('cmd', ['/c', 'start', '', url], { windowsHide: true, detached: true }).unref();
-    } catch {
-      /* 打不开浏览器不影响服务 */
-    }
+    // 按平台选打开浏览器的命令（cmd /c start 只在 Windows 上有）。
+    // 注意 spawn 的失败（如命令不存在）走的是 error 事件而不是同步异常，
+    // 外面套 try/catch 接不住——必须挂 error handler，否则会把整个服务带崩。
+    const { spawn } = await import('node:child_process');
+    const exe = process.platform === 'win32' ? 'cmd'
+      : process.platform === 'darwin' ? 'open' : 'xdg-open';
+    const argv = process.platform === 'win32' ? ['/c', 'start', '', url] : [url];
+    const child = spawn(exe, argv, { windowsHide: true, detached: true });
+    child.on('error', () => { /* 打不开浏览器不影响服务 */ });
+    child.unref();
   }
   await new Promise<void>((resolve) => {
     const stop = () => {

@@ -15,7 +15,7 @@ zerokit 是一个**不绑定宿主**的插件运行器：插件是一份纯文�
 |---|---|---|
 | **Node.js ≥ 22.18** | **必须** | 项目直接用 Node 原生的 TypeScript 类型擦除，**没有构建步骤**，`node src/cli.ts` 就是跑源码。<br>查版本：`node -v`。不够就 `winget install OpenJS.NodeJS.LTS` |
 | git | 可选 | 只有从 git 仓库装插件（集市）时用 |
-| Python 3.10+ | 可选 | 只有示例插件 `jlc-proxy` 需要；其余插件不需要 |
+| Python 3.10+ | 可选 | 只有示例插件 `proxy` 需要；其余插件不需要 |
 | Rust 工具链 | 可选 | 只有编译**原生桌面壳**时需要；用浏览器界面不需要 |
 
 `node_modules` 没有随包发过来（它是装出来的，不是源码），所以**第一步必须是 `npm install`**。
@@ -66,7 +66,7 @@ node src/cli.ts run ip public
 # 4. 界面上：直接打字 xtxx 或 daili，应该能看到拼音/首字母匹配
 ```
 
-`doctor` 里如果提示 `python` 缺失，**不影响其它插件**——只有 `jlc-proxy`
+`doctor` 里如果提示 `python` 缺失，**不影响其它插件**——只有 `proxy`
 （那个接管已有工具的示例）需要它。
 
 ---

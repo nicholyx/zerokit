@@ -204,7 +204,7 @@ AI 客户端替我们把关。所以：
 | 首个页面响应 | 53 ms |
 | 插件列表接口 | 13 ms |
 | 动作 `sysinfo.overview`（node 脚本） | 189~246 ms（首次 1033） |
-| 动作 `jlc-proxy.status`（python 脚本） | 999~1085 ms |
+| 动作 `proxy.status`（python 脚本） | 999~1085 ms |
 | **`node -e 0` 裸启动** | **193 ms** |
 | **`python -c 0` 裸启动** | **246 ms** |
 

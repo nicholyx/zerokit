@@ -52,7 +52,7 @@
       "source": "path:plugins/ip"
     },
     {
-      "id": "jlc-proxy",
+      "id": "proxy",
       "name": "白名单代理",
       "summary": "只允许访问 jlcops.com / jlcerp.com 的出网代理",
       "version": "1.0.0",
@@ -64,7 +64,7 @@
         "jlc",
         "出网"
       ],
-      "source": "path:plugins/jlc-proxy"
+      "source": "path:plugins/proxy"
     },
     {
       "id": "quick",

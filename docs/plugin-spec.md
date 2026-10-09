@@ -24,7 +24,7 @@
 插件就是一个目录，放在 `~/.zerokit/plugins/<任意名字>/`，目录里必须有 `plugin.toml`。
 
 ```
-plugins/jlc-proxy/
+plugins/proxy/
   plugin.toml        必需。唯一的声明文件
   proxy.py           任意语言、任意文件；也可以完全没有代码
   web/index.html     可选。富交互网页形态（**尚未实现**，见 overview.md「待办」）
@@ -102,7 +102,7 @@ runtime = "host"      # 只对「用 {python} 跑一个 .py 文件」的动作�
 
 ```toml
 [plugin]
-id       = "jlc-proxy"
+id       = "proxy"
 name     = "白名单代理"
 version  = "1.0.0"
 summary  = "只允许访问 jlcops.com / jlcerp.com 的出网代理"
@@ -418,7 +418,7 @@ zerokit 的清单（只读，不写你的目录）。丢进插件目录即可，
 
 ```toml
 [plugin]
-id       = "jlc-proxy"
+id       = "proxy"
 name     = "白名单代理"
 version  = "1.0.0"
 summary  = "只允许访问 jlcops.com / jlcerp.com 的出网代理"
@@ -476,7 +476,7 @@ risk        = "destructive"
 
 ```bash
 zkit doctor                    # 清单校验 + 依赖自检
-zkit show jlc-proxy            # 看生成的 MCP 工具名和 inputSchema
-zkit run jlc-proxy status      # 直接跑一次
+zkit show proxy            # 看生成的 MCP 工具名和 inputSchema
+zkit run proxy status      # 直接跑一次
 zkit mcp serve                 # 确认 AI 侧也能看到这些工具
 ```

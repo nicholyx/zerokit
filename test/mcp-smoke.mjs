@@ -89,7 +89,7 @@ try {
     fail('inputSchema 不对：' + JSON.stringify(sample?.inputSchema));
   }
 
-  const ann = tools.find((t) => t.name === 'jlc-proxy__auth')?.annotations;
+  const ann = tools.find((t) => t.name === 'proxy__auth')?.annotations;
   if (ann?.destructiveHint === true && ann?.readOnlyHint === false) {
     pass('高风险动作的 annotations 标注正确（destructiveHint=true）');
   } else {
@@ -110,7 +110,7 @@ try {
 
   // 有副作用的动作，未经授权必须被拒（fail-closed）
   const blocked = await request('tools/call', {
-    name: 'jlc-proxy__stop', arguments: {},
+    name: 'proxy__stop', arguments: {},
   });
   if (blocked.result?.isError === true && /zkit mcp allow/.test(blocked.result.content[0].text)) {
     pass('有副作用的动作默认被拒，并提示用户如何授权');

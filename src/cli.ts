@@ -77,9 +77,9 @@ ${c.bold('其他')}
   path                    打印数据目录
 
 ${c.bold('示例')}
-  zkit run jlc-proxy status
-  zkit run jlc-proxy allow-domain --domain example.com
-  zkit plugin add RedMi/jlc-proxy
+  zkit run proxy status
+  zkit run proxy allow-domain --domain example.com
+  zkit plugin add RedMi/proxy
 
 数据目录 ${c.dim(HOME)}（复制这个目录 = 搬走整套配置和插件）
 `;
