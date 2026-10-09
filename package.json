@@ -23,7 +23,7 @@
     "smol-toml": "^1.9.0"
   },
   "devDependencies": {
-    "@types/node": "^22.10.0",
+    "@types/node": "^26.6.4",
     "pinyin-pro": "^3.29.4",
     "typescript": "^5.7.3"
   }
