@@ -11,6 +11,10 @@ import {
   listPlugins, removePlugin, requirePlugin,
 } from './core/registry.ts';
 import { checkRequires, resolveTool } from './core/resolve.ts';
+import {
+  addMarket, buildIndex, installFromMarket, loadMarkets, previewInstall,
+  readIndex, refreshMarket, removeMarket, searchMarkets,
+} from './core/market.ts';
 import { applyDefaults, parseArgv, toCliFlags, toJsonSchema } from './core/schema.ts';
 import { type RunResult, audit, confirmPolicy, runAction } from './core/runner.ts';
 
@@ -42,11 +46,19 @@ ${c.bold('基本')}
   doctor                  自检：环境、依赖、插件清单是否有问题
 
 ${c.bold('插件')}
-  plugin add <目录|git地址>   安装插件（支持 owner/repo 简写）
+  plugin install <插件id>     从集市安装（会先摊开它的全部能力让你确认）
+  plugin add <目录|git地址>   从本地目录或 git 仓库安装
   plugin remove <插件>        卸载
   plugin bundled              安装仓库自带的示例插件
   plugin export <插件>        打包成单个 .toolpack 文件
   plugin import <文件>        从 .toolpack 安装
+
+${c.bold('集市')}
+  market add <地址|目录>      添加集市（集市 = 一个 git 仓库 + 根目录 market.json）
+  market list                 已添加的集市
+  market search [关键词]      在集市里找插件
+  market refresh [集市名]     拉取最新索引
+  market index [目录]         把一个插件目录生成为集市索引
 
 ${c.bold('界面')}
   ui [--port N] [--open]  启动本地启动器界面（浏览器打开，也是 Tauri 壳用的同一套）
@@ -296,7 +308,7 @@ async function cmdRun(args: string[]): Promise<number> {
   return result.ok ? 0 : 1;
 }
 
-function cmdPlugin(args: string[]): number {
+async function cmdPlugin(args: string[]): Promise<number> {
   const sub = args[0];
   if (sub === 'bundled') {
     const installed = installBundled();
@@ -347,6 +359,9 @@ function cmdPlugin(args: string[]): number {
       return 1;
     }
   }
+  if (sub === 'install') {
+    return cmdPluginInstall(args.slice(1));
+  }
   if (sub === 'import') {
     const file = args[1];
     if (!file) {
@@ -358,7 +373,7 @@ function cmdPlugin(args: string[]): number {
     process.stdout.write(result.ok ? c.green(`✓ ${result.message}\n`) : c.red(`✗ ${result.message}\n`));
     return result.ok ? 0 : 1;
   }
-  process.stderr.write('用法：zkit plugin <add|remove|bundled|export|import>\n');
+  process.stderr.write('用法：zkit plugin <install|add|remove|bundled|export|import>\n');
   return 2;
 }
 
@@ -431,6 +446,180 @@ function cmdLogs(args: string[]): number {
   return 0;
 }
 
+/**
+ * 从集市安装。
+ *
+ * 关键在「先审查再落地」：第三方插件的清单是不可信输入，描述里可以藏指令
+ * （tool poisoning），装完还能偷改（rug pull）。所以这里把要装的东西
+ * 完整摊开——每个动作的真实命令、风险等级、依赖、警告——再让人决定。
+ */
+async function cmdPluginInstall(args: string[]): Promise<number> {
+  const id = args.find((a) => !a.startsWith('-'));
+  if (!id) {
+    process.stderr.write('用法：zkit plugin install <插件id> [--market <集市名>] [--yes]\n');
+    process.stderr.write(c.dim('  先看看有什么：zkit market search\n'));
+    return 2;
+  }
+  const marketIdx = args.indexOf('--market');
+  const marketName = marketIdx >= 0 ? args[marketIdx + 1] : undefined;
+  const skipConfirm = args.includes('--yes') || args.includes('-y');
+
+  const preview = previewInstall(id, marketName);
+  if (!preview) {
+    process.stderr.write(c.red(`✗ 所有集市里都没有插件 "${id}"\n`));
+    process.stderr.write(c.dim('  用 zkit market search 看看有什么，或 zkit market add 添加集市\n'));
+    return 1;
+  }
+  if (!preview.load.plugin || !preview.dir) {
+    process.stderr.write(c.red('✗ 这个插件的清单没通过校验：\n'));
+    for (const e of preview.load.errors) process.stderr.write(c.red(`    ${e}\n`));
+    return 1;
+  }
+
+  const p = preview.load.plugin;
+  process.stdout.write(`\n${c.bold('将要安装')} ${c.bold(p.name)}  ${c.dim(p.id)} v${p.version}\n`);
+  process.stdout.write(c.dim(`来自集市「${preview.market}」\n`));
+  if (p.summary) process.stdout.write(`${p.summary}\n`);
+  if (p.author) process.stdout.write(c.dim(`作者 ${p.author}\n`));
+
+  process.stdout.write(`\n${c.bold('它会获得这些能力')}（共 ${p.actions.length} 个动作）\n`);
+  for (const a of p.actions) {
+    const risk = RISK_LABEL[a.risk] ?? a.risk;
+    process.stdout.write(`  ${c.cyan(a.id.padEnd(16))} ${pad(a.title, 20)} ${risk}\n`);
+    const detail = a.type === 'http'
+      ? `${a.method} ${a.url}`
+      : a.run.join(' ');
+    process.stdout.write(c.dim(`      ${detail}\n`));
+  }
+
+  const reqs = checkRequires(p.requires);
+  if (reqs.length > 0) {
+    process.stdout.write('\n依赖：');
+    process.stdout.write(reqs.map((r) => (r.ok ? c.green(`${r.name} ✓`) : c.red(`${r.name} ✗`))).join('  ') + '\n');
+    for (const r of reqs.filter((x) => !x.ok)) {
+      process.stdout.write(c.yellow(`  ${r.hint}\n`));
+    }
+  }
+  for (const w of preview.load.warnings) process.stdout.write(c.yellow(`! ${w}\n`));
+
+  if (!skipConfirm) {
+    if (!process.stdin.isTTY) {
+      process.stderr.write(c.red('\n✗ 安装插件有风险，当前不是交互环境，无法确认。\n'));
+      process.stderr.write(c.dim('  确认要装就加 --yes\n'));
+      return 1;
+    }
+    process.stderr.write(`\n${c.yellow('确认安装上面这个插件？动作会在你的机器上执行真实命令。')} (y/N) `);
+    const answer = await readLine();
+    if (!/^y(es)?$/i.test(answer.trim())) {
+      process.stdout.write('已取消。\n');
+      return 1;
+    }
+  }
+
+  const result = installFromMarket(id, marketName);
+  process.stdout.write(result.ok
+    ? c.green(`✓ ${result.message}\n`)
+    : c.red(`✗ ${result.message}\n`));
+  if (result.ok && result.id) {
+    process.stdout.write(c.dim(`  看看它有什么：zkit show ${result.id}\n`));
+  }
+  return result.ok ? 0 : 1;
+}
+
+function cmdMarket(args: string[]): number {
+  const sub = (args[0] ?? 'list').toLowerCase();
+
+  if (sub === 'list' || sub === 'ls') {
+    const markets = loadMarkets();
+    if (markets.length === 0) {
+      process.stdout.write('还没有添加任何集市。\n');
+      process.stdout.write(c.dim('  zkit market add <git地址|owner/repo|本地目录>\n'));
+      process.stdout.write(c.dim('  zkit market add D:\\software\\zerokit      ← 把本仓库当集市\n'));
+      return 0;
+    }
+    for (const m of markets) {
+      const index = readIndex(m.name);
+      process.stdout.write(`${c.bold(m.name)}  ${c.dim(`${index?.plugins.length ?? '?'} 个插件`)}\n`);
+      if (index?.description) process.stdout.write(`  ${index.description}\n`);
+      process.stdout.write(c.dim(`  ${m.url}\n`));
+    }
+    return 0;
+  }
+
+  if (sub === 'add') {
+    const source = args[1];
+    if (!source) {
+      process.stderr.write('用法：zkit market add <git地址|owner/repo|本地目录>\n');
+      return 2;
+    }
+    const r = addMarket(source);
+    process.stdout.write(r.ok ? c.green(`✓ ${r.message}\n`) : c.red(`✗ ${r.message}\n`));
+    if (r.ok) process.stdout.write(c.dim('  用 zkit market search 看看有什么\n'));
+    return r.ok ? 0 : 1;
+  }
+
+  if (sub === 'remove' || sub === 'rm') {
+    const name = args[1];
+    if (!name) {
+      process.stderr.write('用法：zkit market remove <集市名>\n');
+      return 2;
+    }
+    const ok = removeMarket(name);
+    process.stdout.write(ok ? c.green(`✓ 已移除集市 ${name}\n`) : c.red(`✗ 没有这个集市：${name}\n`));
+    return ok ? 0 : 1;
+  }
+
+  if (sub === 'refresh') {
+    const target = args[1];
+    const names = target ? [target] : loadMarkets().map((m) => m.name);
+    if (names.length === 0) {
+      process.stdout.write('还没有添加任何集市。\n');
+      return 0;
+    }
+    let bad = 0;
+    for (const name of names) {
+      const r = refreshMarket(name);
+      process.stdout.write(r.ok ? c.green(`✓ ${r.message}\n`) : c.red(`✗ ${r.message}\n`));
+      if (!r.ok) bad++;
+    }
+    return bad ? 1 : 0;
+  }
+
+  if (sub === 'search' || sub === 'find') {
+    const q = args.slice(1).join(' ');
+    const hits = searchMarkets(q);
+    if (hits.length === 0) {
+      process.stdout.write(loadMarkets().length === 0
+        ? '还没有添加任何集市。zkit market add <地址>\n'
+        : `没有匹配 "${q}" 的插件。\n`);
+      return 0;
+    }
+    for (const hit of hits) {
+      const e = hit.entry;
+      process.stdout.write(`${c.bold(e.name ?? e.id)} ${c.dim(e.id)}`
+        + (e.version ? c.dim(` v${e.version}`) : '') + '\n');
+      if (e.summary) process.stdout.write(`  ${e.summary}\n`);
+      const tags = (e.tags ?? []).join(' ');
+      process.stdout.write(c.dim(`  集市 ${hit.market}${tags ? ' · ' + tags : ''}\n`));
+    }
+    process.stdout.write(c.dim('\n安装：zkit plugin install <插件id>\n'));
+    return 0;
+  }
+
+  if (sub === 'index') {
+    const dir = args[1] ?? process.cwd();
+    const index = buildIndex(dir, args[2], args[3]);
+    const outPath = path.join(path.resolve(dir), 'market.json');
+    fs.writeFileSync(outPath, JSON.stringify(index, null, 2) + '\n');
+    process.stdout.write(c.green(`✓ 已生成 ${outPath}，收录 ${index.plugins.length} 个插件\n`));
+    process.stdout.write(c.dim('  把这个文件提交到仓库根目录，别人就能 zkit market add 你的仓库了\n'));
+    return 0;
+  }
+
+  process.stderr.write('用法：zkit market <list|add|remove|refresh|search|index>\n');
+  return 2;
+}
+
 async function main(): Promise<number> {
   const [, , cmd, ...rest] = process.argv;
   switch (cmd) {
@@ -449,6 +638,8 @@ async function main(): Promise<number> {
       return cmdRun(rest);
     case 'plugin':
       return cmdPlugin(rest);
+    case 'market':
+      return cmdMarket(rest);
     case 'doctor':
       return cmdDoctor();
     case 'path':

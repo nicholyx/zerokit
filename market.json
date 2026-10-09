@@ -1,0 +1,51 @@
+{
+  "name": "zerokit 官方集市",
+  "description": "zerokit 自带的示例插件",
+  "plugins": [
+    {
+      "id": "ip",
+      "name": "出口 IP",
+      "summary": "查本机访问外网时用的公网 IP，零代码插件",
+      "version": "1.0.0",
+      "tags": [
+        "ip",
+        "公网",
+        "出口",
+        "网络",
+        "地址"
+      ],
+      "source": "path:plugins/ip"
+    },
+    {
+      "id": "jlc-proxy",
+      "name": "白名单代理",
+      "summary": "只允许访问 jlcops.com / jlcerp.com 的出网代理",
+      "version": "1.0.0",
+      "tags": [
+        "代理",
+        "proxy",
+        "网络",
+        "白名单",
+        "jlc",
+        "出网"
+      ],
+      "source": "path:plugins/jlc-proxy"
+    },
+    {
+      "id": "sysinfo",
+      "name": "系统信息",
+      "summary": "查看本机 CPU、内存、磁盘和占用最高的进程，只读，零依赖",
+      "version": "1.0.0",
+      "tags": [
+        "系统",
+        "cpu",
+        "内存",
+        "磁盘",
+        "进程",
+        "sysinfo",
+        "性能"
+      ],
+      "source": "path:plugins/sysinfo"
+    }
+  ]
+}
