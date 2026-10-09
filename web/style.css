@@ -120,6 +120,22 @@ main { flex: 1; overflow-y: auto; margin-top: 14px; }
 .badge.mutate { color: var(--warn); border-color: #5a4520; }
 .badge.destructive { color: var(--bad); border-color: #5c2a27; }
 
+/* ---------------- 分组（浏览态按插件聚合） ---------------- */
+.group-head {
+  display: flex; align-items: center; gap: 9px;
+  padding: 10px 12px 6px;
+  font-size: 12px; color: var(--fg-dim);
+  cursor: pointer; user-select: none;
+  position: sticky; top: 0;
+  background: var(--bg);
+  z-index: 2;
+}
+.group-head:hover .g-name { color: var(--fg); }
+.group-head .g-arrow { width: 12px; flex-shrink: 0; color: #6b7686; }
+.group-head .g-name { font-weight: 600; font-size: 13px; color: #b8c2d0; }
+.group-head .g-meta { font-family: var(--mono); font-size: 11px; }
+.group-head.collapsed { padding-bottom: 10px; border-bottom: 1px solid #171c23; }
+
 .empty { color: var(--fg-dim); text-align: center; padding: 40px 0; font-size: 13px; }
 
 /* ---------------- 详情 / 表单 ---------------- */
@@ -221,6 +237,50 @@ table.grid tr:last-child td { border-bottom: 0; }
 .ps-head h2 { margin: 0; font-size: 17px; }
 .ps-head .sub { color: var(--fg-dim); font-size: 12px; }
 .ps-head button { margin-left: auto; }
+
+/* ---------------- 插件管理 ---------------- */
+.plug-view { padding-bottom: 16px; }
+
+.plug-install {
+  display: flex; gap: 8px; margin-bottom: 14px;
+}
+.plug-install input {
+  flex: 1; padding: 8px 11px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; color: var(--fg);
+  font: inherit; font-family: var(--mono); font-size: 12.5px;
+}
+.plug-install input:focus { outline: none; border-color: #33455c; }
+
+.plug-card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; margin-bottom: 10px; overflow: hidden;
+}
+.plug-card.installing { border-color: #33455c; }
+.plug-card-head {
+  display: flex; align-items: center; gap: 9px;
+  padding: 10px 12px;
+}
+.plug-card-head b { font-size: 13px; }
+.plug-card-head .aid { font-family: var(--mono); font-size: 12px; color: #7f8b9c; }
+.plug-card-head .badge { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plug-ops { margin-left: auto; display: flex; gap: 7px; flex-shrink: 0; }
+.plug-card-body {
+  padding: 0 12px 11px; color: var(--fg-dim); font-size: 12.5px;
+}
+.plug-card-foot { border-top: 1px solid var(--line); }
+.plug-card-foot .plug-card-body { padding-top: 10px; }
+.plug-card-foot .plug-ops { padding: 0 12px 11px; margin-left: 0; }
+.plug-card table.grid { margin: 0 12px 11px; }
+.plug-card td.cmd-inline {
+  font-family: var(--mono); font-size: 11.5px; color: #9fd0ff;
+  max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.plug-warn {
+  padding: 9px 12px 11px; color: var(--bad); font-size: 12.5px;
+  word-break: break-all;
+}
+
 
 .ps-group { margin-bottom: 18px; }
 .ps-group h3 {

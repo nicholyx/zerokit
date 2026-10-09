@@ -19,6 +19,7 @@
     </div>
     <div class="bar-right">
       <span class="hint-inline" id="count"></span>
+      <button class="ghost run-chip" id="plugBtn" title="管理插件：查看来源与版本、安装、更新、卸载">插件 <b id="plugCount">0</b></button>
       <button class="ghost run-chip" id="psBtn" title="查看正在运行的进程与服务">运行中 <b id="psCount">0</b></button>
       <button class="ghost" id="reloadBtn" title="重新读取插件">重新加载</button>
     </div>
@@ -38,6 +39,7 @@
       <div id="empty" class="empty">没有匹配的插件动作</div>
     </div>
     <div id="detailView" class="detail-view hidden"></div>
+    <div id="plugView" class="plug-view hidden"></div>
     <div id="psView" class="ps-view hidden"></div>
     <div id="workbench" class="workbench hidden"></div>
   </main>
