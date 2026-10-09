@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "zerokit",
+  "version": "0.1.0",
+  "identifier": "dev.zerokit.desktop",
+  "build": {
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/icon.ico"
+    ],
+    "shortDescription": "一份清单，四个面：启动器 / CLI / MCP / Web",
+    "longDescription": "zerokit 桌面壳。真正的功能在 Node 内核里，这里只负责全局热键、托盘和无边框窗口。"
+  }
+}

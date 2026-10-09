@@ -422,8 +422,17 @@ export async function cli(args: string[]): Promise<number> {
   const portIdx = args.indexOf('--port');
   const port = portIdx >= 0 ? Number(args[portIdx + 1]) : 0;
   const { url } = await startServer({ port: Number.isFinite(port) ? port : 0 });
+
+  // 被宿主进程（Tauri 壳、脚本）当子进程拉起时，读取端可能在拿到地址后就关掉了，
+  // 之后任何 stdout 写入都会变成 EPIPE。默认会抛未捕获异常把进程打死，
+  // 所以这里把它降级成静默忽略——内核不该因为没人看输出而死。
+  process.stdout.on('error', () => { /* 读取端关了，无所谓 */ });
+  process.stderr.on('error', () => { /* 同上 */ });
+
   process.stdout.write(`zerokit 启动器已就绪：${url}\n`);
   process.stdout.write('按 Ctrl+C 停止\n');
+  // 机器可读的就绪行，放在最后一行：宿主解析这一行比猜中文提示稳妥
+  process.stdout.write(`zerokit-ready ${JSON.stringify({ url, pid: process.pid })}\n`);
   if (args.includes('--open')) {
     try {
       const { spawn } = await import('node:child_process');
@@ -436,6 +445,13 @@ export async function cli(args: string[]): Promise<number> {
     const stop = () => resolve();
     process.on('SIGINT', stop);
     process.on('SIGTERM', stop);
+    if (args.includes('--exit-on-stdin-close')) {
+      // 供宿主进程（Tauri 壳等）使用：宿主无论怎么死——正常退出、崩溃、被强杀——
+      // 它那一端的管道都会关闭，我们据此跟着退出，避免留下孤儿进程占着端口。
+      process.stdin.on('end', stop);
+      process.stdin.on('close', stop);
+      process.stdin.resume();
+    }
   });
   return 0;
 }

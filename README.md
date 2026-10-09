@@ -11,10 +11,15 @@ uTools 的插件是 JS 调 `utools.*` 私有 API，DeepSeek Harness 的插件是
 | **CLI** | `zkit run <插件> <动作> --参数 值` |
 | **MCP** | 工具 `<插件id>__<动作id>`，`inputSchema` 自动生成，任何 AI 客户端可直接调用 |
 | **启动器** | 关键词命中 → 动作列表 → 参数表单 → 结果卡片 |
+| **AI 工作台** | 同一批动作变成模型的工具，对话式调用，副作用动作先弹确认 |
 | **Web** | 独立页面与表单；插件也可自带 HTML 做富交互 |
 
 所以「给 AI 用」不是额外开发，而是免费副产品。复制一个插件目录（或一个 `.toolpack`
 单文件），能力就整体搬到了任何地方——终端、启动器、Claude Code、Cursor、VS Code 都行。
+
+启动器和 AI 工作台是**同一个窗口的两种模式**：输入框里直接打字是命令模式，
+以 `?` 开头切到工作台。两者共用同一份插件清单，所以在工作台里能用的工具，
+和 Claude Code / Cursor 里能用的完全一致。
 
 ## 快速开始
 
@@ -22,16 +27,34 @@ uTools 的插件是 JS 调 `utools.*` 私有 API，DeepSeek Harness 的插件是
 git clone <this-repo> && cd zerokit
 npm install
 
-node src/cli.ts plugin bundled     # 安装仓库自带的示例插件
-node src/cli.ts list               # 看有什么
-node src/cli.ts doctor             # 环境自检（依赖、插件清单）
-node src/cli.ts run sysinfo overview
+node src/cli.ts market add .           # 把本仓库当集市加进去（仓库自带 market.json）
+node src/cli.ts market search          # 看看有什么
+node src/cli.ts plugin install sysinfo # 安装（会先把它的全部能力摊开给你看）
+node src/cli.ts doctor                 # 环境自检（依赖、插件清单）
+node src/cli.ts run sysinfo overview   # 跑一个动作
+node src/cli.ts ui --open              # 打开启动器 / 工作台界面
 ```
 
 装好之后可以把 `zkit` 链接到全局：
 
 ```bash
 npm link        # 之后直接用 zkit / zkit-mcp
+```
+
+### 界面
+
+```bash
+zkit ui                 # 启动本地界面（默认随机端口，只绑 127.0.0.1）
+zkit ui --open          # 顺便打开浏览器
+```
+
+浏览器里是一个键盘优先的启动器：模糊搜索、↑↓ 选择、回车执行、按参数声明自动生成的表单、
+按 `render` 类型渲染的结果卡片。输入框里打 `?` 切到 AI 工作台。
+
+也可以套上原生壳（全局热键 Alt+Space、托盘、无边框窗口）：
+
+```bash
+cd apps/desktop/src-tauri && cargo run
 ```
 
 ## 接入 AI 客户端
@@ -119,9 +142,17 @@ zkit list / ls              列出插件与动作
 zkit show <插件> [动作]     详情（含生成的 MCP 工具名、JSON Schema、依赖自检）
 zkit run <插件> <动作>      执行；--json 输出结构化结果，--yes 跳过确认
 zkit doctor                 自检环境、依赖、插件清单
-zkit plugin add <目录|git>  安装（支持 owner/repo 简写）
+zkit ui                     启动器 / 工作台界面
+
+zkit market add <地址|目录> 添加集市（集市 = 一个 git 仓库 + 根目录 market.json）
+zkit market search [词]     在集市里找插件
+zkit market refresh         拉取最新索引
+zkit market index [目录]    把一个插件目录生成为集市索引
+zkit plugin install <id>    从集市安装（先摊开全部能力再确认）
+zkit plugin add <目录|git>  从本地目录或 git 仓库安装
 zkit plugin export <插件>   打包成单个 .toolpack
 zkit plugin import <文件>   从 .toolpack 安装
+
 zkit mcp serve|config|allow MCP 对接
 zkit logs [denied]          看审计日志
 ```
@@ -131,11 +162,16 @@ zkit logs [denied]          看审计日志
 `~/.zerokit/`（可用 `ZEROKIT_HOME` 改）：
 
 ```
+config.toml         zerokit 自身的设置（含 [ai] 段的模型 provider 与密钥）
 plugins/            插件目录，一个子目录就是一个插件
 logs/audit.log      所有调用（谁在什么时候执行了什么、结果如何）
 logs/denied.log     被拒/失败的，便于快速排查
 data/<插件>/        插件私有数据，跨更新保留
-approvals.json      CLI 里记住的确认
+data/artifacts/     超大输出的落盘位置
+marketplaces.json   已添加的集市
+cache/market/       集市索引的本地缓存
+installed/<插件>.json  安装时的清单快照（用于发现装后被偷改）
+approvals.json      界面与 CLI 里记住的确认
 mcp-allow.json      已授权给 AI 调用的有副作用动作
 ```
 
@@ -148,15 +184,25 @@ mcp-allow.json      已授权给 AI 调用的有副作用动作
 - [x] 内核：清单解析与校验、参数四投影、依赖自检、执行收口、审计
 - [x] CLI 面（含分级确认、非交互环境 fail-closed）
 - [x] MCP 面：工具自动生成、annotations、AI 侧授权白名单
+- [x] 启动器 UI（模糊搜索、键盘导航、参数表单、结果渲染）
+- [x] AI 工作台（多 provider 模型层、工具卡片、副作用先审批、拒绝后回填给模型）
+- [x] 插件集市（git 仓库 + 索引文件；安装前摊开全部能力审查；目录穿越防护）
+- [x] Tauri 原生壳（全局热键 Alt+Space、托盘、无边框窗口、失焦自动隐藏）
 - [x] 示例插件：`sysinfo`（只读零依赖）、`ip`（**零代码**）、`jlc-proxy`（接入已有工具）
-- [x] MCP 冒烟测试 `test/mcp-smoke.mjs`（用裸 JSON-RPC 客户端，不依赖 SDK）
 
-进行中：
+测试（`node test/*.mjs`，都不联网、不花钱）：
 
-- [ ] 启动器 UI（输入框 + 结果卡片）
-- [ ] AI 工作台（对话 + 工具卡片 + 分级确认 + 步骤时间线）
-- [ ] Tauri 原生壳（全局热键 Alt+Space、托盘）
-- [ ] 插件集市（一个 git 仓库 + 一个索引文件）
+| 测试 | 覆盖 |
+|---|---|
+| `test/mcp-smoke.mjs` | 用裸 JSON-RPC 客户端验证 MCP 面（不依赖 SDK 自证） |
+| `test/workbench-smoke.mjs` | agent 循环、审批挂起、拒绝回填、未配密钥时的提示 |
+| `test/market-smoke.mjs` | 集市添加/搜索/审查/安装、目录穿越拒绝、重复安装 |
+
+尚未开始：
+
+- [ ] 触发词的更多匹配类型（`regex` / `files` / `window` / 内容智能匹配）——uTools 最好用的部分
+- [ ] 拼音与首字母匹配（uTools 的真实护城河）
+- [ ] 常驻插件 host（现在是每次调用起一个进程，冷启动会拖慢启动器体感）
 
 ## 设计取舍
 
