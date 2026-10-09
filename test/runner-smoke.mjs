@@ -166,6 +166,90 @@ background  = true
     !listProcesses().some((p) => p.id === r.background.id));
 }
 
+// ---- 6. 常驻宿主（只对非一次性调用启用）----
+{
+  const { hostCount, shutdownHosts } = await import('../src/core/host.ts');
+  const { resolveTool } = await import('../src/core/resolve.ts');
+  const python = resolveTool('python');
+
+  if (!python) {
+    console.log('SKIP  常驻宿主的用例（本机没有 python）');
+  } else {
+    const dir = path.join(TMP, 'hostly');
+    fs.mkdirSync(dir, { recursive: true });
+    // 故意做一个"import 很贵"的脚本：常驻宿主的意义就是这笔钱只付一次
+    fs.writeFileSync(path.join(dir, 'slow_import.py'), 'import ssl, ctypes, subprocess, asyncio\n');
+    fs.writeFileSync(path.join(dir, 'script.py'), `
+import json, sys
+import slow_import                      # 冷启动时这笔 import 很贵
+print(json.dumps({"argv": sys.argv[1:], "ok": True}))
+`);
+    fs.writeFileSync(path.join(dir, 'plugin.toml'), `
+[plugin]
+id      = "hostly"
+name    = "常驻测试"
+summary = "常驻宿主测试"
+runtime = "host"
+
+[[action]]
+id          = "echo"
+title       = "回显"
+description = "把参数回显出来"
+run         = ["{python}", "script.py", "{word}"]
+output      = "json"
+risk        = "read"
+
+  [[action.param]]
+  name        = "word"
+  type        = "string"
+  default     = "hi"
+  description = "要说的话"
+`);
+    const plugin = loadPlugin(dir).plugin;
+    const action = plugin.actions[0];
+
+    // 一次性调用（cli）**不该**用常驻宿主：宿主冷启动比直接起进程还慢
+    const cliOnce = await runAction(plugin, action, { caller: 'cli', values: { word: 'a' } });
+    check('一次性调用(cli)仍能正确执行', cliOnce.ok && cliOnce.stdout.includes('"a"'),
+      cliOnce.stdout + cliOnce.error);
+    check('一次性调用(cli)不启用常驻宿主（避免冷启动反而更慢）',
+      hostCount() === 0, `hostCount=${hostCount()}`);
+
+    // 长生命周期调用（ui）走常驻宿主
+    const first = await runAction(plugin, action, { caller: 'ui', values: { word: 'b' } });
+    check('长生命周期调用(ui)走常驻宿主', hostCount() > 0, `hostCount=${hostCount()}`);
+    check('常驻路径输出正确', first.ok && first.stdout.includes('"b"'), first.stdout + first.error);
+
+    const timeCall = async () => {
+      const t = performance.now();
+      const r = await runAction(plugin, action, { caller: 'ui', values: { word: 'c' } });
+      return [performance.now() - t, r];
+    };
+    const [ms1, r1] = await timeCall();
+    const [ms2, r2] = await timeCall();
+    check('复用宿主后结果依然正确', r1.ok && r2.ok && r1.stdout.includes('"c"'), r1.stdout + r1.error);
+
+    // 三条路径的输出必须一致——否则"快"就没有意义
+    const spawned = await runAction(plugin, action, { caller: 'cli', values: { word: 'same' } });
+    const hosted = await runAction(plugin, action, { caller: 'ui', values: { word: 'same' } });
+    const parse = (s) => JSON.parse(s.trim());
+    check('常驻与子进程两条路径结果一致',
+      JSON.stringify(parse(spawned.stdout)) === JSON.stringify(parse(hosted.stdout)),
+      `${spawned.stdout.trim()} vs ${hosted.stdout.trim()}`);
+
+    console.log(`      常驻复用耗时 ${ms1.toFixed(0)}ms / ${ms2.toFixed(0)}ms（对比子进程约 ${spawned.ms ?? '?'}ms）`);
+
+    // 常驻宿主必须在「运行中」里看得见——用户有权知道有个进程一直在
+    const listed = listProcesses().find((p) => p.actionId === '__host__');
+    check('常驻宿主出现在「运行中」里（可见、可结束）', Boolean(listed?.running),
+      JSON.stringify(listProcesses().map((p) => p.actionId)));
+
+    // 测试进程不能被宿主一直撑着不退
+    shutdownHosts();
+    check('收工后宿主已关闭', hostCount() === 0, `hostCount=${hostCount()}`);
+  }
+}
+
 console.log('\n' + '='.repeat(60));
 const failed = results.filter(([, ok]) => !ok).map(([n]) => n);
 console.log(`通过 ${results.length - failed.length} / ${results.length}`);

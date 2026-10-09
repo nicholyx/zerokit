@@ -136,9 +136,15 @@ export interface Plugin {
    * 116ms 降到 31ms（约 3.7 倍）。代价是 **worker 不能单独设工作目录**
    * （process.chdir 是进程级的），所以脚本里的相对路径不再是插件目录——
    * 请用 `{plugin_dir}` 或 `import.meta.dirname` 来定位自己的文件。
-   * 不满足条件时会自动退回 spawn，不会因此失败。
+   *
+   * `host` 是**常驻解释器**：脚本在同一个解释器进程里反复执行，解释器启动和
+   * import 的成本只付一次。实测 `proxy.py status` 476ms → 22ms（21 倍）。
+   * 代价更明显，所以更要显式选择：模块缓存会保留、脚本**不能读 stdin**、
+   * 不能用 os.write(1, ...) 直接写文件描述符。只适合无状态的一次性任务。
+   *
+   * 两种加速都不满足条件时自动退回 spawn，不会因此失败。
    */
-  runtime: 'spawn' | 'worker';
+  runtime: 'spawn' | 'worker' | 'host';
   actions: Action[];
   /** 插件声明的常驻服务（可为空） */
   services: Service[];
@@ -489,10 +495,11 @@ export function parseManifest(text: string, pluginDir: string, manifestPath = '<
   const services = parseServices(raw['service'], errors);
 
   const runtimeRaw = (asString(meta['runtime']) ?? 'spawn').toLowerCase();
-  if (runtimeRaw !== 'spawn' && runtimeRaw !== 'worker') {
-    errors.push(`[plugin] runtime "${runtimeRaw}" 不支持（可选 spawn / worker）`);
+  if (!['spawn', 'worker', 'host'].includes(runtimeRaw)) {
+    errors.push(`[plugin] runtime "${runtimeRaw}" 不支持（可选 spawn / worker / host）`);
   }
-  const runtime: 'spawn' | 'worker' = runtimeRaw === 'worker' ? 'worker' : 'spawn';
+  const runtime: 'spawn' | 'worker' | 'host' =
+    runtimeRaw === 'worker' ? 'worker' : runtimeRaw === 'host' ? 'host' : 'spawn';
 
   if (errors.length > 0) return { errors, warnings };
 

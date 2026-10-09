@@ -659,7 +659,11 @@ function cmdPs(): number {
     process.stdout.write(`\n${c.bold('托管的进程')}\n`);
     for (const p of procs) {
       const mark = p.running ? c.green('●') : c.dim('○');
-      const state = p.running ? c.dim(`跑了 ${humanDuration(Date.now() - p.startedAt)}`) : c.red(`已退出（码 ${p.exitCode}）`);
+      // 别的会话登记、又在那边退出的进程，这里拿不到退出码（没人会通知我们），
+      // 所以只在真知道的时候才显示码——不编一个 0 出来把崩溃显示成正常退出。
+      const state = p.running
+        ? c.dim(`跑了 ${humanDuration(Date.now() - p.startedAt)}`)
+        : c.red(p.exitCode === undefined ? '已退出' : `已退出（码 ${p.exitCode}）`);
       process.stdout.write(`  ${mark} ${c.cyan(p.id.padEnd(5))} ${pad(p.title, 26)} ${c.dim(`PID ${p.pid}`)}  ${state}\n`);
       process.stdout.write(c.dim(`      ${p.command}\n`));
       if (!p.running && p.tail.length > 0) {

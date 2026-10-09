@@ -5,6 +5,7 @@ import type { Plugin, Service } from './manifest.ts';
 import { HOME } from './paths.ts';
 import { listPlugins } from './registry.ts';
 import { resolveTool } from './resolve.ts';
+import { isAlive } from './runtime.ts';
 import { buildArgv, runAction } from './runner.ts';
 
 /**
@@ -54,28 +55,46 @@ function previewCommand(plugin: Plugin, argv: string[]): string {
   return resolved.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ');
 }
 
-/** 谁在监听这个端口。用 netstat 而不是 PowerShell——后者光启动就要 200ms。 */
-function pidListeningOn(port: number): number | undefined {
+/**
+ * 「谁在监听哪些端口」的整表，带几秒缓存。
+ *
+ * 为什么缓存：一次 netstat 要 ~470ms（Windows 上它会枚举全部连接），而
+ * 「运行中」面板开着的时候每 2 秒就要问一次。不缓存的话光看面板就白烧 CPU。
+ * 缓存时间刻意比轮询间隔长一点，让相邻两次轮询共用一份结果。
+ */
+const LISTEN_TABLE_TTL = 4000;
+let listenTable: { at: number; ports: Map<number, number> } | undefined;
+
+function readListenTable(): Map<number, number> {
+  const now = Date.now();
+  if (listenTable && now - listenTable.at < LISTEN_TABLE_TTL) return listenTable.ports;
+
+  const ports = new Map<number, number>();
   try {
     const out = spawnSync('netstat', ['-ano', '-p', 'TCP'], {
       encoding: 'utf8', windowsHide: true, timeout: 8000, maxBuffer: 8 << 20,
     });
-    if (out.status !== 0 || !out.stdout) return undefined;
-    for (const line of out.stdout.split('\n')) {
+    for (const line of (out.stdout ?? '').split('\n')) {
       const cols = line.trim().split(/\s+/);
       // 形如：TCP  127.0.0.1:28888  0.0.0.0:0  LISTENING  1234
       if (cols.length < 5 || cols[3] !== 'LISTENING') continue;
       const local = cols[1] ?? '';
       const idx = local.lastIndexOf(':');
       if (idx < 0) continue;
-      if (Number(local.slice(idx + 1)) !== port) continue;
+      const port = Number(local.slice(idx + 1));
       const pid = Number(cols[4]);
-      if (Number.isFinite(pid) && pid > 0) return pid;
+      if (Number.isFinite(port) && Number.isFinite(pid) && pid > 0) ports.set(port, pid);
     }
   } catch {
     /* netstat 不可用就退化为"检测不到" */
   }
-  return undefined;
+  listenTable = { at: now, ports };
+  return ports;
+}
+
+/** 谁在监听这个端口。用 netstat 而不是 PowerShell——后者光启动就要 400ms。 */
+function pidListeningOn(port: number): number | undefined {
+  return readListenTable().get(port);
 }
 
 function readPidFile(file: string): number | undefined {
@@ -90,30 +109,9 @@ function readPidFile(file: string): number | undefined {
 }
 
 function pidAlive(pid: number): boolean {
-  try {
-    const out = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
-      encoding: 'utf8', windowsHide: true, timeout: 8000,
-    });
-    return out.status === 0 && /"/.test(out.stdout ?? '');
-  } catch {
-    return false;
-  }
+  return isAlive(pid);   // 0.06ms，比 tasklist 的 229ms 快三个数量级
 }
 
-/** 进程的启动时间，用于显示"跑了多久" */
-function processStartTime(pid: number): number | undefined {
-  try {
-    const out = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH', '/V'], {
-      encoding: 'utf8', windowsHide: true, timeout: 8000,
-    });
-    const line = (out.stdout ?? '').trim();
-    if (!line) return undefined;
-    // CSV 里没有启动时刻，退回用进程的空闲时间估算意义不大，直接不填
-    return undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 function serviceOf(plugin: Plugin, s: Service): ServiceStatus {
   const status: ServiceStatus = {
@@ -145,8 +143,9 @@ function serviceOf(plugin: Plugin, s: Service): ServiceStatus {
   if (pid !== undefined) {
     status.running = true;
     status.pid = pid;
-    const t = processStartTime(pid);
-    if (t !== undefined) status.startedAt = t;
+    // 注：「跑了多久」对**外部启动的**服务拿不到（tasklist 不给启动时刻，
+    // 而拉一次 tasklist 要 230~470ms，不值当）。托管进程的启动时间我们是知道的，
+    // 那一类会显示时长。
   }
   return status;
 }

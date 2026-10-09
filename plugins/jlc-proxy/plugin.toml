@@ -15,6 +15,11 @@ summary  = "只允许访问 jlcops.com / jlcerp.com 的出网代理"
 keywords = ["代理", "proxy", "网络", "白名单", "jlc", "出网"]
 license  = "MIT"
 
+# 这个插件的动作都是无状态的一次性任务，放进常驻解释器反复执行：
+# 实测 status 从 476ms 降到 22ms（解释器启动与 import 只付一次）。
+# 代价见 docs/plugin-spec.md：模块缓存保留、脚本不能读 stdin。
+runtime  = "host"
+
 [requires]
 python = ">=3.10"
 

@@ -8,6 +8,7 @@ import { toolName } from './manifest.ts';
 import { DATA_DIR, HOME, LOG_DIR, ensureDirs, pluginDataDir } from './paths.ts';
 import { resolveTool } from './resolve.ts';
 import { registerProcess } from './runtime.ts';
+import { hasHostFor, runViaHost } from './host.ts';
 
 /**
  * 执行器：整个系统**唯一的执行收口**。
@@ -22,7 +23,10 @@ import { registerProcess } from './runtime.ts';
 export type Caller = 'cli' | 'mcp' | 'ui' | 'api';
 
 const MAX_OUTPUT = 1 << 20; // 1 MiB，超出部分落盘
-const BUILTIN_NAMES = ['python', 'node', 'git', 'plugin_dir', 'data_dir', 'home'];
+const BUILTIN_NAMES = ['python', 'node', 'git', 'plugin_dir', 'data_dir', 'home', 'kit'];
+
+/** zerokit 自己的安装根目录。适配层（如 uTools 兼容）要用它定位随内核分发的辅助脚本 */
+export const KIT_ROOT = path.resolve(import.meta.dirname, '..', '..');
 
 export interface RunResult {
   ok: boolean;
@@ -60,6 +64,7 @@ function buildVars(plugin: Plugin, values: Record<string, unknown>): Record<stri
     data_dir: pluginDataDir(plugin.id),
     home: HOME,
     node: process.execPath,
+    kit: KIT_ROOT,
   };
   const python = resolveTool('python');
   if (python) vars['python'] = python.path;
@@ -463,29 +468,72 @@ export async function runAction(
     };
   }
 
-  // 优先走 worker（如果插件声明了且形态匹配），任何问题都退回子进程
-  const inWorker = workerTarget(plugin, argv, cwd);
-  let outcome: ExecOutcome;
-  if (inWorker) {
-    try {
-      outcome = await runInWorker(inWorker.script, inWorker.args, {
-        env, timeout: action.timeout * 1000, encoding: action.encoding,
-      });
-    } catch {
-      outcome = await execArgv(argv[0]!, argv.slice(1), {
-        cwd, env, timeout: action.timeout * 1000,
-        shell: action.shell, encoding: action.encoding,
-      });
+  // 执行路径按快慢依次尝试：常驻宿主 → worker → 子进程。
+  // 每一层出问题都退回下一层，别让"加速"变成"更脆弱"。
+  const viaSpawn = () => execArgv(argv[0]!, argv.slice(1), {
+    cwd, env, timeout: action.timeout * 1000,
+    shell: action.shell, encoding: action.encoding,
+  });
+
+  let outcome: ExecOutcome | undefined;
+
+  // 1) 常驻解释器：同一个进程里反复执行，解释器启动与 import 只付一次。
+  //
+  // **一次性命令行调用不走这条路**：宿主冷启动要起解释器并预热 import
+  // （实测约 1.6 秒），而 `zkit run` 每次都是新进程、宿主随之上一次就没了，
+  // 所以单次调用反而比直接起进程（约 0.5 秒）更慢——这是实测踩出来的回归。
+  // 常驻宿主只在长生命周期的地方划算：启动器、MCP 服务端。
+  const worthHosting = options.caller !== 'cli';
+  if (worthHosting && plugin.runtime === 'host'
+    && !action.background && !action.shell && argv.length >= 2) {
+    const interpreter = argv[0]!;
+    const scriptArg = argv[1]!;
+    if (hasHostFor(interpreter)) {
+      const script = path.isAbsolute(scriptArg) ? scriptArg : path.resolve(cwd, scriptArg);
+      if (fs.existsSync(script)) {
+        const hosted = await runViaHost({
+          pluginId: plugin.id,
+          pluginName: plugin.name,
+          interpreter,
+          script,
+          argv: argv.slice(2),
+          cwd,
+          env,
+          timeout: action.timeout * 1000,
+          encoding: action.encoding,
+        });
+        if (!hosted.hostError) {
+          outcome = {
+            exitCode: hosted.exitCode,
+            stdout: hosted.stdout,
+            stderr: hosted.stderr,
+            truncated: false,
+            timedOut: hosted.timedOut,
+          };
+        } else {
+          // 加速路径不可用不该让动作失败，但要留个痕迹（不静默降级）
+          process.stderr.write(`[zerokit] 常驻宿主不可用，已退回子进程：${hosted.hostError}\n`);
+        }
+      }
     }
-  } else {
-    outcome = await execArgv(argv[0]!, argv.slice(1), {
-      cwd,
-      env,
-      timeout: action.timeout * 1000,
-      shell: action.shell,
-      encoding: action.encoding,
-    });
   }
+
+  // 2) worker 线程：省掉整个进程创建
+  if (!outcome) {
+    const inWorker = workerTarget(plugin, argv, cwd);
+    if (inWorker) {
+      try {
+        outcome = await runInWorker(inWorker.script, inWorker.args, {
+          env, timeout: action.timeout * 1000, encoding: action.encoding,
+        });
+      } catch {
+        outcome = undefined;
+      }
+    }
+  }
+
+  // 3) 子进程：最通用，也是其它两条路的兜底
+  outcome ??= await viaSpawn();
 
   const ms = Date.now() - started;
   let ok = outcome.exitCode === 0 && !outcome.timedOut;

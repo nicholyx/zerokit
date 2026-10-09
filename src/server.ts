@@ -8,6 +8,7 @@ import { PKG_ROOT } from './core/paths.ts';
 import { needsConfirm, rememberApproval } from './core/approvals.ts';
 import { killAllProcesses, killProcess, listProcesses } from './core/runtime.ts';
 import { listServices, stopService } from './core/services.ts';
+import { shutdownHosts } from './core/host.ts';
 import { checkAiReady, loadSettings } from './core/settings.ts';
 // 注意这里**不要**顶层导入 './ai/index.ts'：那条链会把 @anthropic-ai/sdk
 // 一起拉进来，光加载就 240ms，而启动器绝大多数时候用不到它。
@@ -491,7 +492,12 @@ export async function cli(args: string[]): Promise<number> {
     }
   }
   await new Promise<void>((resolve) => {
-    const stop = () => resolve();
+    const stop = () => {
+      // 优雅退出时把常驻宿主一起收掉，别留下孤儿解释器（它们本来也会因为
+      // stdin 关闭而自己退出，这里是双保险）
+      shutdownHosts();
+      resolve();
+    };
     process.on('SIGINT', stop);
     process.on('SIGTERM', stop);
     if (args.includes('--exit-on-stdin-close')) {

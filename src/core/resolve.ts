@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { HOME } from './paths.ts';
 
 /**
  * 解释器/外部命令的定位与依赖自检。
@@ -17,6 +18,46 @@ export interface Resolved {
 }
 
 const cache = new Map<string, Resolved | null>();
+
+/**
+ * 磁盘缓存。
+ *
+ * 定位一个解释器要真跑一次 `<命令> --version` 来验证（python 约 150ms、
+ * git 约 100ms），而**每次 CLI 调用都是一个新进程**，内存缓存带不过去。
+ * 不落盘的话每次 `zkit run` 都要白付这两三百毫秒。
+ *
+ * 命中时会校验路径**现在还存在**——否则卸载了 python 之后会一直指着一个
+ * 已经不存在的路径。
+ */
+const CACHE_FILE = path.join(HOME, 'toolcache.json');
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+let diskCache: Record<string, { path: string; version: string; at: number }> | undefined;
+
+type DiskCache = Record<string, { path: string; version: string; at: number }>;
+
+function loadDiskCache(): DiskCache {
+  if (diskCache) return diskCache;
+  // 先装进局部的 loaded，再一次性赋给 diskCache：
+  // 这样"一定被赋值过"对类型系统是显式的，不用靠非空断言。
+  let loaded: DiskCache = {};
+  try {
+    const raw = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')) as unknown;
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) loaded = raw as DiskCache;
+  } catch {
+    /* 没有缓存文件（或它不是合法 JSON）就是空的，下次照样探测 */
+  }
+  diskCache = loaded;
+  return loaded;
+}
+
+function saveDiskCache(): void {
+  try {
+    fs.mkdirSync(HOME, { recursive: true });
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(diskCache ?? {}, null, 2));
+  } catch {
+    /* 写不了就退化成每次都探测，不该因此失败 */
+  }
+}
 
 const WIN = process.platform === 'win32';
 
@@ -100,6 +141,14 @@ export function resolveTool(name: string): Resolved | null {
   const key = name.toLowerCase();
   if (cache.has(key)) return cache.get(key) ?? null;
 
+  // 磁盘缓存命中：只要那个路径现在还在，就直接用
+  const cached = loadDiskCache()[key];
+  if (cached && Date.now() - cached.at < CACHE_TTL_MS && fs.existsSync(cached.path)) {
+    const hit: Resolved = { path: cached.path, version: cached.version };
+    cache.set(key, hit);
+    return hit;
+  }
+
   const override = process.env[`ZEROKIT_${key.toUpperCase()}`];
   const tried: string[] = [];
   if (override) tried.push(override);
@@ -112,6 +161,13 @@ export function resolveTool(name: string): Resolved | null {
     if (result) break;
   }
   cache.set(key, result);
+  const disk = loadDiskCache();
+  if (result) {
+    disk[key] = { path: result.path, version: result.version, at: Date.now() };
+    saveDiskCache();
+  } else {
+    delete disk[key];
+  }
   return result;
 }
 
