@@ -1,0 +1,46 @@
+# 示例插件：只读、零依赖，用来演示「一份清单 → 四个面」。
+# 改动这个文件后，zkit list / CLI / MCP 工具 / Web 表单会同时跟着变。
+
+[plugin]
+id       = "sysinfo"
+name     = "系统信息"
+version  = "1.0.0"
+summary  = "查看本机 CPU、内存、磁盘和占用最高的进程，只读，零依赖"
+keywords = ["系统", "cpu", "内存", "磁盘", "进程", "sysinfo", "性能"]
+license  = "MIT"
+
+[requires]
+node = ">=22"
+
+[[action]]
+id          = "overview"
+title       = "系统概况"
+description = "返回操作系统、CPU 型号与核数、内存占用、开机时长。想了解这台机器当前的整体状态时用这个。"
+run         = ["{node}", "sysinfo.mjs"]
+output      = "json"
+render      = "keyvalue"
+risk        = "read"
+
+[[action]]
+id          = "top"
+title       = "占用最高的进程"
+description = "按内存占用倒序列出进程。排查机器变慢、内存吃紧时用这个。"
+run         = ["{node}", "sysinfo.mjs", "top", "--limit", "{limit}"]
+output      = "json"
+render      = "table"
+risk        = "read"
+
+  [[action.param]]
+  name        = "limit"
+  type        = "integer"
+  default     = 10
+  description = "列出多少个进程，默认 10"
+
+[[action]]
+id          = "disk"
+title       = "磁盘占用"
+description = "列出各磁盘的容量、剩余空间和已用比例。检查磁盘是不是快满了用这个。"
+run         = ["{node}", "sysinfo.mjs", "disk"]
+output      = "json"
+render      = "table"
+risk        = "read"

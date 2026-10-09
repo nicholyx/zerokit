@@ -1,0 +1,456 @@
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import { StringDecoder } from 'node:string_decoder';
+import type { Action, Plugin, RiskLevel } from './manifest.ts';
+import { toolName } from './manifest.ts';
+import { DATA_DIR, HOME, LOG_DIR, ensureDirs, pluginDataDir } from './paths.ts';
+import { resolveTool } from './resolve.ts';
+
+/**
+ * 执行器：整个系统**唯一的执行收口**。
+ *
+ * 所有面（CLI / MCP / 启动器 / Web）都经这里执行动作，因此安全策略只需要
+ * 在这一处实现、一处审计。要点：
+ *   1. 默认不经 shell，参数作为 argv 元素直接传入 —— 从根上消除参数注入
+ *   2. 超时 + 输出上限，避免插件把宿主拖死或把上下文撑爆
+ *   3. 所有调用落审计；被拒/失败单独落一份，便于快速排查
+ */
+
+export type Caller = 'cli' | 'mcp' | 'ui' | 'api';
+
+const MAX_OUTPUT = 1 << 20; // 1 MiB，超出部分落盘
+const BUILTIN_NAMES = ['python', 'node', 'git', 'plugin_dir', 'data_dir', 'home'];
+
+export interface RunResult {
+  ok: boolean;
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  ms: number;
+  /** output = json 且解析成功时的结构化结果 */
+  data?: unknown;
+  /** 输出被截断时，完整输出落盘的路径 */
+  artifactPath?: string;
+  truncated: boolean;
+  error?: string;
+  /** 实际执行的 argv（敏感参数已打码），用于在确认框里给用户看"到底要跑什么" */
+  argv: string[];
+  /** 人类可读的完整命令，仅用于展示 */
+  command: string;
+}
+
+export interface RunOptions {
+  caller: Caller;
+  /** 已解析、已补齐默认值并校验过的参数 */
+  values: Record<string, unknown>;
+  cwd?: string;
+}
+
+const TOKEN_RE = /\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g;
+const WHOLE_TOKEN_RE = /^\{([a-zA-Z_][a-zA-Z0-9_]*)\}$/;
+
+function buildVars(plugin: Plugin, values: Record<string, unknown>): Record<string, string> {
+  const vars: Record<string, string> = {
+    plugin_dir: plugin.dir,
+    data_dir: pluginDataDir(plugin.id),
+    home: HOME,
+    node: process.execPath,
+  };
+  const python = resolveTool('python');
+  if (python) vars['python'] = python.path;
+  const git = resolveTool('git');
+  if (git) vars['git'] = git.path;
+  for (const [k, v] of Object.entries(values)) {
+    vars[k] = v === undefined || v === null ? '' : String(v);
+  }
+  return vars;
+}
+
+/** 把清单里的 run 模板展开成真正的 argv */
+export function buildArgv(
+  plugin: Plugin,
+  action: Action,
+  values: Record<string, unknown>,
+): { argv: string[]; errors: string[] } {
+  const vars = buildVars(plugin, values);
+  const argv: string[] = [];
+  const errors: string[] = [];
+
+  for (const element of action.run) {
+    const whole = WHOLE_TOKEN_RE.exec(element);
+    if (whole) {
+      const name = whole[1]!;
+      const value = vars[name];
+      if (value === undefined) {
+        if (BUILTIN_NAMES.includes(name)) {
+          errors.push(`清单里用到 {${name}}，但本机没找到它`
+            + (name === 'python' ? '（装一个：winget install Python.Python.3.13）' : ''));
+        }
+        continue; // 可选参数没给值：整个元素丢掉，不传空串
+      }
+      if (value === '') continue;
+      argv.push(value);
+      continue;
+    }
+    const missing: string[] = [];
+    const expanded = element.replace(TOKEN_RE, (_m, name: string) => {
+      const value = vars[name];
+      if (value === undefined) {
+        missing.push(name);
+        return '';
+      }
+      return value;
+    });
+    for (const name of missing) {
+      if (BUILTIN_NAMES.includes(name)) {
+        errors.push(`清单里用到 {${name}}，但本机没找到它`);
+      }
+    }
+    argv.push(expanded);
+  }
+  return { argv, errors };
+}
+
+/** 把 fetch 的 "fetch failed" 翻译成人能看懂的原因（原始错误藏在 e.cause 里） */
+function describeFetchError(e: unknown): string {
+  const err = e as { message?: string; cause?: { code?: string; message?: string } };
+  const code = err.cause?.code;
+  switch (code) {
+    case 'ENOTFOUND':
+    case 'EAI_AGAIN':
+      return `域名解析失败（${code}）—— 检查网络或 DNS`;
+    case 'ECONNREFUSED':
+      return '连接被拒绝 —— 目标端口没有服务在监听';
+    case 'ECONNRESET':
+      return '连接被重置（ECONNRESET）—— 大概被出口网络策略拦了';
+    case 'ETIMEDOUT':
+    case 'UND_ERR_CONNECT_TIMEOUT':
+    case 'UND_ERR_HEADERS_TIMEOUT':
+      return `连接超时（${code}）—— 网络不可达，或被出口策略拦截`;
+    case 'CERT_HAS_EXPIRED':
+    case 'UNABLE_TO_VERIFY_LEAF_SIGNATURE':
+    case 'DEPTH_ZERO_SELF_SIGNED_CERT':
+      return `证书校验失败（${code}）`;
+    default:
+      return code
+        ? `${err.cause?.message ?? '请求失败'}（${code}）`
+        : (err.message ?? String(e));
+  }
+}
+
+/** 展示用：把 argv 拼成一行命令，敏感参数打码 */
+export function displayCommand(action: Action, argv: string[]): string {
+  const secrets = new Set(action.params.filter((p) => p.secret).map((p) => p.name));
+  const masked = argv.map((a) => {
+    const whole = WHOLE_TOKEN_RE.exec(a);
+    if (whole && secrets.has(whole[1]!)) return '******';
+    return a;
+  });
+  return masked.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ');
+}
+
+function openAuditLog(file: string): fs.WriteStream | undefined {
+  try {
+    ensureDirs();
+    return fs.createWriteStream(path.join(LOG_DIR, file), { flags: 'a' });
+  } catch {
+    return undefined;
+  }
+}
+
+export interface AuditRecord {
+  ts: string;
+  plugin: string;
+  action: string;
+  tool: string;
+  risk: RiskLevel;
+  caller: Caller;
+  decision: 'allow' | 'deny';
+  reason?: string;
+  command?: string;
+  exitCode?: number | null;
+  ms?: number;
+  outBytes?: number;
+  truncated?: boolean;
+  error?: string;
+}
+
+/** 审计：全部调用进 audit.log，被拒/失败的额外进 denied.log（便于快速排查） */
+export function audit(record: AuditRecord): void {
+  const line = JSON.stringify(record, null, 0) + '\n';
+  for (const file of record.decision === 'deny' ? ['audit.log', 'denied.log'] : ['audit.log']) {
+    const stream = openAuditLog(file);
+    if (stream) {
+      stream.write(line);
+      stream.end();
+    }
+  }
+}
+
+interface ExecOutcome {
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  truncated: boolean;
+  artifactPath?: string;
+  timedOut: boolean;
+}
+
+/**
+ * 为子进程准备环境变量。
+ *
+ * 关键的一条：Python 在 Windows 上往管道写时默认用系统 ANSI 代码页（中文机器是 GBK），
+ * 我们按 UTF-8 解码就会得到乱码。所以凡是 python 解释器，强制它输出 UTF-8。
+ * 其它语言写的插件如果输出不是 UTF-8，在清单里声明 encoding 即可。
+ */
+function childEnv(base: NodeJS.ProcessEnv, argv0: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...base };
+  const exe = path.basename(argv0).toLowerCase();
+  if (/^python[w3.0-9]*\.exe$/.test(exe) || exe === 'python' || exe === 'python3') {
+    env['PYTHONIOENCODING'] = 'utf-8';
+    env['PYTHONUTF8'] = '1';
+  }
+  return env;
+}
+
+function execArgv(
+  file: string,
+  args: string[],
+  opts: { cwd: string; env: NodeJS.ProcessEnv; timeout: number; shell: boolean; encoding: string },
+): Promise<ExecOutcome> {
+  return new Promise((resolve) => {
+    const encoding = opts.encoding as BufferEncoding;
+    const child = spawn(file, args, {
+      cwd: opts.cwd,
+      env: opts.env,
+      shell: opts.shell,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+    let truncated = false;
+    let artifactPath: string | undefined;
+    let spill: fs.WriteStream | undefined;
+    let timedOut = false;
+
+    // 用 StringDecoder 而不是 chunk.toString()：多字节字符可能被切成两个数据块，
+    // 直接按块解码会把它解坏。
+    const outDecoder = new StringDecoder(encoding);
+    const errDecoder = new StringDecoder(encoding);
+
+    const spillPath = () => {
+      if (!artifactPath) {
+        fs.mkdirSync(path.join(DATA_DIR, 'artifacts'), { recursive: true });
+        artifactPath = path.join(
+          DATA_DIR, 'artifacts',
+          `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.out`,
+        );
+        spill = fs.createWriteStream(artifactPath);
+        // 已读到的部分按插件原本的编码写回，保证落盘文件编码一致
+        if (stdout) spill.write(Buffer.from(stdout, encoding));
+      }
+      return spill;
+    };
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGKILL');
+    }, opts.timeout);
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      const text = outDecoder.write(chunk);
+      if (truncated) {
+        spillPath()?.write(Buffer.from(text, encoding));
+        return;
+      }
+      if (stdout.length + text.length > MAX_OUTPUT) {
+        truncated = true;
+        stdout = stdout.slice(0, MAX_OUTPUT);
+        spillPath()?.write(Buffer.from(text, encoding));
+        return;
+      }
+      stdout += text;
+    });
+
+    child.stderr.on('data', (chunk: Buffer) => {
+      // stderr 只保留尾部，避免报错刷屏把内存吃光
+      stderr = (stderr + errDecoder.write(chunk)).slice(-65536);
+    });
+
+    child.on('error', (err) => {
+      clearTimeout(timer);
+      stdout += outDecoder.end();
+      stderr += errDecoder.end();
+      resolve({
+        exitCode: null, stdout, stderr: stderr + String(err.message),
+        truncated, timedOut: false,
+        ...(artifactPath ? { artifactPath } : {}),
+      });
+    });
+
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      stdout += outDecoder.end();
+      stderr += errDecoder.end();
+      spill?.end();
+      resolve({
+        exitCode: code, stdout, stderr, truncated, timedOut,
+        ...(artifactPath ? { artifactPath } : {}),
+      });
+    });
+  });
+}
+
+/** 执行一个动作。这是唯一的执行入口。 */
+export async function runAction(
+  plugin: Plugin,
+  action: Action,
+  options: RunOptions,
+): Promise<RunResult> {
+  const started = Date.now();
+  const base = {
+    ts: new Date().toISOString(),
+    plugin: plugin.id,
+    action: action.id,
+    tool: toolName(plugin.id, action.id),
+    risk: action.risk,
+    caller: options.caller,
+  };
+
+  if (action.type === 'http') {
+    return runHttpAction(plugin, action, options, started, base);
+  }
+
+  const { argv, errors } = buildArgv(plugin, action, options.values);
+  if (errors.length > 0) {
+    audit({ ...base, decision: 'deny', reason: 'missing-builtin', error: errors.join('; ') });
+    return {
+      ok: false, exitCode: null, stdout: '', stderr: '', ms: Date.now() - started,
+      truncated: false, error: errors.join('; '), argv, command: displayCommand(action, argv),
+    };
+  }
+  if (argv.length === 0) {
+    const msg = '命令为空：检查 run 里的占位符是否都解析出来了';
+    audit({ ...base, decision: 'deny', reason: 'empty-argv', error: msg });
+    return {
+      ok: false, exitCode: null, stdout: '', stderr: '', ms: Date.now() - started,
+      truncated: false, error: msg, argv, command: '',
+    };
+  }
+
+  const cwd = action.cwd ? path.resolve(plugin.dir, action.cwd) : plugin.dir;
+  const env = childEnv({ ...process.env, ...action.env }, argv[0]!);
+  const command = displayCommand(action, argv);
+
+  const outcome = await execArgv(argv[0]!, argv.slice(1), {
+    cwd,
+    env,
+    timeout: action.timeout * 1000,
+    shell: action.shell,
+    encoding: action.encoding,
+  });
+
+  const ms = Date.now() - started;
+  let ok = outcome.exitCode === 0 && !outcome.timedOut;
+  let error: string | undefined;
+  if (outcome.timedOut) error = `执行超时（${action.timeout} 秒）已被强制结束`;
+  else if (outcome.exitCode !== 0) error = `退出码 ${outcome.exitCode}`;
+
+  let data: unknown;
+  if (action.output === 'json' && outcome.stdout.trim() !== '') {
+    try {
+      data = JSON.parse(outcome.stdout);
+    } catch (e) {
+      if (ok) {
+        ok = false;
+        error = `output = "json" 但输出不是合法 JSON：${(e as Error).message}`;
+      }
+    }
+  }
+
+  audit({
+    ...base,
+    decision: ok ? 'allow' : 'deny',
+    command,
+    exitCode: outcome.exitCode,
+    ms,
+    outBytes: outcome.stdout.length,
+    truncated: outcome.truncated,
+    ...(error ? { error, reason: outcome.timedOut ? 'timeout' : 'nonzero-exit' } : {}),
+  });
+
+  const result: RunResult = {
+    ok,
+    exitCode: outcome.exitCode,
+    stdout: outcome.stdout,
+    stderr: outcome.stderr,
+    ms,
+    truncated: outcome.truncated,
+    argv,
+    command,
+  };
+  if (data !== undefined) result.data = data;
+  if (outcome.artifactPath) result.artifactPath = outcome.artifactPath;
+  if (error) result.error = error;
+  return result;
+}
+
+async function runHttpAction(
+  plugin: Plugin,
+  action: Action,
+  options: RunOptions,
+  started: number,
+  base: Omit<AuditRecord, 'decision'>,
+): Promise<RunResult> {
+  const vars = buildVars(plugin, options.values);
+  const url = (action.url ?? '').replace(TOKEN_RE, (_m, name: string) => vars[name] ?? '');
+  try {
+    const init: RequestInit = { method: action.method, headers: action.headers };
+    if (action.body !== undefined) {
+      init.body = JSON.stringify(action.body);
+      (init.headers as Record<string, string>)['content-type'] ??= 'application/json';
+    }
+    const res = await fetch(url, { ...init, signal: AbortSignal.timeout(action.timeout * 1000) });
+    const text = await res.text();
+    const ms = Date.now() - started;
+    const ok = res.ok;
+    let data: unknown;
+    if (action.output === 'json') {
+      try { data = JSON.parse(text); } catch { /* 原样返回文本 */ }
+    }
+    const result: RunResult = {
+      ok, exitCode: res.status, stdout: text, stderr: '', ms,
+      truncated: false, argv: [], command: `${action.method} ${url}`,
+    };
+    if (data !== undefined) result.data = data;
+    if (!ok) result.error = `HTTP ${res.status} ${res.statusText}`;
+    audit({
+      ...base, decision: ok ? 'allow' : 'deny', command: result.command, ms,
+      exitCode: res.status,
+      ...(ok ? {} : { reason: 'http-error', error: result.error }),
+    });
+    return result;
+  } catch (e) {
+    const ms = Date.now() - started;
+    const error = `请求失败：${describeFetchError(e)}`;
+    audit({ ...base, decision: 'deny', reason: 'http-error', command: `${action.method} ${url}`, ms, error });
+    return {
+      ok: false, exitCode: null, stdout: '', stderr: '', ms,
+      truncated: false, error, argv: [], command: `${action.method} ${url}`,
+    };
+  }
+}
+
+/** 风险等级 → 确认策略。是 UI 和 CLI 共用的唯一判定，避免两处不一致。 */
+export type ConfirmPolicy = 'never' | 'first-time' | 'always';
+
+export function confirmPolicy(risk: RiskLevel): ConfirmPolicy {
+  switch (risk) {
+    case 'read': return 'never';
+    case 'mutate': return 'first-time';
+    default: return 'always';
+  }
+}

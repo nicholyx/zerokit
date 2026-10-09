@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.log
+.zerokit/
+# Tauri 构建产物
+apps/desktop/src-tauri/target/
+apps/desktop/dist/

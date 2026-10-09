@@ -1,0 +1,101 @@
+# 把「已有的工具」接进 zerokit 的示例。
+#
+# 这份清单没有把 proxy.py 复制进来，而是用 cwd 指向它原有的安装目录，
+# 每个动作的 cwd 都要指过去。
+#
+# 想让它变成完全自包含、可以随手复制分享的插件：把 D:\software\proxy 下的
+# proxy.py / my_config.json（以及需要的数据文件）复制到本目录，
+# 然后把下面各动作里的 cwd 行删掉即可（默认就在插件目录里执行）。
+
+[plugin]
+id       = "jlc-proxy"
+name     = "白名单代理"
+version  = "1.0.0"
+summary  = "只允许访问 jlcops.com / jlcerp.com 的出网代理"
+keywords = ["代理", "proxy", "网络", "白名单", "jlc", "出网"]
+license  = "MIT"
+
+[requires]
+python = ">=3.10"
+
+[[action]]
+id          = "status"
+title       = "查看代理状态"
+description = "显示代理是否在运行、监听地址、允许的域名和端口、以及开机自启状态。想确认代理是否正常工作时用这个。"
+run         = ["{python}", "proxy.py", "status"]
+cwd         = "D:/software/proxy"
+output      = "text"
+risk        = "read"
+
+[[action]]
+id          = "domains"
+title       = "查看允许的域名"
+description = "列出代理当前允许访问的域名白名单。想知道哪些域名能通过代理时用这个。"
+run         = ["{python}", "proxy.py", "config", "domain", "list"]
+cwd         = "D:/software/proxy"
+output      = "text"
+risk        = "read"
+
+[[action]]
+id          = "start"
+title       = "启动代理"
+description = "在后台启动白名单代理。发现代理没在运行时用这个。"
+run         = ["{python}", "proxy.py", "start"]
+cwd         = "D:/software/proxy"
+output      = "text"
+risk        = "mutate"
+
+[[action]]
+id          = "stop"
+title       = "停止代理"
+description = "停掉正在运行的白名单代理。"
+run         = ["{python}", "proxy.py", "stop"]
+cwd         = "D:/software/proxy"
+output      = "text"
+risk        = "mutate"
+
+[[action]]
+id          = "restart"
+title       = "重启代理"
+description = "重启白名单代理，用于让改动后的配置生效。"
+run         = ["{python}", "proxy.py", "restart"]
+cwd         = "D:/software/proxy"
+output      = "text"
+risk        = "mutate"
+
+[[action]]
+id          = "allow-domain"
+title       = "添加允许域名"
+description = "把一个域名加入代理白名单，改完约 2 秒自动生效。需要放行新的站点时用这个。"
+run         = ["{python}", "proxy.py", "config", "domain", "add", "{domain}"]
+cwd         = "D:/software/proxy"
+output      = "text"
+risk        = "mutate"
+
+  [[action.param]]
+  name        = "domain"
+  type        = "string"
+  required    = true
+  description = "要允许的域名，例如 example.com（写主域名即包含它的所有子域）"
+
+[[action]]
+id          = "auth"
+title       = "设置代理认证"
+description = "开启或修改代理的 HTTP Basic 认证用户名密码。改了之后所有走这个代理的客户端都要填上。"
+run         = ["{python}", "proxy.py", "config", "auth", "basic", "{user}", "{password}"]
+cwd         = "D:/software/proxy"
+output      = "text"
+risk        = "destructive"
+
+  [[action.param]]
+  name        = "user"
+  type        = "string"
+  required    = true
+  description = "认证用户名"
+
+  [[action.param]]
+  name        = "password"
+  type        = "string"
+  required    = true
+  secret      = true
+  description = "认证密码"

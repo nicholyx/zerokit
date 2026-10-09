@@ -1,0 +1,19 @@
+# 零代码插件示例：整个插件只有一个 HTTP 请求，没有任何脚本。
+# 说明「声明式」能走多远——最常见的"调个接口"根本不需要写代码。
+
+[plugin]
+id       = "ip"
+name     = "出口 IP"
+version  = "1.0.0"
+summary  = "查本机访问外网时用的公网 IP，零代码插件"
+keywords = ["ip", "公网", "出口", "网络", "地址"]
+
+[[action]]
+id          = "public"
+title       = "查公网 IP"
+description = "返回本机访问外网时使用的公网 IP 地址。想知道当前出口 IP、或者确认是否走了代理时用这个。"
+type        = "http"
+url         = "https://api.ipify.org?format=json"
+output      = "json"
+render      = "keyvalue"
+risk        = "read"

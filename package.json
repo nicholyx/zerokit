@@ -1,0 +1,28 @@
+{
+  "name": "zerokit",
+  "version": "0.1.0",
+  "description": "一份清单，四个面：启动器 / CLI / MCP / Web。不绑定宿主的插件集市。",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "zkit": "./src/cli.ts",
+    "zkit-mcp": "./src/mcp.ts"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "zkit": "node src/cli.ts",
+    "mcp": "node src/mcp.ts",
+    "test": "node --test test/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "smol-toml": "^1.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.3"
+  }
+}
