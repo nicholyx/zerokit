@@ -27,7 +27,7 @@
 plugins/jlc-proxy/
   plugin.toml        必需。唯一的声明文件
   proxy.py           任意语言、任意文件；也可以完全没有代码
-  web/index.html     可选。富交互网页形态
+  web/index.html     可选。富交互网页形态（**尚未实现**，见 overview.md「待办」）
   icon.svg           可选
 ```
 
@@ -349,7 +349,9 @@ risk   = "read"
 
 **2. 跑本地命令（`type = "exec"`）** —— 任意语言，通过 stdout 交流。
 
-**3. 带网页（可选 `web/index.html`）** —— 需要富交互时用，启动器会打开页面而不是结果卡片。
+**3. 带网页（`web/index.html`）** —— 需要富交互时的形态，启动器打开插件自己的页面
+而不是结果卡片。**目前只有约定、没有实现**：内核里没有加载插件目录下 HTML 的代码路径
+（`server.ts` 托管的是应用自己的单页应用）。写插件时先别依赖它，详见 `overview.md`「待办」。
 
 **4. uTools 插件（零改造接入）** —— 见下一节。
 
