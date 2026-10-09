@@ -26,6 +26,18 @@ export interface ManagedProcess {
   command: string;
   pid: number;
   startedAt: number;
+  /**
+   * 后台进程的输出落在这个文件里。
+   *
+   * 为什么是文件而不是管道：后台动作必须 `detached` 才能**在启动它的进程退出后
+   * 继续活着**（实测：不 detach 时父进程一退出子进程就没了）。而 detached 之后
+   * 管道随时可能断裂——插件往 stdout 写一行就 EPIPE 崩掉。落到文件两头都占：
+   * 进程活得下来，输出也留得住。
+   *
+   * 顺带一个好处：路径**落盘**了，所以别的会话（另一个终端里的 `zkit ps`）
+   * 也能读到这个进程的输出尾巴，而不是只有"亲手拉起它的那个进程"才看得见。
+   */
+  logPath?: string;
 }
 
 export interface ProcessView extends ManagedProcess {
@@ -42,9 +54,37 @@ export interface ProcessView extends ManagedProcess {
 
 const FILE = () => path.join(HOME, 'running.json');
 
-/** 本进程亲自拉起的子进程，用来取实时输出、以及优先用句柄结束 */
-const owned = new Map<number, { child: ChildProcess; tail: string[]; exitCode?: number | null }>();
-let seq = 0;
+/** 本进程亲自拉起的子进程，用来优先用句柄结束、以及记退出码 */
+const owned = new Map<number, { child: ChildProcess; exitCode?: number | null }>();
+
+/**
+ * 托管项的 id。
+ *
+ * 用 pid 派生而不是**本进程内的自增序号**：登记表是落盘共享的，序号却各进程
+ * 从 1 开始，于是两个会话各起一个进程就会得到两个 "p1"，`zkit kill p1` 杀谁
+ * 全看谁排在前面（实测撞到过）。pid 在活着的进程之间唯一，从根上避免这个歧义。
+ */
+function idFor(prefix: string, pid: number): string {
+  return `${prefix}${pid}`;
+}
+
+/** 读一个日志文件的最后 n 行（文件很大时只读尾部，别把整个文件读进内存） */
+export function readTail(file: string, n: number): string[] {
+  try {
+    const size = fs.statSync(file).size;
+    const start = Math.max(0, size - 8192);
+    const fd = fs.openSync(file, 'r');
+    try {
+      const buf = Buffer.alloc(size - start);
+      fs.readSync(fd, buf, 0, buf.length, start);
+      return buf.toString('utf8').split('\n').map((l) => l.trim()).filter(Boolean).slice(-n);
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return [];   // 文件还没建/被删了就当作没有输出
+  }
+}
 
 function readAll(): ManagedProcess[] {
   try {
@@ -83,22 +123,14 @@ export function isAlive(pid: number): boolean {
 
 export function registerProcess(entry: Omit<ManagedProcess, 'id' | 'startedAt'> & { child: ChildProcess }): ManagedProcess {
   const { child, ...rest } = entry;
-  const record: ManagedProcess = { ...rest, id: `p${++seq}`, startedAt: Date.now() };
+  const record: ManagedProcess = { ...rest, id: idFor('p', entry.pid), startedAt: Date.now() };
 
   const list = readAll().filter((r) => r.pid !== record.pid);
   list.push(record);
   writeAll(list);
 
-  // 留一份内存副本：实时输出只有本进程能提供，结束它也有句柄可用
-  const tail: string[] = [];
-  const keep = (chunk: Buffer) => {
-    for (const line of chunk.toString('utf8').split('\n')) {
-      if (line.trim()) tail.push(line.trim());
-    }
-    if (tail.length > 20) tail.splice(0, tail.length - 20);
-  };
-  child.stdout?.on('data', keep);
-  child.stderr?.on('data', keep);
+  // 留一份内存副本：结束它要用句柄、以及记退出码。
+  // 输出不在这里收——它落到 logPath 那个文件里，见上面的说明。
   child.on('exit', (code) => {
     // 先记下退出码：调用方可能正要在"已退出"那一行显示它
     const entry = owned.get(record.pid);
@@ -106,7 +138,7 @@ export function registerProcess(entry: Omit<ManagedProcess, 'id' | 'startedAt'> 
     // 进程自己退了，就把登记项摘掉（下次 list 时自然消失）
     writeAll(readAll().filter((r) => r.pid !== record.pid));
   });
-  owned.set(record.pid, { child, tail });
+  owned.set(record.pid, { child });
 
   return record;
 }
@@ -120,7 +152,7 @@ export function registerProcess(entry: Omit<ManagedProcess, 'id' | 'startedAt'> 
 export function registerExternalProcess(
   entry: Omit<ManagedProcess, 'id' | 'startedAt'>,
 ): ManagedProcess {
-  const record: ManagedProcess = { ...entry, id: `x${++seq}`, startedAt: Date.now() };
+  const record: ManagedProcess = { ...entry, id: idFor('x', entry.pid), startedAt: Date.now() };
   writeAll(readAll().filter((r) => r.pid !== record.pid).concat(record));
   return record;
 }
@@ -136,7 +168,13 @@ export function listProcesses(includeExited = false): ProcessView[] {
 
   const views: ProcessView[] = records.map((r) => {
     const mine = owned.get(r.pid);
-    const view: ProcessView = { ...r, running: isAlive(r.pid), tail: mine ? mine.tail.slice(-6) : [] };
+    // 尾巴从日志文件读，所以**别的会话**起的进程也看得见输出（以前只有亲手
+    // 拉起它的进程能提供内存里的那份，换个终端敲 zkit ps 就是空的）
+    const view: ProcessView = {
+      ...r,
+      running: isAlive(r.pid),
+      tail: r.logPath ? readTail(r.logPath, 6) : [],
+    };
     if (mine?.exitCode !== undefined && mine.exitCode !== null) view.exitCode = mine.exitCode;
     return view;
   });
@@ -169,7 +207,10 @@ export function killProcess(id: string): { ok: boolean; message: string } {
     });
     if (out.status !== 0) {
       const detail = (out.stderr || out.stdout || '').trim().slice(0, 200);
-      if (!/not found|不存在|没有找到/i.test(detail)) {
+      // taskkill 的退出码不可尽信：进程可能在我们动手之前就已经退了（比如它自己
+      // 发现异常退出，或者刚被插件的 stop 命令带走）。**以系统事实为准**复核一次，
+      // 已经没了就算成功——否则会报"1 个没能结束"，而实际上一个都没剩（实测碰到）。
+      if (!/not found|不存在|没有找到/i.test(detail) && isAlive(record.pid)) {
         return { ok: false, message: detail || '结束失败' };
       }
     }

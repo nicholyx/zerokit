@@ -195,6 +195,12 @@ export async function stopService(pluginId: string, serviceId: string): Promise<
       type: 'exec' as const,
       run: stopAction,
       shell: false,
+      // **必须显式关掉 background**：这个模板是从 plugin.actions[0] 抄来的，
+      // 而清单里"第一个动作"完全可能是后台动作（比如剪贴板监听的清单里
+      // 第一个动作就有 background = true）。抄过来的话停止命令会被当后台任务
+      // 拉起来——立刻返回、登记进「运行中」、其实什么都没停，而且看起来还是
+      // 「成功」。插件作者只能靠"记得把非后台动作排第一"来绕开，那是个陷阱。
+      background: false,
       params: [],
       output: 'text' as const,
       render: 'text' as const,

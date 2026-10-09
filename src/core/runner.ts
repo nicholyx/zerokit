@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
@@ -7,7 +7,7 @@ import type { Action, Plugin, RiskLevel } from './manifest.ts';
 import { toolName } from './manifest.ts';
 import { DATA_DIR, HOME, LOG_DIR, ensureDirs, pluginDataDir } from './paths.ts';
 import { resolveTool } from './resolve.ts';
-import { registerProcess } from './runtime.ts';
+import { readTail, registerProcess } from './runtime.ts';
 import { hasHostFor, runViaHost } from './host.ts';
 
 /**
@@ -386,6 +386,63 @@ function execArgv(
   });
 }
 
+/**
+ * 后台动作的启动观察窗。
+ *
+ * 不是"等它跑完"——那会毁掉后台动作的意义。只是给一个窗口，把"当场就死了"
+ * 和"正常跑起来了"分开。守护进程本来就该一直活着，所以窗口内最正常的信号
+ * 就是"什么都没有"。
+ *
+ * 800ms 是量出来的，不是拍的。插件"拒绝启动"的耗时 =
+ *   解释器冷启动（本机 node 实测 202/191/218ms）+ 加载插件自己的模块 +
+ *   走到那个判断 —— clipboard 的拒绝路径实测 507/532/493ms。
+ * 最初设 150ms 时 node 写的拒绝完全抓不住（测试里露出来的），500ms 仍会偶发
+ * 漏掉（正好卡在边界上，实测有一次 599ms 就漏了）。
+ *
+ * 代价是每次启动后台动作要多等 0.8 秒，这是**刻意**的：比起"告诉你启动成功了、
+ * 其实它早就死了"，这 0.8 秒值得。而且漏掉的后果是可控的——进程死了之后
+ * registerProcess 的退出回调会把登记项摘掉，「运行中」会自己纠正，只有命令行
+ * 那句回执会不准。后台动作本来就是罕见且用户主动发起的操作，
+ * 不在"打开插件要快"的那个热路径上。
+ */
+const EARLY_START_MS = 800;
+
+interface EarlyDeath {
+  code: number | null;
+  /** 窗口内插件写下的最后几行（它通常会在这里说明为什么启动不了） */
+  stderr: string;
+  /** 'error' 事件的消息（命令不存在、没有执行权限等） */
+  error?: string;
+}
+
+/**
+ * @param logPath 子进程的输出文件。现在后台进程的 stdio 是**文件**不是管道，
+ *                所以失败原因要从这个文件里读，而不是监听 stderr。
+ */
+function observeBackgroundStart(
+  child: ChildProcess,
+  ms: number,
+  logPath: string,
+): Promise<EarlyDeath | null> {
+  return new Promise((resolve) => {
+    let timer: NodeJS.Timeout;
+    const finish = (death: EarlyDeath | null) => {
+      clearTimeout(timer);
+      child.off('exit', onExit);
+      child.off('error', onError);
+      resolve(death);
+    };
+    // 读文件这一下要等子进程真的把内容写进去，所以放在 finish 里同步读一次
+    const onExit = (code: number | null) => finish({ code, stderr: readTail(logPath, 8).join('\n') });
+    const onError = (e: Error) =>
+      finish({ code: null, stderr: readTail(logPath, 8).join('\n'), error: e.message });
+    timer = setTimeout(() => finish(null), ms);
+
+    child.on('exit', onExit);
+    child.on('error', onError);
+  });
+}
+
 /** 执行一个动作。这是唯一的执行入口。 */
 export async function runAction(
   plugin: Plugin,
@@ -430,12 +487,30 @@ export async function runAction(
   // background 动作：拉起长期运行的进程，不等它退出，交给内核托管，
   // 于是它会在「运行中」里出现、能随时结束——不用这样，启动器就只是快捷方式。
   if (action.background) {
+    // 后台进程必须 **detached，且输出进文件而不是管道**。
+    //
+    // 踩过的坑：不 detach 的子进程会在**启动它的进程退出时一起死**——实测
+    // `zkit run clipboard watch-start` 报告"已在后台启动"，命令一返回监听就没了，
+    // 心跳文件一行都没写成。这直接击穿了"后台托管"的承诺。
+    //
+    // 为什么用文件不用管道：detached 之后父进程随时可能先走，管道一断，插件往
+    // stdout 写一行就是 EPIPE 崩溃。落文件两头都占：进程活得下来，输出也留得住，
+    // 而且路径落盘之后，别的会话（另一个终端的 zkit ps）也读得到输出尾巴。
+    const logPath = path.join(LOG_DIR, `bg.${plugin.id}.${action.id}.log`);
     let child;
+    let logFd: number | undefined;
     try {
+      ensureDirs();
+      // 用 'w' 截断而不是 'a' 追加：每次启动都是**新的一次运行**，把上次的输出
+      // 混进来会让"这次为什么没起来"这句话里夹着上一次的成功记录，越看越糊涂。
+      logFd = fs.openSync(logPath, 'w');
       child = spawn(argv[0]!, argv.slice(1), {
         cwd, env, shell: action.shell, windowsHide: true,
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: ['ignore', logFd, logFd],
+        detached: true,
       });
+      // 别让这个句柄拖住父进程：后台动作的语义就是"我不管了"
+      child.unref();
     } catch (e) {
       const msg = `启动失败：${(e as Error).message}`;
       audit({ ...base, decision: 'deny', reason: 'spawn-failed', command, error: msg });
@@ -443,7 +518,60 @@ export async function runAction(
         ok: false, exitCode: null, stdout: '', stderr: '', ms: Date.now() - started,
         truncated: false, error: msg, argv, command,
       };
+    } finally {
+      // 句柄已经复制给子进程了，父进程这份要还回去，否则每启动一次就漏一个
+      if (logFd !== undefined) {
+        try { fs.closeSync(logFd); } catch { /* 已经关了就算了 */ }
+      }
     }
+    // 看一眼"是不是当场就死了"。
+    //
+    // 后台动作的语义是"不等它结束"，代价是**启动失败也看不见**：spawn 对
+    // 命令不存在（ENOENT）不抛错，而是异步发 'error' 事件；插件自己发现
+    // "已经有一个在跑了"然后 exit 1，同样没人接。结果是返回值永远 ok=true、
+    // PID 可能是 -1，失败只留在 stderr 和「运行中」的 tail 里——调用方（CLI、
+    // 启动器、AI 客户端）从返回值上完全看不出来。
+    //
+    // 所以给一个很短的观察窗，专门抓"立刻死掉"这一类。窗口内的正常表现是
+    // "什么都没发生"（守护进程本来就该一直活着），此时按老路托管。
+    const early = await observeBackgroundStart(child, EARLY_START_MS, logPath);
+    const detail = early ? (early.stderr.trim() || early.error || '') : '';
+
+    // 命令不存在 / 没有执行权限：spawn 的 'error' 事件
+    if (early?.error) {
+      const reason = `启动失败：${early.error}`;
+      audit({ ...base, decision: 'deny', reason: 'spawn-failed', command, error: reason });
+      return {
+        ok: false, exitCode: null, stdout: '', stderr: detail,
+        ms: Date.now() - started, truncated: false, error: reason, argv, command,
+      };
+    }
+
+    // 起来了又立刻非 0 退出：插件用这个表达"我拒绝启动"（比如"已经有一个在跑了"）
+    if (early && early.code !== 0) {
+      // error 只放短摘要，细节留在 stderr：CLI/界面是"红色摘要 + 灰色细节"两段渲染的，
+      // 把细节也塞进 error 会让同一句话打两遍。
+      const reason = `启动后立刻退出（码 ${early.code}）`;
+      audit({ ...base, decision: 'deny', reason: 'background-died', command, error: reason });
+      return {
+        ok: false, exitCode: early.code, stdout: '', stderr: detail,
+        ms: Date.now() - started, truncated: false, error: reason, argv, command,
+      };
+    }
+
+    // 退出码 0：这是"自己把守护进程 detach 出去、然后自己正常退出"的写法，合法，
+    // 不能当失败。但也没有进程可以托管了——如实说，别给一个已经不存在的 PID
+    // 让用户去 kill。
+    if (early) {
+      audit({ ...base, decision: 'allow', reason: 'background-detached', command });
+      return {
+        ok: true, exitCode: 0,
+        stdout: '命令已执行并自行退出（退出码 0），没有留下需要托管的进程。'
+          + '如果它本意是常驻，请确认守护进程是不是被 detach 出去了。',
+        stderr: detail, ms: Date.now() - started, truncated: false, argv, command,
+      };
+    }
+
     const managed = registerProcess({
       pluginId: plugin.id,
       pluginName: plugin.name,
@@ -451,6 +579,7 @@ export async function runAction(
       title: `${plugin.name} · ${action.title}`,
       command,
       pid: child.pid ?? -1,
+      logPath,
       child,
     });
     const ms = Date.now() - started;

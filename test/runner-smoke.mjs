@@ -4,6 +4,7 @@
 // 以及 worker 路径不适用时要能**干净地退回** spawn，而不是失败。
 //
 // 全部在临时目录里跑，不碰正式环境、不联网。
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -164,6 +165,208 @@ background  = true
   await new Promise((res) => setTimeout(res, 900));
   check('结束后不再出现在托管列表里',
     !listProcesses().some((p) => p.id === r.background.id));
+}
+
+// ---- 5b. 后台动作"当场就死了"必须被看出来 ----
+//
+// 后台动作的语义是"不等它结束"，所以启动失败原本是看不见的：返回值永远 ok=true，
+// PID 可能是 -1，失败只留在 stderr 里。spawn 对命令不存在（ENOENT）不抛错而是发
+// 'error' 事件；插件自己拒绝启动则表现为"立刻非 0 退出"。两种都该是失败。
+{
+  const dir = path.join(TMP, 'bgfail');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'refuse.mjs'),
+    'console.error("已经有监听在跑了，拒绝重复启动\\n"); process.exit(1);\n');
+  fs.writeFileSync(path.join(dir, 'detach.mjs'),
+    'console.log("已把守护进程 detach 出去\\n");\n');   // 正常退出 0：合法写法
+  fs.writeFileSync(path.join(dir, 'plugin.toml'), `
+[plugin]
+id      = "bgfail"
+name    = "后台失败测试"
+summary = "看后台动作启动失败能不能从返回值看出来"
+
+[[action]]
+id          = "refuse"
+title       = "启动即拒绝"
+description = "模拟「已经有一个在跑了」这种拒绝启动"
+run         = ["{node}", "refuse.mjs"]
+output      = "text"
+risk        = "mutate"
+background  = true
+
+[[action]]
+id          = "missing"
+title       = "命令不存在"
+description = "用来验证 ENOENT 不会被当成启动成功"
+run         = ["{plugin_dir}/definitely-not-here-zkit.exe", "--go"]
+output      = "text"
+risk        = "mutate"
+background  = true
+
+[[action]]
+id          = "detach"
+title       = "正常退出"
+description = "拉起守护进程后自己正常退出，这是合法写法，不该被判失败"
+run         = ["{node}", "detach.mjs"]
+output      = "text"
+risk        = "mutate"
+background  = true
+`);
+  const plugin = loadPlugin(dir).plugin;
+
+  const refuse = await runAction(plugin, plugin.actions[0], { caller: 'cli', values: {} });
+  check('后台动作"启动即拒绝"返回失败（而不是"已启动"）',
+    refuse.ok === false && refuse.exitCode === 1, `ok=${refuse.ok} exit=${refuse.exitCode}`);
+  check('它把插件自己写的失败原因带出来了（不是只有一个退出码）',
+    /拒绝重复启动/.test(refuse.stderr ?? ''), `stderr=${refuse.stderr}`);
+
+  const missing = await runAction(plugin, plugin.actions[1], { caller: 'cli', values: {} });
+  check('后台动作命令不存在（ENOENT）返回失败',
+    missing.ok === false && /启动失败/.test(missing.error ?? ''),
+    `ok=${missing.ok} pid=${missing.background?.pid} error=${missing.error}`);
+
+  const detached = await runAction(plugin, plugin.actions[2], { caller: 'cli', values: {} });
+  check('后台动作"拉起守护进程后正常退出"仍算成功（不能误杀这种写法）',
+    detached.ok === true, `ok=${detached.ok} error=${detached.error}`);
+  check('但它不会给一个已经不存在的 PID 让人去 kill',
+    detached.background === undefined, JSON.stringify(detached.background));
+
+  check('三种情况都没有留下托管记录',
+    !listProcesses(true).some((p) => p.pluginId === 'bgfail'),
+    JSON.stringify(listProcesses(true).map((p) => p.pluginId)));
+}
+
+// ---- 5c. 服务停止命令不能被当后台任务拉起来 ----
+//
+// services.ts 拼停止命令时拿 plugin.actions[0] 当模板。如果清单里第一个动作是
+// 后台动作，模板会把 background = true 一起抄过去，停止命令就被当后台任务拉起——
+// 立刻返回、登记进「运行中」、其实什么都没停，而且看起来还是"成功"。
+// 这个坑插件作者没法从清单里看出来，只能靠"记得把非后台动作排第一"，必须堵死。
+//
+// 判定办法：让停止命令先睡 800ms、再留一个标记文件。停止命令被正确等待时，
+// stopService 返回时标记一定已经写了；被当后台任务拉起时，返回时标记必然还没有
+// （800ms 远大于"spawn 完就返回"的时间）。
+{
+  const dir = path.join(TMP, 'stopbg');
+  fs.mkdirSync(dir, { recursive: true });
+
+  // 一个"活着"的进程：服务检测靠 pid 文件 + 进程在不在，得让它认为服务在运行
+  const dummy = spawn(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { stdio: 'ignore' });
+  await new Promise((res) => dummy.once('spawn', res));
+  fs.writeFileSync(path.join(dir, 'dummy.pid'), String(dummy.pid));
+
+  const marker = path.join(dir, 'stopped.marker');
+  fs.writeFileSync(path.join(dir, 'stop.mjs'), `
+import fs from 'node:fs';
+await new Promise((r) => setTimeout(r, 800));
+fs.writeFileSync(${JSON.stringify(marker)}, 'ok');
+`);
+  fs.writeFileSync(path.join(dir, 'plugin.toml'), `
+[plugin]
+id      = "stopbg"
+name    = "停止命令模板测试"
+summary = "第一个动作是后台动作时，停止命令也不能被当后台任务"
+
+[[action]]
+id          = "watch"
+title       = "一个后台动作（故意排在第一个）"
+description = "用来复现模板继承 background 的陷阱"
+run         = ["{node}", "-e", "setInterval(()=>{},1000)"]
+output      = "text"
+risk        = "mutate"
+background  = true
+
+[[service]]
+id          = "thing"
+title       = "被停的东西"
+description = "用 pid 文件判断在不在跑"
+pidFile     = "dummy.pid"
+stop        = ["{node}", "stop.mjs"]
+`);
+
+  const plugin = loadPlugin(dir).plugin;
+  check('夹具确实是「第一个动作带 background」（否则这条测试没有意义）',
+    plugin.actions[0].background === true);
+
+  const { stopService } = await import('../src/core/services.ts');
+  const r = await stopService('stopbg', 'thing');
+  check('服务停止命令被真正等待执行完，而不是当后台任务拉起来就返回',
+    r.ok === true && fs.existsSync(marker),
+    `ok=${r.ok} 标记文件存在=${fs.existsSync(marker)} msg=${r.message}`);
+
+  // 那个"活着"的进程得自己收掉（上面的停止命令是故意不真杀它的）
+  dummy.kill();
+}
+
+// ---- 5d. 后台进程必须活过"启动它的那个进程" ----
+//
+// 这是后台托管的**全部意义**所在，而且原来的实现是坏的：子进程用管道 stdio、
+// 不 detach，于是启动它的进程一退出它就跟着死。表现是
+// `zkit run clipboard watch-start` 报告"已在后台启动"，命令一返回监听就没了。
+//
+// 这条必须在**子进程里**验证：在本进程里跑，父进程一直活着，测不出这个差别。
+{
+  const dir = path.join(TMP, 'survivor');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'beat.mjs'), `
+import fs from 'node:fs';
+const out = process.argv[2];
+setInterval(() => {
+  try { fs.appendFileSync(out, 'beat\\n'); } catch {}
+}, 150);
+`);
+  fs.writeFileSync(path.join(dir, 'plugin.toml'), `
+[plugin]
+id      = "survivor"
+name    = "存活测试"
+summary = "验证后台进程能否活过启动它的进程"
+
+[[action]]
+id          = "go"
+title       = "常驻并写心跳"
+description = "每 150ms 往心跳文件写一行"
+run         = ["{node}", "beat.mjs", "{plugin_dir}/beat.log"]
+output      = "text"
+risk        = "mutate"
+background  = true
+`);
+
+  // 一个独立的"启动器"进程：跑一次后台动作，然后自己退出
+  fs.writeFileSync(path.join(dir, 'launcher.mjs'), `
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+const ROOT = ${JSON.stringify(PKG_ROOT)};
+const dir = process.argv[2];
+const { loadPlugin } = await import(pathToFileURL(path.join(ROOT, 'src', 'core', 'manifest.ts')).href);
+const { runAction } = await import(pathToFileURL(path.join(ROOT, 'src', 'core', 'runner.ts')).href);
+const plugin = loadPlugin(dir).plugin;
+const r = await runAction(plugin, plugin.actions[0], { caller: 'cli', values: {} });
+process.stdout.write(JSON.stringify({ ok: r.ok, pid: r.background?.pid, error: r.error }) + '\\n');
+`);
+
+  const beat = path.join(dir, 'beat.log');
+  const beats = () => {
+    try { return fs.readFileSync(beat, 'utf8').split('\n').filter(Boolean).length; } catch { return 0; }
+  };
+
+  const launched = spawnSync(process.execPath, [path.join(dir, 'launcher.mjs'), dir], {
+    encoding: 'utf8', windowsHide: true, timeout: 60000,
+  });
+  let started = {};
+  try { started = JSON.parse((launched.stdout ?? '').trim().split('\n').pop() ?? '{}'); } catch { /* 下面会判 */ }
+
+  check('启动器报告后台动作已启动', started.ok === true && started.pid > 0,
+    `stdout=${launched.stdout} stderr=${launched.stderr}`);
+
+  const before = beats();
+  await new Promise((r) => setTimeout(r, 1200));
+  const after = beats();
+
+  check('启动它的进程已经退出（这条测试才有意义）', launched.status === 0, `status=${launched.status}`);
+  check('后台进程活过了启动器退出，并且还在干活',
+    before > 0 && after > before, `心跳行数 ${before} → ${after}`);
+
+  if (started.pid > 0) { try { process.kill(started.pid); } catch { /* 已经没了 */ } }
 }
 
 // ---- 6. 常驻宿主（只对非一次性调用启用）----

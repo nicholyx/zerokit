@@ -327,7 +327,18 @@ async function cmdPlugin(args: string[]): Promise<number> {
       process.stderr.write('用法：zkit plugin add <本地目录|git地址|owner/repo>\n');
       return 2;
     }
-    const isGit = /^(https?:\/\/|git@)/.test(source) || /^[\w.-]+\/[\w.-]+$/.test(source);
+    // 本地目录优先，而且优先于"形状像不像 owner/repo"的判断。
+    // 否则 `zkit plugin add plugins/clipboard` 会因为恰好是「一段/一段」的形状
+    // 被当成 GitHub 仓库去 clone（实测踩到，还会白等一次网络超时）。
+    // 真要装同名的远端仓库，写全 https://github.com/owner/repo 即可。
+    let isLocalDir = false;
+    try {
+      isLocalDir = fs.statSync(source).isDirectory();
+    } catch {
+      /* 不存在就当它不是本地目录 */
+    }
+    const isGit = !isLocalDir
+      && (/^(https?:\/\/|git@)/.test(source) || /^[\w.-]+\/[\w.-]+$/.test(source));
     const result = isGit
       ? addFromGit(/^[\w.-]+\/[\w.-]+$/.test(source) ? `https://github.com/${source}.git` : source)
       : addFromDir(source);
