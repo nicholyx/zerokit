@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<!-- sysinfo 的富交互页面：演示 render = "web" 的完整形态。
+     内核在托管这个文件时自动注入 zkit-bridge.js，所以页面里不用（也不能）引任何宿主脚本。
+     约定：先拿到执行上下文（zkit.ready），再用 zkit.run 调本插件的其它动作。 -->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>系统信息</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font: 13px/1.6 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #14171c; color: #e6e9ef; padding: 14px;
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .cell { background: #1b1f26; border: 1px solid #262c36; border-radius: 8px; padding: 8px 10px; }
+  .k { font-size: 11px; color: #8b93a1; }
+  .v { font-size: 13px; font-weight: 600; word-break: break-all; }
+  .bar { height: 6px; border-radius: 3px; background: #262c36; margin-top: 6px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: linear-gradient(90deg, #3d8bfd, #63e6be); }
+  .row { display: flex; gap: 8px; align-items: center; margin: 12px 0 8px; }
+  button {
+    font: inherit; padding: 5px 12px; border-radius: 8px; cursor: pointer;
+    background: #2271f0; color: #fff; border: 0;
+  }
+  button.ghost { background: transparent; border: 1px solid #364050; color: #8b93a1; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .note { font-size: 12px; color: #8b93a1; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12.5px; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #232933; white-space: nowrap; }
+  th { color: #8b93a1; font-weight: 500; }
+  tr:last-child td { border-bottom: 0; }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; }
+  .err { color: #ff8f8f; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div id="app"><div class="note">正在等执行结果…（这个页面渲染的是动作输出）</div></div>
+<div class="row">
+  <button id="refresh">刷新</button>
+  <button id="top" class="ghost">占用最高的进程</button>
+  <span class="note" id="state"></span>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var app = document.getElementById('app');
+  var state = document.getElementById('state');
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function renderOverview(data) {
+    if (!data || typeof data !== 'object') { app.innerHTML = '<div class="err">动作没有返回对象</div>'; return; }
+    var html = '<div class="grid">';
+    for (var k in data) {
+      var v = String(data[k]);
+      html += '<div class="cell"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v) + '</div>';
+      // 带百分号的指标顺手画个条，纯装饰但有仪表盘的样子
+      var m = /^([\d.]+)%$/.exec(v);
+      if (m) html += '<div class="bar"><i style="width:' + Math.min(100, Number(m[1])) + '%"></i></div>';
+      html += '</div>';
+    }
+    app.innerHTML = html + '</div>';
+  }
+
+  function renderTop(rows) {
+    if (!Array.isArray(rows) || rows.length === 0) { app.innerHTML = '<div class="note">（空结果）</div>'; return; }
+    var cols = [];
+    rows.forEach(function (r) { Object.keys(r).forEach(function (k) { if (cols.indexOf(k) < 0) cols.push(k); }); });
+    app.innerHTML = '<table><thead><tr>' + cols.map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('')
+      + '</tr></thead><tbody>' + rows.map(function (r) {
+        return '<tr>' + cols.map(function (c) {
+          var num = /[\d.]+ ?(%|MB|GB)/.test(String(r[c] ?? ''));
+          return '<td' + (num ? ' class="num"' : '') + '>' + esc(r[c] ?? '') + '</td>';
+        }).join('') + '</tr>';
+      }).join('') + '</tbody></table>';
+  }
+
+  function reportHeight() {
+    if (window.zkit && window.zkit.hosted) {
+      window.zkit.setHeight(Math.max(document.body.scrollHeight, 80));
+    }
+  }
+
+  function boot() {
+    // context.result.data 是触发这次页面的动作输出；params 是用户当时填的参数
+    var ctx = window.zkit ? window.zkit.context : null;
+    var data = ctx && ctx.result ? ctx.result.data : null;
+    if (ctx && ctx.result && ctx.result.error) {
+      app.innerHTML = '<div class="err">' + esc(ctx.result.error) + '</div>';
+    } else {
+      renderOverview(data);
+    }
+    reportHeight();
+
+    if (!window.zkit || !window.zkit.hosted) {
+      state.textContent = '（不在启动器里：按钮需要桥才能执行）';
+      document.getElementById('refresh').disabled = true;
+      document.getElementById('top').disabled = true;
+      return;
+    }
+    document.getElementById('refresh').addEventListener('click', function () {
+      state.textContent = '执行中…';
+      window.zkit.run('overview').then(function (res) {
+        renderOverview(res.data);
+        state.textContent = res.ms + ' ms';
+        reportHeight();
+      }).catch(function (e) { state.textContent = ''; app.innerHTML = '<div class="err">' + esc(e.message) + '</div>'; });
+    });
+    document.getElementById('top').addEventListener('click', function () {
+      state.textContent = '执行中…';
+      window.zkit.run('top', { limit: 8 }).then(function (res) {
+        renderTop(res.data);
+        state.textContent = res.ms + ' ms';
+        reportHeight();
+      }).catch(function (e) { state.textContent = ''; app.innerHTML = '<div class="err">' + esc(e.message) + '</div>'; });
+    });
+  }
+
+  if (window.zkit && window.zkit.hosted) window.zkit.ready(boot);
+  else boot();
+})();
+</script>
+</body>
+</html>

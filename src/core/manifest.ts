@@ -20,7 +20,11 @@ export const RISK_LEVELS = ['read', 'mutate', 'destructive'] as const;
 export type ParamType = (typeof PARAM_TYPES)[number];
 export type RiskLevel = (typeof RISK_LEVELS)[number];
 export type OutputKind = 'text' | 'json' | 'markdown' | 'table' | 'file' | 'html';
-export type RenderKind = 'text' | 'table' | 'json' | 'markdown' | 'keyvalue' | 'image' | 'link';
+/**
+ * render = "web"：结果不由内置卡片渲染，而是交给插件自己的 web/index.html（沙箱 iframe）。
+ * render = "html"：stdout 本身就是 HTML 片段，直接在沙箱 iframe 里渲染（output = "html" 的默认 render）。
+ */
+export type RenderKind = 'text' | 'table' | 'json' | 'markdown' | 'keyvalue' | 'image' | 'link' | 'web' | 'html';
 export type ActionType = 'exec' | 'http';
 
 /**
@@ -158,7 +162,7 @@ export interface LoadResult {
 
 const DEFAULT_TIMEOUT = 60;
 const OUTPUTS: OutputKind[] = ['text', 'json', 'markdown', 'table', 'file', 'html'];
-const RENDERS: RenderKind[] = ['text', 'table', 'json', 'markdown', 'keyvalue', 'image', 'link'];
+const RENDERS: RenderKind[] = ['text', 'table', 'json', 'markdown', 'keyvalue', 'image', 'link', 'web', 'html'];
 
 const RENDER_FOR_OUTPUT: Record<OutputKind, RenderKind> = {
   text: 'text',
@@ -166,7 +170,7 @@ const RENDER_FOR_OUTPUT: Record<OutputKind, RenderKind> = {
   markdown: 'markdown',
   table: 'table',
   file: 'link',
-  html: 'text',
+  html: 'html',
 };
 
 /** MCP 工具名：{插件id}__{动作id}，双下划线避免和 id 里的下划线混淆 */
@@ -493,6 +497,14 @@ export function parseManifest(text: string, pluginDir: string, manifestPath = '<
 
   // 服务声明要在「有错就返回」之前解析，否则它里面的错误会被静默吞掉
   const services = parseServices(raw['service'], errors);
+
+  // render = "web" 承诺了「结果由插件自己的页面渲染」，页面文件必须真实存在。
+  // 清单是唯一事实来源：缺了它，别等到打开启动器才发现，校验阶段就说清。
+  for (const a of actions) {
+    if (a.render === 'web' && !fs.existsSync(path.join(pluginDir, 'web', 'index.html'))) {
+      errors.push(`动作 ${a.id}: render = "web" 需要插件目录下有 web/index.html（插件自带的富交互页面）`);
+    }
+  }
 
   const runtimeRaw = (asString(meta['runtime']) ?? 'spawn').toLowerCase();
   if (!['spawn', 'worker', 'host'].includes(runtimeRaw)) {

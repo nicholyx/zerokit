@@ -157,6 +157,60 @@ function serveStatic(res: http.ServerResponse, urlPath: string): void {
   res.end(body);
 }
 
+/**
+ * 插件自带的 web 面：GET /p/<插件id>/... 托管该插件目录下的 web/。
+ *
+ * 安全边界（与 serveStatic 的关键差异）：
+ *   - **不注入会话令牌**。插件页面是第三方代码，令牌只发给应用自己的前端。
+ *     页面跑在 sandbox iframe 里（opaque origin），fetch 不到带令牌的 API，
+ *     执行请求只能经 postMessage 桥由宿主转发——确认策略因此无法绕过。
+ *   - 注入的 bridge 脚本是宿主资产（/​_zkit/bridge.js），与插件文件分开存放。
+ */
+function servePluginPage(res: http.ServerResponse, urlPath: string): void {
+  const m = /^\/p\/([a-z0-9][a-z0-9._-]*)(?:\/(.*))?$/.exec(urlPath);
+  const fail = (code: number, msg: string) => res.writeHead(code, { 'content-type': 'text/plain; charset=utf-8' }).end(msg);
+  if (!m) {
+    fail(404, '没有这个页面');
+    return;
+  }
+  const entry = listPlugins().find((e) => e.plugin?.id === m[1]);
+  const plugin = entry?.plugin;
+  if (!plugin) {
+    fail(404, `没有插件 ${m[1]}`);
+    return;
+  }
+  const webDir = path.resolve(plugin.dir, 'web');
+  const rel = m[2] === undefined || m[2] === '' ? 'index.html' : m[2];
+  const full = path.resolve(webDir, rel);
+  // 目录穿越防护：resolve 后必须还在 web 目录里（带分隔符，防 web-xxx 兄弟目录）
+  if (full !== webDir && !full.startsWith(webDir + path.sep)) {
+    fail(403, 'forbidden');
+    return;
+  }
+  let body: Buffer;
+  try {
+    body = fs.readFileSync(full);
+  } catch {
+    fail(404, `插件 ${plugin.id} 的 web 目录里没有 ${rel}`);
+    return;
+  }
+  const ext = path.extname(full).toLowerCase();
+  if (ext === '.html') {
+    // 注入桥脚本：让页面拿到 window.zkit（读取执行上下文、反向调用本插件动作）
+    const tag = '<script src="/_zkit/bridge.js"></script>';
+    const html = /<head[^>]*>/i.test(body.toString('utf8'))
+      ? body.toString('utf8').replace(/<head[^>]*>/i, (mm) => mm + tag)
+      : tag + body.toString('utf8');
+    body = Buffer.from(html);
+  }
+  res.writeHead(200, {
+    'content-type': MIME[ext] ?? 'application/octet-stream',
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff',
+  });
+  res.end(body);
+}
+
 function readBody(req: http.IncomingMessage): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -439,6 +493,24 @@ export function createServer(): http.Server {
         return;
       }
 
+      // 插件自带的 web 面（静态托管 + 桥注入），与应用自己的前端分开
+      if (url.pathname.startsWith('/p/') && req.method === 'GET') {
+        servePluginPage(res, url.pathname);
+        return;
+      }
+      if (url.pathname === '/_zkit/bridge.js' && req.method === 'GET') {
+        const bridge = path.join(WEB_DIR, 'zkit-bridge.js');
+        try {
+          res.writeHead(200, {
+            'content-type': 'text/javascript; charset=utf-8',
+            'cache-control': 'no-store',
+          }).end(fs.readFileSync(bridge));
+        } catch {
+          res.writeHead(404).end('bridge 脚本缺失');
+        }
+        return;
+      }
+
       if (req.method === 'GET') {
         serveStatic(res, url.pathname);
         return;
@@ -467,8 +539,8 @@ export function startServer(options: ServerOptions = {}): Promise<{ url: string;
   });
 }
 
-/** zkit ui 的入口 */
-export async function cli(args: string[]): Promise<number> {
+/** zkit ui 的入口。openPath：--open 时打开的路径（含 hash），默认根页面 */
+export async function cli(args: string[], opts: { openPath?: string } = {}): Promise<number> {
   const portIdx = args.indexOf('--port');
   const port = portIdx >= 0 ? Number(args[portIdx + 1]) : 0;
   const { url } = await startServer({ port: Number.isFinite(port) ? port : 0 });
@@ -490,7 +562,8 @@ export async function cli(args: string[]): Promise<number> {
     const { spawn } = await import('node:child_process');
     const exe = process.platform === 'win32' ? 'cmd'
       : process.platform === 'darwin' ? 'open' : 'xdg-open';
-    const argv = process.platform === 'win32' ? ['/c', 'start', '', url] : [url];
+    const target = opts.openPath ? url + opts.openPath : url;
+    const argv = process.platform === 'win32' ? ['/c', 'start', '', target] : [target];
     const child = spawn(exe, argv, { windowsHide: true, detached: true });
     child.on('error', () => { /* 打不开浏览器不影响服务 */ });
     child.unref();
