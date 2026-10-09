@@ -125,18 +125,28 @@ export function buildArgv(
 function describeFetchError(e: unknown): string {
   const err = e as { message?: string; cause?: { code?: string; message?: string } };
   const code = err.cause?.code;
+  // 本机设了代理变量而请求又失败时，多半是它：Node 内置 fetch（undici）
+  // **不读** http_proxy/https_proxy，直连又被出口网络拦——curl 能通、插件不通，
+  // 差别就在这。把这句说清楚，能省一次莫名其妙的排查。
+  const proxyHint = (process.env['https_proxy'] || process.env['HTTPS_PROXY']
+    || process.env['http_proxy'] || process.env['HTTP_PROXY'])
+    && ['ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT',
+      'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT'].includes(code ?? '')
+    ? '；本机设置了 http(s)_proxy，但 Node 内置 fetch 不走代理环境变量——'
+      + '试试 `unset http_proxy https_proxy` 后重试，或换个不需要代理的网络'
+    : '';
   switch (code) {
     case 'ENOTFOUND':
     case 'EAI_AGAIN':
-      return `域名解析失败（${code}）—— 检查网络或 DNS`;
+      return `域名解析失败（${code}）—— 检查网络或 DNS${proxyHint}`;
     case 'ECONNREFUSED':
-      return '连接被拒绝 —— 目标端口没有服务在监听';
+      return `连接被拒绝 —— 目标端口没有服务在监听${proxyHint}`;
     case 'ECONNRESET':
-      return '连接被重置（ECONNRESET）—— 大概被出口网络策略拦了';
+      return `连接被重置（ECONNRESET）—— 大概被出口网络策略拦了${proxyHint}`;
     case 'ETIMEDOUT':
     case 'UND_ERR_CONNECT_TIMEOUT':
     case 'UND_ERR_HEADERS_TIMEOUT':
-      return `连接超时（${code}）—— 网络不可达，或被出口策略拦截`;
+      return `连接超时（${code}）—— 网络不可达，或被出口策略拦截${proxyHint}`;
     case 'CERT_HAS_EXPIRED':
     case 'UNABLE_TO_VERIFY_LEAF_SIGNATURE':
     case 'DEPTH_ZERO_SELF_SIGNED_CERT':

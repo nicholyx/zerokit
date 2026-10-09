@@ -4,6 +4,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
 
 const args = process.argv.slice(2);
 const mode = args[0] ?? 'overview';
@@ -80,6 +81,21 @@ function top(limit) {
       .sort((a, b) => b._mb - a._mb)
       .slice(0, limit)
       .map((r) => ({ 进程: r.进程, PID: r.PID, 内存: `${r._mb.toFixed(1)} MB` }));
+  }
+  // 非 Windows 的 ps 有两个方言：Linux（GNU procps）认 --sort 和 pmem；
+  // macOS（BSD ps）只认 -m（按内存排序）和 rss（KB）。两边分开处理。
+  if (process.platform === 'darwin') {
+    // BSD 的 comm 列被内核限制在 16 字符（/Applications/Or 这种残名），所以取
+    // command（完整命令行）：.app 路径提取出应用名，普通程序取 basename。
+    const ps = execFileSync('ps', ['-eo', 'pid,rss,command', '-m'], { encoding: 'utf8' });
+    return ps.trim().split('\n').slice(1, limit + 1).map((line) => {
+      const cols = line.trim().split(/\s+/);
+      const cmdline = cols.slice(2).join(' ');
+      const app = /^(.*?\.app)\//.exec(cmdline);
+      const name = app ? path.basename(app[1]) : path.basename(cmdline.split(/\s+/)[0] ?? '');
+      const mb = Number(cols[1]) / 1024;
+      return { PID: cols[0], 进程: name, 内存: `${mb.toFixed(1)} MB` };
+    });
   }
   const ps = execFileSync('ps', ['-eo', 'pid,comm,pmem,pcpu', '--sort=-pmem'], { encoding: 'utf8' });
   return ps.trim().split('\n').slice(1, limit + 1).map((line) => {

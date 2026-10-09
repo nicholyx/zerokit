@@ -176,9 +176,16 @@ const run = (id, values) => runAction(plugin, byId(id), { caller: 'cli', values 
   ], { encoding: 'utf8', windowsHide: true, timeout: 30000 });
   let data;
   try { data = JSON.parse(r.stdout); } catch { /* 下面统一报错 */ }
-  check('open 对索引内的路径放行，并构造出 explorer /select 命令（dry-run）',
-    r.status === 0 && /explorer/.test(String(data?.['方式'])) && String(data?.['方式']).includes('/select,')
-    && String(data?.['方式']).includes('Report.TXT'),
+  // 「定位到文件」的平台命令各不相同（filesearch.mjs 的 openCommand）：
+  // win 用 explorer /select，mac 用 open -R，linux 退化为 xdg-open 打开所在目录
+  const how = String(data?.['方式'] ?? '');
+  const howOk = process.platform === 'win32'
+    ? /explorer/.test(how) && how.includes('/select,')
+    : process.platform === 'darwin'
+      ? /\bopen\b/.test(how) && how.includes('-R')
+      : /xdg-open/.test(how);
+  check(`open 对索引内的路径放行，并构造出本平台的定位命令（dry-run）`,
+    r.status === 0 && howOk && how.includes('Report.TXT'),
     `code=${r.status} out=${r.stdout} err=${r.stderr}`);
 
   const bad = spawnSync(process.execPath, [

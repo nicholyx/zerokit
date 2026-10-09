@@ -1,8 +1,8 @@
 // 剪贴板历史插件的动作实现。
 //
-// 读剪贴板这件事本身在 watch.ps1 里做（见那个文件的注释：Node 没有内置 API，
-// 而每次新起 powershell 要 ~200ms，只能用一个常驻进程在内部轮询）。
-// 这个文件负责**动作**：把监听拉起来、读写历史、搜索、放回剪贴板。
+// 读剪贴板由轮询器做（Windows 是 watch.ps1 的常驻 PowerShell；mac/linux 是
+// watch.mjs 的常驻 node 进程——见 clipio.mjs 的平台说明）。这个文件负责**动作**：
+// 把监听拉起来、读写历史、搜索、放回剪贴板。
 //
 // 落盘规则全在 history.mjs（纯函数，可单独测），这里只管流程和输出。
 import fs from 'node:fs';
@@ -13,9 +13,11 @@ import {
   DEFAULT_MAX_ENTRIES, DEFAULT_MAX_LENGTH, clearHistory, formatTime,
   openHistory, readEntries, searchEntries, selectEntry,
 } from './history.mjs';
+import { clipboardIO, powershellExe } from './clipio.mjs';
 
 const HERE = import.meta.dirname; // 插件目录。worker 下 cwd 不是插件目录，所以一律用它。
 const WATCH_PS1 = path.join(HERE, 'watch.ps1');
+const WATCH_MJS = path.join(HERE, 'watch.mjs');
 
 /** 显示用：把换行折叠掉，否则表格会被多行文本撑坏 */
 function oneLine(text, limit) {
@@ -38,25 +40,23 @@ function fail(msg) {
 }
 
 /**
- * PowerShell 可执行文件。
- *
- * 优先用系统目录下的绝对路径：PATH 是用户可改的，一个同名 powershell 挡在前面
- * 就能劫持整个插件。找不到（非标准安装 / 非 Windows）再退回按 PATH 找。
+ * 本平台默认的轮询器：Windows 用 watch.ps1（常驻 PowerShell 进程内轮询，
+ * 每次新起 powershell 要 ~200ms，轮询付不起）；mac/linux 用 watch.mjs
+ * （常驻 node 进程，pbpaste/xclip 都是轻量小工具）。两者行协议一致。
  */
-function powershellExe() {
-  const root = process.env['SystemRoot'] || 'C:\\Windows';
-  const fixed = path.join(root, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-  return fs.existsSync(fixed) ? fixed : 'powershell';
+function defaultPoller() {
+  return process.platform === 'win32' ? WATCH_PS1 : WATCH_MJS;
 }
 
 function pidAlive(pid) {
+  // process.kill(pid, 0) 不发真信号，只探测进程在不在；跨平台，
+  // 且比 tasklist 快三个数量级（内核里 services.ts 判活用的就是它）。
+  // EPERM = 进程存在但属于别的用户，也算活着。
   try {
-    const out = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
-      encoding: 'utf8', windowsHide: true, timeout: 8000,
-    });
-    return out.status === 0 && /"/.test(out.stdout ?? '');
-  } catch {
-    return false;
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return e?.code === 'EPERM';
   }
 }
 
@@ -137,19 +137,10 @@ function actionCopy(argv) {
       + (entries.length ? '（1 是最新的一条）' : '（历史是空的，先用 watch-start 开始监听）'));
   }
 
-  // 文本走 stdin 而不是命令行参数：剪贴板的正文可能很长、含引号换行，
-  // 塞进 -Command 的字符串里迟早会被转义咬到；走管道则原样进原样出。
-  // 用 StreamReader 显式按 UTF-8 读，避免受控制台代码页影响（中文会乱）。
-  const script = [
-    'Add-Type -AssemblyName System.Windows.Forms',
-    '$r = New-Object System.IO.StreamReader([Console]::OpenStandardInput(), [Text.Encoding]::UTF8)',
-    '$t = $r.ReadToEnd()',
-    'Set-Clipboard -Value $t',
-  ].join('; ');
-  const r = spawnSync(powershellExe(), ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script], {
-    input: entry.text, encoding: 'utf8', windowsHide: true, timeout: 20000,
-  });
-  if (r.status !== 0) fail(`写入剪贴板失败：${(r.stderr || r.error?.message || '未知原因').trim().slice(0, 300)}`);
+  // 写剪贴板走平台层（clipio.mjs）：win 用 PowerShell、mac 用 pbcopy、linux 用 xclip/xsel。
+  // 各平台的转义/编码坑都在那边处理，这里只关心结果。
+  const r = clipboardIO().write(entry.text);
+  if (!r.ok) fail(`写入剪贴板失败：${String(r.error).slice(0, 300)}`);
 
   out({ index, length: entry.length, copied: oneLine(entry.text, 60), at: formatTime(entry.at) });
 }
@@ -191,15 +182,15 @@ function actionWatchStart(argv) {
   fs.writeFileSync(pidFile, String(process.pid), 'utf8');
 
   const log = openHistory(dataDir, { maxEntries, maxLength });
-  // 轮询器默认永远是 watch.ps1。留这个环境变量只是给测试一个缝：
-  // 换成"假轮询器"才能在不碰真实剪贴板的前提下验证这一层（pid 文件的生命周期、
-  // 行协议解析、落盘去重）——这是唯一能把粘合代码测到又不去污染用户剪贴板的办法。
-  const poller = process.env['ZK_CLIPBOARD_POLLER'] || WATCH_PS1;
-  const fake = /\.m?js$/i.test(poller);
+  // 轮询器默认按平台选（watch.ps1 / watch.mjs）。留 ZK_CLIPBOARD_POLLER 只是给
+  // 测试一个缝：换成"假轮询器"才能在不碰真实剪贴板的前提下验证这一层
+  // （pid 文件的生命周期、行协议解析、落盘去重）。
+  const poller = process.env['ZK_CLIPBOARD_POLLER'] || defaultPoller();
+  const isJs = /\.m?js$/i.test(poller);
   const child = spawn(
-    fake ? process.execPath : powershellExe(),
-    fake
-      ? [poller]
+    isJs ? process.execPath : powershellExe(),
+    isJs
+      ? [poller, '--interval-ms', String(intervalMs), '--parent-pid', String(process.pid)]
       : ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', poller,
         '-IntervalMs', String(intervalMs), '-ParentPid', String(process.pid)],
     { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true },
@@ -262,9 +253,9 @@ function actionWatchStart(argv) {
 /**
  * 停掉监听。这是 [[service]] 里声明的 stop 命令。
  *
- * 用 taskkill /T 而不是只杀监听进程：/T 连它拉起的轮询进程一起结束。
- * （Node 在 Windows 上没法可靠地发信号，普通 kill 只结束父进程、
- * 留下一个还在轮询的 PowerShell，这正是 /T 存在的理由。）
+ * Windows 用 taskkill /T：/T 连它拉起的轮询进程一起结束（Node 在 Windows 上
+ * 没法可靠地发信号，普通 kill 只结束父进程、留下一个还在轮询的 PowerShell）。
+ * mac/linux 直接 SIGTERM：监听进程的信号处理器会 kill 掉轮询子进程再退出。
  */
 function actionWatchStop(argv) {
   const pidFile = resolvePidFile(argv[0]);
@@ -275,14 +266,22 @@ function actionWatchStop(argv) {
   }
   if (!pidAlive(pid)) {
     try { fs.rmSync(pidFile, { force: true }); } catch { /* 忽略 */ }
-    process.stdout.write(`PID ${pid} 已经不在了，顺手清掉 pid 文件\n`);
+    process.stdout.write(`PID ${pid} 已经��在了，顺手清掉 pid 文件\n`);
     return;
   }
-  const r = spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], {
-    encoding: 'utf8', windowsHide: true, timeout: 15000,
-  });
-  if (r.status !== 0 && !/not found|不存在|没有找到/i.test(r.stderr ?? '')) {
-    fail(`停止失败：${(r.stderr || r.stdout || '').trim().slice(0, 200)}`);
+  if (process.platform === 'win32') {
+    const r = spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], {
+      encoding: 'utf8', windowsHide: true, timeout: 15000,
+    });
+    if (r.status !== 0 && !/not found|不存在|没有找到/i.test(r.stderr ?? '')) {
+      fail(`停止失败：${(r.stderr || r.stdout || '').trim().slice(0, 200)}`);
+    }
+  } else {
+    try {
+      process.kill(pid, 'SIGTERM');
+    } catch (e) {
+      fail(`停止失败：${e?.message ?? e}`);
+    }
   }
   try { fs.rmSync(pidFile, { force: true }); } catch { /* 忽略 */ }
   process.stdout.write(`已停止剪贴板监听（PID ${pid} 及其轮询进程）\n`);
