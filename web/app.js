@@ -353,6 +353,29 @@ function collectValues(action) {
 
 // ---------------------------------------------------------------- 执行与确认
 
+/** 走一遍完整执行：需要确认就先弹确认框，用户取消时返回 null */
+async function executeAction(plugin, action, values, remember = false) {
+  let res = await api('/api/run', {
+    method: 'POST',
+    body: { plugin: plugin.id, action: action.id, values },
+  });
+  if (res.needConfirm) {
+    const ok = await askConfirm(plugin, action, res);
+    if (!ok) return null;
+    if (remember && action.risk !== 'destructive') {
+      await api('/api/approve', {
+        method: 'POST',
+        body: { plugin: plugin.id, action: action.id },
+      }).catch(() => {});
+    }
+    res = await api('/api/run', {
+      method: 'POST',
+      body: { plugin: plugin.id, action: action.id, values, confirm: res.confirm },
+    });
+  }
+  return res;
+}
+
 async function submit(remember) {
   if (!detail) return;
   const { plugin, action } = detail;
@@ -360,24 +383,10 @@ async function submit(remember) {
   if (btn) { btn.disabled = true; btn.textContent = '执行中…'; }
   try {
     const values = collectValues(action);
-    let res = await api('/api/run', {
-      method: 'POST',
-      body: { plugin: plugin.id, action: action.id, values },
-    });
-    if (res.needConfirm) {
-      const ok = await askConfirm(plugin, action, res);
-      if (!ok) return;
-      if (remember && action.risk !== 'destructive') {
-        await api('/api/approve', {
-          method: 'POST',
-          body: { plugin: plugin.id, action: action.id },
-        }).catch(() => {});
-      }
-      res = await api('/api/run', {
-        method: 'POST',
-        body: { plugin: plugin.id, action: action.id, values, confirm: res.confirm },
-      });
-    }
+    const res = await executeAction(plugin, action, values, remember);
+    if (!res) return;   // 用户在确认框点了取消，不算失败也不算成功
+    lastValues = values;
+    lastResult = res;
     renderResult(res);
     rememberRecent(plugin.id, action.id);
     // 刚跑完的动作可能拉起了一个后台进程/服务，徽标要跟着变
@@ -443,7 +452,15 @@ function renderResult(res) {
   if (res.error) {
     body += `<pre class="out" style="color:var(--bad)">${esc(res.error)}</pre>`;
   }
-  if (res.data !== undefined) {
+  if (res.render === 'web' && detail) {
+    // 插件自己的页面渲染结果：沙箱 iframe，无 allow-same-origin——
+    // 页面拿不到令牌、fetch 不了宿主 API，执行只能走桥（见下方 zkit 桥）
+    body += `<iframe class="web-frame" sandbox="allow-scripts"
+      src="/p/${esc(detail.plugin.id)}/index.html" title="${esc(detail.action.title)}"></iframe>`;
+  } else if (res.render === 'html' && res.stdout) {
+    // output = "html"：stdout 本身就是 HTML 片段，沙箱里直接渲染
+    body += `<iframe class="web-frame html" sandbox="allow-scripts" srcdoc="${esc(res.stdout)}"></iframe>`;
+  } else if (res.data !== undefined) {
     body += renderData(res.data, res.render);
   } else if (res.stdout) {
     body += `<pre class="out">${esc(res.stdout)}</pre>`;
@@ -463,7 +480,82 @@ function renderResult(res) {
       </div>
       <div class="card-body">${body}</div>
     </div>`;
+
+  // web 面的 iframe 加载完就发执行上下文（页面里的 hello 握手是双保险）
+  const frame = box.querySelector('.web-frame:not(.html)');
+  if (frame) frame.addEventListener('load', () => sendContext(frame));
 }
+
+// ---------------------------------------------------------------- 插件页面桥（宿主侧）
+//
+// render = "web" 的动作，结果交给插件的 web/index.html 渲染。
+// 页面在 sandbox iframe 里（opaque origin），能和我们说的只有 postMessage：
+//   页面 → 这里：hello（请求上下文）/ run（执行动作）/ resize（报告高度）
+//   这里 → 页面：context（动作 + 参数 + 结果）/ run:result（run 的应答）
+// 令牌永远不会发给插件页面——它要执行动作只能请我们转发，
+// 确认弹窗照常弹出，插件页面代替不了用户点头。
+
+let lastValues = {};   // 最近一次执行时用户填的参数
+let lastResult = null; // 最近一次执行的结果
+
+function sendContext(frame) {
+  if (!frame.contentWindow || !detail || !lastResult) return;
+  frame.contentWindow.postMessage({
+    __zkit: true,
+    type: 'context',
+    payload: {
+      plugin: { id: detail.plugin.id, name: detail.plugin.name },
+      action: { id: detail.action.id, title: detail.action.title },
+      params: lastValues,
+      result: {
+        ok: lastResult.ok, data: lastResult.data, stdout: lastResult.stdout,
+        stderr: lastResult.stderr, error: lastResult.error, ms: lastResult.ms,
+      },
+    },
+  }, '*');   // targetOrigin 用 '*'：sandbox 页面是 opaque origin，没有具体源可写（消息不含敏感内容）
+}
+
+async function bridgeRun(frame, msg) {
+  const reply = (payload) => frame.contentWindow.postMessage({
+    __zkit: true, type: 'run:result', callId: msg.callId, payload,
+  }, '*');
+  const plugin = detail?.plugin;
+  const action = plugin?.actions.find((a) => a.id === msg.action);
+  if (!action) {
+    reply({ ok: false, error: `桥只能调本插件的动作：${plugin ? `没有动作 ${msg.action}` : '详情页已关闭'}` });
+    return;
+  }
+  try {
+    const res = await executeAction(plugin, action, msg.values ?? {});
+    if (!res) { reply({ ok: false, error: '用户在确认框取消了执行' }); return; }
+    lastResult = res;   // 页面后续要 context 时给最新的
+    reply({
+      ok: res.ok !== false && !res.error,
+      data: res.data, stdout: res.stdout, stderr: res.stderr,
+      error: res.error, ms: res.ms,
+    });
+    refreshPsCount();
+  } catch (e) {
+    reply({ ok: false, error: e.message });
+  }
+}
+
+window.addEventListener('message', (ev) => {
+  const msg = ev.data;
+  if (!msg || msg.__zkit !== true) return;
+  // 只信我们自己创建的那个 iframe：消息来源必须是当前结果区里的 web-frame
+  const frame = document.querySelector('#result .web-frame:not(.html)');
+  if (!frame || ev.source !== frame.contentWindow) return;
+  if (msg.type === 'hello') {
+    sendContext(frame);
+  } else if (msg.type === 'resize') {
+    // 页面报告自己的内容高度；上限防恶意撑爆，下限防缩没了
+    const h = Math.min(720, Math.max(80, Number(msg.height) || 0));
+    frame.style.height = `${h}px`;
+  } else if (msg.type === 'run') {
+    bridgeRun(frame, msg);
+  }
+});
 
 function renderData(data, render) {
   if (Array.isArray(data)) {

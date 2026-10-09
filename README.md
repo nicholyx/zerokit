@@ -16,7 +16,7 @@ uTools 的插件是 JS 调 `utools.*` 私有 API，DeepSeek Harness 的插件是
 | **MCP** | 工具 `<插件id>__<动作id>`，`inputSchema` 自动生成，任何 AI 客户端可直接调用 |
 | **启动器** | 关键词命中 → 动作列表 → 参数表单 → 结果卡片 |
 | **AI 工作台** | 同一批动作变成模型的工具，对话式调用，副作用动作先弹确认 |
-| **Web** | 独立页面与表单。插件自带 HTML 做富交互是**计划中**的形态，尚未实现 |
+| **Web** | 动作声明 `render = "web"` 时，结果交给插件自带的 `web/index.html` 渲染（沙箱 iframe + postMessage 桥，`zkit web <插件id>` 直达） |
 
 所以「给 AI 用」不是额外开发，而是免费副产品。复制一个插件目录（或一个 `.toolpack`
 单文件），能力就整体搬到了任何地方——终端、启动器、Claude Code、Cursor、VS Code 都行。

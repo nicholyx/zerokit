@@ -23,7 +23,9 @@ title       = "系统概况"
 description = "返回操作系统、CPU 型号与核数、内存占用、开机时长。想了解这台机器当前的整体状态时用这个。"
 run         = ["{node}", "sysinfo.mjs"]
 output      = "json"
-render      = "keyvalue"
+# render = "web"：结果不用内置卡片，而是交给本插件 web/index.html 渲染（富交互仪表盘）。
+# CLI/MCP 面不受影响——同一份声明，那边照样拿 JSON。
+render      = "web"
 risk        = "read"
 
 [[action]]

@@ -66,6 +66,7 @@ ${c.bold('集市')}
 
 ${c.bold('界面')}
   ui [--port N] [--open]  启动本地启动器界面（浏览器打开，也是 Tauri 壳用的同一套）
+  web <插件id> [--port N] 起界面并直达插件自带的富交互页面（render = "web" 的动作）
 
 ${c.bold('AI 对接')}
   mcp serve               以 MCP server 方式运行（stdio），给 AI 客户端调用
@@ -734,6 +735,39 @@ async function cmdKill(args: string[]): Promise<number> {
   return r.ok ? 0 : 1;
 }
 
+/** zkit web <插件id>：起启动器并直达插件自带的富交互页面 */
+async function cmdWeb(args: string[]): Promise<number> {
+  const id = args.find((a) => !a.startsWith('--'));
+  if (!id) {
+    process.stderr.write('用法：zkit web <插件id> [--port N]\n');
+    process.stderr.write(c.dim('  打开插件自带的 web 面。看看谁有：zkit list\n'));
+    return 2;
+  }
+  const plugin = listPlugins().find((e) => e.plugin?.id === id)?.plugin;
+  if (!plugin) {
+    process.stderr.write(c.red(`✗ 没有插件 ${id}`) + '\n');
+    process.stderr.write(c.dim('  先看看装了什么：zkit list\n'));
+    return 1;
+  }
+  const webAction = plugin.actions.find((a) => a.render === 'web');
+  const hasPage = fs.existsSync(path.join(plugin.dir, 'web', 'index.html'));
+  if (!webAction && !hasPage) {
+    process.stderr.write(c.red(`✗ 插件 ${id} 没有 web 面：目录下没有 web/index.html，也没有 render = "web" 的动作\n`));
+    return 1;
+  }
+  if (webAction) {
+    // 深链直达动作详情页：执行后结果交给插件页面渲染，桥可用
+    process.stdout.write(`打开 ${c.bold(`${id}.${webAction.id}`)} 的富交互页面\n`);
+  } else {
+    process.stdout.write(c.yellow(
+      `提示：${id} 有 web/index.html 但没有声明 render = "web" 的动作，裸开页面拿不到执行结果（桥只在启动器里生效）\n`));
+  }
+  const server = await import('./server.ts');
+  return server.cli(['--open', ...args.filter((a) => a !== id)], {
+    openPath: webAction ? `#/${id}/${webAction.id}` : `/p/${id}/`,
+  });
+}
+
 async function main(): Promise<number> {
   const [, , cmd, ...rest] = process.argv;
   switch (cmd) {
@@ -772,6 +806,8 @@ async function main(): Promise<number> {
       const server = await import('./server.ts');
       return server.cli(rest);
     }
+    case 'web':
+      return cmdWeb(rest);
     default:
       process.stderr.write(c.red(`未知命令：${cmd}`) + '\n');
       process.stdout.write(HELP);

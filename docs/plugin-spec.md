@@ -27,7 +27,7 @@
 plugins/proxy/
   plugin.toml        必需。唯一的声明文件
   proxy.py           任意语言、任意文件；也可以完全没有代码
-  web/index.html     可选。富交互网页形态（**尚未实现**，见 overview.md「待办」）
+  web/index.html     可选。富交互网页形态（render = "web" 的动作用它渲染结果，见「三种插件形态」）
   icon.svg           可选
 ```
 
@@ -136,8 +136,8 @@ Windows 上 `python.exe` 可能只是个会弹商店的空壳）。
 | `run` | exec 必填 | **argv 数组**，不是字符串 |
 | `shell` | | 默认 `false`。开了才用 shell 拼字符串，风险等级会被强制提升为 `destructive` |
 | `url` / `method` / `headers` / `body` | http 必填 `url` | |
-| `output` | | `text`（默认）/ `json` / `markdown` / `table` / `file` / `html` |
-| `render` | | 各端渲染提示。默认由 `output` 推导 |
+| `output` | | `text`（默认）/ `json` / `markdown` / `table` / `file` / `html`（stdout 即 HTML 片段，沙箱渲染） |
+| `render` | | 各端渲染提示，默认由 `output` 推导。`web` = 结果交给插件 `web/index.html` 渲染（需要该文件真实存在，校验阶段检查） |
 | `risk` | ✅ | `read` / `mutate` / `destructive` |
 | `timeout` | | 秒，默认 60 |
 | `cwd` | | 工作目录，相对插件目录；绝对路径也支持（用于接管已有工具） |
@@ -349,9 +349,39 @@ risk   = "read"
 
 **2. 跑本地命令（`type = "exec"`）** —— 任意语言，通过 stdout 交流。
 
-**3. 带网页（`web/index.html`）** —— 需要富交互时的形态，启动器打开插件自己的页面
-而不是结果卡片。**目前只有约定、没有实现**：内核里没有加载插件目录下 HTML 的代码路径
-（`server.ts` 托管的是应用自己的单页应用）。写插件时先别依赖它，详见 `overview.md`「待办」。
+**3. 带网页（`web/index.html`）** —— 需要富交互时的形态：动作声明 `render = "web"`，
+执行结果不再用内置卡片，而是交给插件自己的页面渲染（沙箱 iframe）。
+
+```toml
+[[action]]
+id     = "overview"
+run    = ["{node}", "sysinfo.mjs"]
+output = "json"
+render = "web"        # 结果交给 web/index.html 渲染
+risk   = "read"
+```
+
+内核托管 `/p/<插件id>/`（就是插件的 `web/` 目录），HTML 会**自动注入桥脚本**——
+页面里直接用 `window.zkit`，不用（也不能）引任何宿主文件：
+
+```js
+// 页面加载后拿执行上下文：{ plugin, action, params, result }
+zkit.ready((ctx) => render(ctx.result.data));
+
+// 反向调用本插件的另一个动作（有副作用的照常弹确认，页面绕不过）
+const res = await zkit.run('top', { limit: 8 });
+
+// 报告内容高度，宿主据此调整 iframe
+zkit.setHeight(document.body.scrollHeight);
+```
+
+安全模型：页面跑在 `sandbox="allow-scripts"` 的 iframe 里（opaque origin），
+**拿不到会话令牌、fetch 不了宿主 API**——执行只能经 postMessage 桥由宿主转发，
+`mutate` / `destructive` 的确认弹窗照常生效。裸开 `/p/<id>/`（不在启动器里）
+时 `zkit.hosted` 为 false，`zkit.run` 会给出能看懂的错误。
+
+另一个轻量写法：`output = "html"` 表示 stdout 本身就是 HTML 片段，
+启动器直接在沙箱 iframe 里渲染它（`srcdoc`），不需要 `web/` 目录。
 
 **4. uTools 插件（零改造接入）** —— 见下一节。
 
@@ -396,7 +426,7 @@ zerokit 的清单（只读，不写你的目录）。丢进插件目录即可，
 
 | 面 | 从同一份声明派生出的东西 |
 |---|---|
-| 启动器 / Web | 关键词命中 → 动作列表 → **按参数生成表单** → 按 `render` 渲染结果卡片 |
+| 启动器 / Web | 关键词命中 → 动作列表 → **按参数生成表单** → 按 `render` 渲染结果卡片（`web` = 插件自己的页面） |
 | CLI | `zkit run <插件> <动作> --<参数> <值>` |
 | MCP | 工具 `<插件id>__<动作id>`，`inputSchema` 自动生成，`description` 直接取清单 |
 
