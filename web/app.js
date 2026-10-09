@@ -6,7 +6,7 @@ const TOKEN = document.querySelector('meta[name=zk-token]').content;
 const $ = (id) => document.getElementById(id);
 
 const el = {
-  q: $('q'), list: $('list'), empty: $('empty'), count: $('count'),
+  q: $('q'), list: $('list'), empty: $('empty'), count: $('count'), searchRow: $('searchRow'),
   listView: $('listView'), detailView: $('detailView'), workbench: $('workbench'),
   modeLabel: $('modeLabel'), modeDot: $('modeDot'), reload: $('reloadBtn'),
 };
@@ -103,7 +103,6 @@ function search(query) {
 
 function renderList() {
   const q = el.q.value;
-  if (q.startsWith('?')) { showWorkbench(q.slice(1)); return; }
   mode = 'command';
   el.modeLabel.textContent = '命令';
   el.modeDot.classList.remove('workbench');
@@ -390,6 +389,29 @@ function renderTable(rows) {
 
 // ---------------------------------------------------------------- 工作台（占位）
 
+// ---------------------------------------------------------------- 工作台
+
+const wb = {
+  sessionId: '',
+  model: '',
+  busy: false,
+  log: null,
+  ai: null,
+};
+
+/** 从工作台退回命令模式 */
+function exitWorkbench() {
+  mode = 'command';
+  el.workbench.classList.add('hidden');
+  el.modeLabel.textContent = '命令';
+  el.modeDot.classList.remove('workbench');
+  el.searchRow.classList.remove('hidden');
+  el.listView.classList.remove('hidden');
+  el.q.value = '';
+  renderList();
+  el.q.focus();
+}
+
 function showWorkbench(question) {
   mode = 'workbench';
   el.modeLabel.textContent = '工作台';
@@ -397,23 +419,227 @@ function showWorkbench(question) {
   el.listView.classList.add('hidden');
   el.detailView.classList.add('hidden');
   el.workbench.classList.remove('hidden');
+  el.searchRow.classList.add('hidden'); // 工作台有自己的输入框，别和搜索框并排打架
+
+  if (!wb.log) {
+    el.workbench.innerHTML = `
+      <div class="wb-head">
+        <span class="wb-model" id="wbModel">正在检查模型配置…</span>
+        <span class="wb-tools" id="wbTools"></span>
+        <button class="ghost" id="wbReset">新会话</button>
+      </div>
+      <div class="wb-log" id="wbLog"></div>
+      <div class="wb-input">
+        <input id="wbQ" placeholder="要它做什么？例如：看看系统概况" autocomplete="off">
+        <button class="primary" id="wbSend">发送</button>
+      </div>`;
+    wb.log = $('wbLog');
+    $('wbSend').addEventListener('click', () => wbSend());
+    $('wbQ').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); wbSend(); }
+    });
+    $('wbReset').addEventListener('click', () => { wb.sessionId = ''; wb.log.innerHTML = ''; });
+    loadAiInfo();
+  }
+
+  if (question) {
+    $('wbQ').value = question;
+  }
   el.count.textContent = `${entries.length} 个动作可作为工具`;
-  el.workbench.innerHTML = `
-    <div class="ph">
-      <b>工作台还没接上模型。</b><br><br>
-      它和启动器共用同一份插件清单——清单里的每个动作在这里就是一个工具。
-      输入框里以 <code>?</code> 开头即进入本模式。<br>
-      ${question ? `<br>你刚才问的是：<code>${esc(question)}</code><br>` : ''}
-      <br>当前可用工具：<code>${esc(entries.map((e) => e.action.tool).slice(0, 6).join(', '))}</code> …<br><br>
-      要在命令行先把这些工具交给别的 AI 用，见 <code>zkit mcp config</code>。
-    </div>`;
+  setTimeout(() => $('wbQ')?.focus(), 0);
+}
+
+async function loadAiInfo() {
+  try {
+    const info = await api('/api/ai');
+    wb.ai = info;
+    wb.model = info.model;
+    $('wbModel').textContent = `${info.provider} · ${info.model}`;
+    $('wbTools').textContent = `${info.tools} 个工具可用`;
+    if (!info.ready) {
+      wbBubble('sys',
+        `模型还没配置好：${info.reason}\n${info.hint || ''}\n\n`
+        + '（想先试界面可以在 config.toml 里写 provider = "mock"，它会用一个假模型把整条链路跑通）');
+    }
+  } catch (e) {
+    $('wbModel').textContent = `读取模型配置失败：${e.message}`;
+  }
+}
+
+function wbBubble(kind, text, opts = {}) {
+  const node = document.createElement('div');
+  node.className = `wb-msg ${kind}${opts.thinking ? ' thinking' : ''}`;
+  node.innerHTML = `<div class="wb-who">${kind === 'me' ? '你' : kind === 'sys' ? 'zerokit' : ''}</div>
+    <div class="wb-text">${esc(text)}</div>`;
+  wb.log.appendChild(node);
+  wb.log.scrollTop = wb.log.scrollHeight;
+  return node.querySelector('.wb-text');
+}
+
+/**
+ * 工具调用卡片。
+ * approvable=true 时带「允许 / 拒绝」按钮（有副作用的动作）；
+ * 只读动作不给按钮，因为不需要确认——但它**也必须显示出来**，
+ * 否则模型悄悄调了工具，用户完全看不见发生了什么。
+ */
+function wbToolCard(call, approvable) {
+  const node = document.createElement('div');
+  node.className = 'wb-tool';
+  node.dataset.id = call.id;
+  node.innerHTML = `
+    <div class="wb-tool-head">
+      <span class="badge ${esc(call.risk)}">${esc(RISK_TEXT[call.risk] || call.risk)}</span>
+      <span class="wb-tool-name">${esc(call.actionTitle)}</span>
+      <span class="wb-tool-src">${esc(call.pluginName)} · ${esc(call.tool)}</span>
+      <span class="wb-tool-state" data-state>${approvable ? '等待确认' : '准备执行'}</span>
+    </div>
+    <div class="cmd-line">${esc(call.command || '(无命令)')}</div>
+    ${approvable ? `<div class="wb-tool-actions">
+      <button class="primary" data-allow>允许执行</button>
+      <button class="ghost" data-deny>拒绝</button>
+    </div>` : ''}
+    <div class="wb-tool-out"></div>`;
+  if (approvable) {
+    node.querySelector('[data-allow]').addEventListener('click', () => wbApprove(call.id, true, node));
+    node.querySelector('[data-deny]').addEventListener('click', () => wbApprove(call.id, false, node));
+  }
+  wb.log.appendChild(node);
+  wb.log.scrollTop = wb.log.scrollHeight;
+  return node;
+}
+
+function wbFindCard(id) {
+  return wb.log.querySelector(`.wb-tool[data-id="${CSS.escape(id)}"]`);
+}
+
+async function wbApprove(callId, allow, node) {
+  node.querySelector('.wb-tool-actions').remove();
+  node.querySelector('[data-state]').textContent = allow ? '已批准，执行中…' : '已拒绝';
+  node.classList.toggle('declined', !allow);
+  try {
+    await api('/api/chat/approve', {
+      method: 'POST',
+      body: { sessionId: wb.sessionId, callId, allow },
+    });
+  } catch (e) {
+    node.querySelector('[data-state]').textContent = `审批失败：${e.message}`;
+  }
+}
+
+async function wbSend() {
+  const input = $('wbQ');
+  const text = input.value.trim();
+  if (!text || wb.busy) return;
+  input.value = '';
+  wbBubble('me', text);
+
+  wb.busy = true;
+  const btn = $('wbSend');
+  btn.disabled = true;
+  btn.textContent = '…';
+
+  let assistantText = null;
+  let thinkingText = null;
+  let sawTool = false;
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-zerokit-token': TOKEN },
+      body: JSON.stringify({ message: text, sessionId: wb.sessionId }),
+    });
+
+    if (!res.ok || !res.body) {
+      const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      wbBubble('sys', `没法开始：${err.error}${err.hint ? '\n' + err.hint : ''}`);
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf('\n\n')) >= 0) {
+        const chunk = buf.slice(0, i).trim();
+        buf = buf.slice(i + 2);
+        if (!chunk.startsWith('data:')) continue;
+        let evt;
+        try { evt = JSON.parse(chunk.slice(5).trim()); } catch { continue; }
+
+        if (evt.type === 'session') {
+          wb.sessionId = evt.sessionId;
+          if (evt.model) { wb.model = evt.model; $('wbModel').textContent = `${wb.ai?.provider ?? ''} · ${evt.model}`; }
+        } else if (evt.type === 'text') {
+          if (!assistantText) assistantText = wbBubble('sys', '');
+          assistantText.textContent += evt.delta;
+          wb.log.scrollTop = wb.log.scrollHeight;
+        } else if (evt.type === 'thinking') {
+          if (!thinkingText) thinkingText = wbBubble('sys', '', { thinking: true });
+          thinkingText.textContent += evt.delta;
+        } else if (evt.type === 'tool_pending') {
+          sawTool = true;
+          assistantText = null;
+          wbToolCard(evt.call, true);
+        } else if (evt.type === 'tool_start') {
+          // 只读动作不会先有 tool_pending，这里补建卡片，保证调用过程可见
+          let card = wbFindCard(evt.call.id);
+          if (!card) {
+            sawTool = true;
+            assistantText = null;
+            card = wbToolCard(evt.call, false);
+          }
+          card.querySelector('[data-state]').textContent = '执行中…';
+        } else if (evt.type === 'tool_result') {
+          const r = evt.result;
+          const card = wbFindCard(r.id);
+          if (card) {
+            card.querySelector('[data-state]').innerHTML = r.declined
+              ? '已拒绝'
+              : (r.ok ? `✓ ${r.ms} ms` : `✗ ${esc(r.error || '失败')}`);
+            card.classList.toggle('declined', !!r.declined);
+            card.classList.toggle('failed', !r.ok && !r.declined);
+            const out = card.querySelector('.wb-tool-out');
+            out.innerHTML = `<details${r.summary.length < 400 ? ' open' : ''}>
+              <summary>返回内容</summary><pre class="out">${esc(r.summary)}</pre></details>`;
+          }
+          assistantText = null;
+        } else if (evt.type === 'done') {
+          if (!assistantText && !sawTool) wbBubble('sys', '（没有输出）');
+          const meta = document.createElement('div');
+          meta.className = 'wb-meta';
+          meta.textContent = `完成 · ${evt.steps} 步`;
+          wb.log.appendChild(meta);
+        } else if (evt.type === 'error') {
+          wbBubble('sys', `出错了：${evt.message}`);
+        }
+        wb.log.scrollTop = wb.log.scrollHeight;
+      }
+    }
+  } catch (e) {
+    wbBubble('sys', `连接中断：${e.message}`);
+  } finally {
+    wb.busy = false;
+    btn.disabled = false;
+    btn.textContent = '发送';
+    $('wbQ')?.focus();
+  }
 }
 
 // ---------------------------------------------------------------- 键盘
 
 document.addEventListener('keydown', (e) => {
   if (mode === 'workbench') {
-    if (e.key === 'Escape') { el.q.value = ''; renderList(); el.q.focus(); }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      // 先清空输入框，再按一次才退出（避免误触把对话界面关掉）
+      const q = $('wbQ');
+      if (q && q.value) q.value = '';
+      else exitWorkbench();
+    }
     return;
   }
   if (detail) {
@@ -437,7 +663,17 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-el.q.addEventListener('input', () => { active = 0; renderList(); });
+el.q.addEventListener('input', () => {
+  const q = el.q.value;
+  // 输入 ? 即切到工作台，后面的内容当作第一个问题带过去
+  if (q.startsWith('?') && mode !== 'workbench') {
+    el.q.value = '';
+    showWorkbench(q.slice(1).trim());
+    return;
+  }
+  active = 0;
+  renderList();
+});
 el.reload.addEventListener('click', () => load(true));
 
 // ---------------------------------------------------------------- 启动
@@ -465,6 +701,14 @@ async function load(notify) {
 
 /** 支持 #/插件/动作 深链直达 */
 function applyHash() {
+  // #/workbench?q=...  直接进工作台并把这个问句发出去
+  const wbHash = /^#\/workbench(?:\?(.*))?$/.exec(location.hash || '');
+  if (wbHash) {
+    const q = new URLSearchParams(wbHash[1] || '').get('q') || '';
+    showWorkbench(q);
+    if (q) setTimeout(() => wbSend(), 200);
+    return;
+  }
   const m = /^#\/([\w.-]+)(?:\/([\w.-]+))?/.exec(location.hash || '');
   if (!m) return;
   const entry = entries.find((e) => e.plugin.id === m[1] && (!m[2] || e.action.id === m[2]));

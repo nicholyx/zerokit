@@ -6,6 +6,9 @@ import process from 'node:process';
 import { type Plugin, toolName } from './core/manifest.ts';
 import { PKG_ROOT } from './core/paths.ts';
 import { needsConfirm, rememberApproval } from './core/approvals.ts';
+import { checkAiReady, loadSettings } from './core/settings.ts';
+import { Workbench, createProvider } from './ai/index.ts';
+import { collectToolDefs } from './ai/agent.ts';
 import { listPlugins } from './core/registry.ts';
 import { checkRequires } from './core/resolve.ts';
 import { applyDefaults, coerceParam, toFormFields, toJsonSchema } from './core/schema.ts';
@@ -28,6 +31,10 @@ import { buildArgv, confirmPolicy, displayCommand, runAction } from './core/runn
 const WEB_DIR = path.join(PKG_ROOT, 'web');
 const SESSION_TOKEN = crypto.randomBytes(24).toString('hex');
 const CONFIRM_SECRET = crypto.randomBytes(32);
+
+/** 工作台会话：持有该会话的模型上下文与待审批的调用 */
+const sessions = new Map<string, Workbench>();
+const SESSION_TTL_MS = 30 * 60 * 1000;
 
 export interface ServerOptions {
   port?: number;
@@ -202,6 +209,85 @@ export function createServer(): http.Server {
         return;
       }
 
+      if (url.pathname === '/api/ai' && req.method === 'GET') {
+        const settings = loadSettings(true);
+        const ready = checkAiReady(settings);
+        json(res, 200, {
+          provider: settings.ai.provider,
+          model: settings.ai.model,
+          effort: settings.ai.effort,
+          ready: ready.ready,
+          reason: ready.reason ?? '',
+          hint: ready.hint ?? '',
+          tools: collectToolDefs().length,
+        });
+        return;
+      }
+
+      // 工作台：SSE 流式。审批走 /api/chat/approve，两条请求通过 sessionId 关联
+      if (url.pathname === '/api/chat' && req.method === 'POST') {
+        const body = await readBody(req);
+        const message = String(body['message'] ?? '').trim();
+        const sessionId = String(body['sessionId'] ?? '') || crypto.randomBytes(8).toString('hex');
+        if (!message) {
+          json(res, 400, { error: '消息为空' });
+          return;
+        }
+
+        const ready = checkAiReady();
+        if (!ready.ready) {
+          json(res, 400, { error: ready.reason, hint: ready.hint });
+          return;
+        }
+
+        let wb = sessions.get(sessionId);
+        if (!wb) {
+          wb = new Workbench(createProvider());
+          sessions.set(sessionId, wb);
+          setTimeout(() => sessions.delete(sessionId), SESSION_TTL_MS).unref?.();
+        }
+
+        res.writeHead(200, {
+          'content-type': 'text/event-stream; charset=utf-8',
+          'cache-control': 'no-store',
+          connection: 'keep-alive',
+          'x-accel-buffering': 'no',
+        });
+        const send = (type: string, payload: unknown) => {
+          res.write(`data: ${JSON.stringify({ type, ...(payload as object) })}\n\n`);
+        };
+        send('session', { sessionId, model: loadSettings().ai.model });
+
+        let closed = false;
+        req.on('close', () => { closed = true; });
+
+        await wb.chat(message, {
+          onText: (d) => { if (!closed) send('text', { delta: d }); },
+          onThinking: (d) => { if (!closed) send('thinking', { delta: d }); },
+          onToolPending: (c) => { if (!closed) send('tool_pending', { call: c }); },
+          onToolStart: (c) => { if (!closed) send('tool_start', { call: c }); },
+          onToolResult: (r) => { if (!closed) send('tool_result', { result: r }); },
+          onDone: (info) => { if (!closed) send('done', info); },
+          onError: (m) => { if (!closed) send('error', { message: m }); },
+        });
+        if (!closed) res.end();
+        return;
+      }
+
+      if (url.pathname === '/api/chat/approve' && req.method === 'POST') {
+        const body = await readBody(req);
+        const sessionId = String(body['sessionId'] ?? '');
+        const callId = String(body['callId'] ?? '');
+        const allow = body['allow'] === true;
+        const wb = sessions.get(sessionId);
+        if (!wb) {
+          json(res, 404, { error: '这个会话已经过期了，重新发一条消息即可' });
+          return;
+        }
+        json(res, 200, { ok: wb.resolveApproval(callId, allow) });
+        return;
+      }
+
       if (url.pathname === '/api/approve' && req.method === 'POST') {
         const body = await readBody(req);
         const pluginId = String(body['plugin'] ?? '');
@@ -352,4 +438,14 @@ export async function cli(args: string[]): Promise<number> {
     process.on('SIGTERM', stop);
   });
   return 0;
+}
+
+// 直接被 `node src/server.ts` 拉起时也能工作（被 cli.ts 动态导入时不会触发）
+if (process.argv[1] && /server\.ts$/.test(process.argv[1])) {
+  cli(process.argv.slice(2))
+    .then((code) => process.exit(code))
+    .catch((err) => {
+      process.stderr.write(`启动失败：${err?.stack ?? err}\n`);
+      process.exit(1);
+    });
 }
