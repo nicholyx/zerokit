@@ -195,6 +195,45 @@ table.grid tr:last-child td { border-bottom: 0; }
 .modal .actions { justify-content: flex-end; }
 .modal .remember { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--fg-dim); margin-top: 12px; }
 
+/* ---------------- 运行中 ---------------- */
+.run-chip b { color: var(--fg); font-weight: 600; }
+.run-chip.has-items { color: var(--ok); border-color: #23543d; }
+.run-chip.has-items b { color: var(--ok); }
+
+.ps-view { padding-bottom: 16px; }
+.ps-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+.ps-head h2 { margin: 0; font-size: 17px; }
+.ps-head .sub { color: var(--fg-dim); font-size: 12px; }
+.ps-head button { margin-left: auto; }
+
+.ps-group { margin-bottom: 18px; }
+.ps-group h3 {
+  margin: 0 0 8px; font-size: 12px; font-weight: 500;
+  color: var(--fg-dim); letter-spacing: .3px;
+}
+
+.ps-item {
+  border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px; margin-bottom: 8px; background: var(--panel);
+}
+.ps-item.dead { opacity: .7; }
+.ps-item-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.ps-item-title { font-weight: 600; font-size: 13.5px; }
+.ps-item-meta { font-size: 11.5px; color: var(--fg-dim); font-family: var(--mono); }
+.ps-item-head .badge { margin-left: auto; }
+.ps-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex-shrink: 0; }
+.ps-dot.off { background: #454b55; }
+.ps-item .cmd-line { margin: 8px 0 0; }
+.ps-tail {
+  margin: 8px 0 0; padding: 7px 9px; background: #0b0d10;
+  border: 1px solid var(--line); border-radius: 7px;
+  font-family: var(--mono); font-size: 11.5px; color: #93a2b5;
+  max-height: 108px; overflow: auto; white-space: pre-wrap;
+}
+.ps-item-actions { margin-top: 9px; display: flex; gap: 8px; }
+.ps-item-actions .ghost { padding: 4px 12px; font-size: 12px; }
+.ps-empty { color: var(--fg-dim); font-size: 13px; padding: 18px 0; }
+
 /* ---------------- 工作台 ---------------- */
 .workbench { display: flex; flex-direction: column; height: 100%; padding-bottom: 12px; }
 .wb-head {

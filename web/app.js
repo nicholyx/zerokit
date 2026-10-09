@@ -10,6 +10,7 @@ const $ = (id) => document.getElementById(id);
 const el = {
   q: $('q'), list: $('list'), empty: $('empty'), count: $('count'), searchRow: $('searchRow'),
   listView: $('listView'), detailView: $('detailView'), workbench: $('workbench'),
+  psView: $('psView'), psBtn: $('psBtn'), psCount: $('psCount'),
   modeLabel: $('modeLabel'), modeDot: $('modeDot'), reload: $('reloadBtn'),
 };
 
@@ -296,6 +297,8 @@ async function submit(remember) {
       });
     }
     renderResult(res);
+    // 刚跑完的动作可能拉起了一个后台进程/服务，徽标要跟着变
+    refreshPsCount();
   } catch (e) {
     renderResult({ ok: false, error: e.message, render: 'text' });
   } finally {
@@ -419,6 +422,163 @@ function renderTable(rows) {
 }
 
 // ---------------------------------------------------------------- 工作台（占位）
+
+// ---------------------------------------------------------------- 运行中
+//
+// 「启动了三个插件的服务，我得能看见是哪三个、并且能结束它们」——
+// 这是启动器和「一堆快捷方式」的分界线。
+//
+// 面板里的东西分两类：
+//   1. 内核托管的进程：background = true 的动作拉起的，我们直接管着
+//   2. 插件声明的服务：像白名单代理那种自己管守护进程的，按端口/PID 检测
+//      （检测走系统事实，所以别的程序甚至手动起的也看得见）
+
+let psTimer = null;
+
+function fmtDuration(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return `${s} 秒`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} 分 ${s % 60} 秒`;
+  return `${Math.floor(m / 60)} 小时 ${m % 60} 分`;
+}
+
+async function fetchPs() {
+  try {
+    const data = await api('/api/ps');
+    const running = (data.processes ?? []).filter((p) => p.running).length
+      + (data.services ?? []).filter((s) => s.running).length;
+    el.psCount.textContent = String(running);
+    el.psBtn.classList.toggle('has-items', running > 0);
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/** 只更新徽标，轻量，可在动作执行后顺手调 */
+async function refreshPsCount() {
+  await fetchPs();
+}
+
+async function showPs() {
+  mode = 'ps';
+  el.modeLabel.textContent = '运行中';
+  el.searchRow.classList.add('hidden');
+  el.listView.classList.add('hidden');
+  el.detailView.classList.add('hidden');
+  el.workbench.classList.add('hidden');
+  el.psView.classList.remove('hidden');
+  if (location.hash !== '#/ps') history.replaceState(null, '', '#/ps');
+
+  await renderPs();
+  // 运行中的数据要能自己动：面板开着时每 2 秒刷一次
+  clearInterval(psTimer);
+  psTimer = setInterval(renderPs, 2000);
+}
+
+function exitPs() {
+  clearInterval(psTimer);
+  psTimer = null;
+  mode = 'command';
+  el.psView.classList.add('hidden');
+  el.searchRow.classList.remove('hidden');
+  el.listView.classList.remove('hidden');
+  el.modeLabel.textContent = '命令';
+  history.replaceState(null, '', location.pathname);
+  renderList();
+  el.q.focus();
+}
+
+async function renderPs() {
+  const data = await fetchPs();
+  if (!data) {
+    el.psView.innerHTML = '<div class="ps-empty">读不到运行状态</div>';
+    return;
+  }
+  const procs = data.processes ?? [];
+  const services = data.services ?? [];
+  const runningServices = services.filter((s) => s.running);
+  const idleServices = services.filter((s) => !s.running);
+  const runningProcs = procs.filter((p) => p.running);
+  const total = runningProcs.length + runningServices.length;
+
+  const procHtml = runningProcs.map((p) => `
+    <div class="ps-item">
+      <div class="ps-item-head">
+        <span class="ps-dot"></span>
+        <span class="ps-item-title">${esc(p.title)}</span>
+        <span class="ps-item-meta">PID ${esc(p.pid)} · 已运行 ${esc(fmtDuration(Date.now() - p.startedAt))}</span>
+        <span class="badge read">由 zerokit 托管</span>
+      </div>
+      <div class="cmd-line">${esc(p.command)}</div>
+      ${(p.tail ?? []).length ? `<div class="ps-tail">${esc(p.tail.join('\n'))}</div>` : ''}
+      <div class="ps-item-actions">
+        <button class="ghost" data-kill="${esc(p.id)}">结束</button>
+      </div>
+    </div>`).join('');
+
+  const svcHtml = runningServices.map((s) => `
+    <div class="ps-item">
+      <div class="ps-item-head">
+        <span class="ps-dot"></span>
+        <span class="ps-item-title">${esc(s.title)}</span>
+        <span class="ps-item-meta">${s.port ? `端口 ${esc(s.port)}` : 'pid 文件'} · PID ${esc(s.pid ?? '?')}</span>
+        <span class="badge mutate">插件声明的服务</span>
+      </div>
+      ${s.stopCommand ? `<div class="cmd-line">停止命令：${esc(s.stopCommand)}</div>` : ''}
+      <div class="ps-item-actions">
+        <button class="ghost" data-kill="${esc(`${s.pluginId}.${s.id}`)}">
+          ${s.canStop ? '停止' : '结束进程'}
+        </button>
+      </div>
+    </div>`).join('');
+
+  el.psView.innerHTML = `
+    <div class="ps-head">
+      <h2>运行中（${total}）</h2>
+      <span class="sub">每 2 秒自动刷新</span>
+      ${total > 0 ? '<button class="ghost" id="psKillAll">全部结束</button>' : ''}
+    </div>
+    ${total === 0 ? '<div class="ps-empty">现在没有任何在运行的东西。</div>' : ''}
+    ${procHtml ? `<div class="ps-group"><h3>由 zerokit 托管的进程</h3>${procHtml}</div>` : ''}
+    ${svcHtml ? `<div class="ps-group"><h3>插件声明的服务</h3>${svcHtml}</div>` : ''}
+    ${idleServices.length ? `<div class="ps-group"><h3>已声明但未运行的服务</h3>
+      ${idleServices.map((s) => `<div class="ps-item dead"><div class="ps-item-head">
+        <span class="ps-dot off"></span>
+        <span class="ps-item-title">${esc(s.title)}</span>
+        <span class="ps-item-meta">${esc(s.pluginId)}.${esc(s.id)}${s.port ? ` · 端口 ${esc(s.port)}` : ''}</span>
+        <span class="badge">未运行</span>
+      </div></div>`).join('')}
+    </div>` : ''}
+    <div class="actions"><button class="primary" id="psBack">返回</button></div>`;
+
+  el.psView.querySelectorAll('[data-kill]').forEach((btn) => {
+    btn.addEventListener('click', () => killTarget([btn.dataset.kill], btn));
+  });
+  el.psView.querySelector('#psKillAll')?.addEventListener('click', (e) => killTarget([], e.target, true));
+  el.psView.querySelector('#psBack')?.addEventListener('click', exitPs);
+}
+
+async function killTarget(ids, btn, all = false) {
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '结束中…';
+  try {
+    const res = await api('/api/kill', { method: 'POST', body: all ? { all: true } : { ids } });
+    const bad = (res.results ?? []).filter((r) => !r.ok);
+    if (bad.length) {
+      btn.textContent = '失败';
+      btn.title = bad.map((r) => `${r.target}：${r.message}`).join('\n');
+      setTimeout(() => { btn.disabled = false; btn.textContent = label; }, 2500);
+    }
+    setTimeout(renderPs, 400);
+  } catch (e) {
+    btn.textContent = '失败';
+    btn.title = e.message;
+    setTimeout(() => { btn.disabled = false; btn.textContent = label; }, 2500);
+  }
+}
 
 // ---------------------------------------------------------------- 工作台
 
@@ -663,6 +823,10 @@ async function wbSend() {
 // ---------------------------------------------------------------- 键盘
 
 document.addEventListener('keydown', (e) => {
+  if (mode === 'ps') {
+    if (e.key === 'Escape') { e.preventDefault(); exitPs(); }
+    return;
+  }
   if (mode === 'workbench') {
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -705,7 +869,8 @@ el.q.addEventListener('input', () => {
   active = 0;
   renderList();
 });
-el.reload.addEventListener('click', () => load(true));
+el.reload.addEventListener('click', () => { load(true); refreshPsCount(); });
+el.psBtn.addEventListener('click', () => { if (mode === 'ps') exitPs(); else showPs(); });
 
 // ---------------------------------------------------------------- 启动
 
@@ -731,6 +896,7 @@ async function load(notify) {
     }
     if (notify) { active = 0; }
     renderList();
+    refreshPsCount();   // 顺手把「运行中」徽标更新一下
     applyHash();
   } catch (e) {
     el.count.textContent = `加载失败：${e.message}`;
@@ -739,6 +905,12 @@ async function load(notify) {
 
 /** 支持 #/插件/动作 深链直达 */
 function applyHash() {
+  // #/ps  直接打开「运行中」
+  if ((location.hash || '') === '#/ps') {
+    showPs();
+    return;
+  }
+
   // #/q=...  带一个初始搜索词（命令行、通知、别的程序都能给这么个链接）
   const qHash = /^#\/q=(.*)$/.exec(location.hash || '');
   if (qHash) {

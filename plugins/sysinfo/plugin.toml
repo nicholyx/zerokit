@@ -44,3 +44,14 @@ run         = ["{node}", "sysinfo.mjs", "disk"]
 output      = "json"
 render      = "table"
 risk        = "read"
+
+# background = true：不会等它退出，进程由 zerokit 托管，
+# 于是会出现在「运行中」（zkit ps / 界面上的运行中面板）里，可以随时结束。
+[[action]]
+id          = "watch"
+title       = "持续监控（后台运行）"
+description = "每秒打印一次内存与 CPU 负载，直到被结束。要看实时变化、或者想试试「运行中」面板怎么用时用这个。"
+run         = ["{node}", "sysinfo.mjs", "watch"]
+output      = "text"
+risk        = "mutate"
+background  = true

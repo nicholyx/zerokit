@@ -18,6 +18,16 @@ license  = "MIT"
 [requires]
 python = ">=3.10"
 
+# 声明一个常驻服务：它自己管守护进程（甚至脱离 zerokit 独立运行），
+# 所以用「端口」检测而不是管子进程——手动起的、别的程序起的，这里都看得见。
+[[service]]
+id          = "proxy"
+title       = "白名单代理服务"
+description = "只允许访问 jlcops.com / jlcerp.com 的出网代理"
+port        = 28888
+stop        = ["{python}", "proxy.py", "stop"]
+cwd         = "D:/software/proxy"
+
 [[action]]
 id          = "status"
 title       = "查看代理状态"

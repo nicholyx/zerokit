@@ -11,6 +11,8 @@ import {
   listPlugins, removePlugin, requirePlugin,
 } from './core/registry.ts';
 import { checkRequires, resolveTool } from './core/resolve.ts';
+import { killAllProcesses, killProcess, listProcesses } from './core/runtime.ts';
+import { listServices, stopService } from './core/services.ts';
 import {
   addMarket, buildIndex, installFromMarket, loadMarkets, previewInstall,
   readIndex, refreshMarket, removeMarket, searchMarkets,
@@ -44,6 +46,8 @@ ${c.bold('基本')}
   show <插件> [动作]      查看详情（含生成的 MCP 工具名与 JSON Schema）
   run <插件> <动作> [..]  执行一个动作
   doctor                  自检：环境、依赖、插件清单是否有问题
+  ps                      看正在运行的东西（托管的进程 + 插件声明的服务）
+  kill <进程id|插件.服务> 结束一个；kill all 全部结束
 
 ${c.bold('插件')}
   plugin install <插件id>     从集市安装（会先摊开它的全部能力让你确认）
@@ -620,6 +624,101 @@ function cmdMarket(args: string[]): number {
   return 2;
 }
 
+function humanDuration(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s} 秒`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} 分 ${s % 60} 秒`;
+  const h = Math.floor(m / 60);
+  return `${h} 小时 ${m % 60} 分`;
+}
+
+/**
+ * 「运行中」：把两类东西一起列出来
+ *   1. 内核托管的进程（background 动作拉起的）
+ *   2. 插件声明的常驻服务（按端口/PID 检测，可能是别的程序甚至手动起的）
+ * 这是启动器和「一堆快捷方式」的分界线。
+ */
+function cmdPs(): number {
+  const procs = listProcesses();
+  const services = listServices();
+  const runningServices = services.filter((s) => s.running);
+  const total = procs.length + runningServices.length;
+
+  if (total === 0) {
+    process.stdout.write('当前没有运行中的东西。\n');
+    if (services.length > 0) {
+      process.stdout.write(c.dim(`（有 ${services.length} 个声明过的服务，现在都是停着的）\n`));
+    }
+    return 0;
+  }
+
+  process.stdout.write(`${c.bold(`运行中（${total}）`)}\n`);
+
+  if (procs.length > 0) {
+    process.stdout.write(`\n${c.bold('托管的进程')}\n`);
+    for (const p of procs) {
+      const mark = p.running ? c.green('●') : c.dim('○');
+      const state = p.running ? c.dim(`跑了 ${humanDuration(Date.now() - p.startedAt)}`) : c.red(`已退出（码 ${p.exitCode}）`);
+      process.stdout.write(`  ${mark} ${c.cyan(p.id.padEnd(5))} ${pad(p.title, 26)} ${c.dim(`PID ${p.pid}`)}  ${state}\n`);
+      process.stdout.write(c.dim(`      ${p.command}\n`));
+      if (!p.running && p.tail.length > 0) {
+        for (const line of p.tail) process.stdout.write(c.dim(`      | ${line.slice(0, 120)}\n`));
+      }
+    }
+  }
+
+  if (runningServices.length > 0) {
+    process.stdout.write(`\n${c.bold('插件声明的服务')}\n`);
+    for (const s of runningServices) {
+      const where = s.port ? `端口 ${s.port}` : 'pid 文件';
+      process.stdout.write(
+        `  ${c.green('●')} ${c.cyan(`${s.pluginId}.${s.id}`.padEnd(22))} ${pad(s.title, 20)}`
+        + ` ${c.dim(`${where}`)} ${c.dim(`PID ${s.pid ?? '?'}`)}\n`,
+      );
+    }
+  }
+
+  process.stdout.write(c.dim('\n结束：zkit kill <上面那个 id 或 插件.服务>\n'));
+  process.stdout.write(c.dim('全部结束：zkit kill all\n'));
+  return 0;
+}
+
+async function cmdKill(args: string[]): Promise<number> {
+  const target = args[0];
+  if (!target) {
+    process.stderr.write('用法：zkit kill <进程id|插件.服务|all>\n');
+    process.stderr.write(c.dim('  先看看有什么：zkit ps\n'));
+    return 2;
+  }
+
+  if (target === 'all') {
+    let ok = 0;
+    for (const s of listServices().filter((x) => x.running)) {
+      const r = await stopService(s.pluginId, s.id);
+      process.stdout.write(r.ok ? c.green(`✓ ${r.message}\n`) : c.red(`✗ ${s.pluginId}.${s.id}：${r.message}\n`));
+      if (r.ok) ok++;
+    }
+    const { killed, failed } = killAllProcesses();
+    if (killed > 0) process.stdout.write(c.green(`✓ 已结束 ${killed} 个托管进程\n`));
+    if (failed > 0) process.stderr.write(c.red(`✗ ${failed} 个没能结束\n`));
+    if (ok === 0 && killed === 0 && failed === 0) process.stdout.write('本来就没有在运行的东西。\n');
+    return 0;
+  }
+
+  // 形如 插件.服务 → 走服务停止（插件自己知道怎么优雅退出）
+  if (target.includes('.')) {
+    const idx = target.lastIndexOf('.');
+    const r = await stopService(target.slice(0, idx), target.slice(idx + 1));
+    process.stdout.write(r.ok ? c.green(`✓ ${r.message}\n`) : c.red(`✗ ${r.message}\n`));
+    return r.ok ? 0 : 1;
+  }
+
+  const r = killProcess(target);
+  process.stdout.write(r.ok ? c.green(`✓ ${r.message}\n`) : c.red(`✗ ${r.message}\n`));
+  return r.ok ? 0 : 1;
+}
+
 async function main(): Promise<number> {
   const [, , cmd, ...rest] = process.argv;
   switch (cmd) {
@@ -640,6 +739,10 @@ async function main(): Promise<number> {
       return cmdPlugin(rest);
     case 'market':
       return cmdMarket(rest);
+    case 'ps':
+      return cmdPs();
+    case 'kill':
+      return cmdKill(rest);
     case 'doctor':
       return cmdDoctor();
     case 'path':

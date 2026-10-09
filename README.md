@@ -148,6 +148,9 @@ zkit run <插件> <动作>      执行；--json 输出结构化结果，--yes �
 zkit doctor                 自检环境、依赖、插件清单
 zkit ui                     启动器 / 工作台界面
 
+zkit ps                     看正在运行的东西（托管的进程 + 插件声明的服务）
+zkit kill <进程id|插件.服务> 结束一个；kill all 全部结束
+
 zkit market add <地址|目录> 添加集市（集市 = 一个 git 仓库 + 根目录 market.json）
 zkit market search [词]     在集市里找插件
 zkit market refresh         拉取最新索引
@@ -193,6 +196,7 @@ mcp-allow.json      已授权给 AI 调用的有副作用动作
 - [x] 插件集市（git 仓库 + 索引文件；安装前摊开全部能力审查；目录穿越防护）
 - [x] Tauri 原生壳（全局热键 Alt+Space、托盘、无边框窗口、失焦自动隐藏）
 - [x] **拼音与首字母匹配**（打 `dl` 出「代理」、`xtxx` 出「系统信息」）——纯前端本地计算
+- [x] **运行中管理**：看正在跑的进程与服务、随时结束（`zkit ps` / `zkit kill` / 界面面板）
 - [x] 示例插件：`sysinfo`（只读零依赖）、`ip`（**零代码**）、`jlc-proxy`（接入已有工具）
 
 测试（`node test/*.mjs`，都不联网、不花钱）：

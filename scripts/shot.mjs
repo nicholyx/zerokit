@@ -8,6 +8,7 @@
 
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 // 参数解析：先把带值的开关挑出去，剩下的按位置取，
@@ -15,7 +16,10 @@ import path from 'node:path';
 const rawArgs = process.argv.slice(2);
 const evalIdx = rawArgs.indexOf('--eval');
 const evalExpr = evalIdx >= 0 ? rawArgs[evalIdx + 1] : undefined;
-const positional = rawArgs.filter((_, i) => i !== evalIdx && i !== evalIdx + 1);
+// 注意：没传 --eval 时 evalIdx 是 -1，不能拿它去过滤，否则会把第一个位置参数也滤掉
+const positional = evalIdx >= 0
+  ? rawArgs.filter((_, i) => i !== evalIdx && i !== evalIdx + 1)
+  : rawArgs;
 
 const [url, out, waitMs = '4000', width = '900', height = '820'] = positional;
 if (!url || !out) {
@@ -35,7 +39,9 @@ if (!browser) {
 }
 
 const port = 9222 + Math.floor(Math.random() * 400);
-const profile = path.join(path.dirname(path.resolve(out)), `.cdp-profile-${port}`);
+// profile 固定放临时目录：放在输出目录旁边的话，一旦 out 参数出问题
+// 就会在仓库里留下一堆浏览器垃圾文件（踩过）
+const profile = path.join(os.tmpdir(), `.zerokit-cdp-${port}`);
 const child = spawn(browser, [
   '--headless=new',
   '--disable-gpu',

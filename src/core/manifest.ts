@@ -47,6 +47,11 @@ export interface Action {
   run: string[];
   /** 显式开启才走 shell；开启后风险等级会被强制提升为 destructive */
   shell: boolean;
+  /**
+   * 不等待退出：动作用来拉起一个长期运行的进程时开启。
+   * 进程由内核托管，会在「运行中」里出现，可以随时结束掉。
+   */
+  background: boolean;
   /** http 类型：零代码插件 */
   url?: string;
   method: string;
@@ -62,6 +67,27 @@ export interface Action {
   /** 子进程输出的字符编码。默认 utf8；非 UTF-8 的输出（比如老工具用 GBK）要在这里声明 */
   encoding: string;
   /** 工作目录，相对插件目录 */
+  cwd?: string;
+  env: Record<string, string>;
+}
+
+/**
+ * 插件声明的常驻服务。
+ *
+ * 有些插件的守护进程会脱离 zerokit 独立运行（甚至是被别的程序启动的），
+ * 光看子进程管不着。所以让插件声明「怎么判断它在不在跑」——用端口或 pid 文件——
+ * 检测走系统事实，不信任自报，因此手动起的也能看见。
+ */
+export interface Service {
+  id: string;
+  title: string;
+  description: string;
+  /** 用监听端口判断是否在运行 */
+  port?: number;
+  /** 用 pid 文件判断（相对插件目录） */
+  pidFile?: string;
+  /** 停止命令（argv 数组）。没有就按检测到的 PID 直接结束 */
+  stop?: string[];
   cwd?: string;
   env: Record<string, string>;
 }
@@ -83,6 +109,8 @@ export interface Plugin {
   dir: string;
   manifestPath: string;
   actions: Action[];
+  /** 插件声明的常驻服务（可为空） */
+  services: Service[];
 }
 
 export interface LoadResult {
@@ -176,6 +204,62 @@ function parseParams(raw: unknown, actionId: string, errors: string[]): ActionPa
   return out;
 }
 
+function parseServices(raw: unknown, errors: string[]): Service[] {
+  const list = Array.isArray(raw) ? raw : [];
+  const out: Service[] = [];
+  const seen = new Set<string>();
+
+  for (const item of list) {
+    const s = asRecord(item);
+    const id = asString(s['id']);
+    if (!id) {
+      errors.push('有个 [[service]] 缺少 id');
+      continue;
+    }
+    if (!ID_RE.test(id)) {
+      errors.push(`服务 id "${id}" 非法：只允许小写字母、数字、点、下划线、连字符`);
+      continue;
+    }
+    if (seen.has(id)) {
+      errors.push(`服务 id "${id}" 重复`);
+      continue;
+    }
+    seen.add(id);
+
+    let port: number | undefined;
+    if (s['port'] !== undefined) {
+      const n = Number(s['port']);
+      if (!Number.isInteger(n) || n < 1 || n > 65535) {
+        errors.push(`服务 ${id}: port 必须是 1-65535 的整数`);
+        continue;
+      }
+      port = n;
+    }
+    const pidFile = asString(s['pidFile'] ?? s['pid_file']);
+    if (port === undefined && !pidFile) {
+      errors.push(`服务 ${id}: 至少要给 port 或 pidFile 之一，否则没法判断它在不在运行`);
+      continue;
+    }
+
+    const service: Service = {
+      id,
+      title: asString(s['title']) ?? id,
+      description: asString(s['description']) ?? '',
+      env: Object.fromEntries(
+        Object.entries(asRecord(s['env'])).map(([k, v]) => [k, String(v)]),
+      ),
+    };
+    if (port !== undefined) service.port = port;
+    if (pidFile) service.pidFile = pidFile;
+    const stop = asStringArray(s['stop']);
+    if (stop.length > 0) service.stop = stop;
+    const cwd = asString(s['cwd']);
+    if (cwd) service.cwd = cwd;
+    out.push(service);
+  }
+  return out;
+}
+
 function parseAction(raw: unknown, errors: string[], warnings: string[]): Action | undefined {
   const a = asRecord(raw);
   const id = asString(a['id']);
@@ -264,6 +348,7 @@ function parseAction(raw: unknown, errors: string[], warnings: string[]): Action
     type,
     run,
     shell,
+    background: a['background'] === true,
     method: (asString(a['method']) ?? 'GET').toUpperCase(),
     headers: Object.fromEntries(
       Object.entries(asRecord(a['headers'])).map(([k, v]) => [k, String(v)]),
@@ -329,6 +414,9 @@ export function parseManifest(text: string, pluginDir: string, manifestPath = '<
     actionIds.add(a.id);
   }
 
+  // 服务声明要在「有错就返回」之前解析，否则它里面的错误会被静默吞掉
+  const services = parseServices(raw['service'], errors);
+
   if (errors.length > 0) return { errors, warnings };
 
   const plugin: Plugin = {
@@ -343,6 +431,7 @@ export function parseManifest(text: string, pluginDir: string, manifestPath = '<
     dir: pluginDir,
     manifestPath,
     actions,
+    services,
   };
   const description = asString(meta['description']);
   if (description) plugin.description = description;

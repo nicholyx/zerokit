@@ -88,9 +88,39 @@ function top(limit) {
   });
 }
 
-let result;
-if (mode === 'disk') result = disks();
-else if (mode === 'top') result = top(Number(flag('--limit', 10)) || 10);
-else result = overview();
+/** 持续打印，直到被结束——用来演示「运行中」面板里能被看见、能被结束 */
+async function watch() {
+  const total = os.totalmem();
+  let last = os.cpus().map((c) => c.times);
+  let lastAt = Date.now();
+  for (let i = 1; ; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    const now = os.cpus().map((c) => c.times);
+    let idle = 0;
+    let busy = 0;
+    now.forEach((t, idx) => {
+      const p = last[idx];
+      idle += t.idle - p.idle;
+      busy += (t.user + t.system + t.nice) - (p.user + p.system + p.nice);
+    });
+    last = now;
+    const load = busy + idle > 0 ? (busy / (busy + idle)) * 100 : 0;
+    const used = total - os.freemem();
+    const at = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+    process.stdout.write(
+      `[${at}] #${i}  内存 ${(used / 1024 ** 3).toFixed(1)}/${(total / 1024 ** 3).toFixed(1)} GB`
+      + ` (${((used / total) * 100).toFixed(0)}%)   CPU ${load.toFixed(0)}%`
+      + `   [${((Date.now() - lastAt) / 1000).toFixed(0)}s]\n`,
+    );
+  }
+}
 
-process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+if (mode === 'watch') {
+  await watch();
+} else {
+  let result;
+  if (mode === 'disk') result = disks();
+  else if (mode === 'top') result = top(Number(flag('--limit', 10)) || 10);
+  else result = overview();
+  process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+}

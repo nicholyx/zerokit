@@ -6,6 +6,7 @@ import type { Action, Plugin, RiskLevel } from './manifest.ts';
 import { toolName } from './manifest.ts';
 import { DATA_DIR, HOME, LOG_DIR, ensureDirs, pluginDataDir } from './paths.ts';
 import { resolveTool } from './resolve.ts';
+import { registerProcess } from './runtime.ts';
 
 /**
  * 执行器：整个系统**唯一的执行收口**。
@@ -38,6 +39,8 @@ export interface RunResult {
   argv: string[];
   /** 人类可读的完整命令，仅用于展示 */
   command: string;
+  /** background 动作：被托管起来的进程信息，可在「运行中」里查看和结束 */
+  background?: { id: string; pid: number };
 }
 
 export interface RunOptions {
@@ -344,6 +347,47 @@ export async function runAction(
   const cwd = action.cwd ? path.resolve(plugin.dir, action.cwd) : plugin.dir;
   const env = childEnv({ ...process.env, ...action.env }, argv[0]!);
   const command = displayCommand(action, argv);
+
+  // background 动作：拉起长期运行的进程，不等它退出，交给内核托管，
+  // 于是它会在「运行中」里出现、能随时结束——不用这样，启动器就只是快捷方式。
+  if (action.background) {
+    let child;
+    try {
+      child = spawn(argv[0]!, argv.slice(1), {
+        cwd, env, shell: action.shell, windowsHide: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch (e) {
+      const msg = `启动失败：${(e as Error).message}`;
+      audit({ ...base, decision: 'deny', reason: 'spawn-failed', command, error: msg });
+      return {
+        ok: false, exitCode: null, stdout: '', stderr: '', ms: Date.now() - started,
+        truncated: false, error: msg, argv, command,
+      };
+    }
+    const managed = registerProcess({
+      pluginId: plugin.id,
+      pluginName: plugin.name,
+      actionId: action.id,
+      title: `${plugin.name} · ${action.title}`,
+      command,
+      pid: child.pid ?? -1,
+      child,
+    });
+    const ms = Date.now() - started;
+    audit({ ...base, decision: 'allow', reason: 'background-start', command, ms });
+    return {
+      ok: true,
+      exitCode: null,
+      stdout: `已在后台启动，PID ${child.pid}。要结束它：zkit kill ${managed.id}（或在界面「运行中」里点结束）`,
+      stderr: '',
+      ms,
+      truncated: false,
+      argv,
+      command,
+      background: { id: managed.id, pid: child.pid ?? -1 },
+    };
+  }
 
   const outcome = await execArgv(argv[0]!, argv.slice(1), {
     cwd,

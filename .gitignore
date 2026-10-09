@@ -7,3 +7,4 @@ apps/desktop/src-tauri/target/
 apps/desktop/dist/
 # Tauri 由 tauri-build 生成，不入库
 apps/desktop/src-tauri/gen/schemas/
+.cdp-profile-*/

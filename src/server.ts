@@ -6,6 +6,8 @@ import process from 'node:process';
 import { type Plugin, toolName } from './core/manifest.ts';
 import { PKG_ROOT } from './core/paths.ts';
 import { needsConfirm, rememberApproval } from './core/approvals.ts';
+import { killAllProcesses, killProcess, listProcesses } from './core/runtime.ts';
+import { listServices, stopService } from './core/services.ts';
 import { checkAiReady, loadSettings } from './core/settings.ts';
 import { Workbench, createProvider } from './ai/index.ts';
 import { collectToolDefs } from './ai/agent.ts';
@@ -206,6 +208,48 @@ export function createServer(): http.Server {
     try {
       if (url.pathname === '/api/plugins') {
         json(res, 200, { plugins: wirePlugins() });
+        return;
+      }
+
+      // 「运行中」：托管的进程 + 插件声明的服务。启动器和一堆快捷方式的区别就在这。
+      if (url.pathname === '/api/ps' && req.method === 'GET') {
+        json(res, 200, {
+          // 只列真正在跑的：登记表是落盘的，已经不在了的会被自动清掉
+          processes: listProcesses(),
+          services: listServices(),
+        });
+        return;
+      }
+
+      if (url.pathname === '/api/kill' && req.method === 'POST') {
+        const body = await readBody(req);
+        const results: Array<{ target: string; ok: boolean; message: string }> = [];
+
+        if (body['all'] === true) {
+          for (const s of listServices().filter((x) => x.running)) {
+            const r = await stopService(s.pluginId, s.id);
+            results.push({ target: `${s.pluginId}.${s.id}`, ...r });
+          }
+          const swept = killAllProcesses();
+          results.push({
+            target: '托管进程',
+            ok: swept.failed === 0,
+            message: swept.killed === 0 ? '没有需要结束的' : `结束了 ${swept.killed} 个`,
+          });
+        } else {
+          const ids = Array.isArray(body['ids']) ? body['ids'].map(String) : [];
+          for (const id of ids) {
+            // 形如 插件.服务 交给插件自己的停止命令；纯 id 是托管进程
+            if (id.includes('.')) {
+              const i = id.lastIndexOf('.');
+              const r = await stopService(id.slice(0, i), id.slice(i + 1));
+              results.push({ target: id, ...r });
+            } else {
+              results.push({ target: id, ...killProcess(id) });
+            }
+          }
+        }
+        json(res, 200, { ok: results.every((r) => r.ok), results });
         return;
       }
 
