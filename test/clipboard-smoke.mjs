@@ -198,6 +198,26 @@ fs.writeFileSync(historyPath(DATA_DIR), FIXTURE.map((e) => JSON.stringify(e)).jo
     JSON.stringify({ text: e0.text, length: e0.length, truncated: e0.truncated }));
 }
 
+// ---------------------------------------------------------------- 4.5 平台层（clipio.mjs）
+
+{
+  const { clipboardIO, which } = await import('../plugins/clipboard/clipio.mjs');
+  const io = clipboardIO();
+  if (process.platform === 'win32') {
+    check('平台层：Windows 走 PowerShell（不缺工具）', !io.missing, io.missing ?? '');
+  } else if (process.platform === 'darwin') {
+    check('平台层：macOS 有 pbpaste/pbcopy（不缺工具）',
+      !io.missing && which('pbpaste') !== null && which('pbcopy') !== null, io.missing ?? '');
+  } else {
+    // Linux：xclip/xsel 至少得知道缺了怎么说人话
+    check('平台层：Linux 要么有工具，要么给出安装指引',
+      !io.missing || /xclip|xsel/.test(io.missing), io.missing ?? '');
+  }
+  check('平台层：watch.mjs 与 watch.ps1 都在（各平台的默认轮询器）',
+    fs.existsSync(path.join(PLUGIN_DIR, 'watch.mjs'))
+    && fs.existsSync(path.join(PLUGIN_DIR, 'watch.ps1')));
+}
+
 // ---------------------------------------------------------------- 5. 监听：只验证"能起来、能干净退出"
 
 {
@@ -210,16 +230,30 @@ fs.writeFileSync(historyPath(DATA_DIR), FIXTURE.map((e) => JSON.stringify(e)).jo
     head[0] === 0xef && head[1] === 0xbb && head[2] === 0xbf,
     [...head].map((b) => b.toString(16)).join(' '));
 
-  // -MaxIterations 1：起来、轮询一轮、立刻退出。这样能验证脚本本身没语法/路径错误，
-  // 又不会留下任何常驻进程，也不会往历史里写东西（启动时会先"预热"当前剪贴板）。
-  const proc = spawnSync('powershell', [
-    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps1,
-    '-IntervalMs', '50', '-MaxIterations', '1', '-ParentPid', String(process.pid),
-  ], { encoding: 'utf8', windowsHide: true, timeout: 30000 });
-  check('轮询脚本能启动并立刻退出（退出码 0）', proc.status === 0,
-    `status=${proc.status} stderr=${(proc.stderr ?? '').slice(0, 200)}`);
-  check('这一轮预热不产生任何记录（不会把启动前剪贴板里的旧内容记一遍）',
-    (proc.stdout ?? '').trim() === '', JSON.stringify((proc.stdout ?? '').slice(0, 120)));
+  // 轮询器单轮冒烟：起来、轮询一轮、立刻退出（--max-iterations 1）。
+  // 验证脚本本身没语法/路径错误，不留常驻进程，也不往历史里写东西
+  // （启动时会先"预热"当前剪贴板，预热不产生记录）。
+  // 按平台选轮询器：Windows 是 watch.ps1，mac/linux 是 watch.mjs——
+  // 两个都是各平台的默认轮询器，测的就是真实路径。
+  if (process.platform === 'win32') {
+    const proc = spawnSync('powershell', [
+      '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps1,
+      '-IntervalMs', '50', '-MaxIterations', '1', '-ParentPid', String(process.pid),
+    ], { encoding: 'utf8', windowsHide: true, timeout: 30000 });
+    check('轮询脚本能启动并立刻退出（退出码 0）', proc.status === 0,
+      `status=${proc.status} stderr=${(proc.stderr ?? '').slice(0, 200)}`);
+    check('这一轮预热不产生任何记录（不会把启动前剪贴板里的旧内容记一遍）',
+      (proc.stdout ?? '').trim() === '', JSON.stringify((proc.stdout ?? '').slice(0, 120)));
+  } else {
+    const proc = spawnSync(process.execPath, [
+      path.join(PLUGIN_DIR, 'watch.mjs'),
+      '--interval-ms', '50', '--max-iterations', '1', '--parent-pid', String(process.pid),
+    ], { encoding: 'utf8', timeout: 30000 });
+    check('轮询脚本能启动并立刻退出（退出码 0）', proc.status === 0,
+      `status=${proc.status} stderr=${(proc.stderr ?? '').slice(0, 200)}`);
+    check('这一轮预热不产生任何记录（不会把启动前剪贴板里的旧内容记一遍）',
+      (proc.stdout ?? '').trim() === '', JSON.stringify((proc.stdout ?? '').slice(0, 120)));
+  }
 
   // 已在运行时必须拒绝启动：pid 文件里放本测试进程的 PID（它肯定是活的）。
   // 这条同时证明了 watch-start 在"拒绝"路径上不会去拉起 powershell。

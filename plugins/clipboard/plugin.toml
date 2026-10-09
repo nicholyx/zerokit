@@ -1,29 +1,35 @@
 # 剪贴板历史：把复制过的东西记下来，之后能搜、能再复制回去。
 #
 # 它和别的插件不一样的地方是**有个常驻的监听进程**：剪贴板不会主动通知你，
-# 只能轮询。每次读剪贴板都新起一个 powershell 要 ~200ms，所以监听做成
-# "一个常驻 PowerShell 进程 + 进程内循环轮询"（见 watch.ps1 里的说明），
-# 空闲时 CPU 占用约等于 0。
+# 只能轮询。Windows 上每次新起 powershell 要 ~200ms，所以监听做成
+# "一个常驻 PowerShell 进程 + 进程内循环轮询"（watch.ps1）；mac/linux 的
+# pbpaste/xclip 是轻量小工具，常驻 node 进程轮询即可（watch.mjs）。
+# 两边行协议一致，上层 clipboard.mjs 不感知平台。
 #
-# 只用 Windows 的能力（PowerShell 5.1 + System.Windows.Forms.Clipboard），
+# 平台能力（clipio.mjs 是唯一的平台知识来源）：
+#   Windows : PowerShell + System.Windows.Forms（系统自带）
+#   macOS   : pbpaste / pbcopy（系统自带）
+#   Linux   : xclip 或 xsel（可能要自己装，缺了会给安装指引）
 # 不联网、不依赖任何第三方包。
 #
 # 目录里的东西：
 #   clipboard.mjs  动作实现（worker 线程跑的 CLI）
+#   clipio.mjs     剪贴板读写的平台层（win/mac/linux 各自的命令）
 #   history.mjs    历史的纯逻辑：去重、条数上限、截断、搜索（可脱离剪贴板单独测）
-#   watch.ps1      轮询器，被 clipboard.mjs watch-start 拉起
+#   watch.ps1      Windows 轮询器，被 clipboard.mjs watch-start 拉起
+#   watch.mjs      macOS/Linux 轮询器（行协议与 watch.ps1 一致）
 #   history.jsonl  历史数据，落在 {data_dir}，不在插件目录里（跨更新保留）
 #   clipboard.pid  监听进程的 PID，给 [[service]] 检测用（在插件目录里，见下）
 
 [plugin]
 id       = "clipboard"
 name     = "剪贴板历史"
-version  = "1.0.0"
+version  = "1.1.0"
 summary  = "记录剪贴板历史，可搜索、可把旧内容放回剪贴板，后台常驻监听"
 description = """
 后台监听剪贴板，把每次复制的内容按时间记成一串历史（自动去重、只留最近 500 条）。
 之后可以列出、按关键词搜索，并把其中任意一条重新放回剪贴板。
-只用 Windows 自带的 PowerShell，不联网、不装依赖。
+Windows / macOS 开箱即用，Linux 需要 xclip 或 xsel（缺了会给出安装指引）。不联网、不装依赖。
 """
 keywords = ["剪贴板", "clipboard", "历史", "history", "复制", "粘贴", "clip", "粘贴板"]
 

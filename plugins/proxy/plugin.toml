@@ -7,9 +7,9 @@
 [plugin]
 id       = "proxy"
 name     = "白名单代理"
-version  = "1.0.0"
-summary  = "只允许访问 jlcops.com / jlcerp.com 的出网代理"
-keywords = ["代理", "proxy", "网络", "白名单", "jlc", "出网"]
+version  = "1.1.0"
+summary  = "只放行白名单域名的本机出网代理（默认 example.com，用 allow-domain 加自己要的）"
+keywords = ["代理", "proxy", "网络", "白名单", "出网"]
 license  = "MIT"
 
 # 这个插件的动作都是无状态的一次性任务，放进常驻解释器反复执行：

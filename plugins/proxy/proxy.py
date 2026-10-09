@@ -13,7 +13,7 @@ start_proxy.bat 只做两件事：找到 Python、把参数原样交给本文件
     python proxy.py status             查看状态（含开机自启状态）
     python proxy.py autostart on|off   开关开机自启
     python proxy.py config show        查看配置
-    python proxy.py config domain add jlcops.com
+    python proxy.py config domain add example.com
     python proxy.py config port add 8443
     python proxy.py config auth basic user pass
     python proxy.py config auth none
@@ -88,7 +88,9 @@ DEFAULT_CONFIG = {
     "listen_port": 28888,
     # 允许访问的域名：写域名本身即包含其所有子域；
     # 需要正则时写 "re:^api\\.example\\.com$"
-    "allowed_domains": ["jlcops.com", "jlcerp.com"],
+    # 默认只放行 example.com（RFC 2606 保留域）：这是模板值，装好后第一件事就是
+    # 用 `zkit run proxy allow-domain --domain 你的域名` 换成自己要的。
+    "allowed_domains": ["example.com"],
     # 允许访问的端口：写 "*" 表示不限制（不建议）
     "allowed_ports": [80, 443],
     "connect_timeout": 30,
@@ -97,7 +99,7 @@ DEFAULT_CONFIG = {
         "method": "none",          # none | basic
         "username": "",
         "password": "",
-        "realm": "jlc-proxy",
+        "realm": "zerokit-proxy",
     },
     "logs": {
         "dir": "",                 # 空 = 本文件目录下的 logs
