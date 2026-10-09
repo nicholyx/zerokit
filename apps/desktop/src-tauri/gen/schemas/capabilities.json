@@ -1,1 +1,0 @@
-{"default":{"identifier":"default","description":"桌面壳的默认能力。前端是普通网页、不调用 Tauri API，所以只需要核心默认权限；全局热键与托盘都在 Rust 侧注册，不需要额外授权。","local":true,"windows":["main"],"permissions":["core:default"]}}
