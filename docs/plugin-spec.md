@@ -44,6 +44,33 @@ plugins/jlc-proxy/
 | `description` | | 长说明 |
 | `keywords` | | 字符串数组。同时供模糊搜索和模型判断 |
 | `author` / `homepage` / `license` | | 元信息 |
+| `runtime` | | `spawn`（默认，起子进程，最通用）或 `worker`（见下） |
+
+### `runtime = "worker"`：让 node 插件快 5 倍
+
+默认每个动作起一个子进程，而**起进程本身就是大头**：这台机器上 `node` 裸启动约
+116~193 ms。worker 线程省掉整个进程创建，实测 **176 ms → 34 ms（5.2 倍）**。
+
+```toml
+[plugin]
+runtime = "worker"    # 只对「用 {node} 跑一个 .js/.mjs 文件」的动作生效
+```
+
+**代价**：worker 不能单独设工作目录（`process.chdir` 是进程级的），所以脚本里的
+**相对路径不再指向插件目录**。要定位自己的文件请用 `{plugin_dir}` 或
+`import.meta.dirname`：
+
+```js
+import path from 'node:path';
+const here = import.meta.dirname;              // ✅ 对
+const data = fs.readFileSync('./data.json');   // ❌ worker 下会找不到
+```
+
+不满足条件时（不是 node、不是 .js 文件、脚本不存在）会自动退回子进程，
+不会因此失败。所以开它是安全的，只是要注意上面那条相对路径的约定。
+
+> 其它语言（python 等）暂时用不上这条路——worker 是 Node 特有的。
+> 要让它们也快起来得做「常驻 host」，那需要插件配合一个协议，还没做。
 
 > `id` 为什么必须是 ASCII：MCP 规范要求工具名匹配 `^[A-Za-z0-9._-]{1,128}$`，
 > 而工具名是 `<id>__<action id>` 拼出来的。中文请放 `name`。

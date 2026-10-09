@@ -9,6 +9,11 @@ summary  = "查看本机 CPU、内存、磁盘和占用最高的进程，只读�
 keywords = ["系统", "cpu", "内存", "磁盘", "进程", "sysinfo", "性能"]
 license  = "MIT"
 
+# 用 worker 线程代替子进程执行，省掉整个进程创建（实测 31ms vs 116ms）。
+# 前提是脚本**不要依赖相对路径**（worker 不能单独设工作目录），
+# 需要定位自己的文件请用 {plugin_dir} 或 import.meta.dirname。
+runtime  = "worker"
+
 [requires]
 node = ">=22"
 

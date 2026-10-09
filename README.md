@@ -197,6 +197,8 @@ mcp-allow.json      已授权给 AI 调用的有副作用动作
 - [x] Tauri 原生壳（全局热键 Alt+Space、托盘、无边框窗口、失焦自动隐藏）
 - [x] **拼音与首字母匹配**（打 `dl` 出「代理」、`xtxx` 出「系统信息」）——纯前端本地计算
 - [x] **运行中管理**：看正在跑的进程与服务、随时结束（`zkit ps` / `zkit kill` / 界面面板）
+- [x] **速度**：冷启动 706→315 ms（AI SDK 延迟加载）；node 插件动作 176→34 ms
+      （worker 线程，插件声明 `runtime = "worker"` 开启）
 - [x] 示例插件：`sysinfo`（只读零依赖）、`ip`（**零代码**）、`jlc-proxy`（接入已有工具）
 
 测试（`node test/*.mjs`，都不联网、不花钱）：
@@ -207,6 +209,9 @@ mcp-allow.json      已授权给 AI 调用的有副作用动作
 | `test/workbench-smoke.mjs` | agent 循环、审批挂起、拒绝回填、未配密钥时的提示 |
 | `test/market-smoke.mjs` | 集市添加/搜索/审查/安装、目录穿越拒绝、重复安装 |
 | `test/pinyin-smoke.mjs` | 拼音转换、六档打分、单字母不放宽、两万次评分耗时 |
+| `test/runner-smoke.mjs` | worker 与 spawn 结果必须一致、worker 确实更快、不适用时干净退回、后台动作托管与结束 |
+
+另外 `node scripts/bench.mjs` 会量一遍启动与执行的各环节耗时（优化前先量，别拍脑袋）。
 
 尚未开始：
 

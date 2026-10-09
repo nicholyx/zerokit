@@ -9,8 +9,10 @@ import { needsConfirm, rememberApproval } from './core/approvals.ts';
 import { killAllProcesses, killProcess, listProcesses } from './core/runtime.ts';
 import { listServices, stopService } from './core/services.ts';
 import { checkAiReady, loadSettings } from './core/settings.ts';
-import { Workbench, createProvider } from './ai/index.ts';
-import { collectToolDefs } from './ai/agent.ts';
+// 注意这里**不要**顶层导入 './ai/index.ts'：那条链会把 @anthropic-ai/sdk
+// 一起拉进来，光加载就 240ms，而启动器绝大多数时候用不到它。
+// Workbench 与工具清单在 agent.ts 里，那一支不碰任何模型 SDK，可以静态导入。
+import { Workbench, collectToolDefs } from './ai/agent.ts';
 import { listPlugins } from './core/registry.ts';
 import { checkRequires } from './core/resolve.ts';
 import { applyDefaults, coerceParam, toFormFields, toJsonSchema } from './core/schema.ts';
@@ -286,7 +288,8 @@ export function createServer(): http.Server {
 
         let wb = sessions.get(sessionId);
         if (!wb) {
-          wb = new Workbench(createProvider());
+          const { createProvider } = await import('./ai/index.ts');
+          wb = new Workbench(await createProvider());
           sessions.set(sessionId, wb);
           setTimeout(() => sessions.delete(sessionId), SESSION_TTL_MS).unref?.();
         }
