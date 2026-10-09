@@ -8,7 +8,7 @@
 
 ### Added
 
-- GitHub 项目基建：CI（测试矩阵 / 工作流静态检查 / ���交规范 / 安全扫描）、
+- GitHub 项目基建：CI（测试矩阵 / 工作流静态检查 / 提交规范 / 安全扫描）、
   Issue 与 PR 模板、Dependabot、自动打标、Stale 清理、OSSF Scorecard。
 - 治理文件：LICENSE（MIT）、CONTRIBUTING、CODE_OF_CONDUCT、SECURITY、MAINTAINERS。
 

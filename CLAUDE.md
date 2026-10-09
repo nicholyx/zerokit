@@ -30,10 +30,15 @@
 ## 改完之后
 
 ```bash
+./scripts/lint.sh                  # 本地静态检查（与 CI 同源）
 node scripts/test-all.mjs          # 测试
 node src/cli.ts doctor             # 清单与环境自检
 node src/cli.ts ui --open          # 起界面人工看一眼（UI 改动时）
 ```
+
+日常迭代的完整闭环（规划 → 实现 → 发布）与踩坑硬规则见
+`.claude/skills/maintain-loop/SKILL.md`；基建大改时对照
+`.claude/skills/oss-bootstrap/SKILL.md`。
 
 ## 常见坑
 
