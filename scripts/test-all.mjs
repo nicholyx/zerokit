@@ -66,6 +66,13 @@ for (const file of files) {
   if (bad > 0) failures.push(file);
   const mark = bad === 0 ? '✓' : '✗';
   console.log(`${mark} ${label} ${ok} / ${total}   ${String(ms).padStart(6)}ms`);
+  // 部分断言失败时也要把失败详情带出来——CI 上只看到「4 / 10」无从下手。
+  // 失败行的格式是各测试的 check() 打的「FAIL  名称   <- 详情」，截前 8 条防刷屏
+  if (bad > 0) {
+    for (const line of out.trim().split('\n').filter((l) => l.startsWith('FAIL')).slice(0, 8)) {
+      console.log(`    ${line}`);
+    }
+  }
 }
 
 console.log('\n' + '='.repeat(56));
