@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="zk-token" content="__TOKEN__">
+<title>zerokit</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="shell">
+
+  <header class="bar">
+    <div class="brand">
+      <span class="dot" id="modeDot"></span>
+      <span class="name">zerokit</span>
+      <span class="mode" id="modeLabel">命令</span>
+    </div>
+    <div class="bar-right">
+      <span class="hint-inline" id="count"></span>
+      <button class="ghost" id="reloadBtn" title="重新读取插件">重新加载</button>
+    </div>
+  </header>
+
+  <div class="search-row">
+    <input id="q" type="text" autocomplete="off" spellcheck="false"
+           placeholder="输入插件名或动作，回车执行…   （开头打 ? 切到工作台）">
+    <kbd class="esc-hint">Esc</kbd>
+  </div>
+
+  <main id="stage">
+    <div id="listView" class="list-view">
+      <ul id="list" class="list" role="listbox"></ul>
+      <div id="empty" class="empty">没有匹配的插件动作</div>
+    </div>
+    <div id="detailView" class="detail-view hidden"></div>
+    <div id="workbench" class="workbench hidden"></div>
+  </main>
+
+  <footer class="foot">
+    <span><kbd>↑</kbd><kbd>↓</kbd> 选择</span>
+    <span><kbd>Enter</kbd> 打开 / 执行</span>
+    <span><kbd>Ctrl</kbd>+<kbd>Enter</kbd> 确认并记住（下次不再问）</span>
+    <span><kbd>Esc</kbd> 返回</span>
+  </footer>
+</div>
+
+<script src="/app.js" type="module"></script>
+</body>
+</html>

@@ -2,8 +2,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { type Plugin, toolName } from './core/manifest.ts';
-import { HOME, LOG_DIR, PLUGINS_DIR, ensureDirs } from './core/paths.ts';
+import { type Plugin, type RiskLevel, toolName } from './core/manifest.ts';
+import { HOME, LOG_DIR, PLUGINS_DIR } from './core/paths.ts';
+import { needsConfirm, rememberApproval } from './core/approvals.ts';
+import type { ConfirmPolicy } from './core/runner.ts';
 import {
   addFromDir, addFromGit, exportPlugin, importPlugin, installBundled,
   listPlugins, removePlugin, requirePlugin,
@@ -46,9 +48,13 @@ ${c.bold('插件')}
   plugin export <插件>        打包成单个 .toolpack 文件
   plugin import <文件>        从 .toolpack 安装
 
+${c.bold('界面')}
+  ui [--port N] [--open]  启动本地启动器界面（浏览器打开，也是 Tauri 壳用的同一套）
+
 ${c.bold('AI 对接')}
   mcp serve               以 MCP server 方式运行（stdio），给 AI 客户端调用
   mcp config [客户端]     打印/写入各家 AI 客户端的接入配置
+  mcp allow [动作]        授权有副作用的动作给 AI 调用
 
 ${c.bold('其他')}
   logs [--tail N]         看审计日志
@@ -97,31 +103,12 @@ function printRunResult(action: { output: string }, result: RunResult, json: boo
 
 // ---------------------------------------------------------------- 确认
 
-function approvalsPath(): string {
-  return path.join(HOME, 'approvals.json');
-}
-
-function loadApprovals(): Set<string> {
-  try {
-    const raw = JSON.parse(fs.readFileSync(approvalsPath(), 'utf8'));
-    return new Set(Array.isArray(raw) ? raw : []);
-  } catch {
-    return new Set();
-  }
-}
-
-function rememberApproval(key: string): void {
-  const set = loadApprovals();
-  set.add(key);
-  ensureDirs();
-  fs.writeFileSync(approvalsPath(), JSON.stringify([...set].sort(), null, 2));
-}
-
 /** 按风险等级决定是否要向用户确认。非交互环境下拒绝执行而不是默认放行。 */
 async function confirmRun(plugin: Plugin, actionId: string, policy: string, command: string): Promise<boolean> {
   if (policy === 'never') return true;
-  const key = `${plugin.id}.${actionId}`;
-  if (policy === 'first-time' && loadApprovals().has(key)) return true;
+  if (!needsConfirm(actionRisk(plugin, actionId), policy as ConfirmPolicy, plugin.id, actionId)) {
+    return true;
+  }
 
   if (!process.stdin.isTTY) {
     process.stderr.write(
@@ -141,11 +128,11 @@ async function confirmRun(plugin: Plugin, actionId: string, policy: string, comm
     process.stderr.write('已取消。\n');
     return false;
   }
-  if (policy === 'first-time') rememberApproval(key);
+  if (policy === 'first-time') rememberApproval(plugin.id, actionId);
   return true;
 }
 
-function actionRisk(plugin: Plugin, actionId: string): string {
+function actionRisk(plugin: Plugin, actionId: string): RiskLevel {
   return plugin.actions.find((a) => a.id === actionId)?.risk ?? 'mutate';
 }
 
@@ -471,6 +458,10 @@ async function main(): Promise<number> {
     case 'mcp': {
       const mcp = await import('./mcp.ts');
       return mcp.cli(rest);
+    }
+    case 'ui': {
+      const server = await import('./server.ts');
+      return server.cli(rest);
     }
     default:
       process.stderr.write(c.red(`未知命令：${cmd}`) + '\n');
