@@ -102,21 +102,24 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
+      # Windows 的默认 shell 是 pwsh，run 块里的 bash shebang 不会生效
+      # （会被当成注释，set -euo pipefail 就成了 PowerShell 语句），
+      # 所以本 job 显式指定 bash：windows runner 自带 Git Bash，命令两边通用
       - name: 安装依赖
+        shell: bash
         run: |
-          #!/usr/bin/env bash
           set -euo pipefail
           npm ci
 
       - name: 环境自检
+        shell: bash
         run: |
-          #!/usr/bin/env bash
           set -euo pipefail
           node src/cli.ts doctor
 
       - name: 跑全量测试
+        shell: bash
         run: |
-          #!/usr/bin/env bash
           set -euo pipefail
           node scripts/test-all.mjs
 
