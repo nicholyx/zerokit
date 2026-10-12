@@ -46,8 +46,10 @@ jobs:
             echo "CHANGELOG.md 里没有找到 $version 的版本段，拒绝发布没有账本的版本" >&2
             exit 1
           fi
-          # 尾部固定块：拿到 tag 的人怎么上手、变更明细去哪看
-          footer=$(printf '\n---\n\n**上手指引**：见 [START-HERE.md](https://github.com/%s/zerokit/blob/%s/START-HERE.md)。\n**全部变更**：见 [CHANGELOG.md](https://github.com/%s/zerokit/blob/%s/CHANGELOG.md)。' "$GITHUB_REPOSITORY" "$VERSION" "$GITHUB_REPOSITORY" "$VERSION")
+          # 尾部固定块：拿到 tag 的人怎么上手、变更明细去哪看。
+          # GITHUB_REPOSITORY 已是 owner/repo 全名，不要再拼仓库名（v0.1.0 发布时
+          # 实际踩到：链接拼成 github.com/<owner>/<repo>/<repo>/blob/...）
+          footer=$(printf '\n---\n\n**上手指引**：见 [START-HERE.md](https://github.com/%s/blob/%s/START-HERE.md)。\n**全部变更**：见 [CHANGELOG.md](https://github.com/%s/blob/%s/CHANGELOG.md)。' "$GITHUB_REPOSITORY" "$VERSION" "$GITHUB_REPOSITORY" "$VERSION")
           {
             printf '%s' "$body"
             printf '%s\n' "$footer"
