@@ -110,7 +110,7 @@ uTools 开始收费了。想找一个替代品，找了一圈发现真正的问�
 - 安全模型是这条路径的立身之本：页面跑在 `sandbox="allow-scripts"` 的 iframe 里
   （opaque origin），**拿不到会话令牌、fetch 不了宿主 API**——执行只能经
   postMessage 桥由宿主转发，`mutate` / `destructive` 的确认弹窗照常生效，绕不过。
-- 轻量兄弟：`output = "html"` 表示 stdout ���是 HTML 片段，沙箱 `srcdoc` 直接渲染，
+- 轻量兄弟：`output = "html"` 表示 stdout 就是 HTML 片段，沙箱 `srcdoc` 直接渲染，
   连 `web/` 目录都不用建。
 - 演示：`sysinfo` 的「系统概况」动作就是这个形态（仪表盘页面还能经桥刷新、查占用最高的进程）。
 

@@ -157,7 +157,7 @@ export function addFromDir(source: string, opts: InstallOptions = {}): AddResult
     }
   }
   if (hadOld) fs.rmSync(backup, { recursive: true, force: true });
-  const note = utools ? '（按 uTools 插件兼容���行）' : '';
+  const note = utools ? '（按 uTools 插件兼容层运行）' : '';
   const verb = hadOld ? '已更新' : '已安装';
   return { ok: true, id: result.plugin.id, dir: dst, message: `${verb} ${result.plugin.name}${note}`, warnings: result.warnings };
 }

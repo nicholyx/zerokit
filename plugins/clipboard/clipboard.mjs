@@ -266,7 +266,7 @@ function actionWatchStop(argv) {
   }
   if (!pidAlive(pid)) {
     try { fs.rmSync(pidFile, { force: true }); } catch { /* 忽略 */ }
-    process.stdout.write(`PID ${pid} 已经��在了，顺手清掉 pid 文件\n`);
+    process.stdout.write(`PID ${pid} 已经不在了，顺手清掉 pid 文件\n`);
     return;
   }
   if (process.platform === 'win32') {
