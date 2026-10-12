@@ -1,6 +1,6 @@
 // 插件 web 面（render = "web"）的冒烟测试。
 //
-// 覆盖四层：清单校验 → server 静态托���与桥注入 → API 面透传 → 桥协议本身。
+// 覆盖四层：清单校验 → server 静态托管与桥注入 → API 面透传 → 桥协议本身。
 // 全部在临时目录里跑（自包含，不依赖本机已装的插件），不联网。
 import fs from 'node:fs';
 import http from 'node:http';
