@@ -1,0 +1,72 @@
+# 工作流名称
+name: Release
+# 工作流运行时显示名称
+run-name: Release · ${{ github.ref_name }}
+
+# 推送 v* 标签即发布：tag 是发布的唯一入口，
+# 「tag 打在哪个提交上，那个提交就是发布的内容」——不存在 tag 与分支状态不一致的问题
+on:
+  push:
+    tags: ['v*']
+
+# 创建 Release 要写仓库内容，这是本工作流唯一需要的写权限（最小权限原则）
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: 生成发布说明并发布
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repos
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # 要读 tag 所指提交里的 CHANGELOG（默认浅克隆足够，显式标注重定向语义）
+          ref: ${{ github.ref }}
+          # 后面的 gh 命令走 GH_TOKEN 环境变量，不需要 git 凭证留在 .git/config 里
+          persist-credentials: false
+
+      # 发布说明以 CHANGELOG.md 为唯一事实来源（Keep a Changelog 的哲学）：
+      # 版本段首的引言是主题，### 分类段是明细，不另外手写一份会漂移的文案。
+      - name: 从 CHANGELOG 提取本版本说明
+        id: notes
+        env:
+          # refs/tags/v0.1.0 -> 0.1.0
+          VERSION: ${{ github.ref_name }}
+        run: |
+          version="${VERSION#v}"
+          # 取「## [X.Y.Z]」到下一个「## [」之间的内容（版本段全文，含引言与分类段）。
+          # 版本段头带日期（## [0.1.0] - 2026-10-12），所以用前缀匹配而不是精确相等
+          body=$(awk -v ver="## [$version]" '
+            index($0, ver) == 1 { in_section = 1; next }
+            in_section && /^## \[/ { exit }
+            in_section { print }
+          ' CHANGELOG.md)
+          if [ -z "$(printf '%s' "$body" | tr -d '[:space:]')" ]; then
+            echo "CHANGELOG.md 里没有找到 $version 的版本段，拒绝发布没有账本的版本" >&2
+            exit 1
+          fi
+          # 尾部固定块：拿到 tag 的人怎么上手、变更明细去哪看
+          footer=$(printf '\n---\n\n**上手指引**：见 [START-HERE.md](https://github.com/%s/zerokit/blob/%s/START-HERE.md)。\n**全部变更**：见 [CHANGELOG.md](https://github.com/%s/zerokit/blob/%s/CHANGELOG.md)。' "$GITHUB_REPOSITORY" "$VERSION" "$GITHUB_REPOSITORY" "$VERSION")
+          {
+            printf '%s' "$body"
+            printf '%s\n' "$footer"
+          } > release-notes.md
+          # 多行输出经 GITHUB_FILE 走文件，不塞进环境变量（转义与长度都不可控）
+          echo "path=release-notes.md" >> "$GITHUB_OUTPUT"
+
+      # 幂等创建：网络抖动重跑同一个 tag 时，Release 可能已经建出来了。
+      # 先查后建——已存在就 edit（更新说明而不是失败），不存在才 create。
+      - name: 创建或更新 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          NOTES: ${{ steps.notes.outputs.path }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "Release $TAG 已存在，更新发布说明（幂等重入）"
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$NOTES" --latest
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "$TAG" --notes-file "$NOTES" --latest
+          fi
