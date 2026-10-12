@@ -120,6 +120,13 @@ export function addFromDir(source: string, opts: InstallOptions = {}): AddResult
     return { ok: false, message: `清单校验没通过：\n  - ${result.errors.join('\n  - ')}`, warnings: result.warnings };
   }
   const dst = path.join(PLUGINS_DIR, result.plugin.id);
+  // dev 转正：目标位置是开发链接时直接换成真实复制，不算「已存在」——
+  // 这是开发完成的自然出口（zkit plugin dev <目录> 迭代完再 add 同一个目录）。
+  // 链接没有「旧版本」可备份（源目录才是本体），不走下面的备份式替换。
+  // unlinkSync 只删链接本身（同 removePlugin 的链接分支）。
+  if (fs.existsSync(dst) && fs.lstatSync(dst).isSymbolicLink()) {
+    fs.unlinkSync(dst);
+  }
   if (fs.existsSync(dst) && !opts.replace) {
     return { ok: false, message: `插件 "${result.plugin.id}" 已存在，先 zkit plugin remove ${result.plugin.id}`, warnings: result.warnings };
   }
@@ -259,6 +266,59 @@ export function addFromGit(url: string, ref?: string, opts: InstallOptions = {})
   }
 }
 
+/** 开发链接：把本地开发目录以链接方式装进插件目录（改源码即生效，不复制）。 */
+export function devLink(source: string): AddResult {
+  ensureDirs();
+  const abs = path.resolve(source);
+  if (!fs.existsSync(path.join(abs, 'plugin.toml'))) {
+    return { ok: false, message: `${abs} 下没有 plugin.toml（uTools 插件不支持开发链接）`, warnings: [] };
+  }
+  const result = loadDir(abs);
+  if (!result.plugin) {
+    return { ok: false, message: `清单校验没通过：\n  - ${result.errors.join('\n  - ')}`, warnings: result.warnings };
+  }
+  const dst = path.join(PLUGINS_DIR, result.plugin.id);
+  if (fs.existsSync(dst)) {
+    const st = fs.lstatSync(dst);
+    if (st.isSymbolicLink()) {
+      const pointsTo = fs.realpathSync(dst);
+      // 链到同一个目录：幂等，如实说一声就行
+      if (pointsTo === fs.realpathSync(abs)) {
+        return { ok: true, id: result.plugin.id, dir: dst, message: `${result.plugin.name} 已在开发模式`, warnings: result.warnings };
+      }
+      return {
+        ok: false,
+        message: `插件 "${result.plugin.id}" 已链到别的目录（${pointsTo}），先 zkit plugin remove ${result.plugin.id}`,
+        warnings: result.warnings,
+      };
+    }
+    return {
+      ok: false,
+      message: `插件 "${result.plugin.id}" 已安装为正式副本，先 zkit plugin remove ${result.plugin.id} 再进开发模式`,
+      warnings: result.warnings,
+    };
+  }
+  // junction 要求绝对路径（Windows 上）；类 Unix 上 type 被忽略、建普通 symlink。
+  // junction 不需要管理员/开发者模式权限——npm 的做法，成熟可靠。
+  try {
+    fs.symlinkSync(abs, dst, 'junction');
+  } catch (e) {
+    return { ok: false, message: `创建开发链接失败：${(e as Error).message}`, warnings: result.warnings };
+  }
+  // 来源记录写**源目录**（不是链接里）：源目录才是本体，链接跟着源走。
+  // 卸载只删链接，这条记录留在源目录里无害，下次 dev 会覆盖写。
+  try {
+    writeSource(abs, {
+      type: 'dev', path: abs, installedAt: new Date().toISOString(), installedVersion: result.plugin.version,
+    });
+  } catch { /* 来源写不进去不影响链接 */ }
+  return {
+    ok: true, id: result.plugin.id, dir: dst,
+    message: `已进入开发模式：${result.plugin.name}（改 ${abs} 里的任何文件即生效，四个面都会跟上）`,
+    warnings: result.warnings,
+  };
+}
+
 /** clone 临时目录都在 PLUGINS_DIR/.tmp-* 下，从子目录找回仓库根删掉（update.ts 也用） */
 export function findTmpRoot(dir: string): string {
   let cur = path.resolve(dir);
@@ -274,7 +334,12 @@ export function findTmpRoot(dir: string): string {
 export function removePlugin(id: string): boolean {
   const entry = findPlugin(id);
   if (!entry) return false;
-  fs.rmSync(entry.dir, { recursive: true, force: true });
+  // 开发链接（symlink/junction）只删链接本身，绝不递归进源目录。
+  // 用 unlinkSync：它对 symlink / junction 的语义就是「删链接这一条目录项」，
+  // 不存在 rm 的递归歧义（实测 rmSync 不带 recursive 对链接会按目录处理而报错）。
+  const st = fs.lstatSync(entry.dir);
+  if (st.isSymbolicLink()) fs.unlinkSync(entry.dir);
+  else fs.rmSync(entry.dir, { recursive: true, force: true });
   return true;
 }
 
@@ -284,7 +349,9 @@ export function exportPlugin(id: string): { ok: boolean; path?: string; message:
   const files: Record<string, string> = {};
   const walk = (dir: string, prefix: string): void => {
     for (const name of fs.readdirSync(dir)) {
-      if (name === 'node_modules' || name === '.git') continue;
+      // .zerokit-source.json 是本机的安装来源记录，不属于插件的分发内容
+      // （dev 插件导出时它躺在源目录里，带过去会让导入方拿到错误的来源）
+      if (name === 'node_modules' || name === '.git' || name === '.zerokit-source.json') continue;
       const full = path.join(dir, name);
       const rel = prefix ? `${prefix}/${name}` : name;
       if (fs.statSync(full).isDirectory()) walk(full, rel);

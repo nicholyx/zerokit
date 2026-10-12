@@ -83,6 +83,13 @@ export function checkUpdate(id: string): UpdateCheck {
   }
   const source = readSource(entry.dir);
   const sourceText = describeSource(source);
+  if (source?.type === 'dev') {
+    // 开发链接装的就是源目录本身，「更新」没有意义：改了就已经是最新的了
+    return {
+      ...base, source, sourceText,
+      reason: '开发模式：改源目录即生效。要转成正式副本用 zkit plugin add <目录>',
+    };
+  }
   if (!source || source.type === 'dir') {
     return {
       ...base, source, sourceText,
@@ -169,6 +176,9 @@ function checkUpdateShallow(id: string): UpdateCheck {
     return { ...base, latest: latest || null, available: latest !== '' && latest !== base.current };
   }
   if (source?.type === 'market') return checkUpdate(id);
+  if (source?.type === 'dev') {
+    return { ...base, available: false, reason: '开发模式，改源目录即生效（无需更新）' };
+  }
   if (!source || source.type === 'dir') {
     return {
       ...base, available: false,
@@ -183,6 +193,13 @@ export function applyUpdate(id: string): AddResult {
   const entry = findPlugin(id);
   if (!entry?.plugin) return { ok: false, message: `插件 ${id} 不存在`, warnings: [] };
   const source = readSource(entry.dir);
+  if (source?.type === 'dev') {
+    return {
+      ok: false,
+      message: `${id} 在开发模式（链接到 ${source.path ?? '?'}），改源目录即生效，没有「更新」这一步。要转成正式副本：zkit plugin add <源目录>`,
+      warnings: [],
+    };
+  }
   if (!source || source.type === 'dir') {
     return {
       ok: false,

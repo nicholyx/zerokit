@@ -3,6 +3,7 @@
 一份 `plugin.toml` 同时定义四件事：**人看到的界面、终端敲的命令、AI 客户端看到的工具、
 以及 Web 表单**。加一个参数，四个面同时多出来。
 
+- [从零开始：五分钟写一个插件](#从零开始五分钟写一个插件)
 - [目录与发现](#目录与发现)
 - [\[plugin\] 段](#plugin-段)
 - [\[requires\] 段](#requires-段)
@@ -16,6 +17,41 @@
 - [四个面怎么派生](#四个面怎么派生)
 - [校验规则](#校验规则)
 - [完整示例](#完整示例)
+
+---
+
+## 从零开始：五分钟写一个插件
+
+不想从空白文件手写清单——用脚手架生成骨架，注释即教学：
+
+```bash
+zkit plugin new mytool                    # 生成骨架（node 模板），当场校验并打印它在四个面的样子
+zkit plugin new mytool --runtime python   # python 模板
+zkit plugin new mytool --web              # 附带 web/index.html 富交互页面骨架
+```
+
+开发的核心是**改完即生效**：`zkit plugin dev` 以链接方式把开发目录装进 zerokit
+（不是复制），改 `plugin.toml` 或脚本后 CLI、MCP 工具、启动器表单、AI 工作台
+**下一次调用全部跟上**，不用反复装卸：
+
+```bash
+cd mytool
+zkit plugin dev .          # 进入开发模式
+zkit run mytool hello      # 跑起来
+zkit plugin validate .     # 随手校验清单（不要求已安装）
+# ……改清单、改脚本，想怎么改怎么改，随时再 run
+zkit plugin remove mytool  # 退出开发模式（只删链接，源目录分毫不动）
+```
+
+满意之后两条出路：
+
+```bash
+zkit plugin add .          # 转正：换成真实副本（开发目录从此与安装副本无关）
+zkit plugin export mytool  # 或打包成 .toolpack 单文件分发
+```
+
+> dev 会在开发目录写一个 `.zerokit-source.json`（zerokit 的来源记录），
+> 建议加进 `.gitignore`。
 
 ---
 

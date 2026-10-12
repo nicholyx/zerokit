@@ -8,6 +8,19 @@
 
 ### Added
 
+- 插件脚手架与开发模式，写插件的门槛从「手写整份清单」降到「改生成的骨架」：
+  - `zkit plugin new <id>`——生成带教学注释的最小可用骨架（`--runtime python`、
+    `--web` 附富交互页面骨架），生成即校验，并当场打印这个插件在四个面
+    （CLI / MCP 工具 / 启动器 / 工作台）的样子；
+  - `zkit plugin dev <目录>`——开发模式：以链接（Windows junction / 类 Unix
+    symlink）安装本地目录，改 `plugin.toml` 或脚本**即生效**，四个面下一次
+    调用全部跟上；`zkit plugin remove` 只删链接、不碰源目录；dev 状态下
+    `zkit plugin add <同一目录>` 自动转正为真实副本；`plugin update` 对
+    dev 插件如实提示「改源码即生效」而不是瞎更新；
+  - `zkit plugin validate <目录>`——对任意目录校验清单并摊开全部能力，
+    不要求已安装。
+
+
 - 插件自带的富交互页面（Web 面）：动作声明 `render = "web"` 并在插件目录放
   `web/index.html`，结果交给插件自己的页面渲染（沙箱 iframe）。HTML 自动注入
   `zkit` 桥——页面可读取执行上下文、调用本插件的其它动作；页面拿不到会话令牌，
