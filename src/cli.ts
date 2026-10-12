@@ -7,9 +7,10 @@ import { HOME, LOG_DIR, PLUGINS_DIR } from './core/paths.ts';
 import { needsConfirm, rememberApproval } from './core/approvals.ts';
 import type { ConfirmPolicy } from './core/runner.ts';
 import {
-  addFromDir, addFromGit, exportPlugin, importPlugin, installBundled,
-  listPlugins, removePlugin, requirePlugin,
+  addFromDir, addFromGit, devLink, exportPlugin, importPlugin, installBundled,
+  listPlugins, loadDir, removePlugin, requirePlugin,
 } from './core/registry.ts';
+import { type ScaffoldRuntime, scaffoldPlugin } from './core/scaffold.ts';
 import { applyUpdate, checkUpdate, listUpdateStates } from './core/update.ts';
 import { checkRequires, resolveTool } from './core/resolve.ts';
 import { killAllProcesses, killProcess, listProcesses } from './core/runtime.ts';
@@ -51,6 +52,10 @@ ${c.bold('基本')}
   kill <进程id|插件.服务> 结束一个；kill all 全部结束
 
 ${c.bold('插件')}
+  plugin new <id> [--runtime node|python] [--web] [--dir <目录>] [--name <名字>]
+                              生成插件骨架（带教学注释，生成即校验）
+  plugin dev <目录>           开发模式：以链接安装本地目录，改文件即生效
+  plugin validate <目录>      校验任意目录的清单并摊开能力
   plugin install <插件id>     从集市安装（会先摊开它的全部能力让你确认）
   plugin add <目录|git地址>   从本地目录或 git 仓库安装
   plugin update [插件]        列出可更新的；带插件 id 则检查并更新（来源处拉新版）
@@ -379,6 +384,92 @@ async function cmdPluginUpdate(args: string[]): Promise<number> {
 
 async function cmdPlugin(args: string[]): Promise<number> {
   const sub = args[0];
+  if (sub === 'new') {
+    const rest = args.slice(1);
+    const id = rest.find((a) => !a.startsWith('--'));
+    if (!id) {
+      process.stderr.write('用法：zkit plugin new <id> [--name 名字] [--runtime node|python] [--web] [--dir 目录]\n');
+      return 2;
+    }
+    const flag = (name: string): string | undefined => {
+      const i = rest.indexOf(`--${name}`);
+      return i >= 0 ? rest[i + 1] : undefined;
+    };
+    const runtime = flag('runtime');
+    if (runtime && runtime !== 'node' && runtime !== 'python') {
+      process.stderr.write(c.red(`✗ --runtime 只支持 node 或 python，收到 "${runtime}"\n`));
+      return 2;
+    }
+    const r = scaffoldPlugin(id, {
+      name: flag('name'),
+      runtime: runtime as ScaffoldRuntime | undefined,
+      web: rest.includes('--web'),
+      dir: flag('dir'),
+    });
+    if (!r.ok || !r.dir || !r.load?.plugin) {
+      process.stderr.write(c.red(`✗ ${r.message}\n`));
+      return 1;
+    }
+    const p = r.load.plugin;
+    process.stdout.write(c.green(`✓ ${r.message}：${r.dir}（${runtime ?? 'node'} 模板）\n`));
+    for (const f of r.files) process.stdout.write(c.dim(`  ${f}\n`));
+    process.stdout.write(`\n清单校验通过，${p.name} 有 ${p.actions.length} 个动作：\n`);
+    for (const a of p.actions) {
+      process.stdout.write(`  ${c.bold(a.id)}  ${a.title}（${RISK_LABEL[a.risk] ?? a.risk}，${a.params.length} 个参数）\n`);
+    }
+    // 把「一份清单 → 四个面」在创建的第一秒摊开：内容全部从生成的清单对象推导
+    const first = p.actions[0]!;
+    const firstParam = first.params[0];
+    const example = firstParam
+      ? `zkit run ${p.id} ${first.id} --${firstParam.name} ${String(firstParam.default ?? '值')}`
+      : `zkit run ${p.id} ${first.id}`;
+    process.stdout.write(`\n装进 zerokit 后，${c.bold('同一份清单')}在四个面的样子：\n`);
+    process.stdout.write(`  ${c.cyan('CLI')}        ${example}\n`);
+    process.stdout.write(`  ${c.cyan('MCP')}        工具 ${toolName(p.id, first.id)}（inputSchema 自动生成）\n`);
+    process.stdout.write(`  ${c.cyan('启动器')}     关键词 ${p.keywords.map((k) => `"${k}"`).join(' / ') || p.id} → 动作列表 → 参数表单\n`);
+    process.stdout.write(`  ${c.cyan('工作台')}     模型的工具，对话式调用，${RISK_LABEL[first.risk] ?? first.risk}动作按策略确认\n`);
+    process.stdout.write(`\n${c.bold('下一步')}：\n`);
+    process.stdout.write(c.dim(`  zkit plugin dev ${r.dir}   进入开发模式（改文件即生效，四个面都会跟上）\n`));
+    return 0;
+  }
+  if (sub === 'dev') {
+    const source = args[1];
+    if (!source) {
+      process.stderr.write('用法：zkit plugin dev <目录>\n');
+      return 2;
+    }
+    const result = devLink(source);
+    for (const w of result.warnings) process.stderr.write(c.yellow(`! ${w}`) + '\n');
+    process.stdout.write(result.ok ? c.green(`✓ ${result.message}\n`) : c.red(`✗ ${result.message}\n`));
+    if (result.ok && result.id) {
+      process.stdout.write(c.dim(`  跑一下看看：zkit run ${result.id} hello\n`));
+      process.stdout.write(c.dim(`  退出开发模式：zkit plugin remove ${result.id}（只删链接，不碰源目录）\n`));
+    }
+    return result.ok ? 0 : 1;
+  }
+  if (sub === 'validate') {
+    const dir = args[1];
+    if (!dir) {
+      process.stderr.write('用法：zkit plugin validate <目录>\n');
+      return 2;
+    }
+    const abs = path.resolve(dir);
+    if (!fs.existsSync(path.join(abs, 'plugin.toml'))) {
+      process.stderr.write(c.red(`✗ ${abs} 下没有 plugin.toml\n`));
+      return 1;
+    }
+    const result = loadDir(abs);
+    for (const e of result.errors) process.stderr.write(c.red(`✗ ${e}\n`));
+    for (const w of result.warnings) process.stderr.write(c.yellow(`! ${w}\n`));
+    if (!result.plugin) return 1;
+    const p = result.plugin;
+    process.stdout.write(c.green(`✓ ${p.name} ${p.id} v${p.version} 清单有效\n`));
+    for (const a of p.actions) {
+      const params = a.params.map((x) => `${x.name}:${x.type}${x.required ? '' : '?'}`).join(' ');
+      process.stdout.write(`  ${c.bold(a.id)}  ${a.title}  ${c.dim(`<${toolName(p.id, a.id)}>`)} ${params}\n`);
+    }
+    return 0;
+  }
   if (sub === 'bundled') {
     const installed = installBundled();
     process.stdout.write(installed.length > 0
@@ -459,7 +550,7 @@ async function cmdPlugin(args: string[]): Promise<number> {
     process.stdout.write(result.ok ? c.green(`✓ ${result.message}\n`) : c.red(`✗ ${result.message}\n`));
     return result.ok ? 0 : 1;
   }
-  process.stderr.write('用法：zkit plugin <install|add|update|remove|bundled|export|import>\n');
+  process.stderr.write('用法：zkit plugin <new|dev|validate|install|add|update|remove|bundled|export|import>\n');
   return 2;
 }
 
