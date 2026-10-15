@@ -18,10 +18,11 @@
 
 - **没有构建步骤**：`node src/cli.ts` 直接跑 TS 源码，别引入 tsc/esbuild。
   要求 Node ≥ 22.18。
-- 测试全量跑：`node scripts/test-all.mjs`。注意 3 个测试文件目前
-  在 macOS/Linux 上有平台性失败（clipboard / filesearch / runner-smoke
-  的性能断言），CI 只在 windows-latest 上跑——在 mac 上跑出这几个
-  失败不算你改坏了什么，但除此之外的失败必须当回事。
+- 测试全量跑：`node scripts/test-all.mjs`。**三大平台都要全绿**——CI 已经
+  在 ubuntu / macos / windows 上都跑（各 Node 22，Linux 另跑 Node 24），
+  所以「在我机器上是绿的」不再是理由；本地跑出的任何失败都当回事。
+  Linux 上剪贴板用例依赖 `xclip` + X server，缺了会断言那句安装提示
+  （而不是静默跳过），要完整复现请 `xvfb-run -a node scripts/test-all.mjs`。
 - 提交信息遵循约定式提交（`feat(plugins): ...`），CI 会校验；
   允许的类型表在 `scripts/check-commit-msg.sh` 和 CONTRIBUTING.zh-CN.md。
 - 别提交：`node_modules/`、`~/.zerokit/` 运行数据、Rust `target/`。

@@ -249,10 +249,24 @@ fs.writeFileSync(historyPath(DATA_DIR), FIXTURE.map((e) => JSON.stringify(e)).jo
       path.join(PLUGIN_DIR, 'watch.mjs'),
       '--interval-ms', '50', '--max-iterations', '1', '--parent-pid', String(process.pid),
     ], { encoding: 'utf8', timeout: 30000 });
-    check('轮询脚本能启动并立刻退出（退出码 0）', proc.status === 0,
-      `status=${proc.status} stderr=${(proc.stderr ?? '').slice(0, 200)}`);
-    check('这一轮预热不产生任何记录（不会把启动前剪贴板里的旧内容记一遍）',
-      (proc.stdout ?? '').trim() === '', JSON.stringify((proc.stdout ?? '').slice(0, 120)));
+
+    // Linux 的 CI runner 上通常没有 xclip/xsel（也不会有 GUI/剪贴板会话），
+    // watch.mjs 会带着安装指引退出 1——这是**已文档化的正常状态**，不是脚本坏了。
+    // 这里必须区分开：缺工具时只断言"退出码非 0 且说清了原因"，
+    // 有工具时才断言"真的跑起来并干净退出"。否则 ubuntu-latest 上会红，
+    // 而红的其实是环境而不是代码（Issue #3 要扩 CI 矩阵，正是卡在这里）。
+    const toolsMissing = /xclip|xsel/.test(proc.stderr ?? '');
+    if (toolsMissing) {
+      check('Linux 缺 xclip/xsel 时轮询器给出安装指引并退出（而不是崩掉/静默成功）',
+        proc.status === 1 && /xclip|xsel/.test(proc.stderr ?? ''),
+        `status=${proc.status} stderr=${(proc.stderr ?? '').slice(0, 200)}`);
+      console.log('SKIP  轮询器单轮冒烟（本机没有 xclip/xsel，Linux CI runner 同样如此）');
+    } else {
+      check('轮询脚本能启动并立刻退出（退出码 0）', proc.status === 0,
+        `status=${proc.status} stderr=${(proc.stderr ?? '').slice(0, 200)}`);
+      check('这一轮预热不产生任何记录（不会把启动前剪贴板里的旧内容记一遍）',
+        (proc.stdout ?? '').trim() === '', JSON.stringify((proc.stdout ?? '').slice(0, 120)));
+    }
   }
 
   // 已在运行时必须拒绝启动：pid 文件里放本测试进程的 PID（它肯定是活的）。

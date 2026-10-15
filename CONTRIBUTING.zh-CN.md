@@ -48,10 +48,12 @@ bash -n scripts/check-commit-msg.sh    # 语法检查
 ./scripts/check-commit-msg.sh --message "feat: 测试一下"
 ```
 
-注意：CI 目前只在 **windows-latest** 上跑测试矩阵——示例插件里有
-Windows 专属行为（clipboard 用 PowerShell、filesearch 用
-explorer `/select`）。跨平台适配是进行中的工作，改动了平台相关
-代码时请在 PR 里注明你在哪个平台验证过。
+注意：CI 在 **ubuntu-latest、macos-latest、windows-latest** 三个平台上都跑
+测试矩阵（各跑 Node 22，另在 Linux 上单独跑当前 Node 24），
+`node scripts/test-all.mjs` 就是那条命令。自带插件已经跨平台。唯一依赖环境的是
+Linux 的剪贴板——需要 `xclip` 和 X server，CI 两个都装（整个套件在
+`xvfb-run` 下跑）；万一环境里没有，测试会断言那句「没装工具」的提示，
+而不是静默跳过。改动了平台相关代码时，请在 PR 里注明你在哪个平台验证过。
 
 ## 工作流
 

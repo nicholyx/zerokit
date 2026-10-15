@@ -36,11 +36,14 @@ Run before pushing:
 node scripts/test-all.mjs    # the same command CI runs
 ```
 
-Note: CI currently runs the test matrix only on **windows-latest** — some
-bundled plugins have Windows-specific behavior (clipboard uses PowerShell,
-filesearch uses `explorer /select`). Cross-platform support is work in
-progress; if you touch platform-specific code, note in your PR which
-platform you verified on.
+Note: CI runs the test matrix on **ubuntu-latest, macos-latest and
+windows-latest** (Node 22 on each, plus the current Node 24 on Linux) —
+`node scripts/test-all.mjs` is that same command. The bundled plugins are
+cross-platform. The one environment-dependent case is the Linux clipboard,
+which needs `xclip` and an X server; CI installs both (running the suite
+under `xvfb-run`), and where they are absent the suite asserts the
+documented "not installed" message instead of silently skipping. If you
+touch platform-specific code, note in your PR which platform you verified on.
 
 ## Workflow
 

@@ -79,18 +79,23 @@ jobs:
   # 测试矩阵
   #
   # zerokit 没有构建步骤：Node 原生跑 TypeScript 源码，装完依赖就能测。
-  # 只跑 windows-latest：示例插件深度绑定 Windows（clipboard 用 PowerShell、
-  # filesearch 用 explorer /select），Linux/macOS 的适配是进行中的平台债
-  # （见 Issue 列表），能在多平台跑之前不放宽矩阵——红色的 CI 不如不跑。
-  # Node 测两个大版本：最低支持版本 22.x 与当前 LTS 之后的 24.x。
+  #
+  # 三个平台都跑。曾经只跑 windows-latest——那时示例插件深度绑定 Windows
+  # （clipboard 走 PowerShell、filesearch 用 explorer /select）——但"红色的 CI
+  # 不如不跑"的代价是平台债永远看不见：macOS 上的 3 个失败一直到有人手动跑
+  # 才发现（Issue #3）。插件层已跨平台化，测试断言也按平台分支了，这里跟着放开。
+  #
+  # Node 只测 22.x：那是最低支持版本，也是唯一有实际风险的一档；
+  # 24.x 由下面的 single-node24 job 单独覆盖，不给 3×2 矩阵平白翻一倍机时。
   # ---------------------------------------------------------------------------
   test:
-    name: 测试（Node ${{ matrix.node-version }}）
-    runs-on: windows-latest
+    name: 测试（${{ matrix.os }} / Node ${{ matrix.node-version }}）
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        node-version: [22, 24]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node-version: [22]
     steps:
       - name: Checkout Repos
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -111,6 +116,19 @@ jobs:
           set -euo pipefail
           npm ci
 
+      # Linux runner 上没有 xclip/xsel，也没有剪贴板会话——clipboard 插件的
+      # 读取类用例本来就会走"缺工具"分支。装上 xclip 让它的**真实路径**
+      # （真的调用 xclip 读剪贴板）也被覆盖到，否则 Linux 上这层永远测不到。
+      # xvfb 提供 DISPLAY，xclip 没它连不上 X server。
+      - name: 装 Linux 剪贴板工具（让 clipboard 的真实路径也被测到）
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xclip xvfb
+          echo "装了：$(xclip -version 2>&1 | head -1)"
+
       - name: 环境自检
         shell: bash
         run: |
@@ -121,7 +139,61 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/test-all.mjs
+          # Linux 的 xclip 需要 X server；xvfb-run 起一个虚拟的。
+          # 其他平台直接跑。
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            xvfb-run -a node scripts/test-all.mjs
+          else
+            node scripts/test-all.mjs
+          fi
+
+  # ---------------------------------------------------------------------------
+  # 当前 Node（24.x）单独跑一遍
+  #
+  # 拆出来是为了让主矩阵保持 3 个平台 × 1 个 Node（22.x，最低支持版本），
+  # 而不是 3×2 六个 job。24.x 的价值是"往前看"：API 变更、废弃警告、
+  # 内嵌 undici 行为漂移最先在这里暴露（src/core/proxy.ts 的整段实现就是
+  # 因为 Node 会静默丢弃 fetch 的 proxy 选项才存在的）。平台维度在这里
+  # 价值低，固定在 ubuntu 上跑最省机时。
+  # ---------------------------------------------------------------------------
+  test-node24:
+    name: 测试（ubuntu-latest / Node 24）
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repos
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: 安装 Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+
+      - name: 安装依赖
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+
+      - name: 装 Linux 剪贴板工具（让 clipboard 的真实路径也被测到）
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xclip xvfb
+
+      - name: 环境自检
+        shell: bash
+        run: |
+          set -euo pipefail
+          node src/cli.ts doctor
+
+      - name: 跑全量测试
+        shell: bash
+        run: |
+          set -euo pipefail
+          xvfb-run -a node scripts/test-all.mjs
 
   # ---------------------------------------------------------------------------
   # 提交信息规范
@@ -183,7 +255,7 @@ jobs:
   ci-summary:
     name: CI 总览
     runs-on: ubuntu-latest
-    needs: [actionlint, yamllint, test, commit-messages, zizmor]
+    needs: [actionlint, yamllint, test, test-node24, commit-messages, zizmor]
     if: always()
     steps:
       - name: Checkout Repos
@@ -197,6 +269,7 @@ jobs:
           R_ACTIONLINT: ${{ needs.actionlint.result }}
           R_YAMLLINT: ${{ needs.yamllint.result }}
           R_TEST: ${{ needs.test.result }}
+          R_TEST_NODE24: ${{ needs.test-node24.result }}
           R_COMMIT_MESSAGES: ${{ needs.commit-messages.result }}
           R_ZIZMOR: ${{ needs.zizmor.result }}
         run: |
@@ -213,6 +286,7 @@ jobs:
             "actionlint:工作流静态检查"
             "yamllint:YAML 风格检查"
             "test:测试矩阵"
+            "test-node24:测试（Node 24）"
             "commit-messages:提交信息规范"
             "zizmor:工作流安全扫描"
           )
