@@ -1,4 +1,5 @@
 import type { AiSettings } from '../core/settings.ts';
+import { proxyFetch, proxyFor } from '../core/proxy.ts';
 import {
   type AgentSession, type AssistantTurn, type Provider, ProviderError,
   type StreamHandlers, type ToolCall, type ToolDef, type ToolOutcome,
@@ -66,19 +67,34 @@ export function createOpenAiProvider(ai: AiSettings): Provider {
         }
 
         let res: Response;
+        // 走代理时用自实现的 proxyFetch，原因见 src/core/proxy.ts 顶部：
+        // Node 22 的 fetch 会**静默丢弃** proxy 选项。SSE 流式返回在 proxyFetch
+        // 里也是按流处理的（socketToStream），这里拿到的仍是标准 Response。
+        const proxy = proxyFor(new URL(endpoint));
         try {
-          res = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-              'content-type': 'application/json',
-              authorization: `Bearer ${ai.apiKey}`,
-            },
-            body: JSON.stringify(body),
-          });
+          res = await (proxy
+            ? proxyFetch(endpoint, {
+              method: 'POST',
+              headers: {
+                'content-type': 'application/json',
+                authorization: `Bearer ${ai.apiKey}`,
+              },
+              body: JSON.stringify(body),
+            }, proxy)
+            : fetch(endpoint, {
+              method: 'POST',
+              headers: {
+                'content-type': 'application/json',
+                authorization: `Bearer ${ai.apiKey}`,
+              },
+              body: JSON.stringify(body),
+            }));
         } catch (e) {
           throw new ProviderError(
             `连不上 ${endpoint}：${(e as Error).message}`,
-            '检查 base_url 与网络；本机对部分域名有出口限制',
+            proxy
+              ? `请求已经走代理 ${proxy.url}（${proxy.origin}），检查代理本身是否正常`
+              : '检查 base_url 与网络；本机对部分域名有出口限制',
           );
         }
 
