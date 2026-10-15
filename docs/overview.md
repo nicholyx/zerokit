@@ -200,7 +200,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
       集市是个集中化的单点，将来要么做签名，要么做"来源可追溯 + 变更可见"。
 - [ ] **跨平台收尾。** 示例插件 2026-10 已在 macOS 上逐一实测（clipboard 的
       pbpaste/pbcopy 路径、sysinfo 的 BSD ps、filesearch 的 `open -R` 都已工作）；
-      Linux 真机验证、http 动作走系统代理（Node fetch 不读 `http_proxy`）还没做。
+      Linux 真机验证还没做（http 动作走系统代理已完成）。
 
 ### 明确不做（不是遗漏，是有意留的口子）
 
@@ -220,7 +220,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 |---|---|
 | 云端同步 / 多设备 | **未实现**，且不做中心化方案 |
 | macOS / Linux | 6 个示例插件 2026-10 在 macOS 上逐一实测通过；Linux 只测了纯逻辑层（xclip/xsel 路径未在真机验证） |
-| http 动作 + 系统代理 | Node 内置 fetch 不读 `http_proxy`/`https_proxy`：设了代理的开发机上 `ip` 这类联网动作会失败（错误信息里有提示）。代理内支持是待办 |
+| http 动作 + 系统代理 | **已支持**。`http_proxy`/`https_proxy`/`all_proxy` 与 `config.toml` 的 `[proxy]` 段都认，`no_proxy` 优先。http 目标经代理转发，https 目标走 CONNECT 隧道。之所以要内核自带：Node 内置 fetch 会把 proxy 选项**静默丢弃**（设了代理也照样直连），那条路走不通 |
 | uTools 纯界面插件 | 跑不出结果，会给明确报错 |
 | 插件依赖的自动安装 | 只自检 + 给指引，不代装 |
 | 大输出 | 超过 1 MiB 会截断，完整内容落盘到 `~/.zerokit/data/artifacts/` 并返回路径 |

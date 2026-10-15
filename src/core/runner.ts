@@ -6,6 +6,7 @@ import { Worker } from 'node:worker_threads';
 import type { Action, Plugin, RiskLevel } from './manifest.ts';
 import { toolName } from './manifest.ts';
 import { DATA_DIR, HOME, LOG_DIR, ensureDirs, pluginDataDir } from './paths.ts';
+import { proxyFetch, proxyFor } from './proxy.ts';
 import { resolveTool } from './resolve.ts';
 import { readTail, registerProcess } from './runtime.ts';
 import { hasHostFor, runViaHost } from './host.ts';
@@ -125,15 +126,15 @@ export function buildArgv(
 function describeFetchError(e: unknown): string {
   const err = e as { message?: string; cause?: { code?: string; message?: string } };
   const code = err.cause?.code;
-  // 本机设了代理变量而请求又失败时，多半是它：Node 内置 fetch（undici）
-  // **不读** http_proxy/https_proxy，直连又被出口网络拦——curl 能通、插件不通，
-  // 差别就在这。把这句说清楚，能省一次莫名其妙的排查。
+  // 本机设了代理变量而请求又失败时，多半是它。注意这句**曾经**说 Node 内置 fetch
+  // 不读代理环境变量——那是事实，但从内核支持代理起（见 src/core/proxy.ts），
+  // 代理就真的会走上去了；所以这里改成"检查代理本身通不通"，而不是让人 unset。
   const proxyHint = (process.env['https_proxy'] || process.env['HTTPS_PROXY']
     || process.env['http_proxy'] || process.env['HTTP_PROXY'])
     && ['ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT',
       'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT'].includes(code ?? '')
-    ? '；本机设置了 http(s)_proxy，但 Node 内置 fetch 不走代理环境变量——'
-      + '试试 `unset http_proxy https_proxy` 后重试，或换个不需要代理的网络'
+    ? '；本机设置了 http(s)_proxy，请求已经走代理——检查代理本身是否在运行、'
+      + '以及它能不能到达目标站；确实不需要代理就 `unset http_proxy https_proxy` 重试'
     : '';
   switch (code) {
     case 'ENOTFOUND':
@@ -741,7 +742,14 @@ async function runHttpAction(
       init.body = JSON.stringify(action.body);
       (init.headers as Record<string, string>)['content-type'] ??= 'application/json';
     }
-    const res = await fetch(url, { ...init, signal: AbortSignal.timeout(action.timeout * 1000) });
+    const signal = AbortSignal.timeout(action.timeout * 1000);
+    // 配了代理就自己走代理。**不能依赖 fetch 的 proxy 选项**：Node 22 上它是
+    // 被静默丢弃的（详见 src/core/proxy.ts 顶部注释），设了代理却直连出去，
+    // 使用者根本看不出来。没配代理时这里与改动前完全一致。
+    const proxy = proxyFor(new URL(url));
+    const res = proxy
+      ? await proxyFetch(url, { ...init, signal }, proxy)
+      : await fetch(url, { ...init, signal });
     const text = await res.text();
     const ms = Date.now() - started;
     const ok = res.ok;

@@ -388,6 +388,13 @@ risk   = "read"
 
 **2. 跑本地命令（`type = "exec"`）** —— 任意语言，通过 stdout 交流。
 
+> 上面这类 `http` 动作会**走系统代理**：`http_proxy` / `https_proxy` / `all_proxy`
+> 环境变量，或 `config.toml` 的 `[proxy]` 段（`url` / `no_proxy`）。`no_proxy`
+> 优先，支持逗号分隔的域名 / 后缀 / IP / `*`。https 目标走 CONNECT 隧道。
+>
+> 为什么要内核自己实现：Node 内置 fetch 会把 `proxy` 选项**静默丢弃**——
+> 设了代理也照样直连，且不报错。见 `src/core/proxy.ts`。
+
 **3. 带网页（`web/index.html`）** —— 需要富交互时的形态：动作声明 `render = "web"`，
 执行结果不再用内置卡片，而是交给插件自己的页面渲染（沙箱 iframe）。
 

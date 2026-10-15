@@ -6,6 +6,23 @@
 
 ## [Unreleased]
 
+### Added
+
+- **http 动作与 AI 工作台走系统代理。** 以前设了 `http_proxy` 也没用：Node 内置
+  fetch 会把 `proxy` 选项**静默丢弃**（实测代理指向一个根本不存在的端口，请求也
+  照样直连成功），于是流量绕过代理直接打到目标站，而没有任何地方会报错。
+  现在内核自带代理支持：
+  - 认 `http_proxy` / `https_proxy` / `all_proxy`（大小写都认），也认
+    `config.toml` 里新增的 `[proxy]` 段（`url` / `no_proxy` 两个键）；
+  - `no_proxy` 优先级高于代理，支持逗号分隔的域名 / 后缀 / IP / `*`；
+  - https 目标走 CONNECT 隧道，http 目标走代理转发（absolute-form 请求行）；
+  - 代理地址里带 `user:pass` 时走 `Proxy-Authorization`，且密码不会泄进错误信息；
+  - 错误信息分得清「代理连不上」「代理拒绝建隧道」「代理要认证（407）」
+    「经代理等响应超时」，而不是笼统一句「请求失败」。
+
+  没配代理时行为与改动前**完全一致**（走原生 fetch）。`plugin add` / `plugin update`
+  走的是 `git`，本来就认代理，不受影响。
+
 ## [0.1.0] - 2026-10-12
 
 首个公开版本。「一份 `plugin.toml` 同时派生四个面（CLI / MCP / 启动器 / AI 工作台）」
