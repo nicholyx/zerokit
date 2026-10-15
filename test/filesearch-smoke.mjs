@@ -177,16 +177,25 @@ const run = (id, values) => runAction(plugin, byId(id), { caller: 'cli', values 
   let data;
   try { data = JSON.parse(r.stdout); } catch { /* 下面统一报错 */ }
   // 「定位到文件」的平台命令各不相同（filesearch.mjs 的 openCommand）：
-  // win 用 explorer /select，mac 用 open -R，linux 退化为 xdg-open 打开所在目录
+  // win 用 explorer /select，mac 用 open -R，linux 退化为 xdg-open 打开所在目录。
+  // 命令行里出现的是**哪个路径**也因此不同：win/mac 指向文件本身，
+  // Linux 指向文件所在目录（xdg-open 没有"定位到文件"这回事）。
+  // 这条断言原先一律要求出现 Report.TXT，在 Linux 上永远不可能成立——
+  // 那是把 Windows/macOS 的期望写成了通用期望，CI 一放开到三平台就露出来了。
   const how = String(data?.['方式'] ?? '');
-  const howOk = process.platform === 'win32'
+  const isWin = process.platform === 'win32';
+  const isMac = process.platform === 'darwin';
+  const howOk = isWin
     ? /explorer/.test(how) && how.includes('/select,')
-    : process.platform === 'darwin'
+    : isMac
       ? /\bopen\b/.test(how) && how.includes('-R')
       : /xdg-open/.test(how);
+  // Linux 上该出现的是 Report.TXT 的父目录（nested），而不是文件名。
+  // 两种都要求"指向的是那个文件/它的目录"，而不是随便一个路径。
+  const targetOk = isWin || isMac ? how.includes('Report.TXT') : how.includes('nested');
   check(`open 对索引内的路径放行，并构造出本平台的定位命令（dry-run）`,
-    r.status === 0 && howOk && how.includes('Report.TXT'),
-    `code=${r.status} out=${r.stdout} err=${r.stderr}`);
+    r.status === 0 && howOk && targetOk,
+    `code=${r.status} platform=${process.platform} 方式=${JSON.stringify(how)}`);
 
   const bad = spawnSync(process.execPath, [
     SCRIPT, 'open', `--data-dir=${DATA_DIR}`, `--path=${FILES.report}\ncalc.exe`,
