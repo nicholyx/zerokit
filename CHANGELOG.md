@@ -19,6 +19,25 @@
   xclip/xsel」的安装提示，而不是静默跳过——红要红在环境上，
   不能红在看不见的地方。
 
+### Fixed
+
+- **`tsc --noEmit` 重新变干净，并且 CI 现在真的会跑它。**
+  `package.json` 里一直有 `typecheck` 脚本、文档一直写着「tsc 干净」，
+  但 CI 与本地 `lint.sh` **都没有执行过这条命令**，于是两个只有类型检查才
+  看得见的错误在核心里躺了很久：
+
+  - `src/core/proxy.ts`——`@types/node` 22 起 `Buffer` 是泛型的，`Buffer.slice()`
+    给出 `Buffer<ArrayBufferLike>`，跟 `Buffer.concat()` 的 `Buffer<ArrayBuffer>`
+    互不相容。运行期毫无差别，只有 `tsc` 会报 TS2322。
+  - `src/core/scaffold.ts`——`ScaffoldResult.load` 声明成了 `PluginEntry`
+    （要求 `dir` 字段），实际赋的是 `loadDir()` 的 `LoadResult`（没有 `dir`）。
+    消费方从来只读 `.plugin` / `.errors` / `.warnings`，所以一直没出事。
+
+  新增 `typecheck` job（固定 ubuntu，类型检查与平台无关），并把它接进
+  `CI 总览` 的 `needs` / `R_*` / 汇总表三处。新增 `test/ci-smoke.mjs`
+  断言这条接线不会再次断开——这类「配置漂移」跑产品代码是发现不了的：
+  文档写着干净、测试全绿、CI 全绿，而真相是那条命令从来没人执行。
+
 ### Added
 
 - **http 动作与 AI 工作台走系统代理。** 以前设了 `http_proxy` 也没用：Node 内置

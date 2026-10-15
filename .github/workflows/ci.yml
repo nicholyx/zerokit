@@ -148,6 +148,40 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
+  # 类型检查
+  #
+  # 这个 job 是补的。`package.json` 里一直有 `typecheck` 脚本、docs/overview.md
+  # 一直写着「tsc --noEmit 干净」，但**没有任何地方跑它**——CI 没有、lint.sh 也没有。
+  # 后果是内核里积了两个只有类型检查才看得见的错误（proxy.ts 的 Buffer 泛型
+  # 不兼容、scaffold.ts 的 LoadResult/PluginEntry 混用），运行期毫无症状，
+  # 于是谁都不知道，文档里那句"干净"也就成了没根据的话。
+  #
+  # 只跑一个平台：类型检查的结果与平台无关（tsconfig 也不按平台分支），
+  # 没必要在每个矩阵 job 里重复。
+  # ---------------------------------------------------------------------------
+  typecheck:
+    name: 类型检查
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repos
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: 安装 Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: 安装依赖
+        run: npm ci
+
+      # 用仓库自己的脚本（与 package.json 同源），不在 CI 里另写一条 tsc 命令：
+      # 两处命令一旦分叉，"本地过了 CI 却红"就会再发生一次。
+      - name: tsc --noEmit
+        run: npm run typecheck
+
+  # ---------------------------------------------------------------------------
   # 当前 Node（24.x）单独跑一遍
   #
   # 拆出来是为了让主矩阵保持 3 个平台 × 1 个 Node（22.x，最低支持版本），
@@ -255,7 +289,7 @@ jobs:
   ci-summary:
     name: CI 总览
     runs-on: ubuntu-latest
-    needs: [actionlint, yamllint, test, test-node24, commit-messages, zizmor]
+    needs: [actionlint, yamllint, test, typecheck, test-node24, commit-messages, zizmor]
     if: always()
     steps:
       - name: Checkout Repos
@@ -269,6 +303,7 @@ jobs:
           R_ACTIONLINT: ${{ needs.actionlint.result }}
           R_YAMLLINT: ${{ needs.yamllint.result }}
           R_TEST: ${{ needs.test.result }}
+          R_TYPECHECK: ${{ needs.typecheck.result }}
           R_TEST_NODE24: ${{ needs.test-node24.result }}
           R_COMMIT_MESSAGES: ${{ needs.commit-messages.result }}
           R_ZIZMOR: ${{ needs.zizmor.result }}
@@ -286,6 +321,7 @@ jobs:
             "actionlint:工作流静态检查"
             "yamllint:YAML 风格检查"
             "test:测试矩阵"
+            "typecheck:类型检查"
             "test-node24:测试（Node 24）"
             "commit-messages:提交信息规范"
             "zizmor:工作流安全扫描"

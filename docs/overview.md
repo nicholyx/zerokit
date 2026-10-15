@@ -170,8 +170,11 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 
 ### 质量
 
-- 12 个测试文件、**293 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
-- `tsc --noEmit` 干净。
+- 14 个测试文件、**345 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
+- `tsc --noEmit` 干净——**而且 CI 真的在跑它**（`typecheck` job）。
+  曾经这里写着"干净"但没有任何地方执行这条命令，于是两个只有类型检查才看得见的
+  错误在核心里躺了很久（`proxy.ts` 的 Buffer 泛型不兼容、`scaffold.ts` 的类型混用）。
+  `test/ci-smoke.mjs` 现在会断言它与 CI 的接线没断。
 - 两个刻意的做法：MCP 面用**裸 JSON-RPC 客户端**验证（不拿 SDK 自证）；
   性能优化前后都跑 `scripts/bench.mjs`。
 
