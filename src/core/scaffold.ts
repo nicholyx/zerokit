@@ -10,7 +10,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ID_RE } from './manifest.ts';
-import { type PluginEntry, loadDir } from './registry.ts';
+import { type LoadResult } from './manifest.ts';
+import { loadDir } from './registry.ts';
 
 export type ScaffoldRuntime = 'node' | 'python';
 
@@ -30,7 +31,7 @@ export interface ScaffoldResult {
   dir?: string;
   message: string;
   /** 生成后的加载结果（ok 时保证校验通过） */
-  load?: PluginEntry;
+  load?: LoadResult;
   /** 生成的文件（相对插件目录的路径） */
   files: string[];
 }

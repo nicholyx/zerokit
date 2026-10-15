@@ -464,7 +464,13 @@ function parseResponse(
     } catch { /* 非法头名，丢掉 */ }
   }
 
-  let body = raw.slice(headerEnd + 4);
+  // 这里的类型要写死成 Buffer<ArrayBuffer>，不能用裸 `Buffer`。
+  // @types/node 22 起 Buffer 带类型参数、默认 ArrayBufferLike；裸写会让
+  // `raw.slice()` 得到 Buffer<ArrayBufferLike>，而 decodeChunked 返回的是
+  // Buffer<ArrayBuffer>，两者互不相容 → tsc 报 TS2322（运行期毫无差别，
+  // 只有类型检查看得见，所以只有真去跑 tsc 才会发现）。传进来的实参本来就是
+  // Buffer.concat / Buffer.alloc 的产物，都是 ArrayBuffer 支撑的。
+  let body: Buffer<ArrayBuffer> = raw.slice(headerEnd + 4);
   if (/^transfer-encoding:\s*chunked/im.test(headerText)) {
     body = decodeChunked(body);
   } else {
@@ -477,6 +483,12 @@ function parseResponse(
     || /^transfer-encoding:\s*chunked/im.test(headerText);
   const stream = !selfDelimiting && body.length === 0 ? socketToStream(socket) : undefined;
 
+  // 这里必须拷成一个**由普通 ArrayBuffer 支撑**的 Uint8Array，不能直接把
+  // Buffer 递进去：@types/node 22 起 Buffer 是泛型的（Buffer<ArrayBufferLike>），
+  // 而 fetch 的 BodyInit 只接受 ArrayBufferView<ArrayBuffer>——SharedArrayBuffer
+  // 支撑的视图不在其列。Buffer.slice() 返回的正是 ArrayBufferLike 那一支，
+  // 于是 tsc 报 TS2322（tests 与运行期都没事，只有类型检查看得见）。
+  // 我们对这份数据本来就是只读转交，复制一次的代价可以忽略。
   const out = new Response(stream ?? (body.length ? new Uint8Array(body) : null), {
     status: code || 502,
     statusText,
@@ -531,7 +543,9 @@ function bodyComplete(raw: Buffer, headerEnd: number, headerText: string): boole
   }
   return false; // 没有长度信息，只能等连接关闭
 }
-function decodeChunked(input: Buffer): Buffer {
+// 出入参都写死 Buffer<ArrayBuffer>（理由同 parseResponse 里的 body）：
+// 裸 `Buffer` 是 Buffer<ArrayBufferLike>，跟 ArrayBuffer 支撑的缓冲区不兼容。
+function decodeChunked(input: Buffer<ArrayBuffer>): Buffer<ArrayBuffer> {
   const out: Buffer[] = [];
   let pos = 0;
   while (pos < input.length) {
