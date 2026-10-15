@@ -23,8 +23,9 @@ description: 把一个新项目（或只有代码的裸仓库）快速落实为�
    常见映射：bash → shellcheck + bash -n；YAML → yamllint；Go → golangci-lint + go test；
    JS/TS → eslint + vitest/jest；Python → ruff + pytest。
    zerokit 的特殊性：**无构建步骤**（Node ≥22.18 原生跑 TS 源码），
-   测试是 `node scripts/test-all.mjs`；插件深度绑定 Windows（PowerShell /
-   explorer），CI 矩阵因此暂锁 windows-latest。
+   测试是 `node scripts/test-all.mjs`；插件曾深度绑定 Windows（PowerShell /
+   explorer），现已跨平台化，CI 矩阵跑 ubuntu / macos / windows
+   （各 Node 22，Linux 另跑 Node 24）。
 2. **仓库现状**：`gh repo view`、已有文件清单、是否 fork（fork 需要先在网页端脱离
    fork network，操作见记忆/文档，API 做不了）、已有 Secrets 与变量。
 3. **权限**：`gh auth status` 确认 scopes（repo / workflow）；操作 Projects 看板需要

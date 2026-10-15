@@ -85,8 +85,12 @@ git status --short && git log --oneline -3
 - **测试不得依赖本机状态**：不依赖已装的插件、已建的数据目录——用
   `ZEROKIT_HOME` 指向临时目录 + `plugin bundled` 预装，结束清理
   （mcp-smoke 的教训：依赖本机 `~/.zerokit` 的测试在 CI 全新 runner 上必挂）。
-- **macOS/Linux 上有 3 个已知平台性失败**（clipboard / filesearch / runner-smoke，
-  见平台债 Issue）——这三个之外的新失败必须当回事。CI 矩阵暂锁 windows-latest。
+- **三大平台跑同一套测试**：CI 矩阵是 ubuntu / macos / windows（各 Node 22，
+  Linux 另跑 Node 24）。曾在 macOS/Linux 上有 3 个平台性失败（clipboard /
+  filesearch / runner-smoke），已随插件跨平台化一并修掉（Issue #3）——那之后
+  **任何平台上的失败都要当回事**，别再假设「mac 上的失败是历史债」。
+  Linux 剪贴板用例要 `xclip` + X server：CI 两者都装并用 `xvfb-run` 跑；
+  本地复现同样 `xvfb-run -a node scripts/test-all.mjs`。
 - **每条 CI 断言先在本地复现**再提交，包括 `bash -e` 语义下的行为
   （GitHub Actions 的 `run:` 默认 errexit）。
 - **断言不要匹配状态词本身**——要匹配带图标或数值的具体行，否则断言恒真。

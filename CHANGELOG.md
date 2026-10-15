@@ -6,6 +6,19 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **CI 测试矩阵从「只在 windows-latest」放开到三个平台**
+  （ubuntu / macos / windows，各跑 Node 22，另在 Linux 单独跑当前的 Node 24）。
+  以前只测 Windows 的理由是插件深度绑定它——代价是平台债永远看不见：
+  macOS 上那 3 个失败一直到有人手动跑才发现。插件层跨平台化完成后，
+  测试断言也跟着按平台分支了，这里把矩阵放开。顺手把 Linux 剪贴板的
+  真实路径覆盖上（CI 装 `xclip` + `xvfb`，套件在 `xvfb-run` 下跑）。
+
+  给写测试的人的提醒：Linux 上剪贴板工具缺失时，套件断言那句「需要
+  xclip/xsel」的安装提示，而不是静默跳过——红要红在环境上，
+  不能红在看不见的地方。
+
 ### Added
 
 - **http 动作与 AI 工作台走系统代理。** 以前设了 `http_proxy` 也没用：Node 内置
