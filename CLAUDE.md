@@ -47,3 +47,10 @@ node src/cli.ts ui --open          # 起界面人工看一眼（UI 改动时）
   改了 `plugins/` 下的清单后要 `plugin remove <id>` + `plugin bundled` 重装。
 - Python 子进程统一按 UTF-8 处理（内核注入 `PYTHONIOENCODING`），
   插件要输出 GBK 得在清单里声明 `encoding = "gbk"`。
+- **网络受限时先找本机代理，再谈重试**：`gh` / `git push` / `npm install` /
+  抓网页卡住不动，多半不是服务挂了，而是没走代理。先看本机代理客户端
+  （Clash / Surge / Mihomo / v2ray 之类）当前的本机监听端口，再用环境变量
+  让命令走它：`https_proxy` / `http_proxy` / `all_proxy`。
+  **端口、地址一律不写进仓库**——每台机器、每个代理客户端都不一样，写死只会
+  让别人复制到一条走不通的命令。仓库里只描述「去本机找代理端口」这个动作，
+  具体值由使用者在自己的环境里填。
