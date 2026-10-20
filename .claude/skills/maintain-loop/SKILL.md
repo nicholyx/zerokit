@@ -206,7 +206,9 @@ zerokit **尚无发布流程**（无 release workflow、未打过 tag）。首�
    手写段（awk 提取版本段）+ GitHub 原生 `releases/generate-notes`（PR 清单与对比链接）；
    预发布版本（tag 含 `-`）不标 latest；**tag 过滤器末尾要加 `*`**，否则预发布 tag
    根本不触发工作流。zerokit 无构建产物（`npm install` 即用），首发不需要构建矩阵。
-2. 版本号只有一处：根 `package.json`（`0.1.0`）。无 Tauri 三处同步的包袱。
+2. 版本号有**四处**，发版时一起改：根 `package.json`、`apps/desktop/src-tauri/`
+   下的 `tauri.conf.json` / `Cargo.toml` / `Cargo.lock`（`zerokit-desktop` 那条）。
+   曾以为只有 `package.json` 一处，v0.2.0 发版时才发现桌面壳自报的版本会落在后面。
 3. 之后的流程：从最新 main 切 `chore/release-vX.Y.Z` → CHANGELOG 的 `[Unreleased]`
    归入 `[X.Y.Z] - 日期` → 发布 PR 走完整 CI → squash merge →
    **先查远端没有同名 tag** 再打标签推送。
