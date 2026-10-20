@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-21
+
 ### Changed
 
 - **CI 测试矩阵从「只在 windows-latest」放开到三个平台**
