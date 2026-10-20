@@ -236,6 +236,7 @@ function itemHtml(entry, i, showPlugin) {
       <span class="desc">${smart ? `内容看起来是${esc(smart)}，可以直接用` : esc(a.description || p.summary || '')}</span>
     </span>
     <span class="aid">${esc(a.id)}</span>
+    ${a.steps?.length ? `<span class="badge">组合 ${a.steps.length} 步</span>` : ''}
     ${smart ? `<span class="badge smart-badge">智能匹配</span>` : ''}
     ${dep}
     <span class="badge ${esc(a.risk)}">${esc(RISK_TEXT[a.risk] || a.risk)}</span>
@@ -342,6 +343,12 @@ function openDetail(plugin, action, prefill) {
       ✗ 缺少依赖：${esc(plugin.missingDeps.join(', '))}　先装上它，这个动作才能跑
     </div>`;
 
+  const steps = Array.isArray(action.steps) ? action.steps : [];
+  const chainInfo = steps.length ? `
+    <div class="cmd-line">组合动作，按顺序执行：
+      ${steps.map((s, i) => `<div>${i + 1}. ${esc(s.use)} → {${esc(s.as)}}</div>`).join('')}
+    </div>` : '';
+
   const fields = action.fields.map((f) => {
     const req = f.required ? ' <span class="req">*</span>' : '';
     const help = f.help ? `<div class="help">${esc(f.help)}</div>` : '';
@@ -369,11 +376,13 @@ function openDetail(plugin, action, prefill) {
       <h2>${esc(action.title)}</h2>
       <div class="meta">${esc(plugin.name)} · ${esc(action.id)} ·
         <span class="badge ${esc(action.risk)}">${esc(RISK_TEXT[action.risk] || action.risk)}</span>
+        ${steps.length ? `<span class="badge">组合 ${steps.length} 步</span>` : ''}
         <span class="badge">${esc(action.tool)}</span>
       </div>
       <div class="desc">${esc(action.description || '（这个动作没写说明）')}</div>
     </div>
     ${depWarn}
+    ${chainInfo}
     ${fields}
     <div class="actions">
       <button class="primary" id="runBtn">执行</button>

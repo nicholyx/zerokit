@@ -286,6 +286,8 @@ export function adaptUtoolsPlugin(dir: string): LoadResult {
       timeout: 60,
       encoding: 'utf8',
       env: {},
+      // uTools 翻译出来的都是单步动作，没有组合链路
+      steps: [],
     };
     if (mapped.match) action.match = mapped.match;
     actions.push(action);

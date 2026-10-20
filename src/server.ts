@@ -19,7 +19,7 @@ import { applyUpdate, checkUpdate } from './core/update.ts';
 import { describeSource, readSource } from './core/sources.ts';
 import { checkRequires } from './core/resolve.ts';
 import { applyDefaults, coerceParam, toFormFields, toJsonSchema } from './core/schema.ts';
-import { buildArgv, confirmPolicy, displayCommand, runAction } from './core/runner.ts';
+import { buildArgv, chainDisplay, confirmPolicy, displayCommand, runAction } from './core/runner.ts';
 
 /**
  * 本地 HTTP 面：给启动器 / Web 页面 / Tauri 壳提供同一套 API。
@@ -98,6 +98,8 @@ function wirePlugins(): WiredPlugin[] {
         needsConfirm: confirmPolicy(a.risk) === 'always',
         // 内容智能匹配的声明：前端据此判断"输入像什么"然后推荐
         match: a.match ?? null,
+        // 组合动作的链路（只有 use/as；参数留在清单里，前端不需要知道）
+        steps: a.type === 'chain' ? a.steps.map((s) => ({ use: s.use, as: s.as })) : [],
       })),
     });
   }
@@ -578,12 +580,17 @@ export function createServer(): http.Server {
         const confirmed = Boolean(provided) && sameToken(provided, expected);
 
         if (mustAsk && !confirmed) {
-          // 还没确认：把"到底要跑什么"原样交给前端展示
-          const { argv } = buildArgv(plugin, action, withDefaults.values);
+          // 还没确认：把"到底要跑什么"原样交给前端展示。
+          // 组合动作没有 argv，就把整条链路摊开；http 动作显示请求行。
+          const command = action.type === 'chain'
+            ? chainDisplay(action)
+            : action.type === 'http'
+              ? `${action.method} ${action.url}`
+              : displayCommand(action, buildArgv(plugin, action, withDefaults.values).argv);
           json(res, 200, {
             needConfirm: true,
             risk: action.risk,
-            command: displayCommand(action, argv),
+            command,
             confirm: expected,
           });
           return;

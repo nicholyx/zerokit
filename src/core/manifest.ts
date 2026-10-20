@@ -25,7 +25,31 @@ export type OutputKind = 'text' | 'json' | 'markdown' | 'table' | 'file' | 'html
  * render = "html"：stdout 本身就是 HTML 片段，直接在沙箱 iframe 里渲染（output = "html" 的默认 render）。
  */
 export type RenderKind = 'text' | 'table' | 'json' | 'markdown' | 'keyvalue' | 'image' | 'link' | 'web' | 'html';
-export type ActionType = 'exec' | 'http';
+/**
+ * exec：起子进程跑脚本（最通用）
+ * http：零代码插件，直接发一个请求
+ * chain：组合动作——按顺序调用其它动作，把已有的能力拼成新能力（仍然不用写代码）
+ */
+export type ActionType = 'exec' | 'http' | 'chain';
+
+/** 组合动作里的一步：调用哪个动作、结果叫什么名字、传什么参数 */
+export interface ChainStep {
+  /** 引用目标：`<插件id>.<动作id>`（跨插件）或 `self.<动作id>`（本插件） */
+  use: string;
+  /**
+   * 引用名：后续步骤用 `{名字}` / `{名字.data.字段}` 取这一步的结果。
+   * 不写则由动作 id 推导（`watch-start` → `watch_start`）。
+   */
+  as: string;
+  /** 传给该步骤的参数；字符串里的 `{...}` 会被替换成前面步骤的结果或本动作的参数 */
+  params: Record<string, unknown>;
+}
+
+/**
+ * 内核注入的内置占位符。清单里可以直接写 `{plugin_dir}` 这类名字。
+ * 放在 manifest 里是因为校验组合动作的引用名时也要用到它（不能和参数/步骤引用重名）。
+ */
+export const BUILTIN_VARS = ['python', 'node', 'git', 'plugin_dir', 'data_dir', 'home', 'kit'] as const;
 
 /**
  * 内容智能匹配：输入框里的东西（或剪贴板内容）**像什么**，就自动推荐对应动作。
@@ -94,6 +118,18 @@ export interface Action {
   /** 工作目录，相对插件目录 */
   cwd?: string;
   env: Record<string, string>;
+  /**
+   * 组合动作（type = "chain"）：按顺序调用其它动作。非 chain 动作这里是空数组。
+   *
+   * 存在清单里的原因和 run 一样：链路是**声明**出来的，安装时就能被看见、
+   * 被校验，而不是运行时才决定跑什么。
+   */
+  steps: ChainStep[];
+  /**
+   * 组合动作的输出模板：`{步骤名.data.字段}` / `{prev}` / 本动作的参数都可以插进去。
+   * 只在文本类输出（output 不是 json）时生效；不写就按顺序拼接各步的 stdout。
+   */
+  template?: string;
 }
 
 /**
@@ -161,6 +197,8 @@ export interface LoadResult {
 }
 
 const DEFAULT_TIMEOUT = 60;
+/** 一步链路最多多少步：上限是为了让「链路」保持可读、可在安装时被看懂 */
+const MAX_CHAIN_STEPS = 20;
 const OUTPUTS: OutputKind[] = ['text', 'json', 'markdown', 'table', 'file', 'html'];
 const RENDERS: RenderKind[] = ['text', 'table', 'json', 'markdown', 'keyvalue', 'image', 'link', 'web', 'html'];
 
@@ -301,6 +339,78 @@ function parseServices(raw: unknown, errors: string[]): Service[] {
   return out;
 }
 
+/**
+ * 组合动作的一步：TOML 里的 `[[action.step]]`（也接受 `[[action.steps]]`）。
+ *
+ * 只接受 `<插件id>.<动作id>` / `self.<动作id>` 这种**静态**引用：链路必须在安装
+ * 时就能被看见，而不是运行到这里才拼出一个目标——后者会让"安装时摊开能力给人看"
+ * 这道闸门失效。插件 id 里允许点号，所以从**最后一个点**分界。
+ */
+function parseChainSteps(
+  raw: unknown,
+  actionId: string,
+  errors: string[],
+): ChainStep[] {
+  const list = Array.isArray(raw) ? raw : [];
+  const out: ChainStep[] = [];
+  const seen = new Set<string>();
+  if (list.length > MAX_CHAIN_STEPS) {
+    errors.push(`动作 ${actionId}: 一步链路最多 ${MAX_CHAIN_STEPS} 步（收到 ${list.length}）——再多就该拆插件了`);
+    return out;
+  }
+  for (const item of list) {
+    const s = asRecord(item);
+    const use = asString(s['use']);
+    if (!use) {
+      errors.push(`动作 ${actionId}: 有个 [[action.step]] 缺少 use（写 <插件id>.<动作id>，本插件写 self.<动作id>）`);
+      continue;
+    }
+    const dot = use.lastIndexOf('.');
+    const pluginRef = dot > 0 ? use.slice(0, dot) : '';
+    const actionRef = dot > 0 ? use.slice(dot + 1) : '';
+    if (!pluginRef || !actionRef || !ID_RE.test(pluginRef) || !ID_RE.test(actionRef)) {
+      errors.push(`动作 ${actionId}: 步骤 use "${use}" 格式不对——应该是 <插件id>.<动作id> 或 self.<动作id>`);
+      continue;
+    }
+    if (pluginRef === 'self' && actionRef === actionId) {
+      errors.push(`动作 ${actionId}: 步骤不能引用自己，否则是死循环`);
+      continue;
+    }
+    const alias = asString(s['as']) ?? deriveAlias(actionRef);
+    if (!PARAM_RE.test(alias)) {
+      errors.push(`动作 ${actionId}: 步骤 ${use} 的 as "${alias}" 非法——只能是字母/数字/下划线，且不以数字开头`);
+      continue;
+    }
+    if (alias === 'prev' || (BUILTIN_VARS as readonly string[]).includes(alias)) {
+      errors.push(`动作 ${actionId}: 步骤引用名 "${alias}" 是保留名`
+        + `（prev 指上一步，${BUILTIN_VARS.join(' / ')} 是内置占位符），换一个`);
+      continue;
+    }
+    if (seen.has(alias)) {
+      errors.push(`动作 ${actionId}: 步骤引用名 "${alias}" 重复，后续 {${alias}} 分不清是哪一步的结果`);
+      continue;
+    }
+    seen.add(alias);
+
+    const params: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(asRecord(s['params'] ?? s['param']))) {
+      if (!PARAM_RE.test(k)) {
+        errors.push(`动作 ${actionId}: 步骤 ${use} 的参数名 "${k}" 非法——只能是字母/数字/下划线`);
+        continue;
+      }
+      params[k] = v;
+    }
+    out.push({ use, as: alias, params });
+  }
+  return out;
+}
+
+/** 不给 as 时按被调用的动作 id 推导引用名：`watch-start` → `watch_start` */
+function deriveAlias(actionId: string): string {
+  const alias = actionId.replace(/[^a-zA-Z0-9_]/g, '_');
+  return /^[0-9]/.test(alias) ? `s_${alias}` : alias;
+}
+
 function parseAction(raw: unknown, errors: string[], warnings: string[]): Action | undefined {
   const a = asRecord(raw);
   const id = asString(a['id']);
@@ -314,13 +424,14 @@ function parseAction(raw: unknown, errors: string[], warnings: string[]): Action
   }
 
   const type = (asString(a['type']) ?? 'exec') as ActionType;
-  if (type !== 'exec' && type !== 'http') {
-    errors.push(`动作 ${id}: type 只能是 exec 或 http，收到 "${type}"`);
+  if (type !== 'exec' && type !== 'http' && type !== 'chain') {
+    errors.push(`动作 ${id}: type 只能是 exec / http / chain，收到 "${type}"`);
     return undefined;
   }
 
   const run = asStringArray(a['run']);
   const url = asString(a['url']);
+  const background = a['background'] === true;
   if (type === 'exec' && run.length === 0) {
     errors.push(`动作 ${id}: exec 类型必须给 run = ["命令", "参数1", ...]`);
     return undefined;
@@ -328,6 +439,20 @@ function parseAction(raw: unknown, errors: string[], warnings: string[]): Action
   if (type === 'http' && !url) {
     errors.push(`动作 ${id}: http 类型必须给 url`);
     return undefined;
+  }
+  if (type === 'chain') {
+    if (run.length > 0) {
+      errors.push(`动作 ${id}: chain 类型不能同时给 run——它只调用其它动作，不跑自己的命令`);
+      return undefined;
+    }
+    if (url) {
+      errors.push(`动作 ${id}: chain 类型不能同时给 url——要发请求就把它作为一步 [[action.step]] 引用`);
+      return undefined;
+    }
+    if (background) {
+      errors.push(`动作 ${id}: chain 不能是后台动作——每一步都要拿到结果才能往下传`);
+      return undefined;
+    }
   }
 
   // 风险等级必填：它决定确认策略（read 放行 / mutate 首次确认 / destructive 每次确认）
@@ -345,6 +470,10 @@ function parseAction(raw: unknown, errors: string[], warnings: string[]): Action
   }
 
   const shell = a['shell'] === true;
+  if (type === 'chain' && shell) {
+    errors.push(`动作 ${id}: chain 不能开 shell——它不跑命令，只按顺序调用其它动作`);
+    return undefined;
+  }
   if (shell && risk !== 'destructive') {
     warnings.push(`动作 ${id}: 显式开了 shell（会拼字符串执行），风险等级已从 ${risk} 提升为 destructive`);
     risk = 'destructive';
@@ -382,6 +511,33 @@ function parseAction(raw: unknown, errors: string[], warnings: string[]): Action
   }
   void encoding;
 
+  // 组合动作：链路与输出模板。非 chain 动作这两项必须为空（给了就是写错了）。
+  const steps = parseChainSteps(a['step'] ?? a['steps'], id, errors);
+  if (type !== 'chain' && steps.length > 0) {
+    errors.push(`动作 ${id}: 只有组合动作（type = "chain"）才能写 [[action.step]]`);
+    return undefined;
+  }
+  const template = asString(a['template']);
+  if (template !== undefined) {
+    if (type !== 'chain') {
+      errors.push(`动作 ${id}: template 只属于组合动作（type = "chain"）`);
+      return undefined;
+    }
+    if (!template.trim()) {
+      errors.push(`动作 ${id}: template 不能是空白`);
+      return undefined;
+    }
+    if (output === 'json') {
+      warnings.push(`动作 ${id}: output = "json" 时 template 不生效`
+        + '（JSON 由各步的结构化结果聚合而成），已忽略');
+    }
+  }
+  if (type === 'chain' && steps.length === 0) {
+    errors.push(`动作 ${id}: chain 类型至少要有一步 [[action.step]]，否则它什么都不做`);
+    return undefined;
+  }
+  const params = parseParams(a['params'] ?? a['param'], id, errors);
+
   const action: Action = {
     id,
     title: asString(a['title']) ?? id,
@@ -398,13 +554,25 @@ function parseAction(raw: unknown, errors: string[], warnings: string[]): Action
     render: renderRaw ?? RENDER_FOR_OUTPUT[output],
     risk,
     // TOML 里写 [[action.param]] 时键名是 param（单数），写 [[action.params]] 则是 params，两种都收
-    params: parseParams(a['params'] ?? a['param'], id, errors),
+    params,
     timeout,
     encoding,
     env: Object.fromEntries(
       Object.entries(asRecord(a['env'])).map(([k, v]) => [k, String(v)]),
     ),
+    steps,
   };
+  if (type === 'chain' && template !== undefined && output !== 'json') action.template = template;
+
+  // 引用名不能和动作自己的参数重名：`{keyword}` 到底是参数还是某一步的结果？
+  // 这种歧义必须在安装时挡掉，否则只能在运行时猜。
+  for (const step of steps) {
+    if (action.params.some((p) => p.name === step.as)) {
+      errors.push(`动作 ${id}: 步骤引用名 "${step.as}" 和动作参数重名`
+        + `——后续 {${step.as}} 会被理解成参数，而不是第几步的结果`);
+      return undefined;
+    }
+  }
   const matchRaw = a['match'];
   if (matchRaw !== undefined) {
     const m = asRecord(matchRaw);

@@ -129,6 +129,23 @@ try {
     fail('tools/call 失败：' + JSON.stringify(call).slice(0, 400));
   }
 
+  // 组合动作：AI 面看到的是一整条链路（说明里讲清步骤、annotations 按链路声明）
+  const brief = tools.find((t) => t.name === 'sysinfo__brief');
+  if (brief && brief.annotations?.readOnlyHint === true
+      && brief.annotations?.openWorldHint === false
+      && /组合动作/.test(brief.description ?? '')) {
+    pass('组合动作在 MCP 面正确暴露（说明含步骤、annotations 按声明）');
+  } else {
+    fail('组合动作的 MCP 工具不对：' + JSON.stringify(brief).slice(0, 400));
+  }
+  const briefCall = await request('tools/call', { name: 'sysinfo__brief', arguments: {} });
+  const briefText = briefCall.result?.content?.[0]?.text ?? '';
+  if (briefCall.result?.isError !== true && briefText.includes('内存')) {
+    pass('组合动作经 tools/call 一次调用完成多步');
+  } else {
+    fail('组合动作调用失败：' + JSON.stringify(briefCall).slice(0, 400));
+  }
+
   // 有副作用的动作，未经授权必须被拒（fail-closed）
   const blocked = await request('tools/call', {
     name: 'proxy__stop', arguments: {},

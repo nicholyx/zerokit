@@ -7,7 +7,7 @@ import { HOME, LOG_DIR, PLUGINS_DIR } from './core/paths.ts';
 import { needsConfirm, rememberApproval } from './core/approvals.ts';
 import type { ConfirmPolicy } from './core/runner.ts';
 import {
-  addFromDir, addFromGit, devLink, exportPlugin, importPlugin, installBundled,
+  addFromDir, addFromGit, devLink, exportPlugin, findPlugin, importPlugin, installBundled,
   listPlugins, loadDir, removePlugin, requirePlugin,
 } from './core/registry.ts';
 import { type ScaffoldRuntime, scaffoldPlugin } from './core/scaffold.ts';
@@ -20,7 +20,7 @@ import {
   readIndex, refreshMarket, removeMarket, searchMarkets,
 } from './core/market.ts';
 import { applyDefaults, parseArgv, toCliFlags, toJsonSchema } from './core/schema.ts';
-import { type RunResult, audit, confirmPolicy, runAction } from './core/runner.ts';
+import { type RunResult, audit, chainDisplay, confirmPolicy, runAction } from './core/runner.ts';
 
 const COLOR = process.stdout.isTTY && !process.env['NO_COLOR'];
 const c = {
@@ -184,7 +184,8 @@ function cmdList(): number {
     process.stdout.write(`${c.bold(p.name)} ${c.dim(p.id)} ${c.dim('v' + p.version)}\n`);
     if (p.summary) process.stdout.write(`  ${p.summary}\n`);
     for (const a of p.actions) {
-      process.stdout.write(`  ${c.cyan(a.id.padEnd(18))} ${pad(a.title, 22)} ${RISK_LABEL[a.risk] ?? a.risk}\n`);
+      const tag = a.type === 'chain' ? c.dim('  · 组合') : '';
+      process.stdout.write(`  ${c.cyan(a.id.padEnd(18))} ${pad(a.title, 22)} ${RISK_LABEL[a.risk] ?? a.risk}${tag}\n`);
     }
     process.stdout.write('\n');
   }
@@ -235,7 +236,17 @@ function cmdShow(args: string[]): number {
     process.stdout.write(`\n${c.bold('动作')} ${c.cyan(a.id)}  ${a.title}  ${RISK_LABEL[a.risk] ?? a.risk}\n`);
     if (a.description) process.stdout.write(`  ${a.description}\n`);
     process.stdout.write(c.dim(`  MCP 工具名  ${toolName(plugin.id, a.id)}\n`));
-    process.stdout.write(c.dim(`  命令        ${a.type === 'http' ? a.method + ' ' + a.url : a.run.join(' ')}\n`));
+    const command = a.type === 'http'
+      ? `${a.method} ${a.url}`
+      : a.type === 'chain' ? chainDisplay(a) : a.run.join(' ');
+    process.stdout.write(c.dim(`  命令        ${command}\n`));
+    if (a.type === 'chain') {
+      // 链路要在安装后、执行前就能被看懂：哪一步调谁、结果记在哪个名字下、传了什么
+      for (const [i, step] of a.steps.entries()) {
+        const extra = Object.keys(step.params).length > 0 ? `  参数 ${JSON.stringify(step.params)}` : '';
+        process.stdout.write(c.dim(`  步骤 ${i + 1}      ${step.use} → {${step.as}}${extra}\n`));
+      }
+    }
     if (a.params.length > 0) {
       process.stdout.write('  参数：\n');
       for (const f of toCliFlags(a)) {
@@ -303,8 +314,12 @@ async function cmdRun(args: string[]): Promise<number> {
   const policy = confirmPolicy(action.risk);
   if (!yes) {
     const { buildArgv, displayCommand } = await import('./core/runner.ts');
-    const built = buildArgv(plugin, action, withDefaults.values);
-    const command = displayCommand(action, built.argv);
+    // 组合动作没有自己的 argv，把链路摊开给人看；http 动作直接显示请求行
+    const command = action.type === 'chain'
+      ? chainDisplay(action)
+      : action.type === 'http'
+        ? `${action.method} ${action.url}`
+        : displayCommand(action, buildArgv(plugin, action, withDefaults.values).argv);
     if (!(await confirmRun(plugin, action.id, policy, command))) {
       audit({
         ts: new Date().toISOString(), plugin: plugin.id, action: action.id,
@@ -583,6 +598,22 @@ function cmdDoctor(): number {
       : `  ${c.red('✗')} ${entry.plugin.name} 缺依赖：${reqs.map((r) => r.name).join(', ')}\n`);
     for (const r of reqs) process.stdout.write(c.yellow(`      ${r.hint}\n`));
     for (const w of entry.warnings) process.stdout.write(c.yellow(`      ! ${w}\n`));
+    // 组合动作的步骤跨插件引用：引用的插件/动作没装时，链路跑起来才知道会失败，
+    // 提前在自检里说出来，省得使用者执行到第 3 步才发现
+    for (const a of entry.plugin.actions) {
+      if (a.type !== 'chain') continue;
+      for (const [index, step] of a.steps.entries()) {
+        const dot = step.use.lastIndexOf('.');
+        const ref = step.use.slice(0, dot);
+        if (ref === 'self') continue;
+        const target = findPlugin(ref)?.plugin;
+        if (!target) {
+          process.stdout.write(c.yellow(`      ! 组合动作 ${a.id} 第 ${index + 1} 步引用的插件 ${ref} 没装\n`));
+        } else if (!target.actions.some((x) => x.id === step.use.slice(dot + 1))) {
+          process.stdout.write(c.yellow(`      ! 组合动作 ${a.id} 第 ${index + 1} 步引用的动作 ${step.use} 不存在\n`));
+        }
+      }
+    }
   }
   if (entries.length === 0) {
     process.stdout.write(c.dim('  （还没装插件，可执行 zkit plugin bundled）\n'));
