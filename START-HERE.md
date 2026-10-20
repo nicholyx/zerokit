@@ -121,6 +121,20 @@ Windows：`winget install Python.Python.3.13`。注意微软商店会塞一个�
 `python.exe` 占位程序，这个项目会主动跳过它，所以别从商店装。
 macOS：`brew install python`；Linux：用系统包管理器装 python3 即可。
 
+**`git clone` / `npm install` / `gh` 卡住或超时？**
+先看本机有没有在跑代理客户端（Clash / Surge / v2ray 之类），在它的设置里找到
+**本机监听端口**，再让命令走代理。把 `<端口>` 换成你自己那个，别照抄别人的：
+
+```bash
+export https_proxy=http://127.0.0.1:<端口>
+export http_proxy=http://127.0.0.1:<端口>
+export all_proxy=socks5://127.0.0.1:<端口>
+```
+
+PowerShell 用 `$env:https_proxy="http://127.0.0.1:<端口>"`（其余两个同理）。
+项目本身不记录任何代理地址——每台机器的端口和网关都不一样，写死只会让别人
+复制到一条走不通的命令。
+
 **端口每次都不一样？**
 `zkit ui` 默认随机端口（避免撞车）。要固定就 `--port 28970`。
 
