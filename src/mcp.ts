@@ -10,7 +10,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { type Action, type Plugin, toolName } from './core/manifest.ts';
 import { HOME, PLUGINS_DIR } from './core/paths.ts';
-import { listPlugins } from './core/registry.ts';
+import { findPlugin, listPlugins } from './core/registry.ts';
 import { applyDefaults, coerceParam, toJsonSchema } from './core/schema.ts';
 import { audit, confirmPolicy, runAction } from './core/runner.ts';
 
@@ -58,6 +58,10 @@ function toolDescription(plugin: Plugin, action: Action): string {
   const parts: string[] = [];
   if (action.description) parts.push(action.description);
   else if (plugin.summary) parts.push(plugin.summary);
+  if (action.type === 'chain') {
+    // 一次调用会跑好几步，说明里必须讲清，否则模型会以为它只做一件事
+    parts.push(`（组合动作：依次执行 ${action.steps.map((s) => s.use).join(' → ')}）`);
+  }
   parts.push(`[插件 ${plugin.name}]`);
   if (action.risk !== 'read') {
     parts.push(action.risk === 'destructive'
@@ -65,6 +69,28 @@ function toolDescription(plugin: Plugin, action: Action): string {
       : '（有副作用的动作）');
   }
   return parts.join(' ');
+}
+
+/**
+ * 这条动作会不会访问外部世界（决定 MCP 的 openWorldHint）。
+ *
+ * 组合动作自己没有网络代码，网络可能藏在某一步 http 动作里——静态展开链路就能
+ * 判断出来，不用等运行时才发现标注是错的。
+ */
+function touchesNetwork(plugin: Plugin, action: Action, seen = new Set<string>()): boolean {
+  if (action.type === 'http') return true;
+  if (action.type !== 'chain') return false;
+  const key = `${plugin.id}.${action.id}`;
+  if (seen.has(key)) return false;
+  seen.add(key);
+  for (const step of action.steps) {
+    const dot = step.use.lastIndexOf('.');
+    const ref = step.use.slice(0, dot);
+    const target = ref === 'self' ? plugin : findPlugin(ref)?.plugin;
+    const targetAction = target?.actions.find((a) => a.id === step.use.slice(dot + 1));
+    if (target && targetAction && touchesNetwork(target, targetAction, seen)) return true;
+  }
+  return false;
 }
 
 function collectTools(): Array<{ plugin: Plugin; action: Action }> {
@@ -99,7 +125,7 @@ export async function serve(): Promise<number> {
         readOnlyHint: action.risk === 'read',
         destructiveHint: action.risk === 'destructive',
         idempotentHint: action.risk === 'read',
-        openWorldHint: action.type === 'http',
+        openWorldHint: touchesNetwork(plugin, action),
       },
     }));
     process.stderr.write(`[zerokit] tools/list -> ${tools.length} 个工具\n`);

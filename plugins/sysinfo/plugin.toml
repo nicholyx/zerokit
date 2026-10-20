@@ -62,3 +62,23 @@ run         = ["{node}", "sysinfo.mjs", "watch"]
 output      = "text"
 risk        = "mutate"
 background  = true
+# 组合动作（type = "chain"）：不写代码，把已有动作按顺序拼成新能力。
+# 每一步的 stdout / 结构化结果（{步骤别名.data.字段}）都能带进下一步的参数与最终模板。
+# 四个面自动派生：CLI 的 run/show、MCP 工具、启动器的表单、AI 工作台都照常认它。
+[[action]]
+id          = "brief"
+title       = "一句话播报（组合动作示例）"
+description = "把「系统概况」与「最吃内存的进程」两步拼成一段话。演示 type = \"chain\"：引用 self.overview 与 self.top，用 template 把结果拼起来，全程不写代码。"
+type        = "chain"
+output      = "text"
+risk        = "read"
+template    = "{sys.data.主机名}：内存 {sys.data.内存占用率}（{sys.data.内存已用} / {sys.data.内存总量}），已开机 {sys.data.已开机}。最吃内存的进程：{top.data.0.进程}、{top.data.1.进程}"
+
+  [[action.step]]
+  use = "self.overview"
+  as  = "sys"
+
+  [[action.step]]
+  use    = "self.top"
+  as     = "top"
+  params = { limit = 3 }

@@ -168,7 +168,7 @@ Windows 上 `python.exe` 可能只是个会弹商店的空壳）。
 | `id` | ✅ | 字符集同插件 id。会拼进工具名 |
 | `title` | | 显示名，默认取 `id` |
 | `description` | | **写给人和模型两个人的**。是模型判断「什么时候该用我」的唯一依据 |
-| `type` | | `exec`（默认）或 `http` |
+| `type` | | `exec`（默认）/ `http` / `chain`（组合动作，见下文） |
 | `run` | exec 必填 | **argv 数组**，不是字符串 |
 | `shell` | | 默认 `false`。开了才用 shell 拼字符串，风险等级会被强制提升为 `destructive` |
 | `url` / `method` / `headers` / `body` | http 必填 `url` | |
@@ -242,6 +242,94 @@ risk        = "mutate"
   required    = true
   description = "要允许的域名，例如 example.com（含所有子域）"
 ```
+
+## 组合动作（`type = "chain"`）
+
+有些新能力不需要新代码，只需要把**已有动作**按顺序拼起来：先查公网 IP、再查归属地；
+先索引、再搜索；先取一份数据、再把它写进另一个工具的参数。组合动作就是为这件事准备的：
+在清单里声明一条链路，四个面自动多出一个新动作。
+
+```toml
+[[action]]
+id          = "brief"
+title       = "一句话播报"
+type        = "chain"
+output      = "text"
+risk        = "read"
+template    = "{sys.data.主机名}：内存 {sys.data.内存占用率}。最吃内存的进程：{top.data.0.进程}"
+
+  [[action.step]]
+  use = "self.overview"   # self = 本插件的动作；跨插件写 <插件id>.<动作id>
+  as  = "sys"             # 这一步结果的引用名
+
+  [[action.step]]
+  use    = "self.top"
+  as     = "top"
+  params = { limit = 3 }  # 值里可以引用前面步骤的结果
+```
+
+### 步骤字段
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `use` | ✅ | `<插件id>.<动作id>`；本插件写 `self.<动作id>` |
+| `as` | | 结果引用名，默认由被调动作的 id 推导（`watch-start` → `watch_start`）。不能叫 `prev`，也不能占用内置占位符名 |
+| `params` | | 传给该动作的参数。字符串值里可以写引用，其它类型原样传 |
+
+### 引用规则
+
+- `{参数名}` —— 组合动作**自己的**参数（默认值照常生效）。
+- `{别名}` / `{prev}` —— 某一步（或上一步）的 **stdout 原文**。
+- `{别名.data}` / `{别名.data.a.b.0}` —— 该步的**结构化结果**（要求那一步声明了
+  `output = "json"`；`data.` 前缀可省略）。数组用数字下标。
+- `{python}` / `{node}` / `{git}` / `{plugin_dir}` / `{data_dir}` / `{home}` / `{kit}`
+  —— 与 exec 动作同一套内置占位符。
+
+引用取不到值时**不会静默变成空字符串**：链路当场失败，错误里写明第几步、哪个参数、缺什么。
+
+### 输出怎么拼
+
+- `output = "json"`：把各步的结构化结果按引用名聚成一个对象；没有结构化结果的步骤
+  给它的 stdout 字符串。这样 CLI `--json`、MCP 与 AI 工作台拿到的是一份完整数据。
+- 其它 `output`：写了 `template` 就渲染模板；没写就把各步 stdout 用空行拼起来。
+- `render`（含 `web`）对**链路本身**生效；步骤自己的 `render` 不影响最终结果——
+  `sysinfo` 的 `brief` 就是把带网页仪表盘的 `overview` 拼进一段文字里。
+
+### 风险与限制
+
+- **链路的 `risk` 必须 ≥ 每一步的 `risk`。** 确认闸门挂在链路上，声明低了就等于绕过确认；
+  运行时发现不够会**直接拒绝**（fail-closed），不是打印一句警告继续跑。
+- 步骤不能是**后台动作**（没有结果可传），也不能是**另一条链路**（不支持嵌套）。
+- 所有步骤在**执行之前**先做一遍静态校验：目标插件与动作存在、风险兜得住、参数名合法。
+  写错就立刻失败，不会先跑完前两步、产生了副作用才发现第三步不存在。
+- `timeout` 是**整条链路的总预算**（默认 60 秒）：每一步只拿剩下的时间，链路不会超时失控。
+- 权限模型：MCP 里授权的是**这条链路**（`zkit mcp allow <插件>.<链路id>`），不是链路里的每一步。
+  链路是安装时被摊开审查的那个单位；如果某个步骤的清单更新后风险变高，上面的校验会兜住。
+
+### 跨插件组合
+
+生态里的动作可以互相拼：
+
+```toml
+[[action]]
+id          = "ip-report"
+title       = "查本机出口 IP 并附带系统信息"
+type        = "chain"
+output      = "json"
+risk        = "read"
+
+  [[action.step]]
+  use = "ip.public"       # 另一个插件的动作
+  as  = "ip"
+
+  [[action.step]]
+  use = "sysinfo.top"
+  as  = "top"
+  params = { limit = 3 }
+```
+
+跨插件引用要求目标插件**已经安装**。`zkit doctor` 会提前指出「引用了没装的插件」或
+「引用了不存在的动作」，不用等到执行到那一步才发现。
 
 ## \[action.match\]：内容智能匹配（可选）
 
@@ -372,7 +460,7 @@ MCP 面上还有一层独立的默认拒绝：**只读动作默认放行，有�
 `zkit mcp allow <插件>.<动作>` 显式授权**。理由是 MCP 规范明确要求客户端把 annotations
 当作不可信——不能指望 AI 客户端替我们把关。
 
-## 三种插件形态
+## 四种插件形态
 
 **1. 零代码（`type = "http"`）** —— 最常见的"调个接口"根本不需要写代码：
 
@@ -395,7 +483,27 @@ risk   = "read"
 > 为什么要内核自己实现：Node 内置 fetch 会把 `proxy` 选项**静默丢弃**——
 > 设了代理也照样直连，且不报错。见 `src/core/proxy.ts`。
 
-**3. 带网页（`web/index.html`）** —— 需要富交互时的形态：动作声明 `render = "web"`，
+**3. 组合已有动作（`type = "chain"`）** —— 零代码的第二种用法：把几个动作按顺序串起来，
+步骤之间用 `{别名}` / `{别名.data.字段}` 传结果（详见上面的「组合动作」一节）。
+适合「先查 A、再拿 A 的结果查 B」这类不需要新逻辑的链路。
+
+```toml
+[[action]]
+id     = "brief"
+type   = "chain"
+output = "text"
+risk   = "read"
+
+  [[action.step]]
+  use = "self.overview"
+  as  = "sys"
+
+  [[action.step]]
+  use = "self.top"
+  as  = "top"
+```
+
+**4. 带网页（`web/index.html`）** —— 需要富交互时的形态：动作声明 `render = "web"`，
 执行结果不再用内置卡片，而是交给插件自己的页面渲染（沙箱 iframe）。
 
 ```toml
@@ -489,6 +597,9 @@ zerokit 的清单（只读，不写你的目录）。丢进插件目录即可，
 - `run` 里用了 `{python}` 但本机没装 → 运行时给出安装指引
 - `type = "enum"` 但没给 `enum` 候选值
 - 参数名以数字开头
+- `type = "chain"` 但没有 `[[action.step]]`，或步骤 `use` 不是 `<插件id>.<动作id>` 的格式
+- 链路的引用名重复、占用了 `prev` / 内置占位符名
+- 链路声明了 `run` / `url` / `shell`（组合动作只调用别的动作，自己不跑命令）
 
 ## 完整示例
 

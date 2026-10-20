@@ -3,13 +3,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { Worker } from 'node:worker_threads';
-import type { Action, Plugin, RiskLevel } from './manifest.ts';
-import { toolName } from './manifest.ts';
+import type { Action, ChainStep, Plugin, RiskLevel } from './manifest.ts';
+import { BUILTIN_VARS, toolName } from './manifest.ts';
 import { DATA_DIR, HOME, LOG_DIR, ensureDirs, pluginDataDir } from './paths.ts';
 import { proxyFetch, proxyFor } from './proxy.ts';
+import { findPlugin } from './registry.ts';
 import { resolveTool } from './resolve.ts';
 import { readTail, registerProcess } from './runtime.ts';
 import { hasHostFor, runViaHost } from './host.ts';
+import { applyDefaults } from './schema.ts';
 
 /**
  * 执行器：整个系统**唯一的执行收口**。
@@ -24,7 +26,13 @@ import { hasHostFor, runViaHost } from './host.ts';
 export type Caller = 'cli' | 'mcp' | 'ui' | 'api';
 
 const MAX_OUTPUT = 1 << 20; // 1 MiB，超出部分落盘
-const BUILTIN_NAMES = ['python', 'node', 'git', 'plugin_dir', 'data_dir', 'home', 'kit'];
+const BUILTIN_NAMES: readonly string[] = BUILTIN_VARS;
+
+/** 风险等级的高低：组合动作的风险必须兜得住链路里每一步（低等级不能包住高等级） */
+const RISK_RANK: Record<RiskLevel, number> = { read: 0, mutate: 1, destructive: 2 };
+/** 组合动作里的参数/模板引用：`{名字}` 或 `{名字.a.b.0}`（字段名可以是中文，不能有空格和点） */
+const REF_TOKEN_RE = /\{([a-zA-Z_][a-zA-Z0-9_]*(?:\.[^{}\s.]+)*)\}/g;
+const WHOLE_REF_RE = /^\{([a-zA-Z_][a-zA-Z0-9_]*(?:\.[^{}\s.]+)*)\}$/;
 
 /** zerokit 自己的安装根目录。适配层（如 uTools 兼容）要用它定位随内核分发的辅助脚本 */
 export const KIT_ROOT = path.resolve(import.meta.dirname, '..', '..');
@@ -168,6 +176,11 @@ export function displayCommand(action: Action, argv: string[]): string {
     return a;
   });
   return masked.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ');
+}
+
+/** 组合动作的展示文本：把链路按顺序摊开，确认框里能一眼看出会跑什么 */
+export function chainDisplay(action: Action): string {
+  return '组合：' + action.steps.map((s) => s.use).join(' → ');
 }
 
 function openAuditLog(file: string): fs.WriteStream | undefined {
@@ -473,6 +486,9 @@ export async function runAction(
   if (action.type === 'http') {
     return runHttpAction(plugin, action, options, started, base);
   }
+  if (action.type === 'chain') {
+    return runChainAction(plugin, action, options, started, base);
+  }
 
   const { argv, errors } = buildArgv(plugin, action, options.values);
   if (errors.length > 0) {
@@ -724,6 +740,314 @@ export async function runAction(
   if (data !== undefined) result.data = data;
   if (outcome.artifactPath) result.artifactPath = outcome.artifactPath;
   if (error) result.error = error;
+  return result;
+}
+
+/**
+ * 组合动作的引用上下文。
+ *
+ * 三种来源按固定顺序解析，任何一种取不到都**报错而不是给空串**：
+ * 空串会让下一步拿着一个看起来合法的参数继续跑，最后错在最不相关的地方。
+ */
+interface ChainContext {
+  /** 组合动作自己的参数（已经过 CLI/UI/MCP 的解析与校验） */
+  values: Record<string, unknown>;
+  /** 内置占位符：{plugin_dir} / {data_dir} / {home} / {node} / {kit} / {python} / {git} */
+  builtins: Record<string, string>;
+  /** 已跑完的步骤，按引用名索引 */
+  results: Map<string, RunResult>;
+  /** 上一步的结果 */
+  prev?: RunResult;
+}
+
+/** 解析一个引用表达式（不带花括号）：`名字` 或 `名字.data.a.b.0`（`data.` 可省略） */
+function resolveRef(expr: string, ctx: ChainContext): { value?: unknown; error?: string } {
+  const parts = expr.split('.');
+  const head = parts[0]!;
+  let rest = parts.slice(1);
+
+  let root: unknown;
+  if (head === 'prev') {
+    if (!ctx.prev) return { error: '第一步没有「上一步」，{prev} 用不了' };
+    root = ctx.prev;
+  } else if (ctx.results.has(head)) {
+    root = ctx.results.get(head);
+  } else if (Object.prototype.hasOwnProperty.call(ctx.builtins, head)) {
+    root = ctx.builtins[head];
+    if (root === '') return { error: `{${head}} 在本机取不到值` };
+  } else if (Object.prototype.hasOwnProperty.call(ctx.values, head)) {
+    root = ctx.values[head];
+  } else {
+    const available = [...ctx.results.keys(), 'prev', ...Object.keys(ctx.values), ...Object.keys(ctx.builtins)];
+    return {
+      error: `没有可用的引用 "${head}"。可用的是：${available.join(' / ')}`,
+    };
+  }
+
+  const isResult = Boolean(root && typeof root === 'object' && 'stdout' in (root as Record<string, unknown>));
+
+  // 不带路径：步骤给 stdout（人最常想拼进模板的就是它），参数与内置给原值
+  if (rest.length === 0) {
+    return { value: isResult ? (root as RunResult).stdout : root };
+  }
+
+  if (isResult) {
+    const r = root as RunResult;
+    // `{src.data.ip}` 与 `{src.ip}` 等价：data 只是"结构化结果"的显式前缀
+    if (rest[0] === 'data') rest = rest.slice(1);
+    if (rest.length === 0) {
+      if (r.data === undefined) {
+        return { error: `步骤 "${head}" 没有结构化输出（它没有声明 output = "json"）` };
+      }
+      return { value: r.data };
+    }
+    if (r.data === undefined) {
+      return {
+        error: `步骤 "${head}" 没有结构化输出（它没有声明 output = "json"），`
+          + `取不了 {${expr}}；想用原文就写 {${head}}`,
+      };
+    }
+    root = r.data;
+  }
+
+  let current = root;
+  for (const seg of rest) {
+    if (current === null || current === undefined) {
+      return { error: `引用 {${expr}} 取不到值：上一级是空值` };
+    }
+    if (Array.isArray(current)) {
+      if (!/^\d+$/.test(seg)) {
+        return { error: `引用 {${expr}} 取不到值：上一层是数组，要用数字下标（如 .0）` };
+      }
+      current = current[Number(seg)];
+    } else if (typeof current === 'object') {
+      const obj = current as Record<string, unknown>;
+      if (!Object.prototype.hasOwnProperty.call(obj, seg)) {
+        return { error: `引用 {${expr}} 取不到值：没有字段 "${seg}"` };
+      }
+      current = obj[seg];
+    } else {
+      return { error: `引用 {${expr}} 取不到值："${seg}" 之前已经是普通值` };
+    }
+  }
+  if (current === undefined) return { error: `引用 {${expr}} 取不到值` };
+  return { value: current };
+}
+
+/** 引用值转文本：对象给紧凑 JSON，别把 [object Object] 拼进输出 */
+function refText(value: unknown): string {
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+/**
+ * 把字符串里的 `{...}` 换成真实值。
+ *
+ * 整串就是一个引用时**保留原类型**（数组/对象/数字原样传给参数），
+ * 否则按字符串拼接——这样 `params = { limit = "{n}" }` 和
+ * `params = { rows = "{found.data}" }` 两种写法都是自然的。
+ */
+function interpolate(text: string, ctx: ChainContext): { value?: unknown; error?: string } {
+  const whole = WHOLE_REF_RE.exec(text);
+  if (whole) return resolveRef(whole[1]!, ctx);
+
+  const failures: string[] = [];
+  const out = text.replace(REF_TOKEN_RE, (raw, expr: string) => {
+    const r = resolveRef(expr, ctx);
+    if (r.error !== undefined) {
+      failures.push(r.error);
+      return raw;
+    }
+    return refText(r.value);
+  });
+  if (failures.length > 0) return { error: failures.join('；') };
+  return { value: out };
+}
+
+/**
+ * 组合动作：先**静态**校验整条链路（目标存在、不嵌套、不后台、风险兜得住），
+ * 然后按顺序执行。
+ *
+ * 为什么要先校验再执行：链路本身写错（漏装插件、风险等级不够）时应该立刻失败，
+ * 而不是先跑完前两步、产生了副作用，才在第三步发现目标不存在。
+ */
+async function runChainAction(
+  plugin: Plugin,
+  action: Action,
+  options: RunOptions,
+  started: number,
+  base: Omit<AuditRecord, 'decision'>,
+): Promise<RunResult> {
+  const command = chainDisplay(action);
+  const fail = (reason: string, error: string): RunResult => {
+    audit({ ...base, decision: 'deny', reason, command, error });
+    return {
+      ok: false, exitCode: null, stdout: '', stderr: '', ms: Date.now() - started,
+      truncated: false, error, argv: [], command,
+    };
+  };
+
+  // ---- 1. 静态校验 ----
+  const plan: { step: ChainStep; plugin: Plugin; action: Action }[] = [];
+  for (const [index, step] of action.steps.entries()) {
+    const label = `第 ${index + 1} 步（${step.use}）`;
+    const dot = step.use.lastIndexOf('.');
+    const pluginRef = step.use.slice(0, dot);
+    const actionRef = step.use.slice(dot + 1);
+
+    let targetPlugin: Plugin | undefined;
+    if (pluginRef === 'self') {
+      targetPlugin = plugin;
+    } else {
+      const entry = findPlugin(pluginRef);
+      if (!entry) {
+        return fail('chain-missing-plugin',
+          `${label} 引用的插件 "${pluginRef}" 没装。先安装它：zkit plugin install ${pluginRef}`);
+      }
+      if (!entry.plugin) {
+        return fail('chain-broken-plugin',
+          `${label} 引用的插件 "${pluginRef}" 清单有问题：${entry.errors.join('；')}`);
+      }
+      targetPlugin = entry.plugin;
+    }
+
+    const targetAction = targetPlugin.actions.find((a) => a.id === actionRef);
+    if (!targetAction) {
+      const available = targetPlugin.actions.map((a) => a.id).join(' / ') || '（没有动作）';
+      return fail('chain-missing-action', `${label} 找不到动作 "${actionRef}"。${targetPlugin.id} 里可用的是：${available}`);
+    }
+    if (targetAction.type === 'chain') {
+      return fail('chain-nested',
+        `${label} 指向的也是组合动作——组合动作不支持嵌套。把它的步骤拆开写进这条链路`);
+    }
+    if (targetAction.background) {
+      return fail('chain-background',
+        `${label} 是后台动作（不等结果），没法把结果传给下一步`);
+    }
+    if (RISK_RANK[targetAction.risk] > RISK_RANK[action.risk]) {
+      return fail('chain-risk',
+        `${label} 的风险是 ${targetAction.risk}，高于组合动作声明的 ${action.risk}`
+        + `——把这条链路的 risk 提升到 ${targetAction.risk} 或更高，否则确认闸门会被绕过`);
+    }
+    plan.push({ step, plugin: targetPlugin, action: targetAction });
+  }
+
+  // ---- 2. 顺序执行 ----
+  // 组合动作自己的参数也要走默认值：CLI / MCP / 界面都会先补，但 runAction 是
+  // 唯一的执行收口，别让直接调它的场景（测试、未来的 API）拿不到默认值
+  const own = applyDefaults(action, options.values);
+  if (own.errors.length > 0) return fail('chain-missing-param', own.errors.join('；'));
+  const ctxValues = own.values;
+  const builtins = buildVars(plugin, ctxValues);
+  const results = new Map<string, RunResult>();
+  const outputs: { alias: string; result: RunResult }[] = [];
+  const budgetMs = action.timeout * 1000;
+  let prev: RunResult | undefined;
+  let truncated = false;
+
+  for (const [index, item] of plan.entries()) {
+    const label = `第 ${index + 1} 步（${item.step.use}）`;
+    const remaining = budgetMs - (Date.now() - started);
+    if (remaining <= 0) {
+      return fail('chain-timeout', `${label} 之前，整条链路 ${action.timeout} 秒的总预算已经用完`);
+    }
+
+    const ctx: ChainContext = { values: ctxValues, builtins, results, ...(prev ? { prev } : {}) };
+    const substituted: Record<string, unknown> = {};
+    for (const [key, raw] of Object.entries(item.step.params)) {
+      const declared = item.action.params.find((p) => p.name === key);
+      if (!declared) {
+        const known = item.action.params.map((p) => p.name).join(' / ') || '（没有参数）';
+        return fail('chain-unknown-param',
+          `${label} 给动作 "${item.action.id}" 传了未知参数 "${key}"。它认的是：${known}`);
+      }
+      if (typeof raw !== 'string') {
+        substituted[key] = raw;
+        continue;
+      }
+      const r = interpolate(raw, ctx);
+      if (r.error !== undefined) {
+        return fail('chain-bad-ref', `${label} 的参数 "${key}"：${r.error}`);
+      }
+      // 结构化结果要进标量参数时，用紧凑 JSON 表达——比 "[object Object]" 有用得多
+      if (r.value !== null && typeof r.value === 'object'
+        && (declared.type === 'string' || declared.type === 'path' || declared.type === 'enum')) {
+        substituted[key] = JSON.stringify(r.value);
+      } else {
+        substituted[key] = r.value;
+      }
+    }
+
+    const applied = applyDefaults(item.action, substituted);
+    if (applied.errors.length > 0) {
+      return fail('chain-missing-param', `${label}：${applied.errors.join('；')}`);
+    }
+
+    // timeout 是整条链路的总预算：每一步只拿剩下的时间，不能让单步超时把链路拖过线
+    const stepAction: Action = {
+      ...item.action,
+      timeout: Math.max(1, Math.min(item.action.timeout, Math.round(remaining / 1000))),
+    };
+    const result = await runAction(item.plugin, stepAction, {
+      caller: options.caller,
+      values: applied.values,
+      ...(options.cwd ? { cwd: options.cwd } : {}),
+    });
+    results.set(item.step.as, result);
+    outputs.push({ alias: item.step.as, result });
+    prev = result;
+    truncated ||= result.truncated;
+
+    if (!result.ok) {
+      const error = `${label}失败：${result.error ?? `退出码 ${result.exitCode}`}`;
+      audit({
+        ...base, decision: 'deny', reason: 'chain-step-failed', command,
+        exitCode: result.exitCode, ms: Date.now() - started, error,
+      });
+      return {
+        ok: false,
+        exitCode: result.exitCode,
+        stdout: outputs.map((o) => o.result.stdout.trim()).filter(Boolean).join('\n\n'),
+        stderr: result.stderr,
+        ms: Date.now() - started,
+        truncated,
+        error,
+        argv: [],
+        command,
+      };
+    }
+  }
+
+  // ---- 3. 合成输出 ----
+  const data: Record<string, unknown> = {};
+  for (const o of outputs) {
+    data[o.alias] = o.result.data !== undefined ? o.result.data : o.result.stdout.trim();
+  }
+
+  let stdout: string;
+  if (action.template !== undefined) {
+    const ctx: ChainContext = { values: ctxValues, builtins, results, ...(prev ? { prev } : {}) };
+    const r = interpolate(action.template, ctx);
+    if (r.error !== undefined) {
+      return fail('chain-bad-template', `输出模板（template）里的引用取不到：${r.error}`);
+    }
+    stdout = refText(r.value);
+  } else if (action.output === 'json') {
+    stdout = JSON.stringify(data, null, 2);
+  } else {
+    stdout = outputs.map((o) => o.result.stdout.trim()).filter(Boolean).join('\n\n');
+  }
+
+  const ms = Date.now() - started;
+  audit({
+    ...base, decision: 'allow', command, exitCode: 0, ms,
+    outBytes: stdout.length, truncated,
+  });
+  const result: RunResult = {
+    ok: true, exitCode: 0, stdout, stderr: '', ms, truncated, argv: [], command,
+  };
+  if (action.output === 'json') result.data = data;
   return result;
 }
 

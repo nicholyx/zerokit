@@ -53,6 +53,18 @@ description = "output = html 时 stdout 直接是 HTML"
 run         = ["{node}", "demo.mjs"]
 output      = "html"
 risk        = "read"
+
+[[action]]
+id          = "chain"
+title       = "组合动作"
+description = "把 now 拼起来，验证启动器能拿到步骤"
+type        = "chain"
+output      = "text"
+risk        = "read"
+
+  [[action.step]]
+  use = "self.now"
+  as  = "n"
 `);
   if (withPage) {
     fs.mkdirSync(path.join(dir, 'web'), { recursive: true });
@@ -157,6 +169,11 @@ async function get(p, raw = false) {
     demo?.actions?.some((a) => a.id === 'now' && a.render === 'web'),
     JSON.stringify(demo?.actions?.map((a) => [a.id, a.render])));
 
+  const chain = demo?.actions?.find((a) => a.id === 'chain');
+  check('API：组合动作的步骤带给前端（启动器要标出「组合 N 步」）',
+    chain?.steps?.length === 1 && chain.steps[0].use === 'self.now',
+    JSON.stringify(chain?.steps));
+
   // 端到端：从页面抠出令牌，跑一次动作，确认返回里 render 正确（前端据此换 iframe）
   const html = await (await fetch(BASE + '/')).text();
   const token = /name="zk-token" content="([0-9a-f]+)"/.exec(html)?.[1];
@@ -171,6 +188,18 @@ async function get(p, raw = false) {
     check('API：render = "web" 的动作照常执行并返回数据',
       out.ok === true && out.render === 'web' && out.data?.now === 'ok',
       JSON.stringify(out).slice(0, 120));
+  }
+
+  if (token) {
+    const run = await fetch(BASE + '/api/run', {
+      method: 'POST',
+      headers: { 'x-zerokit-token': token, 'content-type': 'application/json' },
+      body: JSON.stringify({ plugin: 'webdemo', action: 'chain', values: {} }),
+    });
+    const out = await run.json();
+    check('API：组合动作经界面 API 跑通（返回拼接后的文本）',
+      out.ok === true && String(out.stdout).includes('"now":"ok"'),
+      JSON.stringify(out).slice(0, 160));
   }
 }
 
