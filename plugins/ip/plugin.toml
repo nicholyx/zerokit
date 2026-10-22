@@ -4,16 +4,24 @@
 [plugin]
 id       = "ip"
 name     = "出口 IP"
-version  = "1.0.0"
+version  = "1.1.0"
 summary  = "查本机访问外网时用的公网 IP，零代码插件"
 keywords = ["ip", "公网", "出口", "网络", "地址"]
+
+# 设置项：装一次、长期生效的配置。与 action.param（每次执行都要传）不同，
+# 它在这里声明一次，{setting.endpoint} 占位符自动注入，CLI / MCP / 启动器都能改。
+[[setting]]
+name        = "endpoint"
+type        = "string"
+default     = "https://api.ipify.org?format=json"
+description = "公网 IP 查询接口，需返回形如 {\"ip\": \"…\"} 的 JSON；要查内网出口或换成自建服务时改这里"
 
 [[action]]
 id          = "public"
 title       = "查公网 IP"
 description = "返回本机访问外网时使用的公网 IP 地址。想知道当前出口 IP、或者确认是否走了代理时用这个。"
 type        = "http"
-url         = "https://api.ipify.org?format=json"
+url         = "{setting.endpoint}"
 output      = "json"
 render      = "keyvalue"
 risk        = "read"

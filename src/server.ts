@@ -14,11 +14,12 @@ import { checkAiReady, loadSettings } from './core/settings.ts';
 // 一起拉进来，光加载就 240ms，而启动器绝大多数时候用不到它。
 // Workbench 与工具清单在 agent.ts 里，那一支不碰任何模型 SDK，可以静态导入。
 import { Workbench, collectToolDefs } from './ai/agent.ts';
-import { addFromDir, addFromGit, listPlugins, previewAdd, removePlugin } from './core/registry.ts';
+import { addFromDir, addFromGit, findPlugin, listPlugins, previewAdd, removePlugin } from './core/registry.ts';
 import { applyUpdate, checkUpdate } from './core/update.ts';
 import { describeSource, readSource } from './core/sources.ts';
 import { checkRequires } from './core/resolve.ts';
 import { applyDefaults, coerceParam, toFormFields, toJsonSchema } from './core/schema.ts';
+import { type PublicSetting, publicSettings, writeSettings } from './core/pluginConfig.ts';
 import { buildArgv, chainDisplay, confirmPolicy, displayCommand, runAction } from './core/runner.ts';
 
 /**
@@ -63,6 +64,8 @@ interface WiredPlugin {
   sourceText: string;
   installedAt: string;
   actions: Array<Record<string, unknown>>;
+  /** 声明式设置项（密钥已打码，前端只拿得到掩码） */
+  settings: PublicSetting[];
 }
 
 function wirePlugins(): WiredPlugin[] {
@@ -83,6 +86,7 @@ function wirePlugins(): WiredPlugin[] {
       sourceType: source?.type ?? 'unknown',
       sourceText: describeSource(source),
       installedAt: source?.installedAt ?? '',
+      settings: publicSettings(p),
       actions: p.actions.map((a) => ({
         id: a.id,
         title: a.title,
@@ -284,6 +288,41 @@ export function createServer(): http.Server {
     try {
       if (url.pathname === '/api/plugins') {
         json(res, 200, { plugins: wirePlugins() });
+        return;
+      }
+
+      // 插件设置项：声明式配置的读写。密钥只进不出——写进去的是明文，
+      // 任何一次读都只回掩码，避免界面 / 日志 / 截图把密钥带出去。
+      if (url.pathname === '/api/plugin/config') {
+        // 请求体只能读一次：读第二次时 'end' 早已发生，Promise 永远不会 resolve
+        const body = req.method === 'POST' ? await readBody(req) : {};
+        const id = req.method === 'GET'
+          ? (url.searchParams.get('plugin') ?? '')
+          : String(body['plugin'] ?? '');
+        const entry = findPlugin(id);
+        if (!entry?.plugin) {
+          json(res, 404, { error: `没有找到插件 ${id}` });
+          return;
+        }
+        if (req.method === 'GET') {
+          json(res, 200, { settings: publicSettings(entry.plugin) });
+          return;
+        }
+        if (req.method !== 'POST') {
+          json(res, 405, { error: '只支持 GET / POST' });
+          return;
+        }
+        const patch = body['patch'];
+        if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+          json(res, 400, { error: 'patch 必须是「设置项名 → 值」的对象' });
+          return;
+        }
+        const r = writeSettings(entry.plugin, patch as Record<string, unknown>);
+        json(res, r.ok ? 200 : 400, {
+          ok: r.ok,
+          ...(r.error ? { error: r.error } : {}),
+          settings: publicSettings(entry.plugin),
+        });
         return;
       }
 
@@ -586,7 +625,7 @@ export function createServer(): http.Server {
             ? chainDisplay(action)
             : action.type === 'http'
               ? `${action.method} ${action.url}`
-              : displayCommand(action, buildArgv(plugin, action, withDefaults.values).argv);
+              : displayCommand(buildArgv(plugin, action, withDefaults.values).redacted);
           json(res, 200, {
             needConfirm: true,
             risk: action.risk,

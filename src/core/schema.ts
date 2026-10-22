@@ -81,6 +81,8 @@ export interface FormField {
   help: string;
   default?: unknown;
   options?: string[];
+  /** 密钥项：前端的输入框要换成 password，且不许回填真实值 */
+  secret?: boolean;
 }
 
 export function toFormFields(action: Action): FormField[] {
@@ -100,6 +102,7 @@ export function toFormFields(action: Action): FormField[] {
     };
     if (p.default !== undefined) field.default = p.default;
     if (p.enum) field.options = p.enum;
+    if (p.secret) field.secret = true;
     return field;
   });
 }

@@ -84,6 +84,26 @@ export interface ActionParam {
   secret?: boolean;
 }
 
+/**
+ * 插件设置项：装一次、长期生效的配置（不是每次执行的参数）。
+ *
+ * 和 `ActionParam` 的差别在语义而不是形状：参数是「这一次要什么」，
+ * 设置项是「这个插件一直用什么」。类型系统完全相同，校验也复用 `coerceParam`。
+ * 值存在数据目录里（不进仓库、不进清单），密钥类在展示与日志里打码。
+ */
+export interface PluginSetting {
+  name: string;
+  title: string;
+  description: string;
+  type: ParamType;
+  /** 没有默认值、且没显式写 required = false 时，必须由使用者填 */
+  required: boolean;
+  default?: unknown;
+  enum?: string[];
+  /** 密钥类：CLI/界面里打码，审计与确认提示里替换成 ****** */
+  secret?: boolean;
+}
+
 export interface Action {
   id: string;
   title: string;
@@ -188,6 +208,8 @@ export interface Plugin {
   actions: Action[];
   /** 插件声明的常驻服务（可为空） */
   services: Service[];
+  /** 插件设置项：装一次、长期生效的配置（可为空） */
+  settings: PluginSetting[];
 }
 
 export interface LoadResult {
@@ -281,6 +303,138 @@ function parseParams(raw: unknown, actionId: string, errors: string[]): ActionPa
     out.push(param);
   }
   return out;
+}
+
+/** `[[setting]]`：插件级配置。TOML 里单数/复数都收，和 [action.param] 保持一致。 */
+function parseSettings(
+  raw: unknown,
+  errors: string[],
+  warnings: string[],
+): PluginSetting[] {
+  const list = Array.isArray(raw) ? raw : [];
+  const out: PluginSetting[] = [];
+  const seen = new Set<string>();
+
+  for (const item of list) {
+    const s = asRecord(item);
+    const name = asString(s['name']);
+    if (!name) {
+      errors.push('有个 [[setting]] 缺少 name');
+      continue;
+    }
+    if (!PARAM_RE.test(name)) {
+      errors.push(`设置项 name "${name}" 非法：只能是字母/数字/下划线，且不以数字开头`);
+      continue;
+    }
+    if (seen.has(name)) {
+      errors.push(`设置项 "${name}" 重复`);
+      continue;
+    }
+    seen.add(name);
+
+    const type = (asString(s['type']) ?? 'string') as ParamType;
+    if (!PARAM_TYPES.includes(type)) {
+      errors.push(`设置项 ${name}: type "${type}" 不支持（可选 ${PARAM_TYPES.join(' / ')}）`);
+      continue;
+    }
+
+    // 没给默认值又没显式说「可选」的，就是必填：让「打开就能用」和「必须配」都写在清单里，
+    // 而不是靠运行时猜测。
+    const optional = s['required'] === false;
+    const setting: PluginSetting = {
+      name,
+      title: asString(s['title']) ?? name,
+      description: asString(s['description']) ?? '',
+      type,
+      required: !optional && s['default'] === undefined,
+    };
+
+    if (s['required'] === true && s['default'] !== undefined) {
+      warnings.push(`设置项 ${name}: required = true 又给了默认值——有默认值就不算「必填」，`
+        + '两句话互相打架，建议删掉 required（或删掉 default）');
+    }
+
+    if (s['default'] !== undefined) {
+      if (s['secret'] === true) {
+        errors.push(`设置项 ${name}: secret = true 时不能给 default`
+          + '——默认值会跟着清单进 git，等于把密钥公开');
+        continue;
+      }
+      const v = s['default'];
+      if (type === 'integer' && !Number.isInteger(Number(v))) {
+        errors.push(`设置项 ${name}: 默认值（default）需要整数，收到 "${String(v)}"`);
+        continue;
+      }
+      if (type === 'number' && !Number.isFinite(Number(v))) {
+        errors.push(`设置项 ${name}: 默认值（default）需要数字，收到 "${String(v)}"`);
+        continue;
+      }
+      if (type === 'boolean' && typeof v !== 'boolean') {
+        errors.push(`设置项 ${name}: 默认值（default）需要 true / false，收到 "${String(v)}"`);
+        continue;
+      }
+      setting.default = v;
+    }
+
+    if (type === 'enum') {
+      const opts = asStringArray(s['enum'] ?? s['values'] ?? s['options']);
+      if (opts.length === 0) {
+        errors.push(`设置项 ${name}: type = "enum" 必须给 enum = [...] 候选值`);
+        continue;
+      }
+      setting.enum = opts;
+      if (setting.default !== undefined && !opts.includes(String(setting.default))) {
+        errors.push(`设置项 ${name}: default 不在 enum 候选项里`);
+        continue;
+      }
+    }
+    if (s['secret'] === true) setting.secret = true;
+    if (!setting.description) {
+      warnings.push(`设置项 ${name}: 没写 description——它会显示在 CLI 和启动器里，`
+        + '告诉使用者这一项该填什么');
+    }
+    out.push(setting);
+  }
+  return out;
+}
+
+const SETTING_TOKEN_RE = /\{setting\.([A-Za-z_][A-Za-z0-9_]*)\}/g;
+
+function collectSettingRefs(value: unknown, into: Set<string>): void {
+  if (typeof value === 'string') {
+    for (const m of value.matchAll(SETTING_TOKEN_RE)) into.add(m[1]!);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const v of value) collectSettingRefs(v, into);
+    return;
+  }
+  if (value && typeof value === 'object') {
+    for (const v of Object.values(value)) collectSettingRefs(v, into);
+  }
+}
+
+/**
+ * 动作里写 `{setting.x}`，插件就必须真的声明过 x。
+ *
+ * 不校验的话，拼错一个名字的后果是设置值静默变成空串——用在 URL 里是请求
+ * 打到一个错误地址，用在密钥里是认证失败，而报错离根因很远。安装时就该拦住。
+ */
+function validateSettingRefs(actions: Action[], settings: PluginSetting[], errors: string[]): void {
+  const declared = new Set(settings.map((s) => s.name));
+  for (const a of actions) {
+    const refs = new Set<string>();
+    for (const value of [a.run, a.url, a.headers, a.body, a.env, a.cwd, a.template]) {
+      collectSettingRefs(value, refs);
+    }
+    for (const step of a.steps) collectSettingRefs(step.params, refs);
+    for (const ref of refs) {
+      if (!declared.has(ref)) {
+        errors.push(`动作 ${a.id}: 用到 {setting.${ref}}，但插件没有声明这个设置项`
+          + `（在清单里加 [[setting]] name = "${ref}"）`);
+      }
+    }
+  }
 }
 
 function parseServices(raw: unknown, errors: string[]): Service[] {
@@ -666,6 +820,10 @@ export function parseManifest(text: string, pluginDir: string, manifestPath = '<
   // 服务声明要在「有错就返回」之前解析，否则它里面的错误会被静默吞掉
   const services = parseServices(raw['service'], errors);
 
+  // 设置项同理：解析 + 校验每个动作里的 {setting.x} 都真的声明过
+  const settings = parseSettings(raw['setting'] ?? raw['settings'], errors, warnings);
+  validateSettingRefs(actions, settings, errors);
+
   // render = "web" 承诺了「结果由插件自己的页面渲染」，页面文件必须真实存在。
   // 清单是唯一事实来源：缺了它，别等到打开启动器才发现，校验阶段就说清。
   for (const a of actions) {
@@ -697,6 +855,7 @@ export function parseManifest(text: string, pluginDir: string, manifestPath = '<
     runtime,
     actions,
     services,
+    settings,
   };
   const description = asString(meta['description']);
   if (description) plugin.description = description;

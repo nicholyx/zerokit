@@ -37,6 +37,17 @@ id      = "${id}"
 name    = "web面测试"
 summary = "测 render = web"
 
+[[setting]]
+name    = "greeting"
+type    = "string"
+default = "hi"
+
+[[setting]]
+name     = "token"
+type     = "string"
+secret   = true
+required = false
+
 [[action]]
 id          = "now"
 title       = "现在"
@@ -200,6 +211,38 @@ async function get(p, raw = false) {
     check('API：组合动作经界面 API 跑通（返回拼接后的文本）',
       out.ok === true && String(out.stdout).includes('"now":"ok"'),
       JSON.stringify(out).slice(0, 160));
+
+    // 设置项：读只给掩码、写要会话令牌、改完立即生效
+    const conf = await fetch(BASE + '/api/plugin/config?plugin=webdemo');
+    const confBody = await conf.json();
+    const greeting = confBody.settings?.find((x) => x.name === 'greeting');
+    const tokenField = confBody.settings?.find((x) => x.name === 'token');
+    check('API：插件设置项随 /api/plugins 与 config 一起下发（密钥只给掩码）',
+      greeting?.value === 'hi' && tokenField?.value === undefined && tokenField?.secret === true,
+      JSON.stringify(confBody).slice(0, 240));
+
+    const saved = await fetch(BASE + '/api/plugin/config', {
+      method: 'POST',
+      headers: { 'x-zerokit-token': token, 'content-type': 'application/json' },
+      body: JSON.stringify({ plugin: 'webdemo', patch: { greeting: '你好', token: 's3cret-value' } }),
+    });
+    const savedBody = await saved.json();
+    const after = (await (await fetch(BASE + '/api/plugin/config?plugin=webdemo')).json()).settings ?? [];
+    check('API：设置项可写、写入后即生效',
+      savedBody.ok === true && after.find((x) => x.name === 'greeting')?.value === '你好',
+      JSON.stringify(savedBody).slice(0, 240));
+    check('API：写入密钥后，任何读接口都不回显明文',
+      after.find((x) => x.name === 'token')?.value === undefined
+      && after.find((x) => x.name === 'token')?.masked === '******'
+      && !JSON.stringify(savedBody).includes('s3cret-value'),
+      JSON.stringify(after).slice(0, 240));
+
+    const denied = await fetch(BASE + '/api/plugin/config', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ plugin: 'webdemo', patch: { greeting: 'x' } }),
+    });
+    check('API：没有会话令牌时拒绝写设置项（CSRF）', denied.status === 403, `${denied.status}`);
   }
 }
 

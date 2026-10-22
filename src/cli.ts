@@ -20,6 +20,9 @@ import {
   readIndex, refreshMarket, removeMarket, searchMarkets,
 } from './core/market.ts';
 import { applyDefaults, parseArgv, toCliFlags, toJsonSchema } from './core/schema.ts';
+import {
+  SECRET_MASK, publicSettings, resolveSettings, settingsHints, writeSettings,
+} from './core/pluginConfig.ts';
 import { type RunResult, audit, chainDisplay, confirmPolicy, runAction } from './core/runner.ts';
 
 const COLOR = process.stdout.isTTY && !process.env['NO_COLOR'];
@@ -50,6 +53,13 @@ ${c.bold('基本')}
   doctor                  自检：环境、依赖、插件清单是否有问题
   ps                      看正在运行的东西（托管的进程 + 插件声明的服务）
   kill <进程id|插件.服务> 结束一个；kill all 全部结束
+
+${c.bold('配置')}
+  config <插件>               列出设置项（值、来源、是否缺失）
+  config <插件> set <项> [值] 写入一项；密钥项用 --stdin 从标准输入读
+  config <插件> get <项>      打印一项的值（密钥项加 --reveal 才回显）
+  config <插件> unset <项>    清除一项，回到默认值/未设置
+                              --json 以 JSON 输出 list / get 的结果
 
 ${c.bold('插件')}
   plugin new <id> [--runtime node|python] [--web] [--dir <目录>] [--name <名字>]
@@ -181,7 +191,9 @@ function cmdList(): number {
   }
   for (const entry of ok) {
     const p = entry.plugin!;
-    process.stdout.write(`${c.bold(p.name)} ${c.dim(p.id)} ${c.dim('v' + p.version)}\n`);
+    const missing = resolveSettings(p).missing.length;
+    const settingsTag = missing > 0 ? `  ${c.yellow(`缺 ${missing} 项设置`)}` : '';
+    process.stdout.write(`${c.bold(p.name)} ${c.dim(p.id)} ${c.dim('v' + p.version)}${settingsTag}\n`);
     if (p.summary) process.stdout.write(`  ${p.summary}\n`);
     for (const a of p.actions) {
       const tag = a.type === 'chain' ? c.dim('  · 组合') : '';
@@ -227,6 +239,32 @@ function cmdShow(args: string[]): number {
     }
   }
 
+  if (plugin.settings.length > 0) {
+    const view = resolveSettings(plugin);
+    process.stdout.write('\n设置项：\n');
+    for (const st of view.states) {
+      const st_ = st.setting;
+      const title = st_.title && st_.title !== st_.name ? `  ${st_.title}` : '';
+      const flags = [
+        st_.required ? c.yellow('必填') : '',
+        st_.secret ? c.red('密钥') : '',
+      ].filter(Boolean).join(' ');
+      let shown: string;
+      if (st.error) shown = c.red(`值不合法：${st.error}`);
+      else if (st.source === 'unset') shown = c.yellow(st_.required ? '未设置（必填）' : '未设置');
+      else if (st_.secret) shown = c.dim(SECRET_MASK);
+      else shown = JSON.stringify(st.value);
+      const source = st.source === 'default' ? c.dim(' 默认值') : '';
+      process.stdout.write(`  ${pad(st_.name, 18)} ${pad(st_.type, 8)} ${shown}${source}`
+        + `  ${c.dim(flags)}${title}\n`);
+      if (st_.description) process.stdout.write(`    ${c.dim(st_.description)}\n`);
+    }
+    const hints = settingsHints(plugin, view);
+    if (hints.length > 0) {
+      process.stdout.write(c.dim(`  先设置：\n  ${hints.join('\n  ')}\n`));
+    }
+  }
+
   const actions = actionId ? plugin.actions.filter((a) => a.id === actionId) : plugin.actions;
   if (actionId && actions.length === 0) {
     process.stderr.write(c.red(`✗ 插件里没有动作 "${actionId}"\n`));
@@ -257,6 +295,159 @@ function cmdShow(args: string[]): number {
     process.stdout.write(c.dim('  MCP inputSchema：\n'));
     const schema = JSON.stringify(toJsonSchema(a), null, 2).split('\n').map((l) => '    ' + l).join('\n');
     process.stdout.write(c.dim(schema) + '\n');
+  }
+  return 0;
+}
+
+/** 从标准输入读一个值（密钥用：不进 shell 历史，也不出现在进程列表里） */
+function readStdinValue(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk) => { data += chunk; });
+    process.stdin.on('end', () => resolve(data.replace(/\r?\n$/, '')));
+    process.stdin.on('error', reject);
+  });
+}
+
+function cmdConfigUsage(): number {
+  process.stderr.write('用法：zkit config <插件> [list | get <项> | set <项> [值] | unset <项>]'
+    + ' [--json] [--stdin] [--reveal]\n');
+  return 2;
+}
+
+async function cmdConfig(args: string[]): Promise<number> {
+  const json = args.includes('--json');
+  const reveal = args.includes('--reveal');
+  const fromStdin = args.includes('--stdin');
+  const clean = args.filter((a) => a !== '--json' && a !== '--reveal' && a !== '--stdin');
+  const [pluginId, sub = 'list', name, ...rest] = clean;
+  if (!pluginId) return cmdConfigUsage();
+
+  let plugin: Plugin;
+  try {
+    plugin = requirePlugin(pluginId);
+  } catch (e) {
+    process.stderr.write(c.red(`✗ ${(e as Error).message}`) + '\n');
+    return 1;
+  }
+  if (plugin.settings.length === 0) {
+    process.stdout.write(`插件 ${plugin.id} 没有声明设置项（清单里加 [[setting]]）。\n`);
+    return 0;
+  }
+
+  const viewOf = () => resolveSettings(plugin);
+  const listView = () => publicSettings(plugin);
+
+  if (sub === 'list' || sub === 'ls') {
+    const list = listView();
+    if (json) {
+      process.stdout.write(JSON.stringify({ plugin: plugin.id, settings: list }, null, 2) + '\n');
+      return 0;
+    }
+    process.stdout.write(`${c.bold(plugin.name)} ${c.dim(plugin.id)} 的设置项\n`);
+    for (const s of list) {
+      const flags = [s.required ? c.yellow('必填') : '', s.secret ? c.red('密钥') : '']
+        .filter(Boolean).join(' ');
+      let shown: string;
+      if (s.error) shown = c.red(`值不合法：${s.error}`);
+      else if (s.missing) shown = c.yellow('未设置（必填）');
+      else if (s.source === 'unset') shown = c.dim('未设置');
+      else if (s.secret) shown = c.dim(s.masked ?? SECRET_MASK);
+      else shown = JSON.stringify(s.value);
+      const source = s.source === 'default' ? c.dim(' 默认值') : '';
+      process.stdout.write(`  ${pad(s.name, 18)} ${pad(s.type, 8)} ${shown}${source}`
+        + `  ${c.dim(flags)}\n`);
+      if (s.description) process.stdout.write(`    ${c.dim(s.description)}\n`);
+    }
+    const view = viewOf();
+    const hints = settingsHints(plugin, view);
+    if (hints.length > 0) process.stdout.write(c.dim(`  先设置：\n  ${hints.join('\n  ')}\n`));
+    return 0;
+  }
+
+  if (sub !== 'get' && sub !== 'set' && sub !== 'unset') return cmdConfigUsage();
+  if (!name) return cmdConfigUsage();
+  const declared = plugin.settings.find((s) => s.name === name);
+  if (!declared) {
+    process.stderr.write(c.red(`✗ 插件 ${plugin.id} 没有设置项 "${name}"`)
+      + c.dim(`。可用的是：${plugin.settings.map((s) => s.name).join(' / ')}\n`));
+    return 1;
+  }
+
+  if (sub === 'get') {
+    const view = viewOf();
+    const state = view.states.find((st) => st.setting.name === name)!;
+    if (state.error) {
+      process.stderr.write(c.red(`✗ ${state.error}`) + '\n');
+      return 1;
+    }
+    if (state.source === 'unset') {
+      process.stderr.write(c.red(`✗ ${name} 还没设置\n`));
+      return 1;
+    }
+    const value = declared.secret && !reveal ? SECRET_MASK : state.value;
+    if (json) {
+      process.stdout.write(JSON.stringify({
+        plugin: plugin.id, name, type: declared.type, secret: declared.secret === true,
+        value: declared.secret && !reveal ? null : state.value, source: state.source,
+      }, null, 2) + '\n');
+    } else {
+      process.stdout.write(`${typeof value === 'string' ? value : JSON.stringify(value)}\n`);
+    }
+    return 0;
+  }
+
+  if (sub === 'unset') {
+    const r = writeSettings(plugin, { [name]: null });
+    if (!r.ok) {
+      process.stderr.write(c.red(`✗ ${r.error}`) + '\n');
+      return 1;
+    }
+    const back = declared.default !== undefined
+      ? `已回到默认值 ${JSON.stringify(declared.default)}`
+      : '已清除（这项现在是未设置）';
+    process.stdout.write(`${c.green('✓')} ${name}：${back}\n`);
+    return 0;
+  }
+
+  // set
+  let value: string | undefined = rest[0];
+  if (fromStdin) {
+    if (process.stdin.isTTY) {
+      process.stderr.write(c.red('✗ --stdin 需要从管道读入') + '\n'
+        + c.dim(`  例如：printf '%s' "$TOKEN" | zkit config ${plugin.id} set ${name} --stdin\n`));
+      return 2;
+    }
+    value = await readStdinValue();
+    if (value === '') {
+      process.stderr.write(c.red('✗ --stdin 读到空值，已拒绝') + c.dim('（要清除请用 unset）\n'));
+      return 1;
+    }
+    process.stderr.write(c.dim('· 已从标准输入读取，不会留在 shell 历史里\n'));
+  }
+  if (value === undefined) {
+    process.stderr.write(c.red(`✗ 缺少要写入的值`) + '\n'
+      + c.dim(`  zkit config ${plugin.id} set ${name} <值>`)
+      + (declared.secret ? c.dim(`\n  密钥建议：… | zkit config ${plugin.id} set ${name} --stdin`) : '')
+      + '\n');
+    return 2;
+  }
+  if (declared.secret && !fromStdin) {
+    process.stderr.write(c.yellow('! 密钥是命令行参数，会留在 shell 历史里——下次改用 --stdin\n'));
+  }
+  const r = writeSettings(plugin, { [name]: value });
+  if (!r.ok) {
+    process.stderr.write(c.red(`✗ ${r.error}`) + '\n');
+    return 1;
+  }
+  const shown = declared.secret ? SECRET_MASK : JSON.stringify(value);
+  process.stdout.write(`${c.green('✓')} 已保存 ${name} = ${shown}\n`);
+  const view = r.view!;
+  const hints = settingsHints(plugin, view);
+  if (hints.length > 0) {
+    process.stderr.write(c.yellow(`还差 ${view.missing.length} 项必填设置：\n`));
+    for (const h of hints) process.stderr.write(c.dim(`  ${h}\n`));
   }
   return 0;
 }
@@ -319,7 +510,7 @@ async function cmdRun(args: string[]): Promise<number> {
       ? chainDisplay(action)
       : action.type === 'http'
         ? `${action.method} ${action.url}`
-        : displayCommand(action, buildArgv(plugin, action, withDefaults.values).argv);
+        : displayCommand(buildArgv(plugin, action, withDefaults.values).redacted);
     if (!(await confirmRun(plugin, action.id, policy, command))) {
       audit({
         ts: new Date().toISOString(), plugin: plugin.id, action: action.id,
@@ -598,6 +789,21 @@ function cmdDoctor(): number {
       : `  ${c.red('✗')} ${entry.plugin.name} 缺依赖：${reqs.map((r) => r.name).join(', ')}\n`);
     for (const r of reqs) process.stdout.write(c.yellow(`      ${r.hint}\n`));
     for (const w of entry.warnings) process.stdout.write(c.yellow(`      ! ${w}\n`));
+    const view = resolveSettings(entry.plugin);
+    if (view.error) {
+      problems++;
+      process.stdout.write(c.red(`      ✗ 设置项读不出来：${view.error}\n`));
+    }
+    for (const bad of view.invalid) {
+      problems++;
+      process.stdout.write(c.red(`      ✗ 设置项 ${bad.name} 的值不合法：${bad.error}\n`));
+    }
+    if (view.missing.length > 0) {
+      process.stdout.write(c.yellow(`      ! 缺少必填设置项：${view.missing.join(' / ')}\n`));
+      for (const hint of settingsHints(entry.plugin, view)) {
+        process.stdout.write(c.dim(`        ${hint}\n`));
+      }
+    }
     // 组合动作的步骤跨插件引用：引用的插件/动作没装时，链路跑起来才知道会失败，
     // 提前在自检里说出来，省得使用者执行到第 3 步才发现
     for (const a of entry.plugin.actions) {
@@ -976,6 +1182,8 @@ async function main(): Promise<number> {
       return cmdShow(rest);
     case 'run':
       return cmdRun(rest);
+    case 'config':
+      return cmdConfig(rest);
     case 'plugin':
       return cmdPlugin(rest);
     case 'market':

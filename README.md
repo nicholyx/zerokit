@@ -208,6 +208,8 @@ mcp-allow.json      已授权给 AI 调用的有副作用动作
 - [x] **最近使用**：空输入时常用动作排前面（纯本地 localStorage）
 - [x] **运行中管理**：看正在跑的进程与服务、随时结束（`zkit ps` / `zkit kill` / 界面面板）
 - [x] **组合动作**：`type = "chain"` 把已有动作按顺序拼成新动作，`{别名.data.字段}` 在步骤间传结果——零代码的第二种用法，四个面自动派生
+- [x] **插件设置项**：`[[setting]]` 声明「装一次、长期生效」的配置（端点/账号/API Key），
+      `{setting.x}` 与 `ZEROKIT_SETTING_*` 双通道；`zkit config` 与启动器面板共用一份存储，密钥只回掩码
 - [x] **速度**：冷启动 706→315 ms（AI SDK 延迟加载）；node 插件动作 176→34 ms
       （worker 线程，插件声明 `runtime = "worker"` 开启）；
       python 动作 476→22 ms（**常驻解释器**，声明 `runtime = "host"` 开启，21 倍）
@@ -230,6 +232,7 @@ mcp-allow.json      已授权给 AI 调用的有副作用动作
 | `test/clipboard-smoke.mjs` | 剪贴板历史的去重/上限/截断/搜索，监听进程的起停与重复启动拒绝 |
 | `test/filesearch-smoke.mjs` | 文件名索引的排除规则、搜索排序、`open` 的越权拒绝 |
 | `test/chain-smoke.mjs` | 组合动作：步骤间引用与模板、风险/嵌套/后台/缺插件/取不到值等失败路径、CLI show/run/doctor |
+| `test/settings-smoke.mjs` | 插件设置项：清单校验、0600 存储与原子写、默认值/必填/枚举、占位符与环境变量注入、密钥打码与 `--reveal`、`zkit config` 的 list/get/set/unset |
 
 一条命令跑完全部（它会自动补上 mcp-smoke 需要的参数）：
 

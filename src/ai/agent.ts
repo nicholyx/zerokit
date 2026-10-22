@@ -160,8 +160,8 @@ export class Workbench {
     try {
       const parsed = this.parseInput(target, call.input);
       if (!parsed.errors.length) {
-        const { argv } = buildArgv(target.plugin, target.action, parsed.values);
-        command = displayCommand(target.action, argv);
+        const { redacted } = buildArgv(target.plugin, target.action, parsed.values);
+        command = displayCommand(redacted);
       }
     } catch {
       command = '（无法解析出命令）';

@@ -16,6 +16,13 @@ export const PLUGINS_DIR: string = path.join(HOME, 'plugins');
 export const DATA_DIR: string = path.join(HOME, 'data');
 export const LOG_DIR: string = path.join(HOME, 'logs');
 export const CONFIG_PATH: string = path.join(HOME, 'config.toml');
+/**
+ * 插件设置项的存放目录：一个插件一个 `<插件id>.json`。
+ *
+ * 与 `config.toml`（内核自己的全局配置）分开：插件设置项可能含密钥，
+ * 单独放、单独用 0600 权限，删一个插件不会误伤内核配置。
+ */
+export const SETTINGS_DIR: string = path.join(HOME, 'settings');
 
 /** 仓库根目录（src/core/paths.ts -> 仓库根） */
 export const PKG_ROOT: string = path.resolve(import.meta.dirname, '..', '..');
@@ -26,6 +33,8 @@ export function ensureDirs(): void {
   for (const d of [HOME, PLUGINS_DIR, DATA_DIR, LOG_DIR]) {
     fs.mkdirSync(d, { recursive: true });
   }
+  // 设置项可能含密钥：目录只给当前用户读写（0700）。其它目录沿用默认权限。
+  fs.mkdirSync(SETTINGS_DIR, { recursive: true, mode: 0o700 });
 }
 
 /** 插件私有的持久化目录（跨更新保留），插件可通过 {data_dir} 使用 */

@@ -119,6 +119,7 @@ main { flex: 1; overflow-y: auto; margin-top: 14px; }
 .badge.read { color: var(--ok); border-color: #23543d; }
 .badge.mutate { color: var(--warn); border-color: #5a4520; }
 .badge.destructive { color: var(--bad); border-color: #5c2a27; }
+.badge.warn { color: var(--warn); border-color: #5a4520; }
 
 /* ---------------- 分组（浏览态按插件聚合） ---------------- */
 .group-head {
@@ -276,6 +277,26 @@ table.grid tr:last-child td { border-bottom: 0; }
   font-family: var(--mono); font-size: 11.5px; color: #9fd0ff;
   max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* 设置项：一行一项，密钥输入框与普通文本肉眼可分 */
+.plug-settings { border-top: 1px solid var(--line); padding-top: 10px; }
+.plug-settings-head { margin-bottom: 9px; font-size: 12.5px; color: var(--fg); }
+.plug-settings-head .sub { color: #7f8b9c; margin-left: 8px; font-size: 11.5px; }
+.plug-setting { display: grid; gap: 5px; margin-bottom: 10px; }
+.plug-setting-name { font-size: 12px; color: var(--fg); }
+.plug-setting-name .req { color: var(--bad); margin-left: 3px; }
+.plug-setting-note { color: #7f8b9c; font-size: 11px; margin-left: 6px; }
+.plug-setting-help { color: #7f8b9c; font-size: 11.5px; line-height: 1.5; }
+.plug-setting input[type="text"], .plug-setting input[type="number"],
+.plug-setting input[type="password"], .plug-setting select {
+  width: 100%; padding: 7px 10px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 7px;
+  color: var(--fg); font: inherit; font-size: 12.5px;
+}
+.plug-setting input[type="password"] { font-family: var(--mono); letter-spacing: 2px; }
+.plug-setting input[type="checkbox"] { width: 16px; height: 16px; }
+.plug-setting input:focus, .plug-setting select:focus { outline: none; border-color: #33455c; }
+.plug-settings-ops { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+
 .plug-warn {
   padding: 9px 12px 11px; color: var(--bad); font-size: 12.5px;
   word-break: break-all;
