@@ -6,7 +6,7 @@
       "id": "clipboard",
       "name": "剪贴板历史",
       "summary": "记录剪贴板历史，可搜索、可把旧内容放回剪贴板，后台常驻监听",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tags": [
         "剪贴板",
         "clipboard",
@@ -41,7 +41,7 @@
       "id": "ip",
       "name": "出口 IP",
       "summary": "查本机访问外网时用的公网 IP，零代码插件",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tags": [
         "ip",
         "公网",
@@ -55,7 +55,7 @@
       "id": "proxy",
       "name": "白名单代理",
       "summary": "只允许访问 jlcops.com / jlcerp.com 的出网代理",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tags": [
         "代理",
         "proxy",

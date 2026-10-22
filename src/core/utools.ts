@@ -313,6 +313,8 @@ export function adaptUtoolsPlugin(dir: string): LoadResult {
     runtime: 'spawn',
     actions,
     services: [],
+    // uTools 插件没有声明式设置项（它们的配置通常写在插件自己的文件里）
+    settings: [],
   };
   if (typeof raw.description === 'string') plugin.description = raw.description;
   if (typeof raw.author === 'string') plugin.author = raw.author;

@@ -135,6 +135,11 @@ PowerShell 用 `$env:https_proxy="http://127.0.0.1:<端口>"`（其余两个同�
 项目本身不记录任何代理地址——每台机器的端口和网关都不一样，写死只会让别人
 复制到一条走不通的命令。
 
+**插件要填 API Key / 接口地址，配在哪？**
+插件清单里声明的设置项，用 `zkit config <插件id>` 看、`zkit config <插件id> set <项> <值>` 改；
+密钥建议 `printf '%s' "$TOKEN" | zkit config <插件id> set <项> --stdin`（不进 shell 历史）。
+启动器「插件」面板里有同一份表单，保存即生效；值存在 `~/.zerokit/settings/`，权限 0600。
+
 **端口每次都不一样？**
 `zkit ui` 默认随机端口（避免撞车）。要固定就 `--port 28970`。
 
@@ -151,7 +156,7 @@ PowerShell 用 `$env:https_proxy="http://127.0.0.1:<端口>"`（其余两个同�
 ## 七、这个项目现在是什么状态
 
 内核、四个面、插件集市、原生壳、uTools 插件兼容层都已跑通，各有测试
-（`node scripts/test-all.mjs`，15 个文件 380+ 项断言，不联网、不花钱）。
+（`node scripts/test-all.mjs`，16 个文件 420+ 项断言，不联网、不花钱）。
 
 已知的缺口和明确不做的事，都列在 `docs/overview.md` 的「待办」和「已知差距」两节里——
 那份是诚实的账本，建议看一眼再判断这个项目值不值得用。

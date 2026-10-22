@@ -12,6 +12,10 @@ import { resolveTool } from './resolve.ts';
 import { readTail, registerProcess } from './runtime.ts';
 import { hasHostFor, runViaHost } from './host.ts';
 import { applyDefaults } from './schema.ts';
+import {
+  SECRET_MASK, resolveSettings, settingsEnv, settingsHints, settingsVars,
+} from './pluginConfig.ts';
+import type { SettingsView } from './pluginConfig.ts';
 
 /**
  * 执行器：整个系统**唯一的执行收口**。
@@ -62,13 +66,20 @@ export interface RunOptions {
   /** 已解析、已补齐默认值并校验过的参数 */
   values: Record<string, unknown>;
   cwd?: string;
+  /**
+   * 已知的密钥字面量：展示与审计时额外抹掉。
+   * 用于组合动作把密钥设置项传给下游步骤、而下游参数没声明 secret 的兜底。
+   */
+  secretValues?: string[];
 }
 
-const TOKEN_RE = /\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g;
-const WHOLE_TOKEN_RE = /^\{([a-zA-Z_][a-zA-Z0-9_]*)\}$/;
+const TOKEN_RE = /\{([a-zA-Z_][a-zA-Z0-9_.]*)\}/g;
+const WHOLE_TOKEN_RE = /^\{([a-zA-Z_][a-zA-Z0-9_.]*)\}$/;
 
 function buildVars(plugin: Plugin, values: Record<string, unknown>): Record<string, string> {
+  const settings = resolveSettings(plugin);
   const vars: Record<string, string> = {
+    ...settingsVars(settings),
     plugin_dir: plugin.dir,
     data_dir: pluginDataDir(plugin.id),
     home: HOME,
@@ -85,14 +96,52 @@ function buildVars(plugin: Plugin, values: Record<string, unknown>): Record<stri
   return vars;
 }
 
-/** 把清单里的 run 模板展开成真正的 argv */
+/** 展开字符串里的 {名字}；可选重定向某些名字（用于把密钥替换成掩码） */
+function expandVars(
+  text: string,
+  vars: Record<string, string>,
+  pick?: (name: string) => string | undefined,
+): string {
+  return text.replace(TOKEN_RE, (_m, name: string) => pick?.(name) ?? vars[name] ?? '');
+}
+
+/** 递归展开 JSON 结构里的字符串（http 的 body 可以是任意嵌套结构） */
+function expandDeep(value: unknown, vars: Record<string, string>): unknown {
+  if (typeof value === 'string') return expandVars(value, vars);
+  if (Array.isArray(value)) return value.map((v) => expandDeep(v, vars));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, expandDeep(v, vars)]),
+    );
+  }
+  return value;
+}
+
+/** 哪些变量来自密钥（动作参数 + 设置项）：展示与审计时必须打码 */
+function secretVarNames(plugin: Plugin, action: Action): Set<string> {
+  const names = new Set<string>();
+  for (const p of action.params) if (p.secret) names.add(p.name);
+  for (const s of plugin.settings) if (s.secret) names.add(`setting.${s.name}`);
+  return names;
+}
+
+/**
+ * 把清单里的 run 模板展开成真正的 argv。
+ *
+ * 同时产出 `redacted`：与 argv 一一对应、但把密钥来源的片段换成 `******`。
+ * 分开产出的原因：**先展开再猜哪一段是密钥**是不可靠的（值里可能包含空格、
+ * 或者和别的参数拼在同一个元素里）；在这里展开时我们本来就知道来源。
+ */
 export function buildArgv(
   plugin: Plugin,
   action: Action,
   values: Record<string, unknown>,
-): { argv: string[]; errors: string[] } {
+  extraSecretValues: string[] = [],
+): { argv: string[]; redacted: string[]; errors: string[] } {
   const vars = buildVars(plugin, values);
+  const secrets = secretVarNames(plugin, action);
   const argv: string[] = [];
+  const redacted: string[] = [];
   const errors: string[] = [];
 
   for (const element of action.run) {
@@ -109,6 +158,7 @@ export function buildArgv(
       }
       if (value === '') continue;
       argv.push(value);
+      redacted.push(secrets.has(name) ? SECRET_MASK : value);
       continue;
     }
     const missing: string[] = [];
@@ -120,14 +170,49 @@ export function buildArgv(
       }
       return value;
     });
+    const masked = element.replace(TOKEN_RE, (_m, name: string) => {
+      const value = vars[name];
+      if (value === undefined) return '';
+      return secrets.has(name) ? SECRET_MASK : value;
+    });
     for (const name of missing) {
       if (BUILTIN_NAMES.includes(name)) {
         errors.push(`清单里用到 {${name}}，但本机没找到它`);
       }
     }
     argv.push(expanded);
+    redacted.push(masked);
   }
-  return { argv, errors };
+  return { argv, redacted: redacted.map((a) => maskSecrets(a, extraSecretValues)), errors };
+}
+
+/** 把已知密钥值从展示字符串里抹掉。用于"值被传给下游、但下游没声明 secret"的兜底。 */
+function maskSecrets(text: string, secretValues: string[]): string {
+  let out = text;
+  for (const value of secretValues) {
+    if (!value) continue;
+    out = out.split(value).join(SECRET_MASK);
+  }
+  return out;
+}
+
+/** 这个动作带出去的密钥字面量：自己声明的 secret 参数 + 插件的 secret 设置项 */
+function secretValuesOf(
+  plugin: Plugin, action: Action, values: Record<string, unknown>,
+): string[] {
+  const out: string[] = [];
+  for (const p of action.params) {
+    if (!p.secret) continue;
+    const v = values[p.name];
+    if (v !== undefined && v !== null && String(v) !== '') out.push(String(v));
+  }
+  const view = resolveSettings(plugin);
+  for (const setting of plugin.settings) {
+    if (!setting.secret) continue;
+    const v = view.values[setting.name];
+    if (v !== undefined && v !== null && String(v) !== '') out.push(String(v));
+  }
+  return out;
 }
 
 /** 把 fetch 的 "fetch failed" 翻译成人能看懂的原因（原始错误藏在 e.cause 里） */
@@ -167,15 +252,9 @@ function describeFetchError(e: unknown): string {
   }
 }
 
-/** 展示用：把 argv 拼成一行命令，敏感参数打码 */
-export function displayCommand(action: Action, argv: string[]): string {
-  const secrets = new Set(action.params.filter((p) => p.secret).map((p) => p.name));
-  const masked = argv.map((a) => {
-    const whole = WHOLE_TOKEN_RE.exec(a);
-    if (whole && secrets.has(whole[1]!)) return '******';
-    return a;
-  });
-  return masked.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ');
+/** 展示用：把（已经打过码的）argv 拼成一行命令 */
+export function displayCommand(argv: string[]): string {
+  return argv.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(' ');
 }
 
 /** 组合动作的展示文本：把链路按顺序摊开，确认框里能一眼看出会跑什么 */
@@ -186,7 +265,11 @@ export function chainDisplay(action: Action): string {
 function openAuditLog(file: string): fs.WriteStream | undefined {
   try {
     ensureDirs();
-    return fs.createWriteStream(path.join(LOG_DIR, file), { flags: 'a' });
+    const stream = fs.createWriteStream(path.join(LOG_DIR, file), { flags: 'a' });
+    // 写审计失败不能把主进程带走：用户可能在运行期间重置 ~/.zerokit，
+    // 也可能把数据目录放在一个已经卸载的卷上。审计是旁路，不是主流程。
+    stream.on('error', () => {});
+    return stream;
   } catch {
     return undefined;
   }
@@ -467,6 +550,21 @@ function observeBackgroundStart(
   });
 }
 
+/** 设置项有问题时返回一句可直接照做的说明；没问题返回 undefined */
+function describeSettingsProblem(plugin: Plugin, view: SettingsView): string | undefined {
+  if (view.error) {
+    return `设置项文件读不出来：${view.error}`;
+  }
+  if (view.invalid.length > 0) {
+    return '设置项的值不合法：'
+      + view.invalid.map((i) => `${i.name}（${i.error}）`).join('；')
+      + `。用 zkit config ${plugin.id} set <项> <值> 重新设置`;
+  }
+  if (view.missing.length === 0) return undefined;
+  return `缺少必填设置项：${view.missing.join(' / ')}。先设置：\n  `
+    + settingsHints(plugin, view).join('\n  ');
+}
+
 /** 执行一个动作。这是唯一的执行入口。 */
 export async function runAction(
   plugin: Plugin,
@@ -483,6 +581,18 @@ export async function runAction(
     caller: options.caller,
   };
 
+  // 设置项没配好就不执行：让错误停在"配置"这一层，而不是等插件拿空 token 去请求、
+  // 最后报一个和根因隔着两跳的认证失败。
+  const settings = resolveSettings(plugin);
+  const settingsProblem = describeSettingsProblem(plugin, settings);
+  if (settingsProblem) {
+    audit({ ...base, decision: 'deny', reason: 'settings-incomplete', error: settingsProblem });
+    return {
+      ok: false, exitCode: null, stdout: '', stderr: '', ms: Date.now() - started,
+      truncated: false, error: settingsProblem, argv: [], command: '',
+    };
+  }
+
   if (action.type === 'http') {
     return runHttpAction(plugin, action, options, started, base);
   }
@@ -490,12 +600,14 @@ export async function runAction(
     return runChainAction(plugin, action, options, started, base);
   }
 
-  const { argv, errors } = buildArgv(plugin, action, options.values);
+  const { argv, redacted, errors } = buildArgv(
+    plugin, action, options.values, options.secretValues ?? [],
+  );
   if (errors.length > 0) {
     audit({ ...base, decision: 'deny', reason: 'missing-builtin', error: errors.join('; ') });
     return {
       ok: false, exitCode: null, stdout: '', stderr: '', ms: Date.now() - started,
-      truncated: false, error: errors.join('; '), argv, command: displayCommand(action, argv),
+      truncated: false, error: errors.join('; '), argv: redacted, command: displayCommand(redacted),
     };
   }
   if (argv.length === 0) {
@@ -503,7 +615,7 @@ export async function runAction(
     audit({ ...base, decision: 'deny', reason: 'empty-argv', error: msg });
     return {
       ok: false, exitCode: null, stdout: '', stderr: '', ms: Date.now() - started,
-      truncated: false, error: msg, argv, command: '',
+      truncated: false, error: msg, argv: redacted, command: '',
     };
   }
 
@@ -514,9 +626,12 @@ export async function runAction(
     ...process.env,
     ZEROKIT_PLUGIN_DATA_DIR: pluginDataDir(plugin.id),
     ZEROKIT_HOME: HOME,
+    // 设置项也作为环境变量给脚本：插件不改 argv 就能读到（ZEROKIT_SETTING_<NAME>）。
+    // 放在 action.env 之前：清单里显式写的环境变量优先级更高。
+    ...settingsEnv(settings),
     ...action.env,
   }, argv[0]!);
-  const command = displayCommand(action, argv);
+  const command = displayCommand(redacted);
 
   // background 动作：拉起长期运行的进程，不等它退出，交给内核托管，
   // 于是它会在「运行中」里出现、能随时结束——不用这样，启动器就只是快捷方式。
@@ -577,7 +692,7 @@ export async function runAction(
       audit({ ...base, decision: 'deny', reason: 'spawn-failed', command, error: reason });
       return {
         ok: false, exitCode: null, stdout: '', stderr: detail,
-        ms: Date.now() - started, truncated: false, error: reason, argv, command,
+        ms: Date.now() - started, truncated: false, error: reason, argv: redacted, command,
       };
     }
 
@@ -589,7 +704,7 @@ export async function runAction(
       audit({ ...base, decision: 'deny', reason: 'background-died', command, error: reason });
       return {
         ok: false, exitCode: early.code, stdout: '', stderr: detail,
-        ms: Date.now() - started, truncated: false, error: reason, argv, command,
+        ms: Date.now() - started, truncated: false, error: reason, argv: redacted, command,
       };
     }
 
@@ -602,7 +717,7 @@ export async function runAction(
         ok: true, exitCode: 0,
         stdout: '命令已执行并自行退出（退出码 0），没有留下需要托管的进程。'
           + '如果它本意是常驻，请确认守护进程是不是被 detach 出去了。',
-        stderr: detail, ms: Date.now() - started, truncated: false, argv, command,
+        stderr: detail, ms: Date.now() - started, truncated: false, argv: redacted, command,
       };
     }
 
@@ -625,7 +740,7 @@ export async function runAction(
       stderr: '',
       ms,
       truncated: false,
-      argv,
+      argv: redacted,
       command,
       background: { id: managed.id, pid: child.pid ?? -1 },
     };
@@ -734,7 +849,7 @@ export async function runAction(
     stderr: outcome.stderr,
     ms,
     truncated: outcome.truncated,
-    argv,
+    argv: redacted,
     command,
   };
   if (data !== undefined) result.data = data;
@@ -993,6 +1108,8 @@ async function runChainAction(
       caller: options.caller,
       values: applied.values,
       ...(options.cwd ? { cwd: options.cwd } : {}),
+      // 链路自己的密钥设置项 / 加密参数，在下游同样必须打码
+      secretValues: [...secretValuesOf(plugin, action, ctxValues), ...(options.secretValues ?? [])],
     });
     results.set(item.step.as, result);
     outputs.push({ alias: item.step.as, result });
@@ -1059,12 +1176,19 @@ async function runHttpAction(
   base: Omit<AuditRecord, 'decision'>,
 ): Promise<RunResult> {
   const vars = buildVars(plugin, options.values);
-  const url = (action.url ?? '').replace(TOKEN_RE, (_m, name: string) => vars[name] ?? '');
+  const secrets = [...secretValuesOf(plugin, action, options.values), ...(options.secretValues ?? [])];
+  const url = expandVars(action.url ?? '', vars);
+  const shownUrl = maskSecrets(expandVars(action.url ?? '', vars, (name) => {
+    const setting = plugin.settings.find((x) => `setting.${x.name}` === name);
+    return setting?.secret === true ? SECRET_MASK : undefined;
+  }), secrets);
   try {
-    const init: RequestInit = { method: action.method, headers: action.headers };
+    const headers: Record<string, string> = {};
+    for (const [k, v] of Object.entries(action.headers)) headers[k] = expandVars(v, vars);
+    const init: RequestInit = { method: action.method, headers };
     if (action.body !== undefined) {
-      init.body = JSON.stringify(action.body);
-      (init.headers as Record<string, string>)['content-type'] ??= 'application/json';
+      init.body = JSON.stringify(expandDeep(action.body, vars));
+      headers['content-type'] ??= 'application/json';
     }
     const signal = AbortSignal.timeout(action.timeout * 1000);
     // 配了代理就自己走代理。**不能依赖 fetch 的 proxy 选项**：Node 22 上它是
@@ -1083,7 +1207,7 @@ async function runHttpAction(
     }
     const result: RunResult = {
       ok, exitCode: res.status, stdout: text, stderr: '', ms,
-      truncated: false, argv: [], command: `${action.method} ${url}`,
+      truncated: false, argv: [], command: `${action.method} ${shownUrl}`,
     };
     if (data !== undefined) result.data = data;
     if (!ok) result.error = `HTTP ${res.status} ${res.statusText}`;
@@ -1096,10 +1220,10 @@ async function runHttpAction(
   } catch (e) {
     const ms = Date.now() - started;
     const error = `请求失败：${describeFetchError(e)}`;
-    audit({ ...base, decision: 'deny', reason: 'http-error', command: `${action.method} ${url}`, ms, error });
+    audit({ ...base, decision: 'deny', reason: 'http-error', command: `${action.method} ${shownUrl}`, ms, error });
     return {
       ok: false, exitCode: null, stdout: '', stderr: '', ms,
-      truncated: false, error, argv: [], command: `${action.method} ${url}`,
+      truncated: false, error, argv: [], command: `${action.method} ${shownUrl}`,
     };
   }
 }

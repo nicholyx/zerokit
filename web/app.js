@@ -726,12 +726,15 @@ async function renderPlugins() {
           <span class="aid">${esc(p.id)} · v${esc(p.version)}</span>
           <span class="badge">${esc(p.sourceText)}</span>
           ${p.requiresOk ? '' : '<span class="badge destructive">缺依赖</span>'}
+          ${(p.settings || []).some((x) => x.missing) ? '<span class="badge warn">缺配置</span>' : ''}
           <span class="plug-ops">
+            ${(p.settings || []).length > 0 ? '<button class="ghost" data-op="config">配置</button>' : ''}
             <button class="ghost" data-op="check">检查更新</button>
             <button class="ghost" data-op="remove">卸载</button>
           </span>
         </div>
         <div class="plug-card-body">${esc(p.summary || '')} · ${p.actions.length} 个动作</div>
+        <div class="plug-config" hidden></div>
         <div class="plug-card-foot" hidden></div>
       </div>`).join('')}
     <div class="actions"><button class="primary" id="plugBack">返回</button></div>`;
@@ -745,7 +748,82 @@ async function renderPlugins() {
   el.plugView.querySelectorAll('.plug-card').forEach((card) => {
     card.querySelector('[data-op="check"]').addEventListener('click', () => doCheck(card));
     card.querySelector('[data-op="remove"]').addEventListener('click', () => doRemove(card));
+    const cfgBtn = card.querySelector('[data-op="config"]');
+    if (cfgBtn) {
+      const p = plugins.find((x) => x.id === card.dataset.id);
+      cfgBtn.addEventListener('click', () => toggleSettings(card, p));
+    }
   });
+}
+
+/** 设置项表单：密钥呈现为 password 且留空=不修改，避免把掩码写回去 */
+function settingField(s) {
+  const common = `data-setting="${esc(s.name)}" data-stype="${esc(s.type)}"`;
+  let control;
+  if (s.type === 'boolean') {
+    control = `<input type="checkbox" ${s.value === true ? 'checked' : ''} ${common}>`;
+  } else if (s.type === 'enum') {
+    const opts = (s.enum || []).map((v) =>
+      `<option value="${esc(v)}" ${String(s.value ?? '') === v ? 'selected' : ''}>${esc(v)}</option>`).join('');
+    control = `<select ${common}><option value="">（未设置）</option>${opts}</select>`;
+  } else {
+    const type = s.secret ? 'password' : (s.type === 'integer' || s.type === 'number' ? 'number' : 'text');
+    const value = s.secret ? '' : String(s.value ?? '');
+    const ph = s.secret && s.masked ? '已设置（留空=不修改）' : (s.description || '');
+    control = `<input type="${type}" value="${esc(value)}" placeholder="${esc(ph)}" ${common}`
+      + ' autocomplete="off" spellcheck="false">';
+  }
+  const note = s.source === 'default' ? '默认值'
+    : s.source === 'stored' ? (s.secret ? '已设置 · 密钥' : '已设置')
+      : '未设置';
+  return `
+    <label class="plug-setting">
+      <span class="plug-setting-name">${esc(s.title || s.name)}${s.required ? '<b class="req">*</b>' : ''}
+        <span class="plug-setting-note">${esc(note)}${s.error ? ' · ' + esc(s.error) : ''}</span></span>
+      ${control}
+      ${s.description ? `<span class="plug-setting-help">${esc(s.description)}</span>` : ''}
+    </label>`;
+}
+
+function toggleSettings(card, p) {
+  const box = card.querySelector('.plug-config');
+  if (!p) return;
+  if (!box.hidden) { box.hidden = true; return; }
+  box.innerHTML = `
+    <div class="plug-card-body plug-settings">
+      <div class="plug-settings-head">设置项 <span class="sub">保存后立即生效；密钥只以掩码回显，留空表示不修改</span></div>
+      ${p.settings.map(settingField).join('')}
+      <div class="plug-settings-ops">
+        <button class="primary" data-op="save-settings">保存</button>
+        <span class="sub" data-role="settings-msg"></span>
+      </div>
+    </div>`;
+  box.hidden = false;
+  box.querySelector('[data-op="save-settings"]').addEventListener('click', () => saveSettings(card));
+}
+
+async function saveSettings(card) {
+  const box = card.querySelector('.plug-config');
+  const msg = box.querySelector('[data-role="settings-msg"]');
+  const patch = {};
+  box.querySelectorAll('[data-setting]').forEach((node) => {
+    const name = node.dataset.setting;
+    if (node.dataset.stype === 'boolean') { patch[name] = node.checked; return; }
+    const value = node.value;
+    if (value === '') return; // 留空 = 不修改；要清空请用 zkit config <插件> unset <项>
+    patch[name] = value;
+  });
+  if (Object.keys(patch).length === 0) { msg.textContent = '没有改动'; return; }
+  msg.textContent = '保存中…';
+  try {
+    const r = await api('/api/plugin/config', {
+      method: 'POST', body: { plugin: card.dataset.id, patch },
+    });
+    if (r.ok === false) throw new Error(r.error || '保存失败');
+    await renderPlugins();
+  } catch (e) {
+    msg.textContent = '保存失败：' + e.message;
+  }
 }
 
 /** 安装：预览摊开 → 确认 → 落地。预览卡固定在安装框下面，确认前看得见全部能力 */

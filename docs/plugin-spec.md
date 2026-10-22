@@ -243,6 +243,56 @@ risk        = "mutate"
   description = "要允许的域名，例如 example.com（含所有子域）"
 ```
 
+## \[\[setting\]\] 段（可选）：插件级配置
+
+`[[action.param]]` 是**每次执行都要传**的参数；`[[setting]]` 是**装一次、长期生效**的配置。
+典型场景：接口地址、账号、API Key、默认数据目录——这些不该让人每次执行都重新输入。
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `name` | ✅ | `^[a-zA-Z_][a-zA-Z0-9_]*$`；占位符写作 `{setting.<name>}` |
+| `type` | | 与参数相同：`string` / `integer` / `number` / `boolean` / `path` / `enum` |
+| `description` | | 显示在 CLI 和启动器里，说明这一项该填什么（强烈建议写） |
+| `default` | | 默认值；有默认值就不算「需要配置」 |
+| `required` | | 默认规则：**没给 `default` 就是必填**；显式写 `false` 可让无默认值项变成可选 |
+| `secret` | | 密钥项：**不允许给 `default`**（默认值会跟着清单进 git）；展示与日志一律打码 |
+| `enum` | type=enum 必填 | 候选值数组 |
+
+```toml
+[[setting]]
+name        = "endpoint"
+type        = "string"
+default     = "https://api.ipify.org?format=json"
+description = "公网 IP 查询接口"
+
+[[setting]]
+name   = "token"
+type   = "string"
+secret = true
+```
+
+声明之后，同一个值有三种用法（都指向同一份存储）：
+
+1. **占位符**：`run = ["{node}", "client.mjs", "{setting.endpoint}", "{setting.token}"]`、
+   `url = "{setting.endpoint}"`、`env` / `cwd` / headers / body 里也认；
+2. **环境变量**：`ZEROKIT_SETTING_ENDPOINT`、`ZEROKIT_SETTING_TOKEN`——脚本不改清单也能读；
+3. **配置命令 / 界面**：`zkit config <插件>` 看全部；`set <项> <值>`、`get <项>`、`unset <项>`；
+   密钥建议 `printf '%s' "$TOKEN" | zkit config <插件> set <项> --stdin`（不进 shell 历史）；
+   启动器「插件」面板里有同一份表单，保存后立即生效。
+
+存储位置 `~/.zerokit/settings/<插件id>.json`，文件权限 **0600**（目录 0700），原子写
+（先写临时文件再 rename，断电不会留下半个 JSON）。
+
+安全取舍，照实说：
+
+- **密钥是明文存储、不加密、不进系统钥匙串**。安全边界是操作系统账号；换来的好处是
+  数据目录可以整体搬走/备份，也不会因为换机器丢失。密钥只以 `******` 回显，
+  真要看见得显式 `zkit config <插件> get <项> --reveal`。
+- **必填项缺失或存了非法值 → 执行前拒绝**，错误里带可直接复制的修复命令，
+  不会静默拿默认值继续跑。
+- **`{setting.x}` 引用了没声明的 x → 安装清单时就报错**，不是等到运行时变成空串。
+- 设置值对**下一次执行**生效；常驻的后台进程要 `zkit kill` 后重新启动才会读到新值。
+
 ## 组合动作（`type = "chain"`）
 
 有些新能力不需要新代码，只需要把**已有动作**按顺序拼起来：先查公网 IP、再查归属地；
@@ -587,6 +637,10 @@ zerokit 的清单（只读，不写你的目录）。丢进插件目录即可，
 参数投影是同一份声明的四种形态：`toJsonSchema` / `toCliFlags` / `toFormFields` / 值转换。
 所以「给 AI 用」不是额外开发，而是免费副产品。
 
+设置项走的是同一套投影（`publicSettings` 复用 `toFormFields`）：CLI 的 `zkit config`、
+启动器插件面板里的表单、以及占位符 / 环境变量注入，都从 `[[setting]]` 这一段派生，
+不需要为每个界面再写一遍。
+
 ## 校验规则
 
 `zkit doctor` 会检查所有插件的清单。常见错误：
@@ -600,6 +654,10 @@ zerokit 的清单（只读，不写你的目录）。丢进插件目录即可，
 - `type = "chain"` 但没有 `[[action.step]]`，或步骤 `use` 不是 `<插件id>.<动作id>` 的格式
 - 链路的引用名重复、占用了 `prev` / 内置占位符名
 - 链路声明了 `run` / `url` / `shell`（组合动作只调用别的动作，自己不跑命令）
+- `[[setting]]` 的 `name` 不合法，或 `secret = true` 还给了 `default`（默认值会跟着清单进 git）
+- `type = "enum"` 的设置项没给候选值，或默认值不在候选项里
+- 类型是 `integer` / `number` / `boolean` 但默认值类型不对
+- `{setting.x}` 引用了没声明的设置项（拼错名字不该等到运行时才变成空串）
 
 ## 完整示例
 
