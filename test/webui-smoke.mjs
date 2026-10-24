@@ -180,6 +180,10 @@ async function get(p, raw = false) {
     demo?.actions?.some((a) => a.id === 'now' && a.render === 'web'),
     JSON.stringify(demo?.actions?.map((a) => [a.id, a.render])));
 
+  check('API：/api/plugins 带插件依赖状态（前端据此标「缺插件依赖」）',
+    Array.isArray(demo?.pluginDeps) && demo?.pluginDepsOk === true,
+    JSON.stringify(demo?.pluginDeps));
+
   const chain = demo?.actions?.find((a) => a.id === 'chain');
   check('API：组合动作的步骤带给前端（启动器要标出「组合 N 步」）',
     chain?.steps?.length === 1 && chain.steps[0].use === 'self.now',
@@ -189,6 +193,48 @@ async function get(p, raw = false) {
   const html = await (await fetch(BASE + '/')).text();
   const token = /name="zk-token" content="([0-9a-f]+)"/.exec(html)?.[1];
   check('API：应用前端能拿到会话令牌', Boolean(token), 'index.html 里没有 zk-token');
+  if (token) {
+    // 安装预览：依赖是否齐、缺的能不能补，必须在确认之前就摊开
+    const srcDir = path.join(TMP_HOME, 'dep-src');
+    fs.mkdirSync(srcDir, { recursive: true });
+    fs.writeFileSync(path.join(srcDir, 'plugin.toml'), `
+[plugin]
+id      = "depdemo"
+name    = "依赖预览"
+summary = "依赖一个不存在的插件"
+
+[requires]
+plugins = ["ghost"]
+
+[[action]]
+id          = "hi"
+title       = "hi"
+description = "hi"
+run         = ["{node}", "demo.mjs"]
+risk        = "read"
+`);
+    fs.writeFileSync(path.join(srcDir, 'demo.mjs'), 'process.stdout.write("hi\\n");\n');
+    const pv = await (await fetch(BASE + '/api/plugin/install', {
+      method: 'POST',
+      headers: { 'x-zerokit-token': token, 'content-type': 'application/json' },
+      body: JSON.stringify({ source: srcDir }),
+    })).json();
+    check('API：安装预览列出插件依赖与缺失项',
+      pv.plugin?.pluginDeps?.some((d) => d.id === 'ghost' && d.installed === false)
+        && pv.plugin?.missingPluginDeps?.includes('ghost'),
+      JSON.stringify(pv).slice(0, 300));
+
+    // 确认安装时带 withDeps：ghost 无处可补，插件照装、缺的如实回报
+    const done = await (await fetch(BASE + '/api/plugin/install', {
+      method: 'POST',
+      headers: { 'x-zerokit-token': token, 'content-type': 'application/json' },
+      body: JSON.stringify({ source: srcDir, confirm: pv.confirm, withDeps: true }),
+    })).json();
+    check('API：withDeps 补不上的依赖不阻断安装，但要如实回报',
+      done.ok === true && (done.depsMissing ?? []).includes('ghost'),
+      JSON.stringify(done).slice(0, 300));
+  }
+
   if (token) {
     const run = await fetch(BASE + '/api/run', {
       method: 'POST',

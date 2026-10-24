@@ -519,8 +519,8 @@ function cli(args, extraEnv = {}) {
 
 {
   const doctor = cli(['doctor']);
-  check('CLI doctor 提前指出链路引用了没装的插件',
-    doctor.out.includes('组合动作 chain-missing-plugin') && doctor.out.includes('没装'),
+  check('CLI doctor 提前指出链路引用了没装的插件（折算成插件依赖后统一报）',
+    doctor.out.includes('缺少插件依赖') && doctor.out.includes('base'),
     doctor.out.slice(0, 800));
 }
 
