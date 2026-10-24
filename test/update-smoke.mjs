@@ -31,9 +31,10 @@ function sh(cmd, args, opts = {}) {
   return r.stdout;
 }
 
-/** 造一个 git 仓库插件（可以指定版本与动作），返回仓库路径 */
-function makeGitPlugin(version, actions) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zerokit-update-src-'));
+/** 造一个 git 仓库插件（可以指定版本、动作与落盘目录），返回仓库路径 */
+function makeGitPlugin(version, actions, at) {
+  const dir = at ?? fs.mkdtempSync(path.join(os.tmpdir(), 'zerokit-update-src-'));
+  fs.mkdirSync(dir, { recursive: true });
   const actionToml = actions.map((id) => `
 [[action]]
 id     = "${id}"
@@ -89,10 +90,10 @@ let repo;   // 后面复用这个仓库升级它
   repo = path.join(PLUGINS, '..', 'upd-src');
   // 重新造一个干净的（上面 git1 的临时目录还留着，直接复用）
   repo = fs.mkdtempSync(path.join(os.tmpdir(), 'zerokit-update-repo-'));
-  fs.rmSync(repo, { recursive: true, force: true });
-  const v1 = makeGitPlugin('1.0.0', ['hello', 'world']);
-  fs.cpSync(v1, repo, { recursive: true });
-  fs.rmSync(v1, { recursive: true, force: true });
+  // 直接在目标目录里建仓库，不要再把 .git 整个 cp 一遍：
+  // macOS runner 上出现过 cpSync 复制 .git/objects 时 ENOENT 的偶发失败，
+  // 而这一步本来就不需要「复制仓库」这个动作。
+  makeGitPlugin('1.0.0', ['hello', 'world'], repo);
 
   removePlugin('upd');
   const r = addFromGit(repo);
