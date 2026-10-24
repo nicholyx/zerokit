@@ -8,7 +8,7 @@ import { needsConfirm, rememberApproval } from './core/approvals.ts';
 import type { ConfirmPolicy } from './core/runner.ts';
 import {
   addFromDir, addFromGit, devLink, exportPlugin, findPlugin, importPlugin, installBundled,
-  listPlugins, loadDir, removePlugin, requirePlugin,
+  installBundledPlugin, listPlugins, loadDir, removePlugin, requirePlugin,
 } from './core/registry.ts';
 import { type ScaffoldRuntime, scaffoldPlugin } from './core/scaffold.ts';
 import { applyUpdate, checkUpdate, listUpdateStates } from './core/update.ts';
@@ -20,6 +20,7 @@ import {
   readIndex, refreshMarket, removeMarket, searchMarkets,
 } from './core/market.ts';
 import { applyDefaults, parseArgv, toCliFlags, toJsonSchema } from './core/schema.ts';
+import { depStates, depTree, dependents, installDeps, missingDeps } from './core/deps.ts';
 import {
   SECRET_MASK, publicSettings, resolveSettings, settingsHints, writeSettings,
 } from './core/pluginConfig.ts';
@@ -66,8 +67,9 @@ ${c.bold('插件')}
                               生成插件骨架（带教学注释，生成即校验）
   plugin dev <目录>           开发模式：以链接安装本地目录，改文件即生效
   plugin validate <目录>      校验任意目录的清单并摊开能力
-  plugin install <插件id>     从集市安装（会先摊开它的全部能力让你确认）
-  plugin add <目录|git地址>   从本地目录或 git 仓库安装
+  plugin install <插件id>     从集市安装（会先摊开它的全部能力让你确认；--with-deps 一并补依赖）
+  plugin add <目录|git地址>   从本地目录或 git 仓库安装（--with-deps 一并补依赖）
+  plugin deps [插件]          依赖树与安装状态；不带插件则只列缺依赖的
   plugin update [插件]        列出可更新的；带插件 id 则检查并更新（来源处拉新版）
   plugin remove <插件>        卸载
   plugin bundled              安装仓库自带的示例插件
@@ -193,7 +195,8 @@ function cmdList(): number {
     const p = entry.plugin!;
     const missing = resolveSettings(p).missing.length;
     const settingsTag = missing > 0 ? `  ${c.yellow(`缺 ${missing} 项设置`)}` : '';
-    process.stdout.write(`${c.bold(p.name)} ${c.dim(p.id)} ${c.dim('v' + p.version)}${settingsTag}\n`);
+    const depTag = missingDeps(p).length > 0 ? `  ${c.red(`缺插件依赖 ${missingDeps(p).join(', ')}`)}` : '';
+    process.stdout.write(`${c.bold(p.name)} ${c.dim(p.id)} ${c.dim('v' + p.version)}${settingsTag}${depTag}\n`);
     if (p.summary) process.stdout.write(`  ${p.summary}\n`);
     for (const a of p.actions) {
       const tag = a.type === 'chain' ? c.dim('  · 组合') : '';
@@ -230,12 +233,18 @@ function cmdShow(args: string[]): number {
   process.stdout.write(c.dim(`目录 ${plugin.dir}\n`));
 
   const reqs = checkRequires(plugin.requires);
-  if (reqs.length > 0) {
+  const deps = depStates(plugin);
+  if (reqs.length > 0 || deps.length > 0) {
     process.stdout.write('\n依赖：\n');
     for (const r of reqs) {
       process.stdout.write(r.ok
         ? `  ${c.green('✓')} ${r.name} ${c.dim(r.found!.version)}\n`
         : `  ${c.red('✗')} ${r.name} ${r.spec}  ${c.yellow(r.hint ?? '')}\n`);
+    }
+    for (const d of deps) {
+      process.stdout.write(d.installed
+        ? `  ${c.green('✓')} 插件 ${d.id} ${c.dim('v' + (d.version ?? '?'))}\n`
+        : `  ${c.red('✗')} 插件 ${d.id}  ${c.yellow('未安装')}  ${c.dim(`zkit plugin install ${d.id}`)}\n`);
     }
   }
 
@@ -585,7 +594,39 @@ async function cmdPluginUpdate(args: string[]): Promise<number> {
   const result = applyUpdate(id);
   for (const w of result.warnings) process.stderr.write(c.yellow(`! ${w}`) + '\n');
   process.stdout.write(result.ok ? c.green(`✓ ${result.message}\n`) : c.red(`✗ ${result.message}\n`));
+  // 新版本可能引入了新的插件依赖：更新完立刻说清楚，别等第一次执行才炸
+  if (result.ok) finishDeps(id, false);
   return result.ok ? 0 : 1;
+}
+
+/**
+ * 装完插件后处理依赖：withDeps 时先补，再报告仍然缺什么。
+ *
+ * 返回 1 只在「明确要求补依赖但没补齐」时发生——安装本身是成功的，
+ * 不该因为缺依赖而让脚本以为装失败了。
+ */
+function finishDeps(id: string, withDeps: boolean): number {
+  const plugin = requirePlugin(id);
+  if (withDeps) {
+    const r = installDeps(plugin);
+    for (const dep of r.installed) process.stdout.write(c.green(`  ✓ 补装依赖 ${dep}\n`));
+    for (const err of r.errors) process.stderr.write(c.red(`  ✗ ${err}\n`));
+  }
+  const missing = missingDeps(requirePlugin(id));
+  if (missing.length === 0) return 0;
+  process.stderr.write(c.yellow(`  缺少插件依赖：${missing.join(', ')}\n`));
+  for (const dep of missing) process.stderr.write(c.dim(`    zkit plugin install ${dep}\n`));
+  return withDeps ? 1 : 0;
+}
+
+function printDepTree(nodes: ReturnType<typeof depTree>, indent: string): void {
+  for (const n of nodes) {
+    const head = n.installed
+      ? `${c.green('✓')} ${n.id}  ${c.dim('v' + (n.version ?? '?'))}`
+      : `${c.red('✗')} ${n.id}  ${c.yellow('未安装')}  ${c.dim(`zkit plugin install ${n.id}`)}`;
+    process.stdout.write(`${indent}${head}\n`);
+    printDepTree(n.children, indent + '  ');
+  }
 }
 
 async function cmdPlugin(args: string[]): Promise<number> {
@@ -701,6 +742,7 @@ async function cmdPlugin(args: string[]): Promise<number> {
     }
     const isGit = !isLocalDir
       && (/^(https?:\/\/|git@)/.test(source) || /^[\w.-]+\/[\w.-]+$/.test(source));
+    const withDeps = args.includes('--with-deps');
     const result = isGit
       ? addFromGit(/^[\w.-]+\/[\w.-]+$/.test(source) ? `https://github.com/${source}.git` : source)
       : addFromDir(source, {
@@ -709,16 +751,23 @@ async function cmdPlugin(args: string[]): Promise<number> {
       });
     for (const w of result.warnings) process.stderr.write(c.yellow(`! ${w}`) + '\n');
     process.stdout.write(result.ok ? c.green(`✓ ${result.message}\n`) : c.red(`✗ ${result.message}\n`));
-    if (result.ok && result.id) {
-      process.stdout.write(c.dim(`  看看它有什么动作：zkit show ${result.id}\n`));
-    }
-    return result.ok ? 0 : 1;
+    if (!result.ok) return 1;
+    const depCode = result.id ? finishDeps(result.id, withDeps) : 0;
+    if (result.id) process.stdout.write(c.dim(`  看看它有什么动作：zkit show ${result.id}\n`));
+    return depCode;
   }
   if (sub === 'remove' || sub === 'rm') {
     const id = args[1];
     if (!id) {
-      process.stderr.write('用法：zkit plugin remove <插件>\n');
+      process.stderr.write('用法：zkit plugin remove <插件> [--force]\n');
       return 2;
+    }
+    // 别人还在依赖它时先拦住：删掉依赖会让那些插件的动作在运行时才炸
+    const users = dependents(id);
+    if (users.length > 0 && !args.includes('--force')) {
+      process.stderr.write(c.red(`✗ 还有插件依赖 "${id}"：${users.join(', ')}\n`));
+      process.stderr.write(c.dim('  真要删就先卸载它们，或者加 --force 强行删除（会留下跑不起来的插件）\n'));
+      return 1;
     }
     const ok = removePlugin(id);
     process.stdout.write(ok ? c.green(`✓ 已卸载 ${id}\n`) : c.red(`✗ 没有找到插件 ${id}\n`));
@@ -738,6 +787,33 @@ async function cmdPlugin(args: string[]): Promise<number> {
       process.stderr.write(c.red(`✗ ${(e as Error).message}\n`));
       return 1;
     }
+  }
+  if (sub === 'deps') {
+    const id = args[1] && !args[1].startsWith('-') ? args[1] : undefined;
+    if (!id) {
+      let bad = 0;
+      for (const entry of listPlugins()) {
+        const p = entry.plugin;
+        if (!p) continue;
+        const missing = missingDeps(p);
+        if (missing.length === 0) continue;
+        bad++;
+        process.stdout.write(`${c.bold(p.name)} ${c.dim(p.id)}  ${c.red(`缺 ${missing.join(', ')}`)}\n`);
+        for (const dep of missing) process.stdout.write(c.dim(`  zkit plugin install ${dep}\n`));
+      }
+      if (bad === 0) process.stdout.write(c.green('✓ 所有插件的依赖都齐了\n'));
+      return bad === 0 ? 0 : 1;
+    }
+    const plugin = requirePlugin(id);
+    process.stdout.write(`${c.bold(plugin.name)} ${c.dim(plugin.id)} v${plugin.version}\n`);
+    const tree = depTree(plugin);
+    if (tree.length === 0) {
+      process.stdout.write(c.dim('  没有声明插件依赖。\n'));
+      return 0;
+    }
+    process.stdout.write('\n依赖：\n');
+    printDepTree(tree, '  ');
+    return missingDeps(plugin).length > 0 ? 1 : 0;
   }
   if (sub === 'install') {
     return cmdPluginInstall(args.slice(1));
@@ -784,6 +860,14 @@ function cmdDoctor(): number {
     }
     const reqs = checkRequires(entry.plugin.requires).filter((r) => !r.ok);
     if (reqs.length > 0) problems++;
+    const missingPluginDeps = missingDeps(entry.plugin);
+    if (missingPluginDeps.length > 0) {
+      problems++;
+      process.stdout.write(c.red(`      ✗ 缺少插件依赖：${missingPluginDeps.join(', ')}\n`));
+      for (const dep of missingPluginDeps) {
+        process.stdout.write(c.dim(`        zkit plugin install ${dep}\n`));
+      }
+    }
     process.stdout.write(reqs.length === 0
       ? `  ${c.green('✓')} ${entry.plugin.name} ${c.dim(entry.plugin.id)}\n`
       : `  ${c.red('✗')} ${entry.plugin.name} 缺依赖：${reqs.map((r) => r.name).join(', ')}\n`);
@@ -813,9 +897,8 @@ function cmdDoctor(): number {
         const ref = step.use.slice(0, dot);
         if (ref === 'self') continue;
         const target = findPlugin(ref)?.plugin;
-        if (!target) {
-          process.stdout.write(c.yellow(`      ! 组合动作 ${a.id} 第 ${index + 1} 步引用的插件 ${ref} 没装\n`));
-        } else if (!target.actions.some((x) => x.id === step.use.slice(dot + 1))) {
+        if (!target) continue; // 缺插件由上面的「缺少插件依赖」统一报，别报两遍
+        if (!target.actions.some((x) => x.id === step.use.slice(dot + 1))) {
           process.stdout.write(c.yellow(`      ! 组合动作 ${a.id} 第 ${index + 1} 步引用的动作 ${step.use} 不存在\n`));
         }
       }
@@ -870,17 +953,24 @@ function cmdLogs(args: string[]): number {
 async function cmdPluginInstall(args: string[]): Promise<number> {
   const id = args.find((a) => !a.startsWith('-'));
   if (!id) {
-    process.stderr.write('用法：zkit plugin install <插件id> [--market <集市名>] [--yes]\n');
+    process.stderr.write('用法：zkit plugin install <插件id> [--market <集市名>] [--yes] [--with-deps]\n');
     process.stderr.write(c.dim('  先看看有什么：zkit market search\n'));
     return 2;
   }
   const marketIdx = args.indexOf('--market');
   const marketName = marketIdx >= 0 ? args[marketIdx + 1] : undefined;
   const skipConfirm = args.includes('--yes') || args.includes('-y');
+  const withDeps = args.includes('--with-deps');
 
   const preview = previewInstall(id, marketName);
   if (!preview) {
-    process.stderr.write(c.red(`✗ 所有集市里都没有插件 "${id}"\n`));
+    // 集市里没有不代表没有：仓库自带的示例插件同样可以按 id 装（依赖补齐也走这条路）
+    const bundled = installBundledPlugin(id);
+    if (bundled.ok) {
+      process.stdout.write(c.green(`✓ ${bundled.message}\n`));
+      return id ? finishDeps(id, withDeps) : 0;
+    }
+    process.stderr.write(c.red(`✗ 集市和自带示例里都没有插件 "${id}"\n`));
     process.stderr.write(c.dim('  用 zkit market search 看看有什么，或 zkit market add 添加集市\n'));
     return 1;
   }
@@ -904,6 +994,17 @@ async function cmdPluginInstall(args: string[]): Promise<number> {
       ? `${a.method} ${a.url}`
       : a.run.join(' ');
     process.stdout.write(c.dim(`      ${detail}\n`));
+  }
+
+  const deps = depStates(p);
+  if (deps.length > 0) {
+    process.stdout.write('\n插件依赖：');
+    process.stdout.write(deps.map((d) => (d.installed
+      ? c.green(`${d.id} ✓`)
+      : c.red(`${d.id} ✗`))).join('  ') + '\n');
+    if (!withDeps && deps.some((d) => !d.installed)) {
+      process.stdout.write(c.dim('  缺的会一并安装吗？这次不会（加 --with-deps，或在界面里勾选）\n'));
+    }
   }
 
   const reqs = checkRequires(p.requires);
@@ -934,10 +1035,10 @@ async function cmdPluginInstall(args: string[]): Promise<number> {
   process.stdout.write(result.ok
     ? c.green(`✓ ${result.message}\n`)
     : c.red(`✗ ${result.message}\n`));
-  if (result.ok && result.id) {
-    process.stdout.write(c.dim(`  看看它有什么：zkit show ${result.id}\n`));
-  }
-  return result.ok ? 0 : 1;
+  if (!result.ok) return 1;
+  const depCode = result.id ? finishDeps(result.id, withDeps) : 0;
+  if (result.id) process.stdout.write(c.dim(`  看看它有什么：zkit show ${result.id}\n`));
+  return depCode;
 }
 
 function cmdMarket(args: string[]): number {

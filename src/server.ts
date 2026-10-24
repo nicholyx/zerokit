@@ -20,6 +20,7 @@ import { describeSource, readSource } from './core/sources.ts';
 import { checkRequires } from './core/resolve.ts';
 import { applyDefaults, coerceParam, toFormFields, toJsonSchema } from './core/schema.ts';
 import { type PublicSetting, publicSettings, writeSettings } from './core/pluginConfig.ts';
+import { dependents, depStates, installDeps, missingDeps } from './core/deps.ts';
 import { buildArgv, chainDisplay, confirmPolicy, displayCommand, runAction } from './core/runner.ts';
 
 /**
@@ -59,6 +60,9 @@ interface WiredPlugin {
   keywords: string[];
   requiresOk: boolean;
   missingDeps: string[];
+  /** 插件依赖（其它 zerokit 插件）及其状态——和上面的命令依赖是两回事 */
+  pluginDeps: Array<{ id: string; installed: boolean; version?: string }>;
+  pluginDepsOk: boolean;
   /** 安装来源（git / 集市 / 自带 / 本地目录 / 未知），前端据此展示「能不能更新」 */
   sourceType: string;
   sourceText: string;
@@ -83,6 +87,8 @@ function wirePlugins(): WiredPlugin[] {
       keywords: p.keywords,
       requiresOk: reqs.every((r) => r.ok),
       missingDeps: reqs.filter((r) => !r.ok).map((r) => r.name),
+      pluginDeps: depStates(p),
+      pluginDepsOk: missingDeps(p).length === 0,
       sourceType: source?.type ?? 'unknown',
       sourceText: describeSource(source),
       installedAt: source?.installedAt ?? '',
@@ -397,6 +403,8 @@ export function createServer(): http.Server {
             plugin: {
               id: p.id, name: p.name, version: p.version, summary: p.summary,
               requires: Object.keys(p.requires),
+              pluginDeps: depStates(p),
+              missingPluginDeps: missingDeps(p),
               actions: p.actions.map((a) => ({
                 id: a.id, title: a.title, risk: a.risk,
                 command: a.type === 'http' ? `${a.method} ${a.url ?? ''}` : a.run.join(' '),
@@ -415,10 +423,30 @@ export function createServer(): http.Server {
         const result = isLocal
           ? addFromDir(preview.source, { source: { type: 'dir', installedAt: new Date().toISOString(), installedVersion: '' } })
           : addFromGit(preview.source);
+        // 先装插件、再补依赖：插件目录里已经能看到它缺什么，补齐过程也按同一套校验走。
+        // 依赖只在用户显式勾选 / 带 withDeps 时才装——装插件等于允许执行代码，
+        // 不能因为「顺手」就装一堆没看过的能力。
+        let depsInstalled: string[] = [];
+        let depsErrors: string[] = [];
+        let depsMissing: string[] = [];
+        if (result.ok && result.id) {
+          const installed = findPlugin(result.id)?.plugin;
+          if (installed) {
+            if (body['withDeps'] === true) {
+              const r = installDeps(installed);
+              depsInstalled = r.installed;
+              depsErrors = r.errors;
+            }
+            depsMissing = missingDeps(installed);
+          }
+        }
         json(res, 200, {
           ok: result.ok,
           message: result.message,
           warnings: result.warnings,
+          depsInstalled,
+          depsErrors,
+          depsMissing,
           // 前端收到后重新拉 /api/plugins
         });
         return;
@@ -461,9 +489,17 @@ export function createServer(): http.Server {
           json(res, 404, { error: `没有插件 ${id}` });
           return;
         }
+        const users = dependents(id);
+        if (users.length > 0 && body['force'] !== true) {
+          json(res, 409, {
+            error: `还有插件依赖 ${id}：${users.join(', ')}`,
+            dependents: users,
+          });
+          return;
+        }
         const confirm = typeof body['confirm'] === 'string' ? body['confirm'] : '';
         if (!confirm) {
-          json(res, 200, { needConfirm: true, confirm: installToken('remove', id) });
+          json(res, 200, { needConfirm: true, confirm: installToken('remove', id), dependents: users });
           return;
         }
         if (!sameToken(confirm, installToken('remove', id))) {

@@ -726,6 +726,7 @@ async function renderPlugins() {
           <span class="aid">${esc(p.id)} · v${esc(p.version)}</span>
           <span class="badge">${esc(p.sourceText)}</span>
           ${p.requiresOk ? '' : '<span class="badge destructive">缺依赖</span>'}
+          ${p.pluginDepsOk === false ? '<span class="badge destructive">缺插件依赖</span>' : ''}
           ${(p.settings || []).some((x) => x.missing) ? '<span class="badge warn">缺配置</span>' : ''}
           <span class="plug-ops">
             ${(p.settings || []).length > 0 ? '<button class="ghost" data-op="config">配置</button>' : ''}
@@ -733,7 +734,10 @@ async function renderPlugins() {
             <button class="ghost" data-op="remove">卸载</button>
           </span>
         </div>
-        <div class="plug-card-body">${esc(p.summary || '')} · ${p.actions.length} 个动作</div>
+        <div class="plug-card-body">${esc(p.summary || '')} · ${p.actions.length} 个动作${
+          (p.pluginDeps ?? []).length
+            ? ` · 依赖 ${p.pluginDeps.map((d) => (d.installed ? esc(d.id) : `${esc(d.id)}（未装）`)).join('、')}`
+            : ''}</div>
         <div class="plug-config" hidden></div>
         <div class="plug-card-foot" hidden></div>
       </div>`).join('')}
@@ -858,6 +862,16 @@ async function doInstall() {
               <td class="cmd-inline">${esc(a.command)}</td>
             </tr>`).join('')}</tbody>
         </table>
+        ${(p.pluginDeps ?? []).length ? `
+          <div class="plug-card-body">
+            插件依赖：${p.pluginDeps.map((d) => (d.installed
+              ? `<span class="ok">${esc(d.id)} ✓</span>`
+              : `<span style="color:var(--bad)">${esc(d.id)} 未安装</span>`)).join('、')}
+          </div>
+          ${(p.missingPluginDeps ?? []).length
+            ? `<label class="plug-setting"><input type="checkbox" id="pvDeps" checked>
+                 一并安装缺失的依赖（${esc(p.missingPluginDeps.join('、'))}）</label>`
+            : ''}` : ''}
         ${(pv.warnings ?? []).length ? `<div class="plug-warn">${pv.warnings.map((w) => `! ${esc(w)}`).join('<br>')}</div>` : ''}
       </div>`;
     $('pvCancel').addEventListener('click', () => { box.innerHTML = ''; });
@@ -865,11 +879,16 @@ async function doInstall() {
       $('pvOk').disabled = true;
       $('pvOk').textContent = '安装中…';
       try {
+        const withDeps = $('pvDeps')?.checked ?? false;
         const r = await api('/api/plugin/install', {
-          method: 'POST', body: { source, confirm: pv.confirm },
+          method: 'POST', body: { source, confirm: pv.confirm, withDeps },
         });
         if (!r.ok) throw new Error(r.message || '安装失败');
-        box.innerHTML = `<div class="plug-card"><div class="plug-card-body">✓ ${esc(r.message)}</div></div>`;
+        const depNote = (r.depsInstalled ?? []).length
+          ? `<br><span class="ok">已补装依赖：${esc(r.depsInstalled.join('、'))}</span>` : '';
+        const depWarn = (r.depsMissing ?? []).length
+          ? `<br><span style="color:var(--bad)">仍缺依赖：${esc(r.depsMissing.join('、'))}（zkit plugin install …）</span>` : '';
+        box.innerHTML = `<div class="plug-card"><div class="plug-card-body">✓ ${esc(r.message)}${depNote}${depWarn}</div></div>`;
         await load(true);
         await renderPlugins();
       } catch (e) {

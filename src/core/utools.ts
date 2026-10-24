@@ -307,6 +307,7 @@ export function adaptUtoolsPlugin(dir: string): LoadResult {
     summary: typeof raw.description === 'string' ? raw.description.slice(0, 100) : `uTools 插件：${name}`,
     keywords: [...keywords],
     requires: { node: '>=20' },
+    pluginDeps: [],
     dir,
     manifestPath: file,
     // spawn 而非 worker：入口脚本多半是 CommonJS，且要靠进程级的垫片提供 utools 全局

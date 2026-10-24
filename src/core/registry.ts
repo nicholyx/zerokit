@@ -162,6 +162,36 @@ export function addFromDir(source: string, opts: InstallOptions = {}): AddResult
   return { ok: true, id: result.plugin.id, dir: dst, message: `${verb} ${result.plugin.name}${note}`, warnings: result.warnings };
 }
 
+/** 安装仓库自带的一个插件（依赖补齐时按 id 点名安装，不连带装别的） */
+export function installBundledPlugin(id: string): { ok: boolean; message: string } {
+  ensureDirs();
+  let src = path.join(BUNDLED_PLUGINS_DIR, id);
+  if (!fs.existsSync(path.join(src, 'plugin.toml'))) {
+    // 目录名不一定等于插件 id（允许 plugins/foo/plugin.toml 里写 id = "bar"）
+    src = '';
+    if (fs.existsSync(BUNDLED_PLUGINS_DIR)) {
+      for (const name of fs.readdirSync(BUNDLED_PLUGINS_DIR)) {
+        const candidate = path.join(BUNDLED_PLUGINS_DIR, name);
+        if (!fs.existsSync(path.join(candidate, 'plugin.toml'))) continue;
+        if (loadPlugin(candidate).plugin?.id === id) { src = candidate; break; }
+      }
+    }
+  }
+  if (!src) return { ok: false, message: `仓库自带的插件里没有 "${id}"` };
+  const dst = path.join(PLUGINS_DIR, id);
+  if (fs.existsSync(dst)) return { ok: true, message: `${id} 已经装过了` };
+  try {
+    fs.cpSync(src, dst, { recursive: true });
+  } catch (e) {
+    return { ok: false, message: `复制 ${id} 失败：${(e as Error).message}` };
+  }
+  const version = loadPlugin(src).plugin?.version ?? '0.0.0';
+  try {
+    writeSource(dst, { type: 'bundled', installedAt: new Date().toISOString(), installedVersion: version });
+  } catch { /* 来源写不进去不影响安装 */ }
+  return { ok: true, message: `已安装自带的 ${id}` };
+}
+
 /**
  * 克隆一个 git 仓库并定位其中的插件目录。
  * 安装与更新共用这条路径（更新只是「再 clone 一次然后替换」）。

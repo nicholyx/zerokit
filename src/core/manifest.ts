@@ -187,6 +187,15 @@ export interface Plugin {
   license?: string;
   /** 依赖声明，例如 { python = ">=3.10" }。缺失时给安装指引 */
   requires: Record<string, string>;
+  /**
+   * 插件依赖（`[requires] plugins = [...]`）。
+   *
+   * 语义比命令依赖强：没有它，插件的动作可能根本跑不起来（典型是组合动作
+   * 引用了别的插件的动作）。所以安装、doctor、启动器都拿这份清单做检查。
+   * 注意**只**表达 zerokit 插件依赖，pip / npm 包不在这个体系里——
+   * 我们不代跑任何安装脚本。
+   */
+  pluginDeps: string[];
   dir: string;
   manifestPath: string;
   /**
@@ -301,6 +310,78 @@ function parseParams(raw: unknown, actionId: string, errors: string[]): ActionPa
     if (short) param.short = short;
     if (p['secret'] === true) param.secret = true;
     out.push(param);
+  }
+  return out;
+}
+
+/**
+ * `[requires] plugins = [...]`：插件之间的依赖。
+ *
+ * 组合动作已经隐含了依赖（`use = "ip.public"` 就是「需要 ip」），所以这里
+ * 把两种来源合并：显式声明的在前，链路引用的补在后。作者漏写一处也不会装出
+ * 一个「缺胳膊」的插件。
+ */
+function parsePluginDeps(
+  raw: unknown,
+  selfId: string | undefined,
+  actions: Action[],
+  errors: string[],
+  warnings: string[],
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const add = (id: string, whence: string): void => {
+    if (seen.has(id)) return;
+    if (id === 'self') {
+      errors.push(`[requires] plugins 里出现了 "self"——插件不能依赖自己`);
+      return;
+    }
+    if (selfId && id === selfId) {
+      errors.push(`[requires] plugins 里出现了插件自己的 id "${id}"`);
+      return;
+    }
+    if (!ID_RE.test(id)) {
+      errors.push(`[requires] plugins 里的 "${id}" 不是合法插件 id（${whence}）`);
+      return;
+    }
+    seen.add(id);
+    out.push(id);
+  };
+
+  if (raw !== undefined) {
+    if (!Array.isArray(raw)) {
+      errors.push('[requires] plugins 要写成数组：plugins = ["ip", "sysinfo"]');
+    } else {
+      for (const item of raw) {
+        if (typeof item !== 'string' || item.trim() === '') {
+          errors.push('[requires] plugins 里只能放插件 id 字符串');
+          continue;
+        }
+        add(item.trim(), '显式声明');
+      }
+    }
+  }
+
+  // 链路引用折算依赖：这是最容易漏写、也最容易在运行时才炸的一类。
+  for (const action of actions) {
+    if (action.type !== 'chain') continue;
+    for (const step of action.steps) {
+      const dot = step.use.lastIndexOf('.');
+      const dep = step.use.slice(0, dot);
+      if (dep === 'self') continue;
+      add(dep, `动作 ${action.id} 的第 ${action.steps.indexOf(step) + 1} 步引用了它`);
+    }
+  }
+
+  // 显式声明的不用提醒；只有「靠链路引用推出来的」才值得说一句——
+  // 它决定了安装与 doctor 的行为，作者应当知道自己的清单表达了这层关系。
+  const explicit = new Set(
+    Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string').map((x) => x.trim()) : [],
+  );
+  for (const dep of out) {
+    if (!explicit.has(dep)) {
+      warnings.push(`已从组合动作里推导出插件依赖 "${dep}"（写进 [requires] plugins 更直观）`);
+    }
   }
   return out;
 }
@@ -841,6 +922,15 @@ export function parseManifest(text: string, pluginDir: string, manifestPath = '<
 
   if (errors.length > 0) return { errors, warnings };
 
+  // `[requires]` 同时承载命令依赖与插件依赖：plugins 单独解析，不能混进命令检查。
+  // 位置：TOML 里是**顶层** `[requires]`（`[plugin]` 段已结束）。早期代码读的是
+  // `[plugin].requires`，于是所有插件的依赖声明都被静默忽略了一年——这里两种
+  // 都认，顶层优先，避免老清单突然报错。
+  const requiresRaw = Object.keys(asRecord(raw['requires'])).length > 0
+    ? asRecord(raw['requires'])
+    : asRecord(meta['requires']);
+  const pluginDeps = parsePluginDeps(requiresRaw['plugins'], id, actions, errors, warnings);
+
   const plugin: Plugin = {
     id: id!,
     name: name!,
@@ -848,8 +938,11 @@ export function parseManifest(text: string, pluginDir: string, manifestPath = '<
     summary: asString(meta['summary']) ?? '',
     keywords: asStringArray(meta['keywords']),
     requires: Object.fromEntries(
-      Object.entries(asRecord(meta['requires'])).map(([k, v]) => [k, String(v)]),
+      Object.entries(requiresRaw)
+        .filter(([k]) => k !== 'plugins')
+        .map(([k, v]) => [k, String(v)]),
     ),
+    pluginDeps,
     dir: pluginDir,
     manifestPath,
     runtime,
