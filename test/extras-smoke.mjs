@@ -6,6 +6,8 @@ import {
   THEMES, normalizeTheme, resolveTheme, SHORTCUTS,
   highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite,
   favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS,
+  ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch,
+  topActions, recentRuns, invocationText, resultMarkdown,
 } from '../web/extras.js';
 
 const results = [];
@@ -117,6 +119,55 @@ check('健康概览：列出缺依赖 / 缺插件依赖 / 缺配置',
   && health.missingSettings.join(',') === 'bad');
 check('健康概览：全齐时 healthy 为真',
   pluginHealth([{ id: 'a', requiresOk: true, pluginDepsOk: true, settings: [], actions: [] }]).healthy === true);
+
+// ---------------------------------------------------------------- 第二轮：外观 / 筛选 / 历史 / 导出
+
+check('强调色：六档且 id 唯一', ACCENTS.length === 6
+  && new Set(ACCENTS.map((a) => a.id)).size === 6, JSON.stringify(ACCENTS.map((a) => a.id)));
+check('强调色：坏值收敛成 ocean', normalizeAccent('nope') === 'ocean' && normalizeAccent('violet') === 'violet');
+
+const filterPool = [
+  { plugin: { id: 'p' }, action: { id: 'a', risk: 'read' } },
+  { plugin: { id: 'p' }, action: { id: 'b', risk: 'mutate' } },
+  { plugin: { id: 'q' }, action: { id: 'c', risk: 'destructive' } },
+];
+check('筛选：五档标签', FILTERS.map((f) => f.id).join(',') === 'all,fav,read,mutate,destructive');
+check('筛选：只读/会改动/高风险各自命中',
+  filterActions(filterPool, 'read', []).length === 1
+  && filterActions(filterPool, 'mutate', []).length === 1
+  && filterActions(filterPool, 'destructive', []).length === 1);
+check('筛选：收藏按 plugin.action 匹配',
+  filterActions(filterPool, 'fav', ['q.c']).map((x) => x.action.id).join(',') === 'c');
+
+check('搜索历史：最新在前、去重、最多 8 条',
+  pushSearch(pushSearch(pushSearch([], 'a'), 'b'), 'a').join(',') === 'a,b'
+  && pushSearch(Array.from({ length: 9 }, (_, i) => `q${i}`), 'x').length === 8
+  && pushSearch(['a'], '  ').join(',') === 'a');
+
+const fakeStore = {
+  'p.a': [{ ts: 30, ok: true }, { ts: 10, ok: false }],
+  'p.b': [{ ts: 20, ok: true }],
+};
+check('使用统计：按次数排序，取前 N',
+  topActions(fakeStore, 2).map((x) => x.key).join(',') === 'p.a,p.b'
+  && topActions(fakeStore, 5)[0].runs === 2);
+check('最近执行：跨动作按时间倒序',
+  recentRuns(fakeStore, 3).map((x) => x.ts).join(',') === '30,20,10');
+
+const cliText = invocationText({ id: 'sysinfo', name: '系统信息' }, { id: 'top', title: '占用最高的进程' }, 'http://127.0.0.1:1/#/sysinfo/top');
+check('调用方式：三种写法都在',
+  cliText.includes('zkit run sysinfo top') && cliText.includes('sysinfo__top')
+  && cliText.includes('http://127.0.0.1:1/#/sysinfo/top'), cliText);
+
+const mdObj = resultMarkdown('系统信息 · 占用最高的进程', {
+  ok: true, ms: 42, command: 'node sysinfo.mjs top --limit 10',
+  data: { 主机名: 'mac', 内存占用率: '61%' },
+});
+check('导出 Markdown：对象转两列表 + 页脚',
+  mdObj.includes('| 字段 | 值 |') && mdObj.includes('| 主机名 | mac |') && mdObj.includes('> 成功 · 42 ms'), mdObj);
+const mdArr = resultMarkdown('列表', { ok: false, error: 'boom', data: [{ a: 1, b: 2 }, { a: 3, b: 4 }] });
+check('导出 Markdown：数组转表格、失败原因进引用块',
+  mdArr.includes('| a | b |') && mdArr.includes('| 1 | 2 |') && mdArr.includes('> 失败：boom'), mdArr);
 
 // ---------------------------------------------------------------- 工作台建议
 
