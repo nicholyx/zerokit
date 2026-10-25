@@ -4,6 +4,11 @@
 
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
+import {
+  normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey,
+  toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory,
+  pluginHealth, PROMPTS,
+} from './extras.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
 const $ = (id) => document.getElementById(id);
@@ -28,6 +33,69 @@ let mode = 'command';
 let marketData = { markets: [], total: 0 };
 let marketQuery = '';
 let marketPreview = null;
+
+// ---------------------------------------------------------------- 本地偏好
+// 主题 / 收藏 / 参数记忆 / 执行历史全部只进 localStorage：
+// 这是「这台机器上这个人用起来顺手」的状态，不该同步到插件或服务端。
+const PREF = {
+  theme: 'zerokit.theme',
+  favorites: 'zerokit.favorites',
+  params: 'zerokit.params',
+  runs: 'zerokit.runs',
+};
+let favorites = [];
+let paramStore = {};
+let runStore = {};
+
+function readJson(key, fallback) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(key) ?? 'null');
+    return raw ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJson(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* 隐私模式 */ }
+}
+
+function savePrefs() {
+  writeJson(PREF.favorites, favorites);
+  writeJson(PREF.params, paramStore);
+  writeJson(PREF.runs, runStore);
+}
+
+function loadPrefs() {
+  const favs = readJson(PREF.favorites, []);
+  favorites = Array.isArray(favs) ? favs.filter((x) => typeof x === 'string') : [];
+  const params = readJson(PREF.params, {});
+  paramStore = params && typeof params === 'object' ? params : {};
+  const runs = readJson(PREF.runs, {});
+  runStore = runs && typeof runs === 'object' ? runs : {};
+}
+
+function applyTheme() {
+  const choice = normalizeTheme(localStorage.getItem(PREF.theme));
+  const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true;
+  const resolved = resolveTheme(choice, prefersDark);
+  document.documentElement.dataset.theme = resolved;
+  const btn = $('themeBtn');
+  if (btn) {
+    const label = choice === 'system' ? `跟随系统 · ${resolved === 'dark' ? '深色' : '浅色'}`
+      : choice === 'dark' ? '深色' : '浅色';
+    btn.textContent = `${resolved === 'dark' ? '◐' : '◑'} ${label}`;
+    btn.title = '切换主题：跟随系统 → 深色 → 浅色';
+  }
+}
+
+function cycleTheme() {
+  const order = ['system', 'dark', 'light'];
+  const now = normalizeTheme(localStorage.getItem(PREF.theme));
+  const next = order[(order.indexOf(now) + 1) % order.length];
+  try { localStorage.setItem(PREF.theme, next); } catch { /* 隐私模式 */ }
+  applyTheme();
+}
 
 const RISK_TEXT = { read: '只读', mutate: '会改动', destructive: '高风险' };
 
@@ -227,19 +295,22 @@ function saveCollapsed(set) {
   try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...set])); } catch { /* 隐私模式 */ }
 }
 
-function itemHtml(entry, i, showPlugin) {
+function itemHtml(entry, i, showPlugin, query = '') {
   const a = entry.action;
   const p = entry.plugin;
   const dep = p.requiresOk ? '' : `<span class="badge destructive">缺依赖</span>`;
   const smart = filteredSmart.get(entry.order);
+  const key = actionKey(p.id, a.id);
+  const fav = isFavorite(favorites, key);
   // 搜索态跨插件，条目里带上插件名；浏览态有分组头就不重复了
-  const who = showPlugin ? `<span class="plugin">${esc(p.name)}</span>` : '';
-  return `<li class="item${i === active ? ' active' : ''}${smart ? ' smart' : ''}" data-i="${i}" role="option">
+  const who = showPlugin ? `<span class="plugin">${highlightHtml(p.name, query, esc)}</span>` : '';
+  return `<li class="item${i === active ? ' active' : ''}${smart ? ' smart' : ''}${fav ? ' fav' : ''}" data-i="${i}" role="option">
     ${who}
     <span class="title">
-      <span class="name">${esc(a.title)}</span>
+      <span class="name">${highlightHtml(a.title, query, esc)}</span>
       <span class="desc">${smart ? `内容看起来是${esc(smart)}，可以直接用` : esc(a.description || p.summary || '')}</span>
     </span>
+    <button class="star${fav ? ' on' : ''}" data-fav="${esc(key)}" title="${fav ? '取消收藏' : '收藏这个动作'}">${fav ? '★' : '☆'}</button>
     <span class="aid">${esc(a.id)}</span>
     ${a.steps?.length ? `<span class="badge">组合 ${a.steps.length} 步</span>` : ''}
     ${smart ? `<span class="badge smart-badge">智能匹配</span>` : ''}
@@ -258,7 +329,13 @@ function renderList() {
   el.listView.classList.remove('hidden');
   if (detail) el.detailView.classList.remove('hidden');
 
-  const results = search(q);
+  let results = search(q);
+  if (q.trim() === '' && favorites.length > 0) {
+    // 空搜索时收藏优先：高频的几条不用记位置
+    const favSet = new Set(favorites);
+    results = favoritesFirst(results.map((r) => r.entry), favSet)
+      .map((entry) => results.find((r) => r.entry === entry));
+  }
   filtered = results.map((r) => r.entry);
   filteredSmart = new Map(results.filter((r) => r.smart).map((r) => [r.entry.order, r.smart]));
   if (active >= filtered.length) active = Math.max(0, filtered.length - 1);
@@ -284,7 +361,7 @@ function renderList() {
           <span class="g-meta">${esc(p.id)} · v${esc(p.version)} · ${items.length} 个动作</span>
           ${dep}
         </li>`
-        + (isCollapsed ? '' : items.map(([entry, i]) => itemHtml(entry, i, false)).join(''));
+        + (isCollapsed ? '' : items.map(([entry, i]) => itemHtml(entry, i, false, '')).join(''));
     }).join('');
     el.list.querySelectorAll('.group-head').forEach((head) => {
       head.addEventListener('click', () => {
@@ -296,21 +373,35 @@ function renderList() {
       });
     });
   } else {
-    el.list.innerHTML = filtered.map((entry, i) => itemHtml(entry, i, true)).join('');
+    el.list.innerHTML = filtered.map((entry, i) => itemHtml(entry, i, true, q)).join('');
   }
 
   el.list.querySelectorAll('.item').forEach((node) => {
-    node.addEventListener('click', () => { active = Number(node.dataset.i); openActive(); });
+    node.addEventListener('click', (ev) => {
+      if (ev.target.closest('[data-fav]')) return;
+      active = Number(node.dataset.i);
+      openActive();
+    });
     node.addEventListener('mousemove', () => {
       const i = Number(node.dataset.i);
       if (i !== active) { active = i; paintActive(); }
     });
   });
+  // 星标不打开动作：它只是「把这一条钉在前面」，所以单独拦一层
+  el.list.querySelectorAll('[data-fav]').forEach((btn) => {
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      favorites = toggleFavorite(favorites, btn.dataset.fav);
+      savePrefs();
+      renderList();
+    });
+  });
   el.count.textContent = q.trim()
     ? `${filtered.length} / ${entries.length} 个动作`
-    : (loadRecent().length > 0
-      ? `最近使用优先 · ${plugins.length} 个插件 · ${entries.length} 个动作`
-      : `${plugins.length} 个插件 · ${entries.length} 个动作`);
+    : [favorites.length ? `收藏 ${favorites.length} 优先` : '',
+      loadRecent().length > 0 ? '最近使用优先' : '']
+      .filter(Boolean).concat([`${plugins.length} 个插件`, `${entries.length} 个动作`])
+      .join(' · ');
 }
 
 function paintActive() {
@@ -354,6 +445,14 @@ function openDetail(plugin, action, prefill) {
       ${steps.map((s, i) => `<div>${i + 1}. ${esc(s.use)} → {${esc(s.as)}}</div>`).join('')}
     </div>` : '';
 
+  const favKey = actionKey(plugin.id, action.id);
+  const fav = isFavorite(favorites, favKey);
+  const mem = paramStore[favKey] ?? {};
+  const initial = { ...mem, ...(prefill ?? {}) };
+  const memNote = Object.keys(mem).length
+    ? `<div class="mem-note">已带入上次参数 · <button class="link" id="forgetParams">清除记忆</button></div>`
+    : '';
+
   const fields = action.fields.map((f) => {
     const req = f.required ? ' <span class="req">*</span>' : '';
     const help = f.help ? `<div class="help">${esc(f.help)}</div>` : '';
@@ -369,8 +468,9 @@ function openDetail(plugin, action, prefill) {
           ${(f.options || []).map((o) => `<option${o === f.default ? ' selected' : ''}>${esc(o)}</option>`).join('')}
         </select>${help}</div>`;
     }
-    const type = f.type === 'number' ? 'number' : 'text';
-    const given = prefill && prefill[f.name] !== undefined ? prefill[f.name] : f.default;
+    // 密钥字段：输入框就是 password，既不回显也不进参数记忆
+    const type = f.secret ? 'password' : (f.type === 'number' ? 'number' : 'text');
+    const given = initial[f.name] !== undefined ? initial[f.name] : f.default;
     const def = given === undefined ? '' : ` value="${esc(given)}"`;
     return `<div class="field"><label>${esc(f.name)}${req}</label>
       <input id="f_${esc(f.name)}" type="${type}"${def} autocomplete="off">${help}</div>`;
@@ -378,7 +478,8 @@ function openDetail(plugin, action, prefill) {
 
   el.detailView.innerHTML = `
     <div class="detail-head">
-      <h2>${esc(action.title)}</h2>
+      <h2>${esc(action.title)}<button class="star big${fav ? ' on' : ''}" id="favBtn"
+        title="${fav ? '取消收藏' : '收藏这个动作'}">${fav ? '★' : '☆'}</button></h2>
       <div class="meta">${esc(plugin.name)} · ${esc(action.id)} ·
         <span class="badge ${esc(action.risk)}">${esc(RISK_TEXT[action.risk] || action.risk)}</span>
         ${steps.length ? `<span class="badge">组合 ${steps.length} 步</span>` : ''}
@@ -388,7 +489,9 @@ function openDetail(plugin, action, prefill) {
     </div>
     ${depWarn}
     ${chainInfo}
+    ${memNote}
     ${fields}
+    <div id="runHistory" class="run-history"></div>
     <div class="actions">
       <button class="primary" id="runBtn">执行</button>
       <button class="ghost" id="backBtn">返回</button>
@@ -397,6 +500,21 @@ function openDetail(plugin, action, prefill) {
 
   $('backBtn').addEventListener('click', backToList);
   $('runBtn').addEventListener('click', () => submit(false));
+  $('favBtn')?.addEventListener('click', () => {
+    favorites = toggleFavorite(favorites, favKey);
+    savePrefs();
+    const on = isFavorite(favorites, favKey);
+    const btn = $('favBtn');
+    btn.textContent = on ? '★' : '☆';
+    btn.classList.toggle('on', on);
+    btn.title = on ? '取消收藏' : '收藏这个动作';
+  });
+  $('forgetParams')?.addEventListener('click', () => {
+    delete paramStore[favKey];
+    savePrefs();
+    openDetail(plugin, action);
+  });
+  renderRunHistory(plugin, action);
   el.detailView.querySelectorAll('input, select').forEach((node) => {
     node.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') submit(false); });
   });
@@ -462,6 +580,13 @@ async function submit(remember) {
     lastResult = res;
     renderResult(res);
     rememberRecent(plugin.id, action.id);
+    const secretNames = action.fields.filter((f) => f.secret).map((f) => f.name);
+    paramStore = rememberParams(paramStore, actionKey(plugin.id, action.id), values, secretNames);
+    runStore = pushRunHistory(runStore, actionKey(plugin.id, action.id), {
+      ts: Date.now(), ok: res.ok === true, ms: res.ms ?? 0,
+    });
+    savePrefs();
+    renderRunHistory(plugin, action);
     // 刚跑完的动作可能拉起了一个后台进程/服务，徽标要跟着变
     refreshPsCount();
   } catch (e) {
@@ -513,6 +638,24 @@ function askConfirm(plugin, action, res) {
 
 // ---------------------------------------------------------------- 结果渲染
 
+function renderRunHistory(plugin, action) {
+  const box = $('runHistory');
+  if (!box) return;
+  const list = runStore[actionKey(plugin.id, action.id)] ?? [];
+  if (!list.length) {
+    box.innerHTML = '<div class="run-empty">还没有执行记录——跑一次就会记在这里（只保存在本机）。</div>';
+    return;
+  }
+  box.innerHTML = `<div class="run-head">最近执行</div>${list.map((r) => `
+    <div class="run-row">
+      <span class="${r.ok ? 'ok' : 'bad'}">${r.ok ? '✓' : '✗'}</span>
+      <span class="run-when">${esc(new Date(r.ts).toLocaleString())}</span>
+      <span class="run-ms">${esc(String(r.ms))} ms</span>
+      <button class="ghost" data-rerun>重跑</button>
+    </div>`).join('')}`;
+  box.querySelectorAll('[data-rerun]').forEach((b) => b.addEventListener('click', () => submit(false)));
+}
+
 function renderResult(res) {
   const box = $('result');
   if (!box) return;
@@ -546,13 +689,41 @@ function renderResult(res) {
   }
   if (!body) body = `<div class="help">（没有输出）</div>`;
 
+  const copyText = res.data !== undefined ? JSON.stringify(res.data, null, 2) : (res.stdout ?? '');
   box.innerHTML = `
     <div class="card">
-      <div class="card-head">${head}<span>${esc(ms)}</span>
+      <div class="card-head">${head}
         <span style="margin-left:auto" class="aid">${esc(res.command || '')}</span>
+      </div>
+      <div class="result-tools">
+        <button class="ghost" id="copyRes" title="把结果复制到剪贴板">复制</button>
+        <button class="ghost" id="saveRes" title="把结果存成文本文件">下载</button>
+        <button class="ghost" id="againRes" title="用同样的参数再跑一次">再跑一次</button>
+        <span class="ms">${esc(ms)}</span>
       </div>
       <div class="card-body">${body}</div>
     </div>`;
+
+  $('copyRes')?.addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget;
+    try {
+      await navigator.clipboard.writeText(copyText);
+      btn.textContent = '已复制';
+    } catch {
+      btn.textContent = '复制失败';
+    }
+    setTimeout(() => { btn.textContent = '复制'; }, 1500);
+  });
+  $('saveRes')?.addEventListener('click', () => {
+    const blob = new Blob([copyText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `zerokit-${detail ? `${detail.plugin.id}-${detail.action.id}` : 'result'}.txt`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  $('againRes')?.addEventListener('click', () => submit(false));
 
   // web 面的 iframe 加载完就发执行上下文（页面里的 hello 握手是双保险）
   const frame = box.querySelector('.web-frame:not(.html)');
@@ -946,6 +1117,74 @@ async function showPlugins() {
   await renderPlugins();
 }
 
+/** 插件主页：一个插件在四个面里到底是什么——动作、设置、依赖、来源，一页看完 */
+async function showPluginHome(id) {
+  mode = 'plugins';
+  el.modeLabel.textContent = '插件';
+  el.searchRow.classList.add('hidden');
+  el.listView.classList.add('hidden');
+  el.detailView.classList.add('hidden');
+  el.workbench.classList.add('hidden');
+  el.psView.classList.add('hidden');
+  el.marketView.classList.add('hidden');
+  el.plugView.classList.remove('hidden');
+  if (location.hash !== `#/plugins/${id}`) history.replaceState(null, '', `#/plugins/${id}`);
+
+  let p = plugins.find((x) => x.id === id);
+  if (!p) {
+    try { p = ((await api('/api/plugins')).plugins ?? []).find((x) => x.id === id); } catch { p = undefined; }
+  }
+  if (!p) {
+    el.plugView.innerHTML = `<div class="ps-empty">找不到插件 ${esc(id)}</div>
+      <div class="actions"><button class="primary" id="homeBackList">返回插件列表</button></div>`;
+    $('homeBackList').addEventListener('click', showPlugins);
+    return;
+  }
+
+  const settings = p.settings ?? [];
+  const deps = p.pluginDeps ?? [];
+  el.plugView.innerHTML = `
+    <div class="ps-head">
+      <h2>${esc(p.name)} <span class="aid">${esc(p.id)} · v${esc(p.version)}</span></h2>
+      <span class="sub">${esc(p.sourceText)}</span>
+    </div>
+    <div class="plug-home-desc">${esc(p.description || p.summary || '')}</div>
+    <div class="plug-home-meta">
+      <span class="badge">${p.actions.length} 个动作</span>
+      ${deps.length ? `<span class="badge">插件依赖 ${deps.map((d) => `${esc(d.id)}${d.installed ? '' : '（未装）'}`).join('、')}</span>` : ''}
+      ${settings.length ? `<span class="badge warn">${settings.filter((x) => x.missing).length} 项未填</span>` : ''}
+      ${p.requiresOk ? '' : '<span class="badge destructive">缺命令依赖</span>'}
+    </div>
+    <h3 class="plug-home-h">动作</h3>
+    <div class="plug-home-actions">
+      ${p.actions.map((a) => `
+        <button class="plug-action" data-action="${esc(a.id)}">
+          <span class="pa-title">${esc(a.title)}</span>
+          <span class="badge ${esc(a.risk)}">${esc(RISK_TEXT[a.risk] || a.risk)}</span>
+          ${a.steps?.length ? `<span class="badge">组合 ${a.steps.length} 步</span>` : ''}
+        </button>`).join('')}
+    </div>
+    ${settings.length ? `<h3 class="plug-home-h">设置项</h3>
+      <div class="plug-home-settings">
+        ${settings.map((s) => `<div class="home-setting">
+          <span class="hs-name">${esc(s.title || s.name)}</span>
+          <span class="hs-val">${s.secret ? (s.set ? '已设置 · ******' : '未设置') : (s.set ? '已设置' : '未设置')}</span>
+          ${s.missing ? '<span class="badge destructive">缺</span>' : ''}
+        </div>`).join('')}
+      </div>` : ''}
+    <div class="actions">
+      <button class="ghost" id="homeBackList">返回插件列表</button>
+      <button class="primary" id="homeBack">返回</button>
+    </div>`;
+
+  el.plugView.querySelectorAll('[data-action]').forEach((btn) => {
+    const a = p.actions.find((x) => x.id === btn.dataset.action);
+    btn.addEventListener('click', () => openDetail(p, a));
+  });
+  $('homeBackList').addEventListener('click', showPlugins);
+  $('homeBack').addEventListener('click', exitPlugins);
+}
+
 async function renderPlugins() {
   let plugins = [];
   try {
@@ -958,11 +1197,29 @@ async function renderPlugins() {
   }
 
   el.plugCount.textContent = String(plugins.length);
+  const health = pluginHealth(plugins);
   el.plugView.innerHTML = `
     <div class="ps-head">
       <h2>插件（${plugins.length}）</h2>
       <span class="sub">来源与版本 · 安装 · 更新</span>
     </div>
+    <div class="stat-row">
+      <div class="stat-card"><b>${health.actions}</b><span>个动作</span></div>
+      <div class="stat-card${health.chains ? '' : ' mute'}"><b>${health.chains}</b><span>个组合动作</span></div>
+      <div class="stat-card${health.missingDeps.length ? ' warn' : ''}">
+        <b>${health.missingDeps.length}</b><span>缺命令依赖</span>
+        ${health.missingDeps.length ? `<i>${esc(health.missingDeps.join('、'))}</i>` : ''}
+      </div>
+      <div class="stat-card${health.missingPluginDeps.length ? ' warn' : ''}">
+        <b>${health.missingPluginDeps.length}</b><span>缺插件依赖</span>
+        ${health.missingPluginDeps.length ? `<i>${esc(health.missingPluginDeps.join('、'))}</i>` : ''}
+      </div>
+      <div class="stat-card${health.missingSettings.length ? ' warn' : ''}">
+        <b>${health.missingSettings.length}</b><span>缺配置</span>
+      </div>
+    </div>
+    ${health.healthy ? '<div class="health-note ok">全部插件都齐了，没有缺依赖或未填的配置。</div>'
+      : '<div class="health-note">带 ⚠ 的数字点得进去——上面列的就是要补的东西。</div>'}
     <div class="plug-install">
       <input id="installSrc" placeholder="粘贴 git 仓库地址（https://github.com/…）或本地目录，回车安装"
              autocomplete="off" spellcheck="false">
@@ -979,6 +1236,7 @@ async function renderPlugins() {
           ${p.pluginDepsOk === false ? '<span class="badge destructive">缺插件依赖</span>' : ''}
           ${(p.settings || []).some((x) => x.missing) ? '<span class="badge warn">缺配置</span>' : ''}
           <span class="plug-ops">
+            <button class="ghost" data-op="home">主页</button>
             ${(p.settings || []).length > 0 ? '<button class="ghost" data-op="config">配置</button>' : ''}
             <button class="ghost" data-op="check">检查更新</button>
             <button class="ghost" data-op="remove">卸载</button>
@@ -1000,6 +1258,7 @@ async function renderPlugins() {
   $('plugBack').addEventListener('click', exitPlugins);
 
   el.plugView.querySelectorAll('.plug-card').forEach((card) => {
+    card.querySelector('[data-op="home"]').addEventListener('click', () => showPluginHome(card.dataset.id));
     card.querySelector('[data-op="check"]').addEventListener('click', () => doCheck(card));
     card.querySelector('[data-op="remove"]').addEventListener('click', () => doRemove(card));
     const cfgBtn = card.querySelector('[data-op="config"]');
@@ -1441,6 +1700,7 @@ function showWorkbench(question) {
         <span class="wb-tools" id="wbTools"></span>
         <button class="ghost" id="wbReset">新会话</button>
       </div>
+      <div class="wb-suggest" id="wbSuggest"></div>
       <div class="wb-log" id="wbLog"></div>
       <div class="wb-input">
         <input id="wbQ" placeholder="要它做什么？例如：看看系统概况" autocomplete="off">
@@ -1453,6 +1713,7 @@ function showWorkbench(question) {
     });
     $('wbReset').addEventListener('click', () => { wb.sessionId = ''; wb.log.innerHTML = ''; });
     loadAiInfo();
+    renderPrompts();
   }
 
   if (question) {
@@ -1477,6 +1738,20 @@ async function loadAiInfo() {
   } catch (e) {
     $('wbModel').textContent = `读取模型配置失败：${e.message}`;
   }
+}
+
+/** 空会话时的提问建议：给不会写 prompt 的人一个起点，点一下就直接发 */
+function renderPrompts() {
+  const box = $('wbSuggest');
+  if (!box) return;
+  box.innerHTML = `<span class="suggest-label">试试：</span>${PROMPTS.map((p) =>
+    `<button class="suggest-chip" data-prompt="${esc(p.prompt)}">${esc(p.label)}</button>`).join('')}`;
+  box.querySelectorAll('[data-prompt]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      $('wbQ').value = btn.dataset.prompt;
+      wbSend();
+    });
+  });
 }
 
 function wbBubble(kind, text, opts = {}) {
@@ -1544,6 +1819,7 @@ async function wbSend() {
   const text = input.value.trim();
   if (!text || wb.busy) return;
   input.value = '';
+  $('wbSuggest')?.remove();
   wbBubble('me', text);
 
   wb.busy = true;
@@ -1716,6 +1992,46 @@ el.psBtn.addEventListener('click', () => { if (mode === 'ps') exitPs(); else sho
 el.plugBtn.addEventListener('click', () => { if (mode === 'plugins') exitPlugins(); else showPlugins(); });
 el.marketBtn.addEventListener('click', () => { if (mode === 'market') exitMarket(); else showMarket(); });
 
+// ---------------------------------------------------------------- 快捷键速查
+
+function showShortcuts() {
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="modal help-modal">
+      <h3>快捷键</h3>
+      <div class="keys">
+        ${SHORTCUTS.map((s) => `<div class="key-row">
+          <span class="key-combo">${s.keys.map((k) => `<kbd>${esc(k)}</kbd>`).join('')}</span>
+          <span class="key-what">${esc(s.what)}</span>
+        </div>`).join('')}
+      </div>
+      <div class="actions">
+        <button class="primary" id="helpClose">知道了</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector('#helpClose').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', function escClose(e) {
+    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escClose); }
+  });
+  overlay.querySelector('#helpClose').focus();
+}
+
+document.addEventListener('keydown', (e) => {
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && e.key === '/') {
+    e.preventDefault();
+    showShortcuts();
+  } else if (mod && (e.key === 'k' || e.key === 'K')) {
+    e.preventDefault();
+    el.q.focus();
+    el.q.select();
+  }
+});
+
 // ---------------------------------------------------------------- 启动
 
 async function load(notify) {
@@ -1756,6 +2072,13 @@ function applyHash() {
   // #/ps  直接打开「运行中」
   if ((location.hash || '') === '#/ps') {
     showPs();
+    return;
+  }
+
+  // #/plugins/<插件id>  插件主页
+  const ph = /^#\/plugins\/([\w.-]+)$/.exec(location.hash || '');
+  if (ph) {
+    showPluginHome(ph[1]);
     return;
   }
 
@@ -1802,7 +2125,17 @@ window.__zerokit = {
   get filtered() { return filtered; },
   get mode() { return mode; },
   scoreEntry, search, romanize, scorePinyin, renderList,
+  get favorites() { return favorites; },
+  get theme() { return document.documentElement.dataset.theme; },
+  get health() { return pluginHealth(plugins); },
+  cycleTheme, showShortcuts, showPluginHome, renderPrompts,
 };
+
+loadPrefs();
+applyTheme();
+window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
+$('themeBtn')?.addEventListener('click', cycleTheme);
+$('helpBtn')?.addEventListener('click', showShortcuts);
 
 load();
 el.q.focus();
