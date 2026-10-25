@@ -168,6 +168,22 @@ async function get(p, raw = false) {
     check(`安全：${p} 读不到插件目录外的文件`,
       r.status >= 400 || !r.text.includes('[plugin]'), `${r.status} ${r.text.slice(0, 60)}`);
   }
+
+  // 十项体验增强的入口：主题切换 / 快捷键浮层
+  const index = await get('/');
+  check('外壳：主题切换与快捷键入口都在页面上',
+    index.text.includes('id="themeBtn"') && index.text.includes('id="helpBtn"'),
+    index.text.slice(0, 160));
+  const extras = await get('/extras.js');
+  check('静态：extras.js 可加载（收藏/记忆/历史/健康的纯函数）',
+    extras.status === 200 && extras.text.includes('normalizeTheme')
+    && extras.text.includes('pluginHealth') && extras.text.includes('pushRunHistory'),
+    `${extras.status} ${extras.text.slice(0, 80)}`);
+  const appJs = await get('/app.js');
+  check('前端接线：收藏、参数记忆、执行历史、插件主页、快捷键都已接上',
+    ['favorites', 'rememberParams', 'renderRunHistory', 'showPluginHome', 'showShortcuts']
+      .every((k) => appJs.text.includes(k)),
+    'app.js 里缺了某个新功能的函数名');
 }
 
 // ---------------------------------------------------------------- 3. API 面透传
