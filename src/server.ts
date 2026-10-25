@@ -4,7 +4,7 @@ import http from 'node:http';
 import path from 'node:path';
 import process from 'node:process';
 import { type Plugin, toolName } from './core/manifest.ts';
-import { LOG_DIR, PKG_ROOT } from './core/paths.ts';
+import { DATA_DIR, LOG_DIR, PKG_ROOT } from './core/paths.ts';
 import { needsConfirm, rememberApproval } from './core/approvals.ts';
 import { killAllProcesses, killProcess, listProcesses } from './core/runtime.ts';
 import { listServices, stopService } from './core/services.ts';
@@ -660,6 +660,57 @@ export function createServer(): http.Server {
         return;
       }
 
+      // 集市「装前试跑」：用临时目录里摊开的插件真跑一次。只放行 read 风险——
+      // 没审查过的代码绝不执行有副作用的动作。cwd 指向临时目录本身（插件代码的相对引用才有效）。
+      if (url.pathname === '/api/market/tryrun' && req.method === 'POST') {
+        const body = await readBody(req);
+        const id = String(body['id'] ?? '');
+        const actionId = String(body['action'] ?? '');
+        const market = typeof body['market'] === 'string' ? body['market'] : undefined;
+        const preview = previewInstall(id, market);
+        const plugin = preview?.load.plugin;
+        if (!preview || !plugin) {
+          json(res, 404, { error: `集市里没有插件 "${id}"，或清单没通过校验` });
+          return;
+        }
+        const action = plugin.actions.find((a) => a.id === actionId);
+        if (!action) {
+          json(res, 404, { error: `插件 ${id} 没有动作 ${actionId}` });
+          return;
+        }
+        if (action.risk !== 'read') {
+          json(res, 403, { error: '只放行只读动作的试运行——有副作用的动作请安装后再用（会走确认弹窗）' });
+          return;
+        }
+        const rawValues = (body['values'] ?? {}) as Record<string, unknown>;
+        const values: Record<string, unknown> = {};
+        for (const param of action.params) {
+          const raw = rawValues[param.name];
+          if (raw === undefined || raw === null || raw === '') continue;
+          const coerced = coerceParam(param, raw);
+          if (coerced.error) {
+            json(res, 400, { error: `${param.name}：${coerced.error}` });
+            return;
+          }
+          values[param.name] = coerced.value;
+        }
+        const prepared = applyDefaults(action, values);
+        if (prepared.errors.length > 0) {
+          json(res, 400, { error: prepared.errors.join('；') });
+          return;
+        }
+        const result = await runAction(plugin, action, { caller: 'ui', values: prepared.values });
+        json(res, 200, {
+          ok: result.ok,
+          stdout: result.stdout,
+          stderr: result.stderr,
+          error: result.error,
+          ms: result.ms,
+          command: displayCommand(result.argv ?? []),
+        });
+        return;
+      }
+
       if (url.pathname === '/api/market/install' && req.method === 'POST') {
         const body = await readBody(req);
         const id = String(body['id'] ?? '');
@@ -756,6 +807,40 @@ export function createServer(): http.Server {
         }
         const ok = removePlugin(id);
         json(res, 200, { ok, message: ok ? `已卸载 ${id}` : `没有插件 ${id}` });
+        return;
+      }
+
+      // 插件脚手架进界面：在数据目录 dev 区生成可跑的骨架并进入开发模式。
+      // 沿用内核 scaffoldPlugin 的全部校验（id 非法 / 目录已存在都会被拒），不另写一份。
+      if (url.pathname === '/api/plugin/new' && req.method === 'POST') {
+        const body = await readBody(req);
+        const id = String(body['id'] ?? '').trim();
+        const runtime = ['node', 'python'].includes(String(body['runtime'])) ? String(body['runtime']) as 'node' | 'python' : 'node';
+        const name = String(body['name'] ?? '').trim();
+        const { scaffoldPlugin } = await import('./core/scaffold.ts');
+        // 骨架统一落在数据目录的 dev/ 下（不在仓库里，删数据目录即重置）
+        const devDir = path.join(DATA_DIR, 'dev');
+        fs.mkdirSync(devDir, { recursive: true });
+        const r = scaffoldPlugin(id, { runtime, name: name || undefined, dir: devDir });
+        if (!r.ok) {
+          json(res, 400, { error: r.message, files: r.files });
+          return;
+        }
+        // 转成开发模式安装：改文件即生效，界面立刻能看到这个插件
+        const { devLink } = await import('./core/registry.ts');
+        const dev = devLink(r.dir!);
+        if (!dev.ok) {
+          json(res, 500, { error: dev.message });
+          return;
+        }
+        json(res, 200, {
+          ok: true,
+          id: dev.id,
+          dir: r.dir,
+          files: r.files,
+          message: `骨架已生成并进入开发模式：${r.dir}`,
+          ...marketSnapshot(),
+        });
         return;
       }
 

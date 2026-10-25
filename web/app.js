@@ -4,13 +4,7 @@
 
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
-import {
-  normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey,
-  toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory,
-  pluginHealth, PROMPTS,
-  ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch,
-  topActions, recentRuns, invocationText, resultMarkdown,
-} from './extras.js';
+import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend } from './extras.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
 const $ = (id) => document.getElementById(id);
@@ -48,6 +42,8 @@ const PREF = {
   params: 'zerokit.params',
   runs: 'zerokit.runs',
   searches: 'zerokit.searches',
+  tags: 'zerokit.plugin-tags',
+  aliases: 'zerokit.aliases',
 };
 let favorites = [];
 let paramStore = {};
@@ -55,6 +51,8 @@ let runStore = {};
 let accent = 'ocean';
 let searchHistory = [];
 let listFilter = 'all';
+let pluginTags = {};
+let aliases = {};
 
 function readJson(key, fallback) {
   try {
@@ -73,6 +71,8 @@ function savePrefs() {
   writeJson(PREF.favorites, favorites);
   writeJson(PREF.params, paramStore);
   writeJson(PREF.runs, runStore);
+  writeJson(PREF.tags, pluginTags);
+  writeJson(PREF.aliases, aliases);
 }
 
 function loadPrefs() {
@@ -85,6 +85,10 @@ function loadPrefs() {
   accent = normalizeAccent(localStorage.getItem(PREF.accent));
   const searches = readJson(PREF.searches, []);
   searchHistory = Array.isArray(searches) ? searches.filter((x) => typeof x === 'string') : [];
+  pluginTags = readJson(PREF.tags) ?? {};
+  if (typeof pluginTags !== 'object' || Array.isArray(pluginTags)) pluginTags = {};
+  aliases = readJson(PREF.aliases) ?? {};
+  if (typeof aliases !== 'object' || Array.isArray(aliases)) aliases = {};
 }
 
 function applyAccent() {
@@ -441,6 +445,19 @@ function renderListTools(base, q) {
 }
 
 function renderList() {
+  const aliasHit = aliasEntry(el.q.value);
+  if (aliasHit && el.q.value.trim()) {
+    filtered = [aliasHit];
+    filteredSmart = new Map();
+    el.list.innerHTML = filtered.map((entry, i) => itemHtml(entry, i, true, '')).join('');
+    el.count.textContent = `别名「${el.q.value.trim()}」→ ${aliasHit.plugin.name} · ${aliasHit.action.title}`;
+    el.empty.classList.add('hidden');
+    el.list.querySelectorAll('.item').forEach((node) => {
+      node.addEventListener('click', () => { active = Number(node.dataset.i); openActive(); });
+    });
+    el.list.querySelector('.item')?.scrollIntoView({ block: 'nearest' });
+    return;
+  }
   const q = el.q.value;
   mode = 'command';
   el.modeLabel.textContent = '命令';
@@ -565,6 +582,17 @@ function renderList() {
       .join(' · ');
 }
 
+/** 别名解析：`zz` -> 对应动作 entry；未命中返回 undefined */
+function aliasEntry(word) {
+  const key = String(word ?? '').trim().toLowerCase();
+  if (!key) return undefined;
+  const target = aliases[key];
+  if (!target) return undefined;
+  const dot = target.lastIndexOf('.');
+  return entries.find((e) => e.plugin.id === target.slice(0, dot)
+    && e.action.id === target.slice(dot + 1));
+}
+
 function paintActive() {
   el.list.querySelectorAll('.item').forEach((node, i) => {
     node.classList.toggle('active', i === active);
@@ -602,7 +630,12 @@ function openDetail(plugin, action, prefill) {
     </div>`;
 
   const steps = Array.isArray(action.steps) ? action.steps : [];
+  const chainDry = steps.length ? `
+    <div class="chain-dry"><button class="ghost" id="chainDryBtn">试走一遍（不执行，只推演每步会拿到什么形状）</button>
+      <div id="chainDryOut"></div></div>` : '';
+
   const chainInfo = steps.length ? `
+    <div class="chain-dry-wrap">
     <div class="chain-flow">
       ${steps.map((st, i) => {
         const ps = Object.entries(st.params ?? {});
@@ -623,7 +656,7 @@ function openDetail(plugin, action, prefill) {
           </div>
           ${i < steps.length - 1 ? '<div class="chain-arrow">↓</div>' : ''}`;
       }).join('')}
-    </div>` : '';
+    </div>${chainDry}</div>` : '';
 
   const favKey = actionKey(plugin.id, action.id);
   const fav = isFavorite(favorites, favKey);
@@ -632,6 +665,13 @@ function openDetail(plugin, action, prefill) {
   const memNote = Object.keys(mem).length
     ? `<div class="mem-note">已带入上次参数 · <button class="link" id="forgetParams">清除记忆</button></div>`
     : '';
+
+  const aliasKey = actionKey(plugin.id, action.id);
+  const aliasName = Object.entries(aliases).find(([, v]) => v === aliasKey)?.[0];
+  const aliasNote = `<div class="mem-note alias-note">别名：
+    <input id="aliasInput" placeholder="起个短名（如 top）" value="${esc(aliasName ?? '')}"
+      autocomplete="off" spellcheck="false" style="width:9em">
+    <span class="help">之后在搜索框直接输入短名，回车就是这个动作</span></div>`;
 
   const fields = action.fields.map((f) => {
     const req = f.required ? ' <span class="req">*</span>' : '';
@@ -670,6 +710,7 @@ function openDetail(plugin, action, prefill) {
     ${depWarn}
     ${chainInfo}
     ${memNote}
+  ${aliasNote}
     ${fields}
     <div id="runHistory" class="run-history"></div>
     <div class="actions">
@@ -702,6 +743,32 @@ function openDetail(plugin, action, prefill) {
       box.innerHTML = `<div class="help" style="color:var(--bad)">预览失败：${esc(e.message)}</div>`;
     }
   });
+  // chain 试走：纯前端推演。真实执行才有真实值——这里只回答「每步的输入从哪来」。
+  $('chainDryBtn')?.addEventListener('click', () => {
+    const out = $('chainDryOut');
+    if (!out) return;
+    if (out.innerHTML) { out.innerHTML = ''; return; }
+    const rows = steps.map((st, i) => {
+      const ps = Object.entries(st.params ?? {});
+      const refs = [];
+      if (i > 0) refs.push(`{${steps[i - 1].as}}`, '{prev}');
+      for (const [, v] of ps) {
+        for (const m of String(v).matchAll(/\{([\w.]+)\}/g)) refs.push(`{${m[1]}}`);
+      }
+      const filled = ps.filter(([, v]) => !/\{/.test(String(v)));
+      return `<div class="dry-row">
+        <span class="chain-no">${i + 1}</span>
+        <code>${esc(st.use)}</code>
+        → <code>{${esc(st.as)}}</code>
+        <span class="dry-note">
+          ${refs.length ? `会引用 ${refs.map((r) => `<code>${esc(r)}</code>`).join(' / ')}` : '只用动作参数'}
+          ${filled.length ? `；${filled.length} 个参数是写死的常量` : ''}
+        </span>
+      </div>`;
+    }).join('');
+    out.innerHTML = `<div class="cmd-box"><div class="cmd-box-head">推演结果（占位符将在执行时用真实值替换）</div>${rows}</div>`;
+  });
+
   $('cfgBtn')?.addEventListener('click', async () => {
     $('previewBox').innerHTML = '';
     $('invokeBox').innerHTML = '';
@@ -780,6 +847,20 @@ function openDetail(plugin, action, prefill) {
   });
   $('forgetParams')?.addEventListener('click', () => {
     delete paramStore[favKey];
+
+  $('aliasInput')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const name = $('aliasInput').value.trim().toLowerCase();
+    if (name) aliases[name] = aliasKey;
+    else delete aliases[aliasName ?? ''];
+    // 同名指向别的动作时先清掉旧指向
+    for (const [k, v] of Object.entries(aliases)) {
+      if (k !== name && v === aliasKey) delete aliases[k];
+    }
+    savePrefs();
+    openDetail(plugin, action, prefill);
+  });
     savePrefs();
     openDetail(plugin, action);
   });
@@ -858,7 +939,8 @@ async function submit(remember) {
     paramStore = rememberParams(paramStore, actionKey(plugin.id, action.id), values, secretNames);
     runStore = pushRunHistory(runStore, actionKey(plugin.id, action.id), {
       ts: Date.now(), ok: res.ok === true, ms: res.ms ?? 0,
-    });
+      data: res.data,   // 留着给「与最新对比」做逐格 diff
+    }, 5);
     savePrefs();
     renderRunHistory(plugin, action);
     // 刚跑完的动作可能拉起了一个后台进程/服务，徽标要跟着变
@@ -924,14 +1006,25 @@ function renderRunHistory(plugin, action) {
     box.innerHTML = '<div class="run-empty">还没有执行记录——跑一次就会记在这里（只保存在本机）。</div>';
     return;
   }
-  box.innerHTML = `<div class="run-head">最近执行</div>${list.map((r) => `
+  box.innerHTML = `<div class="run-head">最近执行</div>${list.map((r, i) => `
     <div class="run-row">
       <span class="${r.ok ? 'ok' : 'bad'}">${r.ok ? '✓' : '✗'}</span>
       <span class="run-when">${esc(new Date(r.ts).toLocaleString())}</span>
       <span class="run-ms">${esc(String(r.ms))} ms</span>
-      <button class="ghost" data-rerun>重跑</button>
+      <button class="ghost" data-rerun>重跑</button>${list.length >= 2 ? `
+      <button class="ghost" data-diff="${i}" ${i === list.length - 1 ? 'disabled title="这是最新一次，选更早的一条来对比"' : 'title="和最新一次的结果逐格对比"'}>与最新对比</button>` : ''}
     </div>`).join('')}`;
   box.querySelectorAll('[data-rerun]').forEach((b) => b.addEventListener('click', () => submit(false)));
+  box.querySelectorAll('[data-diff]').forEach((b) => b.addEventListener('click', () => {
+    const older = list[Number(b.dataset.diff)];
+    const latest = list[0];
+    const a = latest.data ?? currentResult?.data;
+    if (a === undefined || older.data === undefined) {
+      alert('这两次记录没存结果数据（可能是老记录），重跑一次后再对比。');
+      return;
+    }
+    showResultDiff(a, older.data);
+  }));
 }
 
 /** 高风险动作执行后的「安心提示」：给出审计日志入口，并提示没有自动回滚 */
@@ -953,7 +1046,13 @@ function renderUndoHint(plugin, action) {
   });
 }
 
+let currentResult = null;
+function refreshResult() {
+  if (currentResult) renderResult(currentResult);
+}
+
 function renderResult(res) {
+  currentResult = res;
   const box = $('result');
   if (!box) return;
   const head = res.ok
@@ -974,7 +1073,7 @@ function renderResult(res) {
     // output = "html"：stdout 本身就是 HTML 片段，沙箱里直接渲染
     body += `<iframe class="web-frame html" sandbox="allow-scripts" srcdoc="${esc(res.stdout)}"></iframe>`;
   } else if (res.data !== undefined) {
-    body += renderData(res.data, res.render);
+    body += renderData(res.data, res.render, `r${++resultSeq}`);
   } else if (res.stdout) {
     body += `<pre class="out">${esc(res.stdout)}</pre>`;
   }
@@ -996,6 +1095,8 @@ function renderResult(res) {
         <button class="ghost" id="copyRes" title="把结果复制到剪贴板">复制</button>
         <button class="ghost" id="saveRes" title="把结果存成文本文件">下载</button>
         <button class="ghost" id="mdRes" title="导出成 Markdown（表格/代码块），方便贴进文档或 Issue">导出 Markdown</button>
+        ${res.data !== undefined ? `<button class="ghost" id="csvRes" title="导出成 CSV，Excel / Numbers 直接打开">导出 CSV</button>
+        <button class="ghost" id="jsonRes" title="导出成 JSON，给脚本接着处理">导出 JSON</button>` : ''}
         <button class="ghost" id="againRes" title="用同样的参数再跑一次">再跑一次</button>
         <span class="ms">${esc(ms)}</span>
       </div>
@@ -1035,9 +1136,52 @@ function renderResult(res) {
   });
   $('againRes')?.addEventListener('click', () => submit(false));
 
+  const exportAs = (btnId, text, mime, ext) => {
+    $(btnId)?.addEventListener('click', () => {
+      const blob = new Blob([text], { type: `${mime};charset=utf-8` });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `zerokit-${detail ? `${detail.plugin.id}-${detail.action.id}` : 'result'}.${ext}`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const btn = $(btnId);
+      if (btn) { const t = btn.textContent; btn.textContent = '已导出'; setTimeout(() => { btn.textContent = t; }, 1500); }
+    });
+  };
+  if (res.data !== undefined) {
+    exportAs('csvRes', toCsv(res.data), 'text/csv', 'csv');
+    exportAs('jsonRes', JSON.stringify(res.data, null, 2), 'application/json', 'json');
+  }
+
   // web 面的 iframe 加载完就发执行上下文（页面里的 hello 握手是双保险）
   const frame = box.querySelector('.web-frame:not(.html)');
   if (frame) frame.addEventListener('load', () => sendContext(frame));
+  bindTableSorts(box);
+}
+
+/** 两次结果逐格对比：只对对象 / 对象数组有意义，标量给一句话 */
+function showResultDiff(a, b) {
+  const diffs = diffResults(a, b);
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="modal diff-modal">
+      <h3>结果对比（上一次 → 最新）</h3>
+      ${diffs.length === 0
+        ? '<div class="help">两次结果完全一致。</div>'
+        : `<table class="grid diff-table"><thead><tr><th>字段</th><th>较早</th><th>最新</th></tr></thead>
+          <tbody>${diffs.map((d) => `<tr>
+            <td><code>${esc(d.path)}</code></td>
+            <td class="diff-from">${esc(d.from)}</td>
+            <td class="diff-to">${esc(d.to)}</td></tr>`).join('')}</tbody></table>`}
+      <div class="actions"><button class="primary" id="diffClose">关闭</button></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector('#diffClose').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector('#diffClose').focus();
 }
 
 // ---------------------------------------------------------------- 插件页面桥（宿主侧）
@@ -1111,10 +1255,11 @@ window.addEventListener('message', (ev) => {
   }
 });
 
-function renderData(data, render) {
+let resultSeq = 0;
+function renderData(data, render, tableId = '') {
   if (Array.isArray(data)) {
     if (data.length === 0) return `<div class="help">（空结果）</div>`;
-    if (typeof data[0] === 'object' && data[0] !== null) return renderTable(data);
+    if (typeof data[0] === 'object' && data[0] !== null) return renderTable(data, tableId);
     return `<pre class="out">${esc(data.join('\n'))}</pre>`;
   }
   if (data && typeof data === 'object') {
@@ -1135,19 +1280,39 @@ function renderKV(obj) {
   return `<table class="kv">${rows}</table>`;
 }
 
-function renderTable(rows) {
+/** 结果表格：点列头排序（再点反向）、数字列右对齐 + 千分位。rowKey 让 diff 取「第 N 次」 */
+function renderTable(rows, tableId = '') {
   const cols = [];
   for (const row of rows) {
     for (const k of Object.keys(row)) if (!cols.includes(k)) cols.push(k);
   }
-  const head = cols.map((c) => `<th>${esc(c)}</th>`).join('');
-  const body = rows.map((row) => `<tr>${cols.map((c) => {
+  const numeric = Object.fromEntries(cols.map((c) => [c, isNumericColumn(rows.map((r) => r[c]))]));
+  const state = tableState[tableId] ?? { col: null, dir: 1 };
+  const view = state.col ? sortRows(rows, state.col, state.dir) : rows;
+  const arrow = (c) => state.col === c ? (state.dir === 1 ? ' ▲' : ' ▼') : '';
+  const head = cols.map((c) =>
+    `<th class="sortable${numeric[c] ? ' num' : ''}" data-col="${esc(c)}">${esc(c)}${arrow(c)}</th>`).join('');
+  const body = view.map((row) => `<tr>${cols.map((c) => {
     const v = row[c];
     const val = (v && typeof v === 'object') ? JSON.stringify(v) : String(v ?? '');
-    const num = typeof v === 'number' ? ' class="num"' : '';
-    return `<td${num}>${esc(val)}</td>`;
+    const shown = numeric[c] && val !== '' && Number.isFinite(Number(val)) ? formatNumber(val) : val;
+    return `<td${numeric[c] ? ' class="num"' : ''}>${esc(shown)}</td>`;
   }).join('')}</tr>`).join('');
-  return `<table class="grid"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  return `<table class="grid" data-table="${esc(tableId)}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+// 表格排序状态（按 tableId 记，重渲染后保留）
+const tableState = {};
+function bindTableSorts(scope) {
+  scope.querySelectorAll('table.grid[data-table]').forEach((tbl) => {
+    const id = tbl.dataset.table || 't';
+    tbl.querySelectorAll('th.sortable').forEach((th) => th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      const st = tableState[id] ?? { col: null, dir: 1 };
+      tableState[id] = st.col === col ? { col, dir: -st.dir } : { col, dir: 1 };
+      refreshResult();  // 用同样的数据重画整张结果卡
+    }));
+  });
 }
 
 // ---------------------------------------------------------------- 工作台（占位）
@@ -1399,7 +1564,9 @@ function renderMarketPreviewBox() {
   const rows = (p.actions || []).map((a) => `
     <tr><td>${esc(a.title)}<span class="aid"> ${esc(a.id)}</span></td>
         <td>${risk(a.risk)}</td>
-        <td class="cmd-inline" title="${esc(a.command)}">${esc(a.command)}</td></tr>`).join('');
+        <td class="cmd-inline" title="${esc(a.command)}">${esc(a.command)}</td>
+        <td>${a.risk === 'read' ? `<button class="ghost" data-tryrun="${esc(a.id)}">装前试跑</button>` : '<span class="sub" title="有副作用的动作只在安装后、经过确认才执行">—</span>'}</td></tr>
+        <tr class="tryrun-out" data-out="${esc(a.id)}" hidden><td colspan="4"></td></tr>`).join('');
   const problems = [...(p.errors || []), ...(p.warnings || [])];
   const missing = p.missingPluginDeps || [];
   box.innerHTML = `
@@ -1411,7 +1578,7 @@ function renderMarketPreviewBox() {
       </div>
       ${problems.length ? `<div class="plug-card-body"><div class="plug-warn">${problems.map(esc).join('<br>')}</div></div>` : ''}
       <table class="grid">
-        <thead><tr><th>动作</th><th>风险</th><th>真实命令</th></tr></thead>
+        <thead><tr><th>动作</th><th>风险</th><th>真实命令</th><th>试跑</th></tr></thead>
         <tbody>${rows || '<tr><td colspan="3">清单没有可用动作</td></tr>'}</tbody>
       </table>
       <div class="plug-card-foot">
@@ -1423,6 +1590,33 @@ function renderMarketPreviewBox() {
         </div>
       </div>
     </div>`;
+  box.querySelectorAll('[data-tryrun]').forEach((btn) => btn.addEventListener('click', async () => {
+    const actionId = btn.dataset.tryrun;
+    const out = box.querySelector(`[data-out="${actionId}"]`);
+    if (!out) return;
+    btn.disabled = true;
+    btn.textContent = '试跑中…';
+    out.hidden = false;
+    out.querySelector('td').innerHTML = '<div class="help">正在用临时目录里的代码运行（只读动作，装前先看结果）…</div>';
+    try {
+      const r = await api('/api/market/tryrun', {
+        method: 'POST',
+        body: { id: p.id, market: p.market, action: actionId },
+      });
+      const head = r.ok
+        ? `<span class="ok">✓ 成功 · ${esc(String(r.ms ?? ''))} ms</span>`
+        : `<span class="bad">✗ 失败</span>`;
+      const bodyText = r.error
+        ? `<pre class="out" style="color:var(--bad)">${esc(r.error)}</pre>`
+        : (r.stdout ? `<pre class="out">${esc(r.stdout)}</pre>` : (r.stderr ? `<pre class="out">${esc(r.stderr)}</pre>` : '<div class="help">（没有输出）</div>'));
+      out.querySelector('td').innerHTML = `<div class="tryrun-head">${head}
+        <span class="aid">${esc(r.command || '')}</span></div>${bodyText}`;
+    } catch (e) {
+      out.querySelector('td').innerHTML = `<div class="help" style="color:var(--bad)">试跑失败：${esc(e.message)}</div>`;
+    }
+    btn.disabled = false;
+    btn.textContent = '再试一次';
+  }));
   $('marketCancel').addEventListener('click', () => { marketPreview = null; renderMarketPreviewBox(); });
   $('marketInstall').addEventListener('click', () => doMarketInstall());
 }
@@ -1713,11 +1907,21 @@ async function renderPlugins() {
       <input id="installSrc" placeholder="粘贴 git 仓库地址（https://github.com/…）或本地目录，回车安装"
              autocomplete="off" spellcheck="false">
       <button class="primary" id="installBtn">安装</button>
+      <button class="ghost" id="newPluginBtn" title="生成一个能直接跑的最小插件骨架，改文件即生效">新建插件</button>
     </div>
+    <div id="newPluginBox" class="cmd-box hidden"></div>
     <div id="installBox"></div>
-    ${plugins.map((p) => `
+    <div class="plug-batch">
+      <label class="market-check"><input type="checkbox" id="plugSelAll"> 全选</label>
+      <button class="ghost" id="plugBatchCheck" disabled>批量检查更新</button>
+      <span class="sub" id="plugBatchNote"></span>
+    </div>
+    ${plugins.map((p) => {
+      const tags = pluginTags[p.id] ?? [];
+      return `
       <div class="plug-card" data-id="${esc(p.id)}">
         <div class="plug-card-head">
+          <input type="checkbox" class="plug-sel" data-id="${esc(p.id)}" title="选中做批量操作">
           <b>${esc(p.name)}</b>
           <span class="aid">${esc(p.id)} · v${esc(p.version)}</span>
           <span class="badge">${esc(p.sourceText)}</span>
@@ -1736,9 +1940,14 @@ async function renderPlugins() {
           (p.pluginDeps ?? []).length
             ? ` · 依赖 ${p.pluginDeps.map((d) => (d.installed ? esc(d.id) : `${esc(d.id)}（未装）`)).join('、')}`
             : ''}</div>
+        <div class="plug-tags-row">
+          ${(tags).map((t) => `<span class="tag">${esc(t)}<button class="tag-x" data-untag="${esc(t)}" title="移除标签">×</button></span>`).join('')}
+          <input class="tag-input" placeholder="+ 标签，回车添加" data-taginput="${esc(p.id)}">
+        </div>
         <div class="plug-config" hidden></div>
         <div class="plug-card-foot" hidden></div>
-      </div>`).join('')}
+      </div>`;
+    }).join('')}
     <div class="actions"><button class="primary" id="plugBack">返回</button></div>`;
 
   $('installSrc').addEventListener('keydown', (e) => {
@@ -1746,6 +1955,105 @@ async function renderPlugins() {
   });
   $('installBtn').addEventListener('click', doInstall);
   $('plugBack').addEventListener('click', exitPlugins);
+
+  // 新建插件：三个问题（id / 名字 / 语言）→ 生成骨架 → 开发模式装好
+  $('newPluginBtn')?.addEventListener('click', () => {
+    const box = $('newPluginBox');
+    if (!box.classList.contains('hidden')) { box.classList.add('hidden'); return; }
+    box.innerHTML = `
+      <div class="cmd-box-head">新建插件 —— 生成能直接跑的最小骨架，进入开发模式（改文件即生效）</div>
+      <div class="new-plugin-form">
+        <label>插件 id（小写字母/数字/连字符）<input id="npId" placeholder="my-tool" autocomplete="off" spellcheck="false"></label>
+        <label>显示名称（可留空，默认用 id）<input id="npName" placeholder="我的工具" autocomplete="off" spellcheck="false"></label>
+        <label>语言
+          <select id="npRuntime">
+            <option value="node">Node.js（零依赖，推荐）</option>
+            <option value="python">Python（要装 python）</option>
+          </select></label>
+        <button class="primary" id="npCreate">生成骨架</button>
+        <span class="sub" id="npMsg"></span>
+      </div>`;
+    box.classList.remove('hidden');
+    $('npCreate').addEventListener('click', async () => {
+      const id = $('npId').value.trim();
+      if (!id) { $('npMsg').textContent = '先填插件 id'; return; }
+      $('npMsg').textContent = '生成中…';
+      try {
+        const r = await api('/api/plugin/new', {
+          method: 'POST',
+          body: { id, name: $('npName').value.trim(), runtime: $('npRuntime').value },
+        });
+        $('npMsg').innerHTML = `✓ ${esc(r.message)}。生成了 ${r.files.length} 个文件，去命令行改 <code>${esc(String(r.dir))}</code> 下的文件即生效；也可以 <a class="link" href="#/plugins">刷新插件列表</a> 看到它。`;
+        plugins = (await api('/api/plugins')).plugins ?? [];
+        entries = buildEntries(plugins);
+        renderPlugins();
+        box.classList.remove('hidden');   // renderPlugins 会重建 DOM，把表单补回来
+      } catch (e) {
+        $('npMsg').textContent = `失败：${e.message}`;
+      }
+    });
+  });
+
+  // 批量选择：至少选中一个才点亮「批量检查更新」
+  const selAll = $('plugSelAll');
+  const batchBtn = $('plugBatchCheck');
+  const batchNote = $('plugBatchNote');
+  const syncBatch = () => {
+    const n = el.plugView.querySelectorAll('.plug-sel:checked').length;
+    batchBtn.disabled = n === 0;
+    batchNote.textContent = n ? `已选 ${n} 个` : '';
+  };
+  selAll.addEventListener('change', () => {
+    el.plugView.querySelectorAll('.plug-sel').forEach((c) => { c.checked = selAll.checked; });
+    syncBatch();
+  });
+  el.plugView.querySelectorAll('.plug-sel').forEach((c) => c.addEventListener('change', syncBatch));
+  batchBtn.addEventListener('click', async () => {
+    const ids = [...el.plugView.querySelectorAll('.plug-sel:checked')].map((c) => c.dataset.id);
+    if (!ids.length) return;
+    batchBtn.disabled = true;
+    batchNote.textContent = `正在检查 ${ids.length} 个插件…`;
+    let updated = 0;
+    let upToDate = 0;
+    let failed = 0;
+    for (const id of ids) {
+      try {
+        const r = await api('/api/plugin/check', { method: 'POST', body: { id } });
+        if (r.available && r.confirm) {
+          const up = await api('/api/plugin/update', {
+            method: 'POST', body: { id, confirm: r.confirm },
+          });
+          if (up.ok) { updated++; continue; }
+        }
+        if (r.available === false) upToDate++;
+        else failed++;
+      } catch { failed++; }
+    }
+    batchNote.textContent = `完成：${updated} 个已更新，${upToDate} 个已是最新${failed ? `，${failed} 个失败` : ''}`;
+    if (updated) await renderPlugins();
+  });
+
+  // 标签：回车添加、×移除；只存本机
+  el.plugView.querySelectorAll('[data-taginput]').forEach((input) => {
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' || !input.value.trim()) return;
+      e.preventDefault();
+      const id = input.dataset.taginput;
+      const set = new Set(pluginTags[id] ?? []);
+      set.add(input.value.trim());
+      pluginTags[id] = [...set];
+      savePrefs();
+      renderPlugins();
+    });
+  });
+  el.plugView.querySelectorAll('[data-untag]').forEach((x) => x.addEventListener('click', () => {
+    const card = x.closest('.plug-card');
+    const id = card?.dataset.id;
+    if (!id) return;
+    pluginTags[id] = (pluginTags[id] ?? []).filter((t) => t !== x.dataset.untag);
+    savePrefs();
+    renderPlugins();
+  }));
 
   el.plugView.querySelectorAll('.plug-card').forEach((card) => {
     card.querySelector('[data-op="home"]').addEventListener('click', () => showPluginHome(card.dataset.id));
@@ -2426,6 +2734,81 @@ async function wbSend() {
 
 
 
+// ---------------------------------------------------------------- 全局统计页
+
+/** 全局统计：总执行数 / 成功率 / 最活跃插件 / 近 7 天趋势。数据全部来自本机 runStore。 */
+function showStats() {
+  mode = 'stats';
+  el.modeLabel.textContent = '统计';
+  el.searchRow.classList.add('hidden');
+  hidePanels();
+  el.allowView.classList.remove('hidden');
+  const view = el.allowView;
+  if (location.hash !== '#/stats') history.replaceState(null, '', '#/stats');
+
+  // 扁平化全部执行记录
+  const runs = [];
+  for (const [key, list] of Object.entries(runStore)) {
+    for (const r of list ?? []) runs.push({ key, ts: r.ts, ok: r.ok, ms: r.ms });
+  }
+  runs.sort((a, b) => b.ts - a.ts);
+  const total = runs.length;
+  const okCount = runs.filter((r) => r.ok).length;
+  const rate = total ? Math.round((okCount / total) * 100) : 0;
+  const byPlugin = new Map();
+  for (const r of runs) {
+    const pid = r.key.split('.')[0];
+    byPlugin.set(pid, (byPlugin.get(pid) ?? 0) + 1);
+  }
+  const top = [...byPlugin.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const maxTop = top[0]?.[1] ?? 1;
+  const trend = dailyTrend(runs, 7);
+  const maxDay = Math.max(1, ...trend.map((d) => d.total));
+  const avgMs = total ? Math.round(runs.reduce((s, r) => s + (r.ms ?? 0), 0) / total) : 0;
+
+  view.innerHTML = `
+    <div class="ps-head"><h2>使用统计</h2>
+      <span class="sub">全部来自本机执行记录，不上传任何数据</span></div>
+    <div class="doc-grid">
+      <div class="doc-line stat-big"><b>${total}</b><span>总执行次数</span></div>
+      <div class="doc-line stat-big"><b>${rate}%</b><span>成功率（${okCount} 成功）</span></div>
+      <div class="doc-line stat-big"><b>${avgMs} ms</b><span>平均耗时</span></div>
+    </div>
+    ${top.length ? `
+    <h3 class="plug-home-h">最活跃的插件</h3>
+    <div class="usage-block">
+      ${top.map(([pid, n]) => `
+        <div class="usage-row"><span class="usage-name">${esc(pid)}</span>
+          <span class="usage-bar"><i style="width:${Math.round((n / maxTop) * 100)}%"></i></span>
+          <span class="usage-n">${n} 次</span></div>`).join('')}
+    </div>` : ''}
+    <h3 class="plug-home-h">近 7 天</h3>
+    <div class="usage-block trend">
+      ${trend.map((d) => `
+        <div class="trend-col" title="${esc(d.day)}：${d.total} 次（失败 ${d.fail}）">
+          <div class="trend-bars">
+            <i class="trend-ok" style="height:${Math.round(((d.total - d.fail) / maxDay) * 60)}px"></i>
+            ${d.fail ? `<i class="trend-fail" style="height:${Math.max(3, Math.round((d.fail / maxDay) * 60))}px"></i>` : ''}
+          </div>
+          <span class="trend-day">${esc(d.day.slice(5))}</span>
+        </div>`).join('')}
+    </div>
+    ${total === 0 ? '<div class="ps-empty">还没有执行记录——随便跑一个只读动作，这里就会开始长出来。</div>' : ''}
+    <div class="actions"><button class="ghost" id="statsBack">返回</button></div>`;
+  $('statsBack').addEventListener('click', exitStats);
+}
+
+function exitStats() {
+  mode = 'command';
+  el.allowView.classList.add('hidden');
+  el.searchRow.classList.remove('hidden');
+  el.listView.classList.remove('hidden');
+  el.modeLabel.textContent = '命令';
+  history.replaceState(null, '', location.pathname);
+  renderList();
+  el.q.focus();
+}
+
 // ---------------------------------------------------------------- MCP 授权面板
 
 /** MCP 授权：哪些「有副作用」的动作允许 AI 直接调。只读动作默认放行，不在这里。 */
@@ -2513,6 +2896,7 @@ function showPalette() {
     { icon: '▤', label: '审计日志', hint: '每次执行/被拒/失败', act: () => showLogs() },
     { icon: '✓', label: '环境自检', hint: '解释器/依赖/配置问题', act: () => showDoctor() },
     { icon: '🔑', label: 'MCP 授权', hint: '哪些动作允许 AI 调用', act: () => showMcpAllow() },
+    { icon: '📈', label: '使用统计', hint: '总执行数 / 成功率 / 趋势', act: () => showStats() },
   ];
   overlay.innerHTML = `
     <div class="modal palette">
@@ -2587,6 +2971,10 @@ document.addEventListener('keydown', (e) => {
   }
   if (mode === 'mcp') {
     if (e.key === 'Escape') { e.preventDefault(); exitMcpAllow(); }
+    return;
+  }
+  if (mode === 'stats') {
+    if (e.key === 'Escape') { e.preventDefault(); exitStats(); }
     return;
   }
   if (mode === 'workbench') {
@@ -2693,6 +3081,7 @@ function showShortcuts() {
           ['#/logs', '审计日志', '每次执行、被拒、失败'],
           ['#/doctor', '环境自检', '解释器 / 依赖 / 配置问题'],
           ['#/mcp', 'MCP 授权', '允许 AI 调用哪些动作'],
+          ['#/stats', '使用统计', '总执行数 / 成功率 / 近 7 天趋势'],
           ['#/workbench', 'AI 工作台', '自然语言指挥插件'],
           ['#/q=关键词', '带词搜索', '打开就搜「关键词」'],
         ].map(([h, n, d]) => `<div class="key-row"><a class="link" href="${h}">${n}</a>
@@ -2726,26 +3115,32 @@ document.addEventListener('keydown', (e) => {
 
 // ---------------------------------------------------------------- 启动
 
+/** 扁平化动作索引：搜索、命令面板、别名都吃这一份 */
+function buildEntries(list) {
+  const out = [];
+  for (const p of list) {
+    for (const a of p.actions) {
+      out.push({
+        plugin: p, action: a,
+        order: out.length,         // 清单顺序，用于并列时的兜底排序
+        hayId: `${p.id}.${a.id} ${p.id} ${a.id}`,
+        // 拼音形式在装载时算一次，之后每次按键直接用（不重复转换）
+        py: {
+          name: romanize(p.name),
+          title: romanize(a.title),
+          keywords: romanize((p.keywords || []).join(' ')),
+        },
+      });
+    }
+  }
+  return out;
+}
+
 async function load(notify) {
   try {
     const data = await api('/api/plugins');
     plugins = data.plugins || [];
-    entries = [];
-    for (const p of plugins) {
-      for (const a of p.actions) {
-        entries.push({
-          plugin: p, action: a,
-          order: entries.length,     // 清单顺序，用于并列时的兜底排序
-          hayId: `${p.id}.${a.id} ${p.id} ${a.id}`,
-          // 拼音形式在装载时算一次，之后每次按键直接用（不重复转换）
-          py: {
-            name: romanize(p.name),
-            title: romanize(a.title),
-            keywords: romanize((p.keywords || []).join(' ')),
-          },
-        });
-      }
-    }
+    entries = buildEntries(plugins);
     if (notify) { active = 0; }
     renderList();
     refreshPsCount();   // 顺手把「运行中」徽标更新一下
@@ -2804,6 +3199,12 @@ function applyHash() {
     return;
   }
 
+  // #/stats  全局统计
+  if ((location.hash || '') === '#/stats') {
+    showStats();
+    return;
+  }
+
   // #/q=...  带一个初始搜索词（命令行、通知、别的程序都能给这么个链接）
   const qHash = /^#\/q=(.*)$/.exec(location.hash || '');
   if (qHash) {
@@ -2839,6 +3240,7 @@ window.__zerokit = {
   get theme() { return document.documentElement.dataset.theme; },
   get health() { return pluginHealth(plugins); },
   cycleTheme, showShortcuts, showPluginHome, renderPrompts, showLogs, showDoctor,
+  openDetail, submit, backToList,
 };
 
 loadPrefs();
