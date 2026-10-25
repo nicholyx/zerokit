@@ -36,7 +36,8 @@ node src/cli.ts market search          # 看看有什么
 node src/cli.ts plugin install sysinfo # 安装（会先把它的全部能力摊开给你看）
 node src/cli.ts doctor                 # 环境自检（依赖、插件清单）
 node src/cli.ts run sysinfo overview   # 跑一个动作
-node src/cli.ts ui --open              # 打开启动器 / 工作台界面
+node src/cli.ts ui --open              # 打开启动器：顶部「集市」标签可直接浏览、预览、安装
+                                       # （工作台在搜索框打 ? 开头）
 ```
 
 装好之后可以把 `zkit` 链接到全局：
@@ -202,6 +203,8 @@ mcp-allow.json      已授权给 AI 调用的有副作用动作
 - [x] 启动器 UI（模糊搜索、键盘导航、参数表单、结果渲染）
 - [x] AI 工作台（多 provider 模型层、工具卡片、副作用先审批、拒绝后回填给模型）
 - [x] 插件集市（git 仓库 + 索引文件；安装前摊开全部能力审查；目录穿越防护）
+- [x] **启动器内置集市**（`#/market`）：添加/刷新/移除集市、跨集市搜索、能力摊开预览、
+      一键安装（可勾选连带补装插件依赖）——发现插件不用记地址，也不用切终端
 - [x] Tauri 原生壳（全局热键 Alt+Space、托盘、无边框窗口、失焦自动隐藏）
 - [x] **拼音与首字母匹配**（打 `dl` 出「代理」、`xtxx` 出「系统信息」）——纯前端本地计算
 - [x] **内容智能匹配**：粘链接就出「打开链接」、粘时间戳就出「转成日期」，回车即用
@@ -227,6 +230,7 @@ mcp-allow.json      已授权给 AI 调用的有副作用动作
 | `test/mcp-smoke.mjs` | 用裸 JSON-RPC 客户端验证 MCP 面（不依赖 SDK 自证）※需带参数 |
 | `test/workbench-smoke.mjs` | agent 循环、审批挂起、拒绝回填、未配密钥时的提示 |
 | `test/market-smoke.mjs` | 集市添加/搜索/审查/安装、目录穿越拒绝、重复安装 |
+| `test/market-ui-smoke.mjs` | 集市面板 API：添加/搜索/预览摊开、确认令牌（缺/错/串用）、安装、重复安装、刷新/移除、会话令牌 |
 | `test/pinyin-smoke.mjs` | 拼音转换、六档打分、单字母不放宽、两万次评分耗时 |
 | `test/runner-smoke.mjs` | spawn/worker/常驻宿主三条路径结果必须一致、确实更快、不适用时干净退回、后台动作托管与结束 |
 | `test/match-smoke.mjs` | 内容嗅探与 match 命中判定（url / 正则 / 文件 / 文本） |
