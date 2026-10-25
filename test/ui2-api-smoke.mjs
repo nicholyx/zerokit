@@ -218,7 +218,48 @@ try {
   const combo = wired.actions.find((a) => a.id === 'combo');
   check('GET /api/plugins：chain 步骤带 params 模板（前端画链路图用）',
     combo?.steps?.length === 1 && 'params' in combo.steps[0], JSON.stringify(combo?.steps));
+
+  // ---------------------------------------------------------------- 6. 插件脚手架 / 集市试运行（第四轮）
+
+  {
+    const bad = await postJson('/api/plugin/new', { id: 'BAD ID' });
+    check('POST /api/plugin/new：id 非法返回 400（内核校验，不另写一份）',
+      bad.status === 400, JSON.stringify(bad.body));
+
+    const created = await postJson('/api/plugin/new', { id: 'made-in-ui', name: '界面生成', runtime: 'node' });
+    check('POST /api/plugin/new：生成骨架并进入开发模式',
+      created.status === 200 && created.body.ok === true && created.body.files.length >= 3
+      && String(created.body.dir).includes('dev'),
+      JSON.stringify(created.body).slice(0, 200));
+
+    const listed = (await getJson('/api/plugins')).body.plugins.find((x) => x.id === 'made-in-ui');
+    check('POST /api/plugin/new：生成的插件立刻出现在插件列表（dev 链接）',
+      Boolean(listed), JSON.stringify((await getJson('/api/plugins')).body.plugins.map((x) => x.id)));
+
+    const again = await postJson('/api/plugin/new', { id: 'made-in-ui' });
+    check('POST /api/plugin/new：重复 id 返回 400（绝不覆盖）',
+      again.status === 400, JSON.stringify(again.body));
+
+    // 集市试运行：把仓库自带的 plugins/ 当作一个集市
+    const PKG = path.resolve(import.meta.dirname, '..');
+    const added = await postJson('/api/market/add', { source: PKG });
+    check('POST /api/market/add：内置 plugins/ 目录可作为集市',
+      added.status === 200, JSON.stringify(added.body).slice(0, 160));
+
+    const tryrun = await postJson('/api/market/tryrun', { id: 'sysinfo', action: 'disk' });
+    check('POST /api/market/tryrun：read 动作真跑并返回 stdout',
+      tryrun.status === 200 && tryrun.body.ok === true && tryrun.body.stdout.includes('盘符'),
+      JSON.stringify(tryrun.body).slice(0, 220));
+
+    const trydeny = await postJson('/api/market/tryrun', { id: 'clipboard', action: 'copy' });
+    check('POST /api/market/tryrun：mutate 动作被拒（没审查过的代码不执行副作用）',
+      trydeny.status === 403, JSON.stringify(trydeny.body));
+
+    const trymiss = await postJson('/api/market/tryrun', { id: 'sysinfo', action: 'nope' });
+    check('POST /api/market/tryrun：动作不存在返回 404',
+      trymiss.status === 404, String(trymiss.status));
   }
+}
 } finally {
   close();
   fs.rmSync(TMP_HOME, { recursive: true, force: true });

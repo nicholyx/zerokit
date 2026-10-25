@@ -258,3 +258,91 @@ export function resultMarkdown(title, res) {
   out.push('', `> ${res.ok ? '成功' : '失败'}${res.ms !== undefined ? ` · ${res.ms} ms` : ''}${res.command ? ` · \`${res.command}\`` : ''}`);
   return out.join('\n');
 }
+
+// ---------------------------------------------------------------- 第四轮：结果加工与统计
+
+/** 千分位：1234567 -> "1,234,567"；小数保留原样（只加整数部分分隔） */
+export function formatNumber(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  const [int, dec] = String(n).split('.');
+  return int.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (dec ? '.' + dec : '');
+}
+
+/** 判断一列是不是数字列：至少一半的值是有限数字 */
+export function isNumericColumn(values) {
+  const vals = values.filter((v) => v !== null && v !== undefined && v !== '');
+  if (!vals.length) return false;
+  const nums = vals.filter((v) => Number.isFinite(Number(v)));
+  return nums.length >= vals.length / 2;
+}
+
+/** 表格排序：num 列按数值、其余按字符串；dir=1 升序 -1 降序；返回新数组不动原表 */
+export function sortRows(rows, col, dir = 1) {
+  return [...rows].sort((a, b) => {
+    const x = a[col], y = b[col];
+    const nx = Number(x), ny = Number(y);
+    const bothNum = Number.isFinite(nx) && Number.isFinite(ny)
+      && String(x).trim() !== '' && String(y).trim() !== '';
+    const cmp = bothNum ? nx - ny : String(x ?? '').localeCompare(String(y ?? ''), 'zh');
+    return cmp * dir;
+  });
+}
+
+/** 结果转 CSV：数组对象取并集列；对象转 key,value 两列。值里带逗号/引号/换行会加引号转义 */
+export function toCsv(data) {
+  const cell = (v) => {
+    const s = (v && typeof v === 'object') ? JSON.stringify(v) : String(v ?? '');
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const lines = [];
+  if (Array.isArray(data) && data.length && typeof data[0] === 'object' && data[0] !== null) {
+    const keys = [...new Set(data.flatMap((row) => Object.keys(row)))];
+    lines.push(keys.map(cell).join(','));
+    for (const row of data) lines.push(keys.map((k) => cell(row[k])).join(','));
+  } else if (data && typeof data === 'object') {
+    lines.push('key,value');
+    for (const [k, v] of Object.entries(data)) lines.push(`${cell(k)},${cell(v)}`);
+  } else if (data !== undefined && data !== null) {
+    lines.push(cell(data));
+  }
+  return lines.join('\n');
+}
+
+/** 两次执行结果的逐格 diff：a -> b，只对对象/对象数组。返回 [{path, from, to}] */
+export function diffResults(a, b) {
+  const out = [];
+  const walk = (x, y, path) => {
+    if (x === y) return;
+    if (x !== null && y !== null && typeof x === 'object' && typeof y === 'object'
+        && !Array.isArray(x) && !Array.isArray(y)) {
+      for (const k of new Set([...Object.keys(x), ...Object.keys(y)])) walk(x[k], y[k], path ? `${path}.${k}` : k);
+      return;
+    }
+    const fa = (x === undefined) ? '（无）' : (typeof x === 'object' ? JSON.stringify(x) : String(x));
+    const fb = (y === undefined) ? '（无）' : (typeof y === 'object' ? JSON.stringify(y) : String(y));
+    if (fa !== fb) out.push({ path: path || '（顶层）', from: fa, to: fb });
+  };
+  walk(a, b, '');
+  return out;
+}
+
+/** 近 N 天执行趋势：runs 是全部 runStore 扁平化后的 [{ts, ok}]，返回 [{day, total, fail}] */
+export function dailyTrend(runs, days = 7) {
+  const buckets = new Map();
+  const dayKey = (ts) => {
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  for (let i = days - 1; i >= 0; i--) {
+    const t = Date.now() - i * 86400000;
+    buckets.set(dayKey(t), { day: dayKey(t), total: 0, fail: 0 });
+  }
+  for (const r of runs) {
+    const b = buckets.get(dayKey(r.ts));
+    if (!b) continue;
+    b.total++;
+    if (!r.ok) b.fail++;
+  }
+  return [...buckets.values()];
+}
