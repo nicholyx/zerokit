@@ -58,6 +58,13 @@ run         = ["{node}", "demo.mjs", "secret", "{token}"]
 risk        = "read"
 
 [[action]]
+id          = "touch"
+title       = "写一下"
+description = "有副作用的动作，给授权面板用"
+run         = ["{node}", "demo.mjs", "hello"]
+risk        = "mutate"
+
+[[action]]
 id          = "combo"
 title       = "组合"
 description = "一步链路"
@@ -167,6 +174,50 @@ try {
 
     const bad = await postJson('/api/preview', { plugin: 'demo', action: 'with-secret', values: {} });
     check('POST /api/preview：必填参数缺失返回 400', bad.status === 400, JSON.stringify(bad.body));
+  }
+
+  // ---------------------------------------------------------------- 5. MCP 授权接口（第三轮）
+
+  {
+  const list = await getJson('/api/mcp/allow');
+  const touch = list.body.items?.find((x) => x.key === 'demo.touch');
+  check('GET /api/mcp/allow：列出有副作用的动作（不含只读）',
+    list.status === 200
+    && touch?.risk === 'mutate' && touch.allowed === false
+    && !list.body.items.some((x) => x.risk === 'read'),
+    JSON.stringify(list.body).slice(0, 200));
+
+  const grant = await postJson('/api/mcp/allow', { key: 'demo.touch' });
+  check('POST /api/mcp/allow：授权后状态翻转为 allowed',
+    grant.status === 200 && grant.body.allowed === true
+    && (await getJson('/api/mcp/allow')).body.items.find((x) => x.key === 'demo.touch').allowed === true,
+    JSON.stringify(grant.body));
+  check('POST /api/mcp/allow：授权名单落盘（与 zkit mcp allow 共用一份）',
+    JSON.parse(fs.readFileSync(path.join(TMP_HOME, 'mcp-allow.json'), 'utf8')).includes('demo.touch'),
+    'mcp-allow.json');
+
+  const revoke = await postJson('/api/mcp/allow', { key: 'demo.touch', revoke: true });
+  check('POST /api/mcp/allow：撤销后恢复未授权',
+    revoke.status === 200 && revoke.body.allowed === false
+    && !(await getJson('/api/mcp/allow')).body.items.find((x) => x.key === 'demo.touch').allowed,
+    JSON.stringify(revoke.body));
+
+  const unknown = await postJson('/api/mcp/allow', { key: 'demo.nope' });
+  check('POST /api/mcp/allow：不存在的动作返回 404', unknown.status === 404, String(unknown.status));
+
+  const readonly = await postJson('/api/mcp/allow', { key: 'demo.hello' });
+  check('POST /api/mcp/allow：只读动作拒绝授权（默认放行）',
+    readonly.status === 400, JSON.stringify(readonly.body));
+
+  const malformed = await postJson('/api/mcp/allow', { key: 'not-a-key' });
+  check('POST /api/mcp/allow：key 形状非法返回 400', malformed.status === 400, JSON.stringify(malformed.body));
+
+  const wired = (await getJson('/api/plugins')).body.plugins.find((x) => x.id === 'demo');
+  check('GET /api/plugins：带 sourceUrl（分享安装命令用）',
+    typeof wired.sourceUrl === 'string', JSON.stringify(wired.sourceUrl));
+  const combo = wired.actions.find((a) => a.id === 'combo');
+  check('GET /api/plugins：chain 步骤带 params 模板（前端画链路图用）',
+    combo?.steps?.length === 1 && 'params' in combo.steps[0], JSON.stringify(combo?.steps));
   }
 } finally {
   close();

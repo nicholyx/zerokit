@@ -70,6 +70,7 @@ interface WiredPlugin {
   pluginDepsOk: boolean;
   /** 安装来源（git / 集市 / 自带 / 本地目录 / 未知），前端据此展示「能不能更新」 */
   sourceType: string;
+  sourceUrl: string;
   sourceText: string;
   installedAt: string;
   actions: Array<Record<string, unknown>>;
@@ -95,6 +96,7 @@ function wirePlugins(): WiredPlugin[] {
       pluginDeps: depStates(p),
       pluginDepsOk: missingDeps(p).length === 0,
       sourceType: source?.type ?? 'unknown',
+      sourceUrl: source?.url ?? '',
       sourceText: describeSource(source),
       installedAt: source?.installedAt ?? '',
       settings: publicSettings(p),
@@ -114,7 +116,11 @@ function wirePlugins(): WiredPlugin[] {
         // 内容智能匹配的声明：前端据此判断"输入像什么"然后推荐
         match: a.match ?? null,
         // 组合动作的链路（只有 use/as；参数留在清单里，前端不需要知道）
-        steps: a.type === 'chain' ? a.steps.map((s) => ({ use: s.use, as: s.as })) : [],
+        // 组合动作的链路：use/as 给前端画链路图，params 是模板原文（可能含 {占位符}，
+        // 静态就写在清单里，不含运行值）
+        steps: a.type === 'chain'
+          ? a.steps.map((st) => ({ use: st.use, as: st.as, params: st.params ?? {} }))
+          : [],
       })),
     });
   }
@@ -750,6 +756,53 @@ export function createServer(): http.Server {
         }
         const ok = removePlugin(id);
         json(res, 200, { ok, message: ok ? `已卸载 ${id}` : `没有插件 ${id}` });
+        return;
+      }
+
+      // MCP 授权面板：列出所有有副作用的动作与其授权状态；POST 增/撤授权。
+      // 授权名单与 `zkit mcp allow` 是同一份（~/.zerokit/mcp-allow.json）。
+      if (url.pathname === '/api/mcp/allow' && req.method === 'GET') {
+        const mcp = await import('./mcp.ts');
+        const allow = mcp.loadAllow();
+        const items = mcp.collectTools()
+          .filter(({ plugin, action }) => action.risk !== 'read')
+          .map(({ plugin, action }) => ({
+            key: `${plugin.id}.${action.id}`,
+            pluginId: plugin.id,
+            pluginName: plugin.name,
+            title: action.title,
+            risk: action.risk,
+            allowed: allow.has(`${plugin.id}.${action.id}`),
+          }));
+        json(res, 200, { items, allowedCount: items.filter((x) => x.allowed).length });
+        return;
+      }
+
+      if (url.pathname === '/api/mcp/allow' && req.method === 'POST') {
+        const body = await readBody(req);
+        const key = String(body['key'] ?? '').trim();
+        const revoke = body['revoke'] === true;
+        // key 只认「插件id.动作id」的形状——防手滑把别的东西写进名单
+        if (!/^[\w.-]+\.[\w.-]+$/.test(key)) {
+          json(res, 400, { error: '授权目标要写成 插件id.动作id 的形状' });
+          return;
+        }
+        const mcp = await import('./mcp.ts');
+        const [pluginId, actionId] = key.split('.');
+        const hit = mcp.collectTools().find((t) => t.plugin.id === pluginId && t.action.id === actionId);
+        if (!hit) {
+          json(res, 404, { error: `没有这个动作：${key}` });
+          return;
+        }
+        if (hit.action.risk === 'read') {
+          json(res, 400, { error: '只读动作默认放行，不需要授权' });
+          return;
+        }
+        const allow = mcp.loadAllow();
+        if (revoke) allow.delete(key);
+        else allow.add(key);
+        mcp.saveAllow(allow);
+        json(res, 200, { ok: true, allowed: !revoke, key });
         return;
       }
 
