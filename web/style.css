@@ -398,3 +398,15 @@ kbd {
   padding: 0 4px; margin-right: 2px; color: #808b9a;
 }
 .hidden { display: none !important; }
+/* ---- 集市面板 ---- */
+.market-msg { min-height: 18px; margin: -6px 0 10px; font-size: 12px; color: var(--fg-dim); }
+.market-msg.ok { color: var(--ok); }
+.market-msg.err { color: var(--bad); }
+.market-tags { margin-left: 8px; color: #7f8b9c; font-size: 11.5px; }
+.market-card { border-color: #2b3542; }
+.market-entry .aid { color: #7f8b9c; }
+.market-check {
+  display: flex; align-items: center; gap: 8px;
+  margin: 9px 12px; font-size: 12px; color: var(--fg-dim);
+}
+.market-check input { width: 15px; height: 15px; }

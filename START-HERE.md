@@ -64,6 +64,7 @@ node src/cli.ts run sysinfo overview
 node src/cli.ts run ip public
 
 # 4. 界面上：直接打字 xtxx 或 daili，应该能看到拼音/首字母匹配
+# 5. 界面顶部「集市」：不用记地址，搜索 → 预览每个动作的真实命令 → 确认安装
 ```
 
 `doctor` 里如果提示 `python` 缺失，**不影响其它插件**——只有 `proxy`
@@ -156,7 +157,7 @@ PowerShell 用 `$env:https_proxy="http://127.0.0.1:<端口>"`（其余两个同�
 ## 七、这个项目现在是什么状态
 
 内核、四个面、插件集市、原生壳、uTools 插件兼容层都已跑通，各有测试
-（`node scripts/test-all.mjs`，17 个文件 450+ 项断言，不联网、不花钱）。
+（`node scripts/test-all.mjs`，18 个文件 470+ 项断言，不联网、不花钱）。
 
 已知的缺口和明确不做的事，都列在 `docs/overview.md` 的「待办」和「已知差距」两节里——
 那份是诚实的账本，建议看一眼再判断这个项目值不值得用。

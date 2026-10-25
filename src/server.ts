@@ -22,6 +22,10 @@ import { applyDefaults, coerceParam, toFormFields, toJsonSchema } from './core/s
 import { type PublicSetting, publicSettings, writeSettings } from './core/pluginConfig.ts';
 import { dependents, depStates, installDeps, missingDeps } from './core/deps.ts';
 import { buildArgv, chainDisplay, confirmPolicy, displayCommand, runAction } from './core/runner.ts';
+import {
+  addMarket, findEntry, installFromMarket, loadMarkets, previewInstall,
+  readIndex, refreshMarket, removeMarket,
+} from './core/market.ts';
 
 /**
  * 本地 HTTP 面：给启动器 / Web 页面 / Tauri 壳提供同一套 API。
@@ -122,7 +126,7 @@ function confirmToken(pluginId: string, actionId: string, values: Record<string,
 }
 
 /** 安装/更新/卸载的确认令牌：和「这条来源 + 这个插件」绑定，防「确认的是 A、操作的是 B」 */
-function installToken(kind: 'install' | 'update' | 'remove', key: string): string {
+function installToken(kind: 'install' | 'update' | 'remove' | 'market', key: string): string {
   return crypto.createHmac('sha256', CONFIRM_SECRET).update(`${kind}|${key}`).digest('hex');
 }
 
@@ -130,6 +134,40 @@ function sameToken(a: string, b: string): boolean {
   const ba = Buffer.from(a);
   const bb = Buffer.from(b);
   return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
+}
+
+/** 集市快照：已添加的集市 + 各自索引 + 每个条目是否已装（前端一次拿全） */
+function marketSnapshot(): {
+  markets: Array<Record<string, unknown>>;
+  total: number;
+} {
+  const installed = new Map<string, string>();
+  for (const entry of listPlugins()) {
+    if (entry.plugin) installed.set(entry.plugin.id, entry.plugin.version);
+  }
+  const markets = loadMarkets().map((m) => {
+    const index = readIndex(m.name);
+    return {
+      name: m.name,
+      url: m.url,
+      addedAt: m.addedAt,
+      local: !/^(https?:\/\/|git@|ssh:\/\/)/.test(m.url),
+      description: index?.description ?? '',
+      plugins: (index?.plugins ?? []).map((e) => ({
+        ...e,
+        installedVersion: installed.get(e.id) ?? '',
+      })),
+    };
+  });
+  return { markets, total: markets.reduce((n, m) => n + (m.plugins as unknown[]).length, 0) };
+}
+
+/** 预览里摊开一条动作：装第三方插件时，人要先看到「它到底会跑什么」 */
+function previewAction(a: Plugin['actions'][number]): Record<string, unknown> {
+  const command = a.type === 'http'
+    ? `${a.method} ${a.url ?? ''}`
+    : a.type === 'chain' ? chainDisplay(a) : a.run.join(' ');
+  return { id: a.id, title: a.title, description: a.description, risk: a.risk, type: a.type, command };
 }
 
 function json(res: http.ServerResponse, code: number, body: unknown): void {
@@ -448,6 +486,113 @@ export function createServer(): http.Server {
           depsErrors,
           depsMissing,
           // 前端收到后重新拉 /api/plugins
+        });
+        return;
+      }
+
+      // 集市：浏览 / 添加 / 刷新 / 移除 / 预览 / 安装。
+      // 索引来自本地缓存，只有 add 与 refresh 会碰网络（git clone）；
+      // 安装仍然要能力摊开 + 确认令牌，令牌绑定「集市 + 插件 id」。
+      if (url.pathname === '/api/markets' && req.method === 'GET') {
+        json(res, 200, marketSnapshot());
+        return;
+      }
+
+      if (url.pathname === '/api/market/add' && req.method === 'POST') {
+        const body = await readBody(req);
+        const source = String(body['source'] ?? '').trim();
+        if (!source) {
+          json(res, 400, { error: '缺少集市地址：git 地址、owner/repo 或本地目录' });
+          return;
+        }
+        const result = addMarket(source);
+        json(res, result.ok ? 200 : 400, { ...result, ...marketSnapshot() });
+        return;
+      }
+
+      if (url.pathname === '/api/market/remove' && req.method === 'POST') {
+        const body = await readBody(req);
+        const name = String(body['name'] ?? '');
+        if (!removeMarket(name)) {
+          json(res, 404, { error: `没有这个集市：${name}` });
+          return;
+        }
+        json(res, 200, {
+          ok: true,
+          message: `已移除集市「${name}」（已装的插件不受影响）`,
+          ...marketSnapshot(),
+        });
+        return;
+      }
+
+      if (url.pathname === '/api/market/refresh' && req.method === 'POST') {
+        const body = await readBody(req);
+        const name = String(body['name'] ?? '');
+        const result = refreshMarket(name);
+        json(res, result.ok ? 200 : 400, { ...result, ...marketSnapshot() });
+        return;
+      }
+
+      if (url.pathname === '/api/market/preview' && req.method === 'POST') {
+        const body = await readBody(req);
+        const id = String(body['id'] ?? '');
+        const market = typeof body['market'] === 'string' ? body['market'] : undefined;
+        const preview = previewInstall(id, market);
+        if (!preview) {
+          json(res, 404, { error: `所有集市里都没有插件 "${id}"` });
+          return;
+        }
+        json(res, 200, {
+          needConfirm: true,
+          confirm: installToken('market', `${preview.market}:${id}`),
+          id,
+          market: preview.market,
+          entry: preview.entry,
+          actions: preview.load.plugin?.actions.map(previewAction) ?? [],
+          errors: preview.load.errors,
+          warnings: preview.load.warnings,
+          pluginDeps: preview.load.plugin ? depStates(preview.load.plugin) : [],
+          missingPluginDeps: preview.load.plugin ? missingDeps(preview.load.plugin) : [],
+        });
+        return;
+      }
+
+      if (url.pathname === '/api/market/install' && req.method === 'POST') {
+        const body = await readBody(req);
+        const id = String(body['id'] ?? '');
+        const market = typeof body['market'] === 'string' ? body['market'] : undefined;
+        const hit = findEntry(id, market);
+        if (!hit) {
+          json(res, 404, { error: `所有集市里都没有插件 "${id}"` });
+          return;
+        }
+        if (!sameToken(String(body['confirm'] ?? ''), installToken('market', `${hit.market}:${id}`))) {
+          json(res, 403, { error: '确认令牌不对：请重新预览后再确认' });
+          return;
+        }
+        const result = installFromMarket(id, hit.market);
+        let depsInstalled: string[] = [];
+        let depsErrors: string[] = [];
+        let depsMissing: string[] = [];
+        if (result.ok && result.id) {
+          const installed = findPlugin(result.id)?.plugin;
+          if (installed) {
+            if (body['withDeps'] === true) {
+              const r = installDeps(installed);
+              depsInstalled = r.installed;
+              depsErrors = r.errors;
+            }
+            depsMissing = missingDeps(installed);
+          }
+        }
+        json(res, 200, {
+          ok: result.ok,
+          message: result.message,
+          warnings: result.warnings,
+          depsInstalled,
+          depsErrors,
+          depsMissing,
+          ...marketSnapshot(),
         });
         return;
       }
