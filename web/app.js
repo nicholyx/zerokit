@@ -20,6 +20,7 @@ const el = {
   listView: $('listView'), detailView: $('detailView'), workbench: $('workbench'),
   psView: $('psView'), psBtn: $('psBtn'), psCount: $('psCount'), clipBtn: $('clipBtn'),
   logsView: $('logsView'), doctorView: $('doctorView'), listTools: $('listTools'),
+  allowView: $('allowView'),
   plugView: $('plugView'), plugBtn: $('plugBtn'), plugCount: $('plugCount'),
   marketView: $('marketView'), marketBtn: $('marketBtn'), marketCount: $('marketCount'),
   modeLabel: $('modeLabel'), modeDot: $('modeDot'), reload: $('reloadBtn'),
@@ -385,7 +386,7 @@ function itemHtml(entry, i, showPlugin, query = '') {
 
 function hidePanels() {
   for (const v of [el.listView, el.detailView, el.workbench, el.psView,
-    el.plugView, el.marketView, el.logsView, el.doctorView]) {
+    el.plugView, el.marketView, el.logsView, el.doctorView, el.allowView]) {
     v.classList.add('hidden');
   }
 }
@@ -464,7 +465,32 @@ function renderList() {
     .map((r) => [r.entry.order, r.smart]));
   if (active >= filtered.length) active = Math.max(0, filtered.length - 1);
 
-  el.empty.classList.toggle('hidden', filtered.length > 0);
+  if (filtered.length > 0) {
+    el.empty.classList.add('hidden');
+  } else {
+    // 空状态不是死胡同：给出「下一步做什么」的可点建议
+    const suggestions = [];
+    if (q.trim()) {
+      suggestions.push(`<button class="link" data-sug="clear">清空搜索，浏览全部动作</button>`);
+      suggestions.push(`<button class="link" data-sug="market">去集市找一个能做这件事的插件</button>`);
+      suggestions.push(`<button class="link" data-sug="wb">问 AI 工作台：「${esc(q.trim())}」</button>`);
+    } else if (!plugins.length) {
+      suggestions.push(`<button class="link" data-sug="market">还没有插件——去集市装一个</button>`);
+      suggestions.push(`<button class="link" data-sug="doctor">检查环境哪里没配好</button>`);
+    }
+    el.empty.innerHTML = suggestions.length
+      ? `<div class="empty-title">${q.trim() ? `没有匹配「${esc(q.trim())}」的动作` : '这里还空着'}</div>
+         <div class="empty-sugs">${suggestions.join('')}</div>`
+      : '没有匹配的插件动作';
+    el.empty.classList.remove('hidden');
+    el.empty.querySelectorAll('[data-sug]').forEach((b) => b.addEventListener('click', () => {
+      const act2 = b.dataset.sug;
+      if (act2 === 'clear') { el.q.value = ''; renderList(); el.q.focus(); }
+      else if (act2 === 'market') showMarket();
+      else if (act2 === 'doctor') showDoctor();
+      else if (act2 === 'wb') showWorkbench(el.q.value.trim());
+    }));
+  }
 
   if (q.trim() === '' && filtered.length > 0) {
     // 浏览态：按插件分组（组顺序 = 该插件第一个动作在排序里的位置）
@@ -577,8 +603,26 @@ function openDetail(plugin, action, prefill) {
 
   const steps = Array.isArray(action.steps) ? action.steps : [];
   const chainInfo = steps.length ? `
-    <div class="cmd-line">组合动作，按顺序执行：
-      ${steps.map((s, i) => `<div>${i + 1}. ${esc(s.use)} → {${esc(s.as)}}</div>`).join('')}
+    <div class="chain-flow">
+      ${steps.map((st, i) => {
+        const ps = Object.entries(st.params ?? {});
+        const paramTxt = ps.length
+          ? ps.map(([k, v]) => `<span class="chain-param">${esc(k)}=${esc(String(v))}</span>`).join(' ')
+          : '';
+        const ref = i === 0
+          ? '动作参数 + 内置占位符'
+          : `上一步结果 {${esc(steps[i - 1].as)}} / {prev}`;
+        return `
+          <div class="chain-step">
+            <span class="chain-no">${i + 1}</span>
+            <div class="chain-body">
+              <div class="chain-use">${esc(st.use)} <span class="aid">→ {${esc(st.as)}}</span></div>
+              ${paramTxt ? `<div class="chain-params">${paramTxt}</div>` : ''}
+              <div class="chain-src">输入来自：${ref}</div>
+            </div>
+          </div>
+          ${i < steps.length - 1 ? '<div class="chain-arrow">↓</div>' : ''}`;
+      }).join('')}
     </div>` : '';
 
   const favKey = actionKey(plugin.id, action.id);
@@ -632,10 +676,12 @@ function openDetail(plugin, action, prefill) {
       <button class="primary" id="runBtn">执行</button>
       <button class="ghost" id="previewBtn" title="先看真正会执行的命令行（密钥打码），再决定跑不跑">预览命令</button>
       <button class="ghost" id="invokeBtn" title="这个动作在 CLI / MCP / 深链里怎么调">调用方式</button>
+      ${plugin.settings?.length ? '<button class="ghost" id="cfgBtn" title="这个插件的长期配置（端点、密钥等），保存后立即生效">配置插件</button>' : ''}
       <button class="ghost" id="backBtn">返回</button>
     </div>
     <div id="previewBox"></div>
     <div id="invokeBox"></div>
+    <div id="detailCfg" class="cmd-box hidden"></div>
     <div id="result"></div>`;
 
   $('previewBtn').addEventListener('click', async () => {
@@ -654,6 +700,52 @@ function openDetail(plugin, action, prefill) {
       </div>`;
     } catch (e) {
       box.innerHTML = `<div class="help" style="color:var(--bad)">预览失败：${esc(e.message)}</div>`;
+    }
+  });
+  $('cfgBtn')?.addEventListener('click', async () => {
+    $('previewBox').innerHTML = '';
+    $('invokeBox').innerHTML = '';
+    const box = $('detailCfg');
+    if (!box.classList.contains('hidden')) { box.classList.add('hidden'); return; }
+    box.innerHTML = '<div class="help">读取配置中…</div>';
+    box.classList.remove('hidden');
+    try {
+      const r = await api(`/api/plugin/config?plugin=${encodeURIComponent(plugin.id)}`);
+      if (!r.settings?.length) { box.innerHTML = '<div class="help">这个插件没有声明设置项。</div>'; return; }
+      box.innerHTML = `
+        <div class="cmd-box-head">插件配置 · ${esc(plugin.name)} <span class="sub">保存后立即生效；密钥留空 = 不修改</span></div>
+        <div class="detail-cfg">${r.settings.map((x) => `
+          <label class="plug-setting">
+            <span class="plug-setting-name">${esc(x.title || x.name)}${x.required ? '<b class="req">*</b>' : ''}
+              <span class="plug-setting-note">${x.set ? '已设置' : '未设置'}${x.secret ? ' · 密钥' : ''}</span></span>
+            ${x.type === 'boolean'
+              ? `<input type="checkbox" data-cfg="${esc(x.name)}" ${x.value === true ? 'checked' : ''}>`
+              : `<input type="${x.secret ? 'password' : 'text'}" data-cfg="${esc(x.name)}"
+                   value="${x.secret ? '' : esc(String(x.value ?? ''))}"
+                   placeholder="${x.secret && x.set ? '已设置（留空=不修改）' : ''}"
+                   autocomplete="off" spellcheck="false">`}
+            ${x.description ? `<span class="plug-setting-help">${esc(x.description)}</span>` : ''}
+          </label>`).join('')}
+        </div>
+        <div class="actions"><button class="primary" id="cfgSave">保存配置</button>
+          <span class="sub" id="cfgMsg"></span></div>`;
+      $('cfgSave').addEventListener('click', async () => {
+        const patch = {};
+        box.querySelectorAll('[data-cfg]').forEach((n) => {
+          if (n.type === 'checkbox') { patch[n.dataset.cfg] = n.checked; return; }
+          if (n.value !== '') patch[n.dataset.cfg] = n.value;  // 留空 = 不修改
+        });
+        const msg = $('cfgMsg');
+        msg.textContent = '保存中…';
+        try {
+          await api('/api/plugin/config', { method: 'POST', body: { plugin: plugin.id, patch } });
+          msg.textContent = '✓ 已保存，下一次执行立即生效';
+        } catch (e) {
+          msg.textContent = `保存失败：${e.message}`;
+        }
+      });
+    } catch (e) {
+      box.innerHTML = `<div class="help" style="color:var(--bad)">读取失败：${esc(e.message)}</div>`;
     }
   });
   $('invokeBtn').addEventListener('click', () => {
@@ -758,6 +850,7 @@ async function submit(remember) {
     lastValues = values;
     lastResult = res;
     renderResult(res);
+    if (res.ok === true && action.risk === 'destructive') renderUndoHint(plugin, action);
     // 结果可能很长，直接把卡片顶部带进视野（否则用户以为「点了没反应」）
     setTimeout(() => $('result')?.scrollIntoView({ block: 'start' }), 0);
     rememberRecent(plugin.id, action.id);
@@ -783,6 +876,9 @@ function askConfirm(plugin, action, res) {
     const overlay = document.createElement('div');
     overlay.className = 'overlay';
     const rememberable = action.risk !== 'destructive';
+    const riskExplain = action.risk === 'destructive'
+      ? '这个动作会改动或删除数据，且不可自动撤销。请确认命令行内容与你的预期一致。'
+      : '这个动作会改动系统或插件状态（写文件、发请求、起进程等）。';
     overlay.innerHTML = `
       <div class="modal">
         <h3>确认执行</h3>
@@ -790,6 +886,7 @@ function askConfirm(plugin, action, res) {
           ${esc(plugin.name)} · ${esc(action.title)} ·
           <span class="badge ${esc(action.risk)}">${esc(RISK_TEXT[action.risk] || action.risk)}</span>
         </div>
+        <div class="confirm-explain">${riskExplain}</div>
         <div class="cmd-line">${esc(res.command || '(无命令)')}</div>
         ${rememberable ? `<div class="remember">
           <input type="checkbox" id="rememberBox" checked>
@@ -835,6 +932,25 @@ function renderRunHistory(plugin, action) {
       <button class="ghost" data-rerun>重跑</button>
     </div>`).join('')}`;
   box.querySelectorAll('[data-rerun]').forEach((b) => b.addEventListener('click', () => submit(false)));
+}
+
+/** 高风险动作执行后的「安心提示」：给出审计日志入口，并提示没有自动回滚 */
+function renderUndoHint(plugin, action) {
+  const box = $('result');
+  if (!box) return;
+  const hint = document.createElement('div');
+  hint.className = 'cmd-box undo-hint';
+  hint.innerHTML = `
+    <div class="cmd-box-head">刚刚执行了高风险动作</div>
+    <div class="help">zerokit 不会猜测怎么撤销——每个插件改的东西不同。如果需要回退：
+      ① 打开<a href="#" id="undoLogs" class="link">审计日志</a>确认刚才实际执行了什么；
+      ② 用对应的恢复手段（备份、插件自带的还原动作、或系统工具）手动处理。
+      下次执行前，可以先用「预览命令」看清楚再跑。</div>`;
+  box.prepend(hint);
+  hint.querySelector('#undoLogs').addEventListener('click', (e) => {
+    e.preventDefault();
+    showLogs();
+  });
 }
 
 function renderResult(res) {
@@ -1611,6 +1727,7 @@ async function renderPlugins() {
           <span class="plug-ops">
             <button class="ghost" data-op="home">主页</button>
             ${(p.settings || []).length > 0 ? '<button class="ghost" data-op="config">配置</button>' : ''}
+            ${p.sourceUrl ? '<button class="ghost" data-op="share" title="生成一条安装命令，发给同事就能装同一个插件">分享</button>' : ''}
             <button class="ghost" data-op="check">检查更新</button>
             <button class="ghost" data-op="remove">卸载</button>
           </span>
@@ -1638,6 +1755,20 @@ async function renderPlugins() {
     if (cfgBtn) {
       const p = plugins.find((x) => x.id === card.dataset.id);
       cfgBtn.addEventListener('click', () => toggleSettings(card, p));
+    }
+    const shareBtn = card.querySelector('[data-op="share"]');
+    if (shareBtn) {
+      shareBtn.addEventListener('click', async () => {
+        const p = plugins.find((x) => x.id === card.dataset.id);
+        const cmd = `zkit plugin add ${p.sourceUrl}`;
+        try {
+          await navigator.clipboard.writeText(cmd);
+          shareBtn.textContent = '已复制';
+        } catch {
+          shareBtn.textContent = '复制失败';
+        }
+        setTimeout(() => { shareBtn.textContent = '分享'; }, 1500);
+      });
     }
   });
 }
@@ -2293,6 +2424,148 @@ async function wbSend() {
   }
 }
 
+
+
+// ---------------------------------------------------------------- MCP 授权面板
+
+/** MCP 授权：哪些「有副作用」的动作允许 AI 直接调。只读动作默认放行，不在这里。 */
+async function showMcpAllow() {
+  mode = 'mcp';
+  el.modeLabel.textContent = 'MCP 授权';
+  el.searchRow.classList.add('hidden');
+  hidePanels();
+  el.allowView.classList.remove('hidden');
+  const view = el.allowView;
+  if (location.hash !== '#/mcp') history.replaceState(null, '', '#/mcp');
+
+  const render = (data, err) => {
+    if (err) {
+      view.innerHTML = `<div class="ps-empty">读不到授权状态：${esc(err)}</div>`;
+      return;
+    }
+    const groups = new Map();
+    for (const it of data.items) {
+      if (!groups.has(it.pluginName)) groups.set(it.pluginName, []);
+      groups.get(it.pluginName).push(it);
+    }
+    view.innerHTML = `
+      <div class="ps-head"><h2>MCP 授权</h2>
+        <span class="sub">有副作用的动作默认拒绝 AI 调用；在这里显式放行。只读动作不需要授权。</span></div>
+      <div class="allow-summary">${data.allowedCount} / ${data.items.length} 已授权</div>
+      ${[...groups.entries()].map(([name, items]) => `
+        <div class="allow-group">
+          <div class="allow-group-name">${esc(name)}</div>
+          ${items.map((it) => `
+            <div class="allow-row">
+              <span class="badge ${esc(it.risk)}">${esc(RISK_TEXT[it.risk] || it.risk)}</span>
+              <span class="allow-title">${esc(it.title)}</span>
+              <span class="aid">${esc(it.key)}</span>
+              <button class="ghost ${it.allowed ? 'on' : ''}" data-key="${esc(it.key)}"
+                data-allowed="${it.allowed}">${it.allowed ? '撤销授权' : '允许 AI 调用'}</button>
+            </div>`).join('')}
+        </div>`).join('')}`;
+    view.querySelectorAll('[data-key]').forEach((btn) => btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        await api('/api/mcp/allow', {
+          method: 'POST',
+          body: { key: btn.dataset.key, revoke: btn.dataset.allowed === 'true' },
+        });
+        await showMcpAllow();  // 重画
+      } catch (e) {
+        btn.disabled = false;
+        view.querySelector('.allow-summary').textContent = `操作失败：${e.message}`;
+      }
+    }));
+  };
+  try {
+    render(await api('/api/mcp/allow'));
+  } catch (e) { render(null, e.message); }
+}
+
+function exitMcpAllow() {
+  mode = 'command';
+  el.allowView.classList.add('hidden');
+  el.searchRow.classList.remove('hidden');
+  el.listView.classList.remove('hidden');
+  el.modeLabel.textContent = '命令';
+  history.replaceState(null, '', location.pathname);
+  renderList();
+  el.q.focus();
+}
+
+// ---------------------------------------------------------------- 全局命令面板（Ctrl+P）
+
+let paletteMode = false;
+
+/** 命令面板：一个输入框直达任何动作 / 页面。数据全是本地，不新增接口。 */
+function showPalette() {
+  if (paletteMode) return;
+  paletteMode = true;
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.id = 'paletteOverlay';
+  const pages = [
+    { icon: '⌘', label: 'AI 工作台', hint: '自然语言指挥插件干活', act: () => showWorkbench('') },
+    { icon: '▶', label: '运行中', hint: '看正在跑的进程/服务，可结束', act: () => showPs() },
+    { icon: '⚙', label: '插件管理', hint: '安装/更新/卸载/配置', act: () => showPlugins() },
+    { icon: '🛍', label: '插件集市', hint: '浏览并一键安装集市插件', act: () => showMarket() },
+    { icon: '▤', label: '审计日志', hint: '每次执行/被拒/失败', act: () => showLogs() },
+    { icon: '✓', label: '环境自检', hint: '解释器/依赖/配置问题', act: () => showDoctor() },
+    { icon: '🔑', label: 'MCP 授权', hint: '哪些动作允许 AI 调用', act: () => showMcpAllow() },
+  ];
+  overlay.innerHTML = `
+    <div class="modal palette">
+      <input id="paletteQ" type="text" placeholder="输入动作名、插件名或页面名…" autocomplete="off" spellcheck="false">
+      <ul id="paletteList" role="listbox"></ul>
+      <div class="palette-foot">↑↓ 选择 · Enter 打开 · Esc 关闭</div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const q = overlay.querySelector('#paletteQ');
+  const list = overlay.querySelector('#paletteList');
+  let sel = 0;
+  let items = [];
+
+  const paint = () => {
+    list.innerHTML = items.map((x, i) => `
+      <li class="palette-item${i === sel ? ' on' : ''}" data-i="${i}">
+        <span class="palette-icon">${x.icon}</span>
+        <span class="palette-label">${x.label}</span>
+        <span class="palette-hint">${x.hint}</span>
+      </li>`).join('') || '<li class="palette-item none">没有匹配的项</li>';
+    list.querySelectorAll('.palette-item.on').forEach((n) => n.scrollIntoView({ block: 'nearest' }));
+  };
+  const refill = () => {
+    const needle = q.value.trim().toLowerCase();
+    const actionItems = entries.map((e) => ({
+      icon: '⚡', label: e.action.title, hint: `${e.plugin.name} · ${e.action.id}`,
+      act: () => { exitPalette(); openDetail(e.plugin, e.action); },
+    }));
+    const all = [...pages.map((x) => ({ ...x, act: (() => { const f = x.act; return () => { exitPalette(); f(); }; })() })),
+      ...actionItems];
+    items = !needle ? all.slice(0, 20) : all.filter((x) =>
+      x.label.toLowerCase().includes(needle) || x.hint.toLowerCase().includes(needle)).slice(0, 20);
+    sel = 0;
+    paint();
+  };
+  const exitPalette = () => { paletteMode = false; overlay.remove(); };
+
+  q.addEventListener('input', refill);
+  q.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); exitPalette(); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel + 1, items.length - 1); paint(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel - 1, 0); paint(); }
+    else if (e.key === 'Enter') { e.preventDefault(); items[sel]?.act(); }
+  });
+  list.addEventListener('click', (e) => {
+    const li = e.target.closest('.palette-item[data-i]');
+    if (li) items[Number(li.dataset.i)]?.act();
+  });
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) exitPalette(); });
+  refill();
+  q.focus();
+}
+
 // ---------------------------------------------------------------- 键盘
 
 document.addEventListener('keydown', (e) => {
@@ -2312,6 +2585,10 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { e.preventDefault(); exitDoctor(); }
     return;
   }
+  if (mode === 'mcp') {
+    if (e.key === 'Escape') { e.preventDefault(); exitMcpAllow(); }
+    return;
+  }
   if (mode === 'workbench') {
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -2327,12 +2604,30 @@ document.addEventListener('keydown', (e) => {
     else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(true); }
     return;
   }
+  // Ctrl+P / Ctrl+K：全局命令面板（键盘党不用碰鼠标）
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.key === 'k' || e.key === 'K')) {
+    e.preventDefault();
+    showPalette();
+    return;
+  }
   if (e.key === 'ArrowDown') {
     e.preventDefault();
     if (filtered.length) { active = Math.min(active + 1, filtered.length - 1); paintActive(); }
   } else if (e.key === 'ArrowUp') {
     e.preventDefault();
     if (filtered.length) { active = Math.max(active - 1, 0); paintActive(); }
+  } else if (e.key === 'Home') {
+    e.preventDefault();
+    if (filtered.length) { active = 0; paintActive(); }
+  } else if (e.key === 'End') {
+    e.preventDefault();
+    if (filtered.length) { active = filtered.length - 1; paintActive(); }
+  } else if (e.key === 'PageDown') {
+    e.preventDefault();
+    if (filtered.length) { active = Math.min(active + 10, filtered.length - 1); paintActive(); }
+  } else if (e.key === 'PageUp') {
+    e.preventDefault();
+    if (filtered.length) { active = Math.max(active - 10, 0); paintActive(); }
   } else if (e.key === 'Enter') {
     e.preventDefault();
     if (e.ctrlKey || e.metaKey) { openActive(); setTimeout(() => submit(true), 0); }
@@ -2388,6 +2683,20 @@ function showShortcuts() {
           <span class="key-combo">${s.keys.map((k) => `<kbd>${esc(k)}</kbd>`).join('')}</span>
           <span class="key-what">${esc(s.what)}</span>
         </div>`).join('')}
+      </div>
+      <h3>直达页面（深链接，收藏或发给同事都行）</h3>
+      <div class="keys deep-links">
+        ${[
+          ['#/ps', '运行中', '看正在跑的进程与服务'],
+          ['#/plugins', '插件管理', '安装 / 更新 / 卸载 / 配置'],
+          ['#/market', '插件集市', '浏览并一键安装'],
+          ['#/logs', '审计日志', '每次执行、被拒、失败'],
+          ['#/doctor', '环境自检', '解释器 / 依赖 / 配置问题'],
+          ['#/mcp', 'MCP 授权', '允许 AI 调用哪些动作'],
+          ['#/workbench', 'AI 工作台', '自然语言指挥插件'],
+          ['#/q=关键词', '带词搜索', '打开就搜「关键词」'],
+        ].map(([h, n, d]) => `<div class="key-row"><a class="link" href="${h}">${n}</a>
+          <span class="key-what"><code>${h}</code> — ${d}</span></div>`).join('')}
       </div>
       <div class="actions">
         <button class="primary" id="helpClose">知道了</button>
@@ -2486,6 +2795,12 @@ function applyHash() {
   // #/market  直接打开「集市」
   if ((location.hash || '') === '#/market') {
     showMarket();
+    return;
+  }
+
+  // #/mcp  直接打开「MCP 授权」
+  if ((location.hash || '') === '#/mcp') {
+    showMcpAllow();
     return;
   }
 

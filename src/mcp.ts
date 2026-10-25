@@ -33,7 +33,8 @@ function allowPath(): string {
   return path.join(HOME, 'mcp-allow.json');
 }
 
-function loadAllow(): Set<string> {
+/** 读取 MCP 授权名单。启动器面板与 CLI 共用同一份，避免两处各管各的。 */
+export function loadAllow(): Set<string> {
   try {
     const raw = JSON.parse(fs.readFileSync(allowPath(), 'utf8'));
     return new Set(Array.isArray(raw) ? raw : []);
@@ -42,7 +43,7 @@ function loadAllow(): Set<string> {
   }
 }
 
-function saveAllow(set: Set<string>): void {
+export function saveAllow(set: Set<string>): void {
   fs.mkdirSync(HOME, { recursive: true });
   fs.writeFileSync(allowPath(), JSON.stringify([...set].sort(), null, 2));
 }
@@ -93,7 +94,7 @@ function touchesNetwork(plugin: Plugin, action: Action, seen = new Set<string>()
   return false;
 }
 
-function collectTools(): Array<{ plugin: Plugin; action: Action }> {
+export function collectTools(): Array<{ plugin: Plugin; action: Action }> {
   const out: Array<{ plugin: Plugin; action: Action }> = [];
   for (const entry of listPlugins()) {
     if (!entry.plugin) continue;
