@@ -131,3 +131,130 @@ export const PROMPTS = [
   { label: '最近剪贴板有什么', prompt: '看看剪贴板历史里最近几条，帮我归类' },
   { label: '搜索文件', prompt: '帮我找一下名字里带 report 的文件' },
 ];
+
+// ---------------------------------------------------------------- 第二轮十项
+//
+// 同样只放纯函数：解析/排序/拼文本这类容易写错、又完全不需要 DOM 的逻辑，
+// 放这里让 Node 直接单测。
+
+/** 强调色：只改一个 CSS 变量，深浅主题都跟着走 */
+export const ACCENTS = [
+  { id: 'ocean', label: '海水蓝', color: '#5aa9ff' },
+  { id: 'violet', label: '暮光紫', color: '#a78bfa' },
+  { id: 'emerald', label: '翡翠绿', color: '#34d399' },
+  { id: 'amber', label: '琥珀金', color: '#f0b43c' },
+  { id: 'rose', label: '玫瑰红', color: '#f472b6' },
+  { id: 'slate', label: '石板灰', color: '#94a3b8' },
+];
+
+export function normalizeAccent(id) {
+  return ACCENTS.some((a) => a.id === id) ? id : 'ocean';
+}
+
+export function accentColor(id) {
+  return ACCENTS.find((a) => a.id === normalizeAccent(id)).color;
+}
+
+/** 列表筛选：风险维度 + 收藏，顺序与数量都由它决定 */
+export const FILTERS = [
+  { id: 'all', label: '全部' },
+  { id: 'fav', label: '收藏' },
+  { id: 'read', label: '只读' },
+  { id: 'mutate', label: '会改动' },
+  { id: 'destructive', label: '高风险' },
+];
+
+export function filterActions(items, filter, favorites) {
+  const list = Array.isArray(items) ? items : [];
+  if (filter === 'fav') {
+    const favSet = new Set(favorites || []);
+    return list.filter((e) => favSet.has(`${e.plugin.id}.${e.action.id}`));
+  }
+  if (filter === 'read' || filter === 'mutate' || filter === 'destructive') {
+    return list.filter((e) => e.action.risk === filter);
+  }
+  return list;
+}
+
+/** 搜索历史：最近的在前、去重、最多 8 条；空查询不写 */
+export function pushSearch(history, query, max = 8) {
+  const q = String(query ?? '').trim();
+  const list = Array.isArray(history) ? history : [];
+  if (!q) return list;
+  return [q, ...list.filter((x) => x !== q)].slice(0, max);
+}
+
+/** 使用统计：按执行次数取前 N，次数相同看最近一次 */
+export function topActions(runStore, n = 5) {
+  return Object.entries(runStore || {})
+    .map(([key, runs]) => {
+      const list = Array.isArray(runs) ? runs : [];
+      return { key, runs: list.length, last: list[0]?.ts ?? 0 };
+    })
+    .filter((x) => x.runs > 0)
+    .sort((a, b) => b.runs - a.runs || b.last - a.last)
+    .slice(0, n);
+}
+
+/** 跨动作的最近执行：首页「最近执行」用，时间倒序 */
+export function recentRuns(runStore, n = 5) {
+  const rows = [];
+  for (const [key, list] of Object.entries(runStore || {})) {
+    if (!Array.isArray(list)) continue;
+    for (const run of list) rows.push({ key, ...run });
+  }
+  return rows.sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0)).slice(0, n);
+}
+
+/**
+ * 复制「怎么调用这个动作」：CLI、MCP 工具名、启动器深链三行。
+ * 给同事分享、或让 AI 直接照着调时不用查文档。
+ */
+export function invocationText(plugin, action, deepLink = '') {
+  const lines = [];
+  if (action.type === 'http') {
+    lines.push(`# CLI（http 动作）`, `zkit run ${plugin.id} ${action.id} --yes # ${action.method} ${action.url}`);
+  } else if (action.type === 'chain') {
+    lines.push(`# CLI（组合 ${action.steps.length} 步）`, `zkit run ${plugin.id} ${action.id}`);
+  } else {
+    lines.push('# CLI', `zkit run ${plugin.id} ${action.id}`);
+  }
+  lines.push('', '# MCP 工具（AI 客户端里叫这个名字）', `${plugin.id}__${action.id}`);
+  if (deepLink) lines.push('', '# 启动器深链', deepLink);
+  return lines.join('\n');
+}
+
+/**
+ * 把结果导出成 Markdown：对象走表格、数组走表格或 JSON、纯文本走代码块。
+ * 导出的东西要能直接贴进 Issue / 文档，所以不用截图，也不带终端控制字符。
+ */
+export function resultMarkdown(title, res) {
+  const out = [`### ${title}`, ''];
+  if (!res) return out.join('\n');
+  if (!res.ok && res.error) {
+    out.push(`> 失败：${String(res.error).replace(/\s+/g, ' ')}`, '');
+  }
+  const cell = (v) => String(v === undefined || v === null ? '' : v).replace(/\|/g, '\\|').replace(/\n/g, ' ');
+  const data = res.data;
+  if (Array.isArray(data)) {
+    const first = data[0];
+    if (first && typeof first === 'object' && !Array.isArray(first)) {
+      const keys = [...new Set(data.flatMap((row) => Object.keys(row)))];
+      out.push(`| ${keys.join(' | ')} |`, `| ${keys.map(() => '---').join(' | ')} |`);
+      for (const row of data) out.push(`| ${keys.map((k) => cell(row[k])).join(' | ')} |`);
+    } else {
+      out.push('```json', JSON.stringify(data, null, 2), '```');
+    }
+  } else if (data && typeof data === 'object') {
+    out.push('| 字段 | 值 |', '| --- | --- |');
+    for (const [k, v] of Object.entries(data)) {
+      out.push(`| ${cell(k)} | ${cell(typeof v === 'object' ? JSON.stringify(v) : v)} |`);
+    }
+  } else if (data !== undefined && data !== null) {
+    out.push(String(data));
+  } else if (res.stdout) {
+    out.push('```', String(res.stdout).trim(), '```');
+  }
+  out.push('', `> ${res.ok ? '成功' : '失败'}${res.ms !== undefined ? ` · ${res.ms} ms` : ''}${res.command ? ` · \`${res.command}\`` : ''}`);
+  return out.join('\n');
+}

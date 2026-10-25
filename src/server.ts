@@ -4,7 +4,7 @@ import http from 'node:http';
 import path from 'node:path';
 import process from 'node:process';
 import { type Plugin, toolName } from './core/manifest.ts';
-import { PKG_ROOT } from './core/paths.ts';
+import { LOG_DIR, PKG_ROOT } from './core/paths.ts';
 import { needsConfirm, rememberApproval } from './core/approvals.ts';
 import { killAllProcesses, killProcess, listProcesses } from './core/runtime.ts';
 import { listServices, stopService } from './core/services.ts';
@@ -19,9 +19,10 @@ import { applyUpdate, checkUpdate } from './core/update.ts';
 import { describeSource, readSource } from './core/sources.ts';
 import { checkRequires } from './core/resolve.ts';
 import { applyDefaults, coerceParam, toFormFields, toJsonSchema } from './core/schema.ts';
-import { type PublicSetting, publicSettings, writeSettings } from './core/pluginConfig.ts';
+import { type PublicSetting, publicSettings, SECRET_MASK, writeSettings } from './core/pluginConfig.ts';
 import { dependents, depStates, installDeps, missingDeps } from './core/deps.ts';
 import { buildArgv, chainDisplay, confirmPolicy, displayCommand, runAction } from './core/runner.ts';
+import { buildDoctorReport } from './core/doctor.ts';
 import {
   addMarket, findEntry, installFromMarket, loadMarkets, previewInstall,
   readIndex, refreshMarket, removeMarket,
@@ -332,6 +333,102 @@ export function createServer(): http.Server {
     try {
       if (url.pathname === '/api/plugins') {
         json(res, 200, { plugins: wirePlugins() });
+        return;
+      }
+
+      // 启动器「日志」面板：审计日志只读、倒序、可筛选。只读最后 512KB，
+      // 日志再大也不会把整个文件读进内存（老记录本来就该靠归档而不是一次读全）。
+      if (url.pathname === '/api/logs' && req.method === 'GET') {
+        const file = url.searchParams.get('file') === 'denied' ? 'denied.log' : 'audit.log';
+        const limit = Math.min(1000, Math.max(1, Number(url.searchParams.get('limit') ?? 200) || 200));
+        const decision = url.searchParams.get('decision') ?? '';
+        const q = (url.searchParams.get('q') ?? '').trim().toLowerCase();
+        const logPath = path.join(LOG_DIR, file);
+        let entries: Record<string, unknown>[] = [];
+        if (fs.existsSync(logPath)) {
+          const size = fs.statSync(logPath).size;
+          const start = Math.max(0, size - 512 * 1024);
+          const buf = Buffer.alloc(size - start);
+          const fd = fs.openSync(logPath, 'r');
+          try {
+            fs.readSync(fd, buf, 0, buf.length, start);
+          } finally {
+            fs.closeSync(fd);
+          }
+          entries = buf.toString('utf8').split('\n').filter(Boolean).flatMap((line) => {
+            try {
+              return [JSON.parse(line) as Record<string, unknown>];
+            } catch {
+              return [];
+            }
+          });
+        }
+        const counts = {
+          total: entries.length,
+          deny: entries.filter((e) => e['decision'] === 'deny').length,
+          error: entries.filter((e) => Boolean(e['error'])).length,
+        };
+        if (decision === 'error') entries = entries.filter((e) => Boolean(e['error']));
+        else if (decision) entries = entries.filter((e) => e['decision'] === decision);
+        if (q) entries = entries.filter((e) => JSON.stringify(e).toLowerCase().includes(q));
+        json(res, 200, {
+          file,
+          exists: fs.existsSync(logPath),
+          counts,
+          entries: entries.slice(-limit).reverse(),
+        });
+        return;
+      }
+
+      // 环境自检：与 CLI 的 `zkit doctor` 共用 buildDoctorReport，判定只有一份。
+      if (url.pathname === '/api/doctor' && req.method === 'GET') {
+        json(res, 200, buildDoctorReport());
+        return;
+      }
+
+      // 执行前预览命令：把「将要跑什么」摊开给人看。只算不跑，不写审计。
+      if (url.pathname === '/api/preview' && req.method === 'POST') {
+        const body = await readBody(req);
+        const plugin = findPlugin(String(body['plugin'] ?? ''))?.plugin;
+        if (!plugin) {
+          json(res, 404, { error: '插件不存在' });
+          return;
+        }
+        const action = plugin.actions.find((a) => a.id === String(body['action'] ?? ''));
+        if (!action) {
+          json(res, 404, { error: '动作不存在' });
+          return;
+        }
+        const rawValues = (body['values'] ?? {}) as Record<string, unknown>;
+        const values: Record<string, unknown> = {};
+        for (const param of action.params) {
+          const raw = rawValues[param.name];
+          if (raw === undefined || raw === null || raw === '') continue;
+          const coerced = coerceParam(param, raw);
+          if (coerced.error) {
+            json(res, 400, { error: `${param.name}：${coerced.error}` });
+            return;
+          }
+          values[param.name] = coerced.value;
+        }
+        // 预览等于「预演一次参数检查」：必填缺失、类型不对都在这里拦住，
+        // 否则界面会显示一条实际执行时必然失败的命令。
+        const prepared = applyDefaults(action, values);
+        if (prepared.errors.length > 0) {
+          json(res, 400, { error: prepared.errors.join('；') });
+          return;
+        }
+        const command = action.type === 'http'
+          ? `${action.method} ${action.url}`
+          : action.type === 'chain'
+            ? chainDisplay(action)
+            : displayCommand(buildArgv(plugin, action, prepared.values).redacted);
+        json(res, 200, {
+          command,
+          masked: command.includes(SECRET_MASK),
+          // http / chain 的变量在执行时展开，这里原样展示占位符
+          hasPlaceholders: action.type !== 'exec',
+        });
         return;
       }
 

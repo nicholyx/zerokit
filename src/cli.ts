@@ -12,7 +12,8 @@ import {
 } from './core/registry.ts';
 import { type ScaffoldRuntime, scaffoldPlugin } from './core/scaffold.ts';
 import { applyUpdate, checkUpdate, listUpdateStates } from './core/update.ts';
-import { checkRequires, resolveTool } from './core/resolve.ts';
+import { checkRequires } from './core/resolve.ts';
+import { buildDoctorReport } from './core/doctor.ts';
 import { killAllProcesses, killProcess, listProcesses } from './core/runtime.ts';
 import { listServices, stopService } from './core/services.ts';
 import {
@@ -837,80 +838,39 @@ async function cmdPlugin(args: string[]): Promise<number> {
 }
 
 function cmdDoctor(): number {
+  const report = buildDoctorReport();
   process.stdout.write(c.bold('环境自检\n'));
-  process.stdout.write(`  ${c.green('✓')} node ${process.version}  ${c.dim(process.execPath)}\n`);
-  for (const tool of ['python', 'git']) {
-    const r = resolveTool(tool);
-    process.stdout.write(r
-      ? `  ${c.green('✓')} ${tool} ${c.dim(r.version)}  ${c.dim(r.path)}\n`
-      : `  ${c.yellow('!')} ${tool} 没找到（用到它的插件无法执行）\n`);
+  for (const tool of report.tools) {
+    process.stdout.write(tool.ok
+      ? `  ${c.green('✓')} ${tool.name} ${c.dim(tool.version ?? '')}  ${c.dim(tool.path ?? '')}\n`
+      : `  ${c.yellow('!')} ${tool.name} 没找到（用到它的插件无法执行）\n`);
   }
-  process.stdout.write(`\n数据目录 ${c.dim(HOME)}\n`);
-  process.stdout.write(`插件目录 ${c.dim(PLUGINS_DIR)}\n`);
+  process.stdout.write(`\n数据目录 ${c.dim(report.dirs.home)}\n`);
+  process.stdout.write(`插件目录 ${c.dim(report.dirs.plugins)}\n`);
 
-  const entries = listPlugins();
-  process.stdout.write(c.bold(`\n插件（${entries.length}）\n`));
-  let problems = 0;
-  for (const entry of entries) {
-    if (!entry.plugin) {
-      problems++;
-      process.stdout.write(`  ${c.red('✗')} ${path.basename(entry.dir)}\n`);
-      for (const e of entry.errors) process.stdout.write(c.red(`      ${e}\n`));
-      continue;
-    }
-    const reqs = checkRequires(entry.plugin.requires).filter((r) => !r.ok);
-    if (reqs.length > 0) problems++;
-    const missingPluginDeps = missingDeps(entry.plugin);
-    if (missingPluginDeps.length > 0) {
-      problems++;
-      process.stdout.write(c.red(`      ✗ 缺少插件依赖：${missingPluginDeps.join(', ')}\n`));
-      for (const dep of missingPluginDeps) {
-        process.stdout.write(c.dim(`        zkit plugin install ${dep}\n`));
-      }
-    }
-    process.stdout.write(reqs.length === 0
-      ? `  ${c.green('✓')} ${entry.plugin.name} ${c.dim(entry.plugin.id)}\n`
-      : `  ${c.red('✗')} ${entry.plugin.name} 缺依赖：${reqs.map((r) => r.name).join(', ')}\n`);
-    for (const r of reqs) process.stdout.write(c.yellow(`      ${r.hint}\n`));
-    for (const w of entry.warnings) process.stdout.write(c.yellow(`      ! ${w}\n`));
-    const view = resolveSettings(entry.plugin);
-    if (view.error) {
-      problems++;
-      process.stdout.write(c.red(`      ✗ 设置项读不出来：${view.error}\n`));
-    }
-    for (const bad of view.invalid) {
-      problems++;
-      process.stdout.write(c.red(`      ✗ 设置项 ${bad.name} 的值不合法：${bad.error}\n`));
-    }
-    if (view.missing.length > 0) {
-      process.stdout.write(c.yellow(`      ! 缺少必填设置项：${view.missing.join(' / ')}\n`));
-      for (const hint of settingsHints(entry.plugin, view)) {
-        process.stdout.write(c.dim(`        ${hint}\n`));
-      }
-    }
-    // 组合动作的步骤跨插件引用：引用的插件/动作没装时，链路跑起来才知道会失败，
-    // 提前在自检里说出来，省得使用者执行到第 3 步才发现
-    for (const a of entry.plugin.actions) {
-      if (a.type !== 'chain') continue;
-      for (const [index, step] of a.steps.entries()) {
-        const dot = step.use.lastIndexOf('.');
-        const ref = step.use.slice(0, dot);
-        if (ref === 'self') continue;
-        const target = findPlugin(ref)?.plugin;
-        if (!target) continue; // 缺插件由上面的「缺少插件依赖」统一报，别报两遍
-        if (!target.actions.some((x) => x.id === step.use.slice(dot + 1))) {
-          process.stdout.write(c.yellow(`      ! 组合动作 ${a.id} 第 ${index + 1} 步引用的动作 ${step.use} 不存在\n`));
-        }
+  process.stdout.write(c.bold(`\n插件（${report.plugins.length}）\n`));
+  for (const plugin of report.plugins) {
+    const bad = plugin.problems.some((x) => x.level === 'error');
+    process.stdout.write(bad
+      ? `  ${c.red('✗')} ${plugin.name || plugin.dir}\n`
+      : `  ${c.green('✓')} ${plugin.name} ${c.dim(plugin.id)}\n`);
+    for (const problem of plugin.problems) {
+      process.stdout.write(problem.level === 'error'
+        ? c.red(`      ✗ ${problem.text}\n`)
+        : c.yellow(`      ! ${problem.text}\n`));
+      if (problem.hint) {
+        for (const line of problem.hint.split('\n')) process.stdout.write(c.dim(`        ${line}\n`));
       }
     }
   }
-  if (entries.length === 0) {
+  if (report.plugins.length === 0) {
     process.stdout.write(c.dim('  （还没装插件，可执行 zkit plugin bundled）\n'));
   }
-  process.stdout.write(problems === 0
+  const errors = report.summary.errors;
+  process.stdout.write(errors === 0
     ? `\n${c.green('一切正常。')}\n`
-    : `\n${c.yellow(`有 ${problems} 处需要处理。`)}\n`);
-  return problems === 0 ? 0 : 1;
+    : `\n${c.yellow(`有 ${errors} 处需要处理。`)}\n`);
+  return errors === 0 ? 0 : 1;
 }
 
 function cmdPath(): number {

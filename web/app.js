@@ -8,6 +8,8 @@ import {
   normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey,
   toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory,
   pluginHealth, PROMPTS,
+  ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch,
+  topActions, recentRuns, invocationText, resultMarkdown,
 } from './extras.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
@@ -17,6 +19,7 @@ const el = {
   q: $('q'), list: $('list'), empty: $('empty'), count: $('count'), searchRow: $('searchRow'),
   listView: $('listView'), detailView: $('detailView'), workbench: $('workbench'),
   psView: $('psView'), psBtn: $('psBtn'), psCount: $('psCount'), clipBtn: $('clipBtn'),
+  logsView: $('logsView'), doctorView: $('doctorView'), listTools: $('listTools'),
   plugView: $('plugView'), plugBtn: $('plugBtn'), plugCount: $('plugCount'),
   marketView: $('marketView'), marketBtn: $('marketBtn'), marketCount: $('marketCount'),
   modeLabel: $('modeLabel'), modeDot: $('modeDot'), reload: $('reloadBtn'),
@@ -39,13 +42,18 @@ let marketPreview = null;
 // 这是「这台机器上这个人用起来顺手」的状态，不该同步到插件或服务端。
 const PREF = {
   theme: 'zerokit.theme',
+  accent: 'zerokit.accent',
   favorites: 'zerokit.favorites',
   params: 'zerokit.params',
   runs: 'zerokit.runs',
+  searches: 'zerokit.searches',
 };
 let favorites = [];
 let paramStore = {};
 let runStore = {};
+let accent = 'ocean';
+let searchHistory = [];
+let listFilter = 'all';
 
 function readJson(key, fallback) {
   try {
@@ -73,6 +81,13 @@ function loadPrefs() {
   paramStore = params && typeof params === 'object' ? params : {};
   const runs = readJson(PREF.runs, {});
   runStore = runs && typeof runs === 'object' ? runs : {};
+  accent = normalizeAccent(localStorage.getItem(PREF.accent));
+  const searches = readJson(PREF.searches, []);
+  searchHistory = Array.isArray(searches) ? searches.filter((x) => typeof x === 'string') : [];
+}
+
+function applyAccent() {
+  document.documentElement.dataset.accent = normalizeAccent(accent);
 }
 
 function applyTheme() {
@@ -85,8 +100,57 @@ function applyTheme() {
     const label = choice === 'system' ? `跟随系统 · ${resolved === 'dark' ? '深色' : '浅色'}`
       : choice === 'dark' ? '深色' : '浅色';
     btn.textContent = `${resolved === 'dark' ? '◐' : '◑'} ${label}`;
-    btn.title = '切换主题：跟随系统 → 深色 → 浅色';
+    btn.title = '外观：主题与强调色';
   }
+}
+
+/** 外观面板：主题三档 + 六个强调色。以前只能循环切换，想回上一档要再点两轮。 */
+function openThemePop() {
+  const pop = $('themePop');
+  if (!pop) return;
+  if (!pop.classList.contains('hidden')) {
+    pop.classList.add('hidden');
+    return;
+  }
+  const choice = normalizeTheme(localStorage.getItem(PREF.theme));
+  pop.innerHTML = `
+    <div class="tp-head">主题</div>
+    <div class="tp-row">
+      ${[['system', '跟随系统'], ['dark', '深色'], ['light', '浅色']].map(([id, label]) => `
+        <button data-theme-choice="${id}" class="${choice === id ? 'on' : ''}">${label}</button>`).join('')}
+    </div>
+    <div class="tp-head">强调色</div>
+    <div class="tp-swatches">
+      ${ACCENTS.map((a) => `<button data-accent="${a.id}" title="${esc(a.label)}"
+        style="background:${a.color}" class="${normalizeAccent(accent) === a.id ? 'on' : ''}"></button>`).join('')}
+    </div>`;
+  pop.classList.remove('hidden');
+  // 选中后就地更新高亮，不重建 DOM、也不收起面板：重建会让本次点击的目标
+  // 变成游离节点，document 上的「点外面关掉」判断就会误判成点了外面。
+  const paint = () => {
+    const choice = normalizeTheme(localStorage.getItem(PREF.theme));
+    pop.querySelectorAll('[data-theme-choice]').forEach((b) => {
+      b.classList.toggle('on', b.dataset.themeChoice === choice);
+    });
+    pop.querySelectorAll('[data-accent]').forEach((b) => {
+      b.classList.toggle('on', b.dataset.accent === normalizeAccent(accent));
+    });
+  };
+  pop.querySelectorAll('[data-theme-choice]').forEach((b) => {
+    b.addEventListener('click', () => {
+      try { localStorage.setItem(PREF.theme, b.dataset.themeChoice); } catch { /* 隐私模式 */ }
+      applyTheme();
+      paint();
+    });
+  });
+  pop.querySelectorAll('[data-accent]').forEach((b) => {
+    b.addEventListener('click', () => {
+      accent = normalizeAccent(b.dataset.accent);
+      try { localStorage.setItem(PREF.accent, accent); } catch { /* 隐私模式 */ }
+      applyAccent();
+      paint();
+    });
+  });
 }
 
 function cycleTheme() {
@@ -319,6 +383,62 @@ function itemHtml(entry, i, showPlugin, query = '') {
   </li>`;
 }
 
+function hidePanels() {
+  for (const v of [el.listView, el.detailView, el.workbench, el.psView,
+    el.plugView, el.marketView, el.logsView, el.doctorView]) {
+    v.classList.add('hidden');
+  }
+}
+
+function rememberSearch(query) {
+  const q = String(query ?? '').trim();
+  if (!q) return;
+  searchHistory = pushSearch(searchHistory, q);
+  writeJson(PREF.searches, searchHistory);
+}
+
+/** 首页「最近执行」：跨动作的最近 5 条，点一下直接回到那条动作。 */
+function recentBlockHtml() {
+  const rows = recentRuns(runStore, 5);
+  if (!rows.length) return '';
+  const inner = rows.map((r) => {
+    const dot = r.key.lastIndexOf('.');
+    const plugin = entries.find((e) => e.plugin.id === r.key.slice(0, dot)
+      && e.action.id === r.key.slice(dot + 1));
+    if (!plugin) return '';
+    return `<div class="recent-row" data-recent="${esc(r.key)}">
+      <span class="${r.ok ? 'ok' : 'bad'}">${r.ok ? '✓' : '✗'}</span>
+      <span class="r-what">${esc(plugin.action.title)}</span>
+      <span class="r-when">${esc(new Date(r.ts).toLocaleString())}</span>
+    </div>`;
+  }).join('');
+  return `<li class="recent-block"><div class="recent-title">最近执行</div>${inner}</li>`;
+}
+
+/** 列表上方的筛选与搜索历史：筛选算的是「当前搜索结果」里的分布。 */
+function renderListTools(base, q) {
+  const count = (id) => filterActions(base, id, favorites).length;
+  const chips = FILTERS.map((f) => `<button class="chip${listFilter === f.id ? ' on' : ''}"
+    data-filter="${f.id}">${f.label}<b>${count(f.id)}</b></button>`).join('');
+  const hist = q.trim() === '' && searchHistory.length
+    ? `<div class="hist-chips"><span class="hist-label">最近搜索</span>${searchHistory
+      .map((x) => `<button class="chip quiet" data-hist="${esc(x)}">${esc(x)}</button>`).join('')}
+      <button class="chip quiet" id="clearHist">清空</button></div>`
+    : '';
+  el.listTools.innerHTML = `<div class="chips">${chips}</div>${hist}`;
+  el.listTools.querySelectorAll('[data-filter]').forEach((b) => {
+    b.addEventListener('click', () => { listFilter = b.dataset.filter; renderList(); });
+  });
+  el.listTools.querySelectorAll('[data-hist]').forEach((b) => {
+    b.addEventListener('click', () => { el.q.value = b.dataset.hist; listFilter = 'all'; renderList(); });
+  });
+  $('clearHist')?.addEventListener('click', () => {
+    searchHistory = [];
+    writeJson(PREF.searches, searchHistory);
+    renderList();
+  });
+}
+
 function renderList() {
   const q = el.q.value;
   mode = 'command';
@@ -326,18 +446,22 @@ function renderList() {
   el.modeDot.classList.remove('workbench');
   el.workbench.classList.add('hidden');
   el.plugView.classList.add('hidden');
+  el.psView.classList.add('hidden');
+  el.marketView.classList.add('hidden');
+  el.logsView.classList.add('hidden');
+  el.doctorView.classList.add('hidden');
   el.listView.classList.remove('hidden');
   if (detail) el.detailView.classList.remove('hidden');
 
-  let results = search(q);
-  if (q.trim() === '' && favorites.length > 0) {
-    // 空搜索时收藏优先：高频的几条不用记位置
-    const favSet = new Set(favorites);
-    results = favoritesFirst(results.map((r) => r.entry), favSet)
-      .map((entry) => results.find((r) => r.entry === entry));
-  }
-  filtered = results.map((r) => r.entry);
-  filteredSmart = new Map(results.filter((r) => r.smart).map((r) => [r.entry.order, r.smart]));
+  const results = search(q);
+  const baseEntries = results.map((r) => r.entry);
+  const built = filterActions(baseEntries, listFilter, favorites);
+  filtered = q.trim() === '' && favorites.length > 0 && listFilter === 'all'
+    ? favoritesFirst(built, new Set(favorites))
+    : built;
+  filteredSmart = new Map(results
+    .filter((r) => r.smart && filtered.includes(r.entry))
+    .map((r) => [r.entry.order, r.smart]));
   if (active >= filtered.length) active = Math.max(0, filtered.length - 1);
 
   el.empty.classList.toggle('hidden', filtered.length > 0);
@@ -346,12 +470,13 @@ function renderList() {
     // 浏览态：按插件分组（组顺序 = 该插件第一个动作在排序里的位置）
     const collapsed = loadCollapsed();
     const groups = new Map();
-    results.forEach((r, i) => {
-      const id = r.entry.plugin.id;
+    filtered.forEach((entry, i) => {
+      const id = entry.plugin.id;
       if (!groups.has(id)) groups.set(id, []);
-      groups.get(id).push([r.entry, i]);
+      groups.get(id).push([entry, i]);
     });
-    el.list.innerHTML = [...groups.entries()].map(([id, items]) => {
+    el.list.innerHTML = (listFilter === 'all' ? recentBlockHtml() : '')
+      + [...groups.entries()].map(([id, items]) => {
       const p = items[0][0].plugin;
       const isCollapsed = collapsed.has(id);
       const dep = p.requiresOk ? '' : `<span class="badge destructive">缺依赖</span>`;
@@ -376,6 +501,16 @@ function renderList() {
     el.list.innerHTML = filtered.map((entry, i) => itemHtml(entry, i, true, q)).join('');
   }
 
+  renderListTools(baseEntries, q);
+  el.list.querySelectorAll('[data-recent]').forEach((node) => {
+    node.addEventListener('click', () => {
+      const key = node.dataset.recent;
+      const dot = key.lastIndexOf('.');
+      const entry = entries.find((e) => e.plugin.id === key.slice(0, dot)
+        && e.action.id === key.slice(dot + 1));
+      if (entry) openDetail(entry.plugin, entry.action);
+    });
+  });
   el.list.querySelectorAll('.item').forEach((node) => {
     node.addEventListener('click', (ev) => {
       if (ev.target.closest('[data-fav]')) return;
@@ -414,6 +549,7 @@ function paintActive() {
 // ---------------------------------------------------------------- 详情 / 表单
 
 function openActive() {
+  rememberSearch(el.q.value);
   const entry = filtered[active];
   if (!entry) return;
   // 智能匹配的条目：把输入框里的内容直接填进它声明的那个参数，
@@ -494,10 +630,51 @@ function openDetail(plugin, action, prefill) {
     <div id="runHistory" class="run-history"></div>
     <div class="actions">
       <button class="primary" id="runBtn">执行</button>
+      <button class="ghost" id="previewBtn" title="先看真正会执行的命令行（密钥打码），再决定跑不跑">预览命令</button>
+      <button class="ghost" id="invokeBtn" title="这个动作在 CLI / MCP / 深链里怎么调">调用方式</button>
       <button class="ghost" id="backBtn">返回</button>
     </div>
+    <div id="previewBox"></div>
+    <div id="invokeBox"></div>
     <div id="result"></div>`;
 
+  $('previewBtn').addEventListener('click', async () => {
+    $('invokeBox').innerHTML = '';
+    const box = $('previewBox');
+    box.innerHTML = '<div class="help">读取中…</div>';
+    try {
+      const r = await api('/api/preview', {
+        method: 'POST',
+        body: { plugin: plugin.id, action: action.id, values: collectValues(action) },
+      });
+      box.innerHTML = `<div class="cmd-box">
+        <div class="cmd-box-head">将要执行${r.masked ? '（密钥已打码）' : ''}</div>
+        <pre>${esc(r.command || '（这个动作没有命令）')}</pre>
+        ${r.hasPlaceholders ? '<div class="help">带占位符的动作在真正执行时才会展开引用、时间与路径。</div>' : ''}
+      </div>`;
+    } catch (e) {
+      box.innerHTML = `<div class="help" style="color:var(--bad)">预览失败：${esc(e.message)}</div>`;
+    }
+  });
+  $('invokeBtn').addEventListener('click', () => {
+    $('previewBox').innerHTML = '';
+    const deepLink = `${location.origin}${location.pathname}#/${plugin.id}/${action.id}`;
+    const text = invocationText(plugin, action, deepLink);
+    $('invokeBox').innerHTML = `<div class="cmd-box">
+      <div class="cmd-box-head">三种调用方式</div>
+      <pre>${esc(text)}</pre>
+      <button class="ghost" id="copyInvoke">复制</button>
+    </div>`;
+    $('copyInvoke').addEventListener('click', async (ev) => {
+      try {
+        await navigator.clipboard.writeText(text);
+        ev.currentTarget.textContent = '已复制';
+      } catch {
+        ev.currentTarget.textContent = '复制失败（非 https 环境）';
+      }
+      setTimeout(() => { ev.currentTarget.textContent = '复制'; }, 1500);
+    });
+  });
   $('backBtn').addEventListener('click', backToList);
   $('runBtn').addEventListener('click', () => submit(false));
   $('favBtn')?.addEventListener('click', () => {
@@ -573,12 +750,16 @@ async function submit(remember) {
   const btn = $('runBtn');
   if (btn) { btn.disabled = true; btn.textContent = '执行中…'; }
   try {
+    $('previewBox').innerHTML = '';
+    $('invokeBox').innerHTML = '';
     const values = collectValues(action);
     const res = await executeAction(plugin, action, values, remember);
     if (!res) return;   // 用户在确认框点了取消，不算失败也不算成功
     lastValues = values;
     lastResult = res;
     renderResult(res);
+    // 结果可能很长，直接把卡片顶部带进视野（否则用户以为「点了没反应」）
+    setTimeout(() => $('result')?.scrollIntoView({ block: 'start' }), 0);
     rememberRecent(plugin.id, action.id);
     const secretNames = action.fields.filter((f) => f.secret).map((f) => f.name);
     paramStore = rememberParams(paramStore, actionKey(plugin.id, action.id), values, secretNames);
@@ -698,6 +879,7 @@ function renderResult(res) {
       <div class="result-tools">
         <button class="ghost" id="copyRes" title="把结果复制到剪贴板">复制</button>
         <button class="ghost" id="saveRes" title="把结果存成文本文件">下载</button>
+        <button class="ghost" id="mdRes" title="导出成 Markdown（表格/代码块），方便贴进文档或 Issue">导出 Markdown</button>
         <button class="ghost" id="againRes" title="用同样的参数再跑一次">再跑一次</button>
         <span class="ms">${esc(ms)}</span>
       </div>
@@ -722,6 +904,18 @@ function renderResult(res) {
     a.download = `zerokit-${detail ? `${detail.plugin.id}-${detail.action.id}` : 'result'}.txt`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  $('mdRes')?.addEventListener('click', () => {
+    const title = detail ? `${detail.plugin.name} · ${detail.action.title}` : 'zerokit 结果';
+    const blob = new Blob([resultMarkdown(title, res)], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `zerokit-${detail ? `${detail.plugin.id}-${detail.action.id}` : 'result'}.md`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    const btn = $('mdRes');
+    if (btn) { btn.textContent = '已导出'; setTimeout(() => { btn.textContent = '导出 Markdown'; }, 1500); }
   });
   $('againRes')?.addEventListener('click', () => submit(false));
 
@@ -851,6 +1045,7 @@ function renderTable(rows) {
 // ---------------------------------------------------------------- 集市面板
 
 async function showMarket() {
+  hidePanels();
   mode = 'market';
   el.modeLabel.textContent = '集市';
   el.searchRow.classList.add('hidden');
@@ -874,6 +1069,166 @@ function exitMarket() {
   history.replaceState(null, '', location.pathname);
   renderList();
   el.q.focus();
+}
+
+// ---------------------------------------------------------------- 审计日志
+// 日志只在本机（~/.zerokit/logs/），这里只读不写；被拒与失败能一眼筛出来。
+let logsFile = 'audit';
+let logsDecision = '';
+let logsQuery = '';
+
+async function showLogs() {
+  mode = 'logs';
+  el.modeLabel.textContent = '日志';
+  el.searchRow.classList.add('hidden');
+  hidePanels();
+  el.logsView.classList.remove('hidden');
+  if (location.hash !== '#/logs') history.replaceState(null, '', '#/logs');
+  await renderLogs();
+}
+
+function exitLogs() {
+  mode = 'command';
+  el.logsView.classList.add('hidden');
+  el.searchRow.classList.remove('hidden');
+  el.listView.classList.remove('hidden');
+  el.modeLabel.textContent = '命令';
+  history.replaceState(null, '', location.pathname);
+  renderList();
+  el.q.focus();
+}
+
+function logDetailHtml(e, i) {
+  return `<div class="log-detail hidden" id="logDetail${i}">
+    <pre>${esc(String(e['command'] ?? '（无命令）'))}</pre>
+    ${e['error'] ? `<p class="log-error">${esc(String(e['error']))}</p>` : ''}
+    <div class="log-extra">决策 ${esc(String(e['decision'] ?? '-'))} · 退出码 ${esc(String(e['exitCode'] ?? '-'))} · 输出 ${esc(String(e['outBytes'] ?? 0))} 字节${e['truncated'] ? ' · 已截断' : ''}</div>
+  </div>`;
+}
+
+function logRowHtml(e, i) {
+  const mark = e['error'] ? '✗' : (e['decision'] === 'deny' ? '⊘' : '✓');
+  const kind = e['error'] ? 'bad' : (e['decision'] === 'deny' ? 'warn' : 'ok');
+  const when = e['ts'] ? new Date(String(e['ts'])).toLocaleString() : '';
+  return `<button class="log-row" data-log="${i}">
+      <span class="log-mark ${kind}">${mark}</span>
+      <span class="log-what">${esc(String(e['plugin'] ?? '?'))}<span class="aid">${esc(String(e['action'] ?? ''))}</span></span>
+      <span class="log-meta">${esc(String(e['caller'] ?? ''))} · ${esc(String(e['ms'] ?? 0))}ms</span>
+      <span class="log-when">${esc(when)}</span>
+    </button>${logDetailHtml(e, i)}`;
+}
+
+async function renderLogs() {
+  const chips = [['', '全部'], ['allow', '允许'], ['deny', '被拒'], ['error', '失败']]
+    .map(([id, label]) => `<button class="chip${logsDecision === id ? ' on' : ''}" data-log-decision="${id}">${label}</button>`).join('');
+  el.logsView.innerHTML = `
+    <div class="ps-head">
+      <h2>审计日志 <span class="aid">${logsFile === 'audit' ? 'audit.log' : 'denied.log'}</span></h2>
+      <span class="sub">每次执行、被拒、失败都在这里；只在本机 ~/.zerokit/logs/</span>
+    </div>
+    <div class="log-tools">
+      <div class="chips">${chips}</div>
+      <input id="logQuery" class="log-query" placeholder="过滤：插件 / 动作 / 错误" value="${esc(logsQuery)}">
+      <button class="ghost" id="logReload">刷新</button>
+      <button class="ghost" id="logFile">${logsFile === 'audit' ? '看被拒记录' : '看全部记录'}</button>
+    </div>
+    <div id="logList" class="log-list"><div class="ps-empty">读取中…</div></div>`;
+
+  el.logsView.querySelectorAll('[data-log-decision]').forEach((b) => {
+    b.addEventListener('click', () => { logsDecision = b.dataset.logDecision; renderLogs(); });
+  });
+  $('logQuery').addEventListener('change', () => { logsQuery = $('logQuery').value.trim(); renderLogs(); });
+  $('logReload').addEventListener('click', renderLogs);
+  $('logFile').addEventListener('click', () => {
+    logsFile = logsFile === 'audit' ? 'denied' : 'audit';
+    renderLogs();
+  });
+
+  let data;
+  try {
+    const params = new URLSearchParams({ file: logsFile, limit: '200' });
+    if (logsDecision) params.set('decision', logsDecision);
+    if (logsQuery) params.set('q', logsQuery);
+    data = await api(`/api/logs?${params}`);
+  } catch (e) {
+    $('logList').innerHTML = `<div class="ps-empty">读日志失败：${esc(e.message)}</div>`;
+    return;
+  }
+  const rows = data.entries ?? [];
+  $('logList').innerHTML = rows.length
+    ? rows.map(logRowHtml).join('')
+    : `<div class="ps-empty">${data.exists ? '没有符合条件的记录' : '还没有日志——执行一次动作就会写进来'}</div>`;
+  $('logList').querySelectorAll('[data-log]').forEach((row) => {
+    row.addEventListener('click', () => {
+      $(`logDetail${row.dataset.log}`)?.classList.toggle('hidden');
+    });
+  });
+}
+
+// ---------------------------------------------------------------- 环境自检
+async function showDoctor() {
+  mode = 'doctor';
+  el.modeLabel.textContent = '自检';
+  el.searchRow.classList.add('hidden');
+  hidePanels();
+  el.doctorView.classList.remove('hidden');
+  if (location.hash !== '#/doctor') history.replaceState(null, '', '#/doctor');
+  await renderDoctor();
+}
+
+function exitDoctor() {
+  mode = 'command';
+  el.doctorView.classList.add('hidden');
+  el.searchRow.classList.remove('hidden');
+  el.listView.classList.remove('hidden');
+  el.modeLabel.textContent = '命令';
+  history.replaceState(null, '', location.pathname);
+  renderList();
+  el.q.focus();
+}
+
+async function renderDoctor() {
+  el.doctorView.innerHTML = `<div class="ps-head"><h2>环境自检</h2>
+      <span class="sub">解释器、插件依赖、必填配置——有问题的直接给修复命令</span></div>
+    <div class="log-tools"><button class="ghost" id="docReload">重新检查</button></div>
+    <div id="docBody"><div class="ps-empty">检查中…</div></div>`;
+  $('docReload').addEventListener('click', renderDoctor);
+
+  let r;
+  try { r = await api('/api/doctor'); } catch (e) {
+    $('docBody').innerHTML = `<div class="ps-empty">自检失败：${esc(e.message)}</div>`;
+    return;
+  }
+  const toolRows = (r.tools ?? []).map((t) => `<div class="doc-line ${t.ok ? '' : 'bad'}">
+      <span class="doc-mark">${t.ok ? '✓' : '!'}</span>
+      <span class="doc-name">${esc(t.name)}</span>
+      <span class="doc-val">${esc(t.version ?? '')} ${esc(t.path ?? '')}</span>
+    </div>`).join('');
+  const pluginRows = (r.plugins ?? []).map((p) => {
+    const bad = (p.problems ?? []).some((x) => x.level === 'error');
+    const warn = (p.problems ?? []).some((x) => x.level === 'warning');
+    const problems = (p.problems ?? []).map((x) => `<div class="doc-problem ${x.level}">
+        <span>${esc(x.text)}</span>
+        ${x.hint ? `<pre class="doc-hint">${esc(x.hint)}</pre>` : ''}
+      </div>`).join('');
+    return `<div class="doc-plugin">
+      <div class="doc-line ${bad ? 'bad' : warn ? 'warn' : 'ok'}">
+        <span class="doc-mark">${bad ? '✗' : warn ? '!' : '✓'}</span>
+        <span class="doc-name">${esc(p.name || p.dir)}</span>
+        <span class="doc-val">${esc(p.id || p.dir)} · ${p.actions} 个动作</span>
+      </div>
+      ${problems}
+    </div>`;
+  }).join('');
+  $('docBody').innerHTML = `
+    <div class="doc-grid">
+      <div class="doc-card"><b>${esc(String(r.summary?.plugins ?? 0))}</b><span>插件</span></div>
+      <div class="doc-card"><b>${esc(String(r.summary?.actions ?? 0))}</b><span>动作</span></div>
+      <div class="doc-card ${r.summary?.errors ? 'bad' : 'ok'}"><b>${esc(String(r.summary?.errors ?? 0))}</b><span>错误</span></div>
+      <div class="doc-card ${r.summary?.warnings ? 'warn' : ''}"><b>${esc(String(r.summary?.warnings ?? 0))}</b><span>提醒</span></div>
+    </div>
+    <h3 class="plug-home-h">环境</h3>${toolRows}
+    <h3 class="plug-home-h">插件</h3>${pluginRows || '<div class="ps-empty">还没装插件</div>'}`;
 }
 
 function marketMsg(text, kind = '') {
@@ -1105,6 +1460,7 @@ function exitPlugins() {
 }
 
 async function showPlugins() {
+  hidePanels();
   mode = 'plugins';
   el.modeLabel.textContent = '插件';
   el.searchRow.classList.add('hidden');
@@ -1119,6 +1475,7 @@ async function showPlugins() {
 
 /** 插件主页：一个插件在四个面里到底是什么——动作、设置、依赖、来源，一页看完 */
 async function showPluginHome(id) {
+  hidePanels();
   mode = 'plugins';
   el.modeLabel.textContent = '插件';
   el.searchRow.classList.add('hidden');
@@ -1220,6 +1577,22 @@ async function renderPlugins() {
     </div>
     ${health.healthy ? '<div class="health-note ok">全部插件都齐了，没有缺依赖或未填的配置。</div>'
       : '<div class="health-note">带 ⚠ 的数字点得进去——上面列的就是要补的东西。</div>'}
+    ${(() => {
+      const top = topActions(runStore, 5);
+      if (!top.length) return '<div class="usage-empty">还没有执行记录——用几次之后，这里会出现你的「最常用动作」。</div>';
+      const max = top[0].runs || 1;
+      return `<div class="usage-panel"><div class="usage-title">最常用动作</div>
+        ${top.map((t) => {
+          const dot = t.key.lastIndexOf('.');
+          const entry = entries.find((e) => e.plugin.id === t.key.slice(0, dot)
+            && e.action.id === t.key.slice(dot + 1));
+          return `<div class="usage-row">
+            <span class="u-name">${esc(entry ? entry.action.title : t.key)}</span>
+            <span class="u-bar"><i style="width:${Math.max(6, Math.round(t.runs / max * 100))}%"></i></span>
+            <span class="u-count">${t.runs} 次</span>
+          </div>`;
+        }).join('')}</div>`;
+    })()}
     <div class="plug-install">
       <input id="installSrc" placeholder="粘贴 git 仓库地址（https://github.com/…）或本地目录，回车安装"
              autocomplete="off" spellcheck="false">
@@ -1540,6 +1913,7 @@ async function refreshPsCount() {
 }
 
 async function showPs() {
+  hidePanels();
   mode = 'ps';
   el.modeLabel.textContent = '运行中';
   el.searchRow.classList.add('hidden');
@@ -1683,6 +2057,7 @@ function exitWorkbench() {
 }
 
 function showWorkbench(question) {
+  hidePanels();
   mode = 'workbench';
   el.modeLabel.textContent = '工作台';
   el.modeDot.classList.add('workbench');
@@ -1929,6 +2304,14 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { e.preventDefault(); exitPs(); }
     return;
   }
+  if (mode === 'logs') {
+    if (e.key === 'Escape') { e.preventDefault(); exitLogs(); }
+    return;
+  }
+  if (mode === 'doctor') {
+    if (e.key === 'Escape') { e.preventDefault(); exitDoctor(); }
+    return;
+  }
   if (mode === 'workbench') {
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -2088,6 +2471,18 @@ function applyHash() {
     return;
   }
 
+  // #/logs  审计日志
+  if ((location.hash || '') === '#/logs') {
+    showLogs();
+    return;
+  }
+
+  // #/doctor  环境自检
+  if ((location.hash || '') === '#/doctor') {
+    showDoctor();
+    return;
+  }
+
   // #/market  直接打开「集市」
   if ((location.hash || '') === '#/market') {
     showMarket();
@@ -2128,13 +2523,22 @@ window.__zerokit = {
   get favorites() { return favorites; },
   get theme() { return document.documentElement.dataset.theme; },
   get health() { return pluginHealth(plugins); },
-  cycleTheme, showShortcuts, showPluginHome, renderPrompts,
+  cycleTheme, showShortcuts, showPluginHome, renderPrompts, showLogs, showDoctor,
 };
 
 loadPrefs();
 applyTheme();
+applyAccent();
 window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
-$('themeBtn')?.addEventListener('click', cycleTheme);
+$('themeBtn')?.addEventListener('click', openThemePop);
+document.addEventListener('click', (e) => {
+  const pop = $('themePop');
+  if (!pop || pop.classList.contains('hidden')) return;
+  if (pop.contains(e.target) || e.target.closest('#themeBtn')) return;
+  pop.classList.add('hidden');
+});
+$('logsBtn')?.addEventListener('click', showLogs);
+$('doctorBtn')?.addEventListener('click', showDoctor);
 $('helpBtn')?.addEventListener('click', showShortcuts);
 
 load();

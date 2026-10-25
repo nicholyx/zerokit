@@ -27,6 +27,8 @@
     </div>
   </header>
 
+  <div id="themePop" class="theme-pop hidden"></div>
+
   <div class="search-row" id="searchRow">
     <input id="q" type="text" autocomplete="off" spellcheck="false"
            placeholder="输入插件名或动作，回车执行…   （开头打 ? 切到工作台）">
@@ -37,6 +39,7 @@
 
   <main id="stage">
     <div id="listView" class="list-view">
+      <div id="listTools" class="list-tools"></div>
       <ul id="list" class="list" role="listbox"></ul>
       <div id="empty" class="empty">没有匹配的插件动作</div>
     </div>
@@ -44,6 +47,8 @@
     <div id="plugView" class="plug-view hidden"></div>
     <div id="psView" class="ps-view hidden"></div>
     <div id="marketView" class="plug-view hidden"></div>
+    <div id="logsView" class="plug-view hidden"></div>
+    <div id="doctorView" class="plug-view hidden"></div>
     <div id="workbench" class="workbench hidden"></div>
   </main>
 
@@ -52,6 +57,8 @@
     <span><kbd>Enter</kbd> 打开 / 执行</span>
     <span><kbd>Ctrl</kbd>+<kbd>Enter</kbd> 确认并记住（下次不再问）</span>
     <span><kbd>Esc</kbd> 返回</span>
+    <span class="foot-link" id="logsBtn" title="审计日志：每次执行、被拒、失败都记着">日志</span>
+    <span class="foot-link" id="doctorBtn" title="环境自检：解释器、插件依赖、必填配置">自检</span>
     <span class="foot-link" id="helpBtn" title="打开快捷键速查（Ctrl + /）"><kbd>Ctrl</kbd>+<kbd>/</kbd> 快捷键</span>
   </footer>
 </div>
