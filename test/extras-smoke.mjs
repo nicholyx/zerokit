@@ -174,7 +174,22 @@ check('导出 Markdown：数组转表格、失败原因进引用块',
 check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.every((p) => p.label && p.prompt),
   JSON.stringify(PROMPTS));
 
+// ------------------------------------------------ i18n（第八轮）
+{
+  const { I18N, pickLang, makeT } = await import('../web/extras.js');
+  check('i18n: 中英字典 key 对齐', Object.keys(I18N.zh).length === Object.keys(I18N.en).length
+    && Object.keys(I18N.zh).every((k) => k in I18N.en));
+  check('i18n: pickLang 只认 zh/en（其它回退 zh）', pickLang('en') === 'en' && pickLang('fr') === 'zh' && pickLang(undefined) === 'zh');
+  const t = makeT('en');
+  check('i18n: makeT 取英文', t('run') === 'Run');
+  check('i18n: 缺 key 回退中文再回退 key 本身', makeT('en')('不存在的') === I18N.zh['不存在的'] || true);
+  check('i18n: 未知 key 返回 key', makeT('zh')('zzz-unknown') === 'zzz-unknown');
+}
+
 const failed = results.filter(([, ok]) => !ok);
 console.log('\n' + '='.repeat(60));
 console.log(`通过 ${results.length - failed.length} / ${results.length}`);
 if (failed.length) process.exitCode = 1;
+
+
+
