@@ -846,6 +846,38 @@ export function createServer(): http.Server {
         return;
       }
 
+      // 偏好导出/导入：把本机 zerokit.* 的 localStorage 偏好打包成一份 JSON。
+      // 导出由前端拼好 POST 上来存档；导入时校验形状再原样返回，前端负责写回。
+      if (url.pathname === '/api/prefs/export' && req.method === 'POST') {
+        const body = await readBody(req);
+        const prefs = body['prefs'];
+        if (!prefs || typeof prefs !== 'object' || Array.isArray(prefs)) {
+          json(res, 400, { error: 'prefs 要是一个对象' });
+          return;
+        }
+        const payload = { version: 1, exportedAt: new Date().toISOString(), prefs };
+        json(res, 200, { ok: true, payload });
+        return;
+      }
+
+      if (url.pathname === '/api/prefs/import' && req.method === 'POST') {
+        const body = await readBody(req);
+        const payload = body['payload'];
+        const prefs = (payload as Record<string, unknown> | undefined)?.['prefs'];
+        if (!prefs || typeof prefs !== 'object' || Array.isArray(prefs)) {
+          json(res, 400, { error: '文件形状不对：要有 payload.prefs 对象' });
+          return;
+        }
+        const clean: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(prefs as Record<string, unknown>)) {
+          // 只认 zerokit. 前缀的键，别的键一律丢弃——不往 localStorage 塞不明东西
+          if (!k.startsWith('zerokit.')) continue;
+          clean[k] = v;
+        }
+        json(res, 200, { ok: true, prefs: clean, count: Object.keys(clean).length });
+        return;
+      }
+
       // MCP 授权面板：列出所有有副作用的动作与其授权状态；POST 增/撤授权。
       // 授权名单与 `zkit mcp allow` 是同一份（~/.zerokit/mcp-allow.json）。
       if (url.pathname === '/api/mcp/allow' && req.method === 'GET') {

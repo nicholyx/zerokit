@@ -346,3 +346,38 @@ export function dailyTrend(runs, days = 7) {
   }
   return [...buckets.values()];
 }
+
+/** 按小时分布（0–23），返回 [{hour, total}]，供热力条 */
+export function hourlyHeat(runs) {
+  const buckets = Array.from({ length: 24 }, (_, hour) => ({ hour, total: 0 }));
+  for (const r of runs) {
+    const h = new Date(r.ts).getHours();
+    buckets[h].total++;
+  }
+  return buckets;
+}
+
+/** 执行日报：本地拼装的中文小结（不调模型）。runs 为扁平化记录。 */
+export function dailyReport(runs, { pluginNames = new Map() } = {}) {
+  if (!runs.length) return { title: '今天的 zerokit', body: '今天还没有执行记录。跑一个只读动作试试，比如「系统概况」。' };
+  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+  const today = runs.filter((r) => r.ts >= dayStart.getTime());
+  const okCount = today.filter((r) => r.ok).length;
+  const failCount = today.length - okCount;
+  const byAction = new Map();
+  for (const r of today) byAction.set(r.key, (byAction.get(r.key) ?? 0) + 1);
+  const top = [...byAction.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const avgMs = Math.round(today.reduce((s, r) => s + (r.ms ?? 0), 0) / today.length);
+  const lines = [];
+  lines.push(`今天跑了 ${today.length} 次动作（成功 ${okCount}${failCount ? `，失败 ${failCount}` : ''}），平均 ${avgMs} ms。`);
+  if (top.length) {
+    lines.push('用得最多的是：' + top.map(([k, n]) => {
+      const [pid, aid] = k.split('.');
+      const name = pluginNames.get(pid) ?? pid;
+      return `「${name} · ${aid}」${n} 次`;
+    }).join('、') + '。');
+  }
+  if (failCount) lines.push(`有 ${failCount} 次失败——可以在审计日志里看具体原因。`);
+  else lines.push('全部成功，稳。');
+  return { title: `今天的 zerokit（${new Date().toLocaleDateString()}）`, body: lines.join('\n') };
+}

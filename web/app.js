@@ -4,7 +4,7 @@
 
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
-import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend } from './extras.js';
+import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport } from './extras.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
 const $ = (id) => document.getElementById(id);
@@ -505,7 +505,11 @@ function renderList() {
       suggestions.push(`<button class="link" data-sug="doctor">检查环境哪里没配好</button>`);
     }
     el.empty.innerHTML = suggestions.length
-      ? `<div class="empty-title">${q.trim() ? `没有匹配「${esc(q.trim())}」的动作` : '这里还空着'}</div>
+      ? `<div class="empty-art" aria-hidden="true">${q.trim() ? '🔍' : '🌱'}</div>
+         <div class="empty-title">${q.trim() ? `没有匹配「${esc(q.trim())}」的动作` : '这里还空着'}</div>
+         <div class="empty-why">${q.trim()
+           ? '可能是词太具体，也可能这个能力还没装进来。'
+           : '装上第一个插件，启动器就会开始认识你的电脑。'}</div>
          <div class="empty-sugs">${suggestions.join('')}</div>`
       : '没有匹配的插件动作';
     el.empty.classList.remove('hidden');
@@ -733,6 +737,7 @@ function openDetail(plugin, action, prefill) {
       <button class="ghost" id="previewBtn" title="先看真正会执行的命令行（密钥打码），再决定跑不跑">预览命令</button>
       <button class="ghost" id="invokeBtn" title="这个动作在 CLI / MCP / 深链里怎么调">调用方式</button>
       ${plugin.settings?.length ? '<button class="ghost" id="cfgBtn" title="这个插件的长期配置（端点、密钥等），保存后立即生效">配置插件</button>' : ''}
+      <button class="ghost" id="copyJsonBtn" title="复制动作定义 JSON（写文档 / 分享给他人用）">复制 JSON</button>
       <button class="ghost" id="backBtn">返回</button>
     </div>
     <div id="previewBox"></div>
@@ -785,6 +790,22 @@ function openDetail(plugin, action, prefill) {
   });
 
   $('hkBtn')?.addEventListener('click', () => bindHotkey(favKey, action.title));
+  $('copyJsonBtn').addEventListener('click', async (ev) => {
+    const def = {
+      plugin: plugin.id, action: action.id, title: action.title,
+      type: action.type ?? 'exec', risk: action.risk,
+      params: (action.fields ?? []).map((f) => ({ name: f.name, type: f.type, required: f.required ?? false })),
+      steps: action.steps ?? undefined,
+    };
+    const btn = ev.currentTarget;
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(def, null, 2));
+      btn.textContent = '✓ 已复制';
+      setTimeout(() => { btn.textContent = '复制 JSON'; }, 1200);
+    } catch {
+      btn.textContent = '复制失败';
+    }
+  });
   $('cfgBtn')?.addEventListener('click', async () => {
     $('previewBox').innerHTML = '';
     $('invokeBox').innerHTML = '';
@@ -1346,9 +1367,19 @@ function showResultDiff(a, b) {
             <td><code>${esc(d.path)}</code></td>
             <td class="diff-from">${esc(d.from)}</td>
             <td class="diff-to">${esc(d.to)}</td></tr>`).join('')}</tbody></table>`}
-      <div class="actions"><button class="primary" id="diffClose">关闭</button></div>
+      <div class="actions"><button class="primary" id="diffClose">关闭</button>
+        ${diffs.length ? '<button class="ghost" id="diffMd">导出 Markdown</button>' : ''}</div>
     </div>`;
   document.body.appendChild(overlay);
+  overlay.querySelector('#diffMd')?.addEventListener('click', () => {
+    const md = ['| 字段 | 较早 | 最新 |', '| --- | --- | --- |',
+      ...diffs.map((d) => `| \`${String(d.path).replace(/\|/g, '\\|')}\` | ${String(d.from).replace(/\|/g, '\\|')} | ${String(d.to).replace(/\|/g, '\\|')} |`)].join('\n');
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = 'result-diff.md'; link.click();
+    URL.revokeObjectURL(url);
+  });
   const close = () => overlay.remove();
   overlay.querySelector('#diffClose').addEventListener('click', close);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
@@ -2532,6 +2563,8 @@ async function fetchPs() {
       + (data.services ?? []).filter((s) => s.running).length;
     el.psCount.textContent = String(running);
     el.psBtn.classList.toggle('has-items', running > 0);
+    // 徽标计数：有东西在跑时，标签页标题一眼可见（切去别的页也不会忘）
+    document.title = running > 0 ? `(${running}) zerokit` : 'zerokit';
     return data;
   } catch {
     return null;
@@ -3011,9 +3044,95 @@ function showStats() {
           <span class="trend-day">${esc(d.day.slice(5))}</span>
         </div>`).join('')}
     </div>
+    ${total ? `
+    <h3 class="plug-home-h">一天中的什么时候在用</h3>
+    <div class="usage-block heat-row">
+      ${(() => {
+        const heat = hourlyHeat(runs);
+        const maxH = Math.max(1, ...heat.map((x) => x.total));
+        return heat.map((b) => `
+          <div class="heat-cell" title="${b.hour}:00 — ${b.total} 次">
+            <i style="height:${Math.max(2, Math.round((b.total / maxH) * 32))}px"></i>
+            <span>${b.hour}</span>
+          </div>`).join('');
+      })()}
+    </div>` : ''}
     ${total === 0 ? '<div class="ps-empty">还没有执行记录——随便跑一个只读动作，这里就会开始长出来。</div>' : ''}
-    <div class="actions"><button class="ghost" id="statsBack">返回</button></div>`;
+    <h3 class="plug-home-h">偏好备份</h3>
+    <div class="cmd-box prefs-box">
+      <div class="help">收藏、备注、别名、标签、快捷键、主题——全部只存在这台机器的浏览器里。
+        换电脑或清浏览器数据前，先导出一份 JSON；导入时只认 zerokit. 开头的键。</div>
+      <div class="actions">
+        <button class="ghost" id="prefsExport">导出偏好</button>
+        <button class="ghost" id="prefsImport">导入偏好</button>
+        <input type="file" id="prefsFile" accept="application/json" class="hidden">
+        <span class="sub" id="prefsMsg"></span>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="ghost" id="statsBack">返回</button>
+      ${total ? '<button class="primary" id="dailyReportBtn">生成今天的日报</button>' : ''}
+    </div>`;
   $('statsBack').addEventListener('click', exitStats);
+  $('dailyReportBtn')?.addEventListener('click', () => {
+    const names = new Map(plugins.map((p) => [p.id, p.name]));
+    const rep = dailyReport(runs, { pluginNames: names });
+    const box = document.createElement('div');
+    box.className = 'overlay';
+    box.innerHTML = `
+      <div class="modal diff-modal">
+        <h3>${esc(rep.title)}</h3>
+        <pre class="report-body">${esc(rep.body)}</pre>
+        <div class="actions">
+          <button class="ghost" id="reportCopy">复制</button>
+          <button class="primary" id="reportClose">关闭</button>
+        </div>
+      </div>`;
+    document.body.appendChild(box);
+    box.querySelector('#reportClose').addEventListener('click', () => box.remove());
+    box.addEventListener('click', (e) => { if (e.target === box) box.remove(); });
+    box.querySelector('#reportCopy').addEventListener('click', async (e) => {
+      try {
+        await navigator.clipboard.writeText(`${rep.title}\n\n${rep.body}`);
+        e.currentTarget.textContent = '✓ 已复制';
+      } catch { e.currentTarget.textContent = '复制失败'; }
+    });
+  });
+
+  $('prefsExport').addEventListener('click', async () => {
+    const msg = $('prefsMsg');
+    const prefs = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith('zerokit.')) prefs[k] = localStorage.getItem(k);
+    }
+    try {
+      const r = await api('/api/prefs/export', { method: 'POST', body: { prefs } });
+      const blob = new Blob([JSON.stringify(r.payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `zerokit-prefs-${new Date().toISOString().slice(0, 10)}.json`; a.click();
+      URL.revokeObjectURL(url);
+      msg.textContent = '✓ 已导出';
+    } catch (e) { msg.textContent = `导出失败：${e.message}`; }
+  });
+  $('prefsImport').addEventListener('click', () => $('prefsFile').click());
+  $('prefsFile').addEventListener('change', async (ev) => {
+    const file = ev.target.files?.[0];
+    if (!file) return;
+    const msg = $('prefsMsg');
+    try {
+      const parsed = JSON.parse(await file.text());
+      const r = await api('/api/prefs/import', { method: 'POST', body: { payload: parsed } });
+      let n = 0;
+      for (const [k, v] of Object.entries(r.prefs)) {
+        localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v));
+        n++;
+      }
+      msg.textContent = `✓ 已导入 ${n} 项，刷新后生效`;
+      loadPrefs(); applyTheme(); applyAccent();
+    } catch (e) { msg.textContent = `导入失败：${e.message}`; }
+  });
 }
 
 function exitStats() {
@@ -3391,6 +3510,23 @@ function showShortcuts() {
           <span class="key-what">${esc(s.what)}</span>
         </div>`).join('')}
       </div>
+      ${(() => {
+        const map = hotkeyMap();
+        const rows = Object.entries(map).map(([k, keyStr]) => {
+          const dot = keyStr.lastIndexOf('.');
+          const entry = entries.find((e) => e.plugin.id === keyStr.slice(0, dot)
+            && e.action.id === keyStr.slice(dot + 1));
+          return { k, name: entry ? `${entry.plugin.name} · ${entry.action.title}` : keyStr };
+        });
+        if (!rows.length) return '';
+        return `<h3>功能键（按一下直达）</h3>
+          <div class="keys">
+            ${rows.map((r) => `<div class="key-row">
+              <span class="key-combo"><kbd>${esc(r.k)}</kbd></span>
+              <span class="key-what">${esc(r.name)}</span>
+            </div>`).join('')}
+          </div>`;
+      })()}
       <h3>直达页面（深链接，收藏或发给同事都行）</h3>
       <div class="keys deep-links">
         ${[

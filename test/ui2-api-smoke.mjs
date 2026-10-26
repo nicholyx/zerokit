@@ -176,6 +176,22 @@ try {
     check('POST /api/preview：必填参数缺失返回 400', bad.status === 400, JSON.stringify(bad.body));
   }
 
+  // ---- 第六轮：偏好导出/导入
+  {
+    const ex = await postJson('/api/prefs/export', { prefs: { 'zerokit.theme': 'dark', 'evil.key': 'x' } });
+    check('POST /api/prefs/export：打包偏好并加 version/时间戳',
+      ex.status === 200 && ex.body.ok === true && ex.body.payload.version === 1
+      && ex.body.payload.prefs['zerokit.theme'] === 'dark', JSON.stringify(ex.body));
+
+    const imp = await postJson('/api/prefs/import', { payload: ex.body.payload });
+    check('POST /api/prefs/import：只认 zerokit. 前缀的键',
+      imp.status === 200 && imp.body.count === 1 && imp.body.prefs['zerokit.theme'] === 'dark'
+      && !('evil.key' in imp.body.prefs), JSON.stringify(imp.body));
+
+    const badImp = await postJson('/api/prefs/import', { payload: { nope: 1 } });
+    check('POST /api/prefs/import：坏形状返回 400', badImp.status === 400, JSON.stringify(badImp.body));
+  }
+
   // ---------------------------------------------------------------- 5. MCP 授权接口（第三轮）
 
   {
