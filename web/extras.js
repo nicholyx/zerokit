@@ -418,3 +418,58 @@ export function makeT(lang) {
   const L = I18N[pickLang(lang)];
   return (key) => L[key] ?? I18N.zh[key] ?? key;
 }
+
+
+// ---------------------------------------------------------------- 第九轮：可发现性与效率
+
+/**
+ * 键盘跳页计算：Home/End/PageUp/PageDown 在长度 n 的扁平序里怎么移。
+ * 纯函数便于单测；pageLines 与可视区行高解耦（固定 8 行/页，与 CSS 行高一致）。
+ */
+export function pageJump(index, key, n, pageLines = 8) {
+  if (!Number.isInteger(index) || index < 0) index = 0;
+  const max = Math.max(0, n - 1);
+  switch (key) {
+    case 'Home': return 0;
+    case 'End': return max;
+    case 'PageUp': return Math.max(0, index - pageLines);
+    case 'PageDown': return Math.min(max, index + pageLines);
+    default: return index;
+  }
+}
+
+/**
+ * 搜索权重解释：把一次命中的各信号分数摊开，给「为什么排在前面」一个人话版。
+ * 返回 [{label, score, weight, got}]（got = score * weight）。
+ */
+export function explainScore(pairs) {
+  return (pairs ?? [])
+    .filter(([, w]) => w > 0)
+    .map(([label, score, weight]) => ({ label, score: Math.round(score * 100) / 100, weight, got: Math.round(score * weight * 100) / 100 }))
+    .sort((a, b) => b.got - a.got);
+}
+
+/**
+ * 批量执行计划：按选中顺序编排，destructive 排最后（降低「顺手全选」的破坏面）。
+ * 返回 {ordered, moved}，moved 是被挪到尾部的 destructive 数量。
+ */
+export function planBatch(entries) {
+  const list = [...(entries ?? [])];
+  const dangerous = list.filter((e) => e.action.risk === 'destructive');
+  const safe = list.filter((e) => e.action.risk !== 'destructive');
+  return { ordered: [...safe, ...dangerous], moved: dangerous.length };
+}
+
+/**
+ * 耗时直方图：把毫秒数装进对数桶（<50/100/250/500/1k/2.5k/5k/∞）。
+ */
+export function msHistogram(runsMs) {
+  const edges = [50, 100, 250, 500, 1000, 2500, 5000, Infinity];
+  const labels = ['<50', '50–100', '100–250', '250–500', '0.5–1s', '1–2.5s', '2.5–5s', '>5s'];
+  const buckets = labels.map(() => 0);
+  for (const ms of runsMs ?? []) {
+    const i = edges.findIndex((e) => ms < e);
+    buckets[i < 0 ? labels.length - 1 : i] += 1;
+  }
+  return labels.map((label, i) => ({ label, count: buckets[i] }));
+}

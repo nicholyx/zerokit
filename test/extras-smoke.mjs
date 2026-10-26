@@ -186,6 +186,28 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
   check('i18n: 未知 key 返回 key', makeT('zh')('zzz-unknown') === 'zzz-unknown');
 }
 
+
+// ------------------------------------------------ 第九轮：可发现性与效率
+{
+  const { pageJump, explainScore, planBatch, msHistogram } = await import('../web/extras.js');
+  check('pageJump: 四方向', pageJump(3, 'PageDown', 20) === 11 && pageJump(15, 'PageUp', 20) === 7
+    && pageJump(5, 'End', 20) === 19 && pageJump(5, 'Home', 20) === 0);
+  check('pageJump: 越界钳制与未知键', pageJump(0, 'PageUp', 5) === 0 && pageJump(4, 'PageDown', 5) === 4 && pageJump(2, 'x', 5) === 2);
+  check('explainScore: 丢零信号并排序', (() => {
+    const rows = explainScore([['标题', 1, 1.2], ['关键词', 0, 1], ['ID', 0.5, 1]]);
+    return rows.length === 2 && rows[0].label === '标题' && rows[1].got === 0.5;
+  })());
+  check('planBatch: destructive 排最后', (() => {
+    const { ordered, moved } = planBatch([{ action: { risk: 'destructive' } }, { action: { risk: 'read' } }, { action: { risk: 'write' } }]);
+    return moved === 1 && ordered[ordered.length - 1].action.risk === 'destructive';
+  })());
+  check('msHistogram: 对数桶计数', (() => {
+    const h = msHistogram([30, 80, 300, 3000, 9000]);
+    const m = Object.fromEntries(h.map((x) => [x.label, x.count]));
+    return m['<50'] === 1 && m['50–100'] === 1 && m['250–500'] === 1 && m['2.5–5s'] === 1 && m['>5s'] === 1;
+  })());
+}
+
 const failed = results.filter(([, ok]) => !ok);
 console.log('\n' + '='.repeat(60));
 console.log(`通过 ${results.length - failed.length} / ${results.length}`);

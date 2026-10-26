@@ -6,6 +6,7 @@ import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
 import { pickLang, makeT } from './extras.js';
+import { pageJump, explainScore, planBatch, msHistogram } from './extras.js';
 import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport } from './extras.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
@@ -329,12 +330,16 @@ function scoreOne(text, token) {
  *
  * 所以：动作级命中直接胜出；只命中插件级的整体降一档。
  */
-function scoreEntry(entry, token) {
+function scoreEntry(entry, token, explain) {
   const p = entry.plugin;
   const a = entry.action;
   const best = (...pairs) => {
     let m = 0;
-    for (const [value, weight] of pairs) if (value * weight > m) m = value * weight;
+    let mi = -1;
+    for (let i = 0; i < pairs.length; i++) {
+      if (pairs[i][0] * pairs[i][1] > m) { m = pairs[i][0] * pairs[i][1]; mi = i; }
+    }
+    if (explain && mi >= 0) explain.push([pairs[mi][2] ?? '命中', pairs[mi][0], pairs[mi][1]]);
     return m;
   };
   // 昵称：用户自己起的名字，权重最高——他们叫它什么，搜它就该第一个出来
@@ -344,12 +349,12 @@ function scoreEntry(entry, token) {
 
   // 动作自己这一层：名字里直接命中，"打开这个动作"的意图最明确
   const own = best(
-    [nick ? scoreOne(nick, token) * 1.2 : 0, 1.0],
-    [scoreOne(a.id, token), 1.0],
-    [scoreOne(a.title, token), 1.05],
-    [scoreOne(entry.hayId, token), 0.9],
-    [scorePinyin(entry.py.title, token), 1.05],
-    [atags.length ? scoreOne(atags.join(' '), token) * 0.95 : 0, 1.0],
+    [nick ? scoreOne(nick, token) * 1.2 : 0, 1.0, '昵称'],
+    [scoreOne(a.id, token), 1.0, '动作ID'],
+    [scoreOne(a.title, token), 1.05, '动作名'],
+    [scoreOne(entry.hayId, token), 0.9, '插件.动作'],
+    [scorePinyin(entry.py.title, token), 1.05, '拼音'],
+    [atags.length ? scoreOne(atags.join(' '), token) * 0.95 : 0, 1.0, '标签'],
   );
   if (own > 0) return own;
 
@@ -387,12 +392,14 @@ function search(query) {
   for (const entry of entries) {
     let total = 0;
     let ok = true;
+    const why = [];
     for (const token of tokens) {
-      const s = scoreEntry(entry, token);
+      const s = scoreEntry(entry, token, why);
       if (s <= 0) { ok = false; break; }
       total += s;
     }
     if (!ok) continue;
+    entry.lastWhy = why;   // 详情页「为什么命中」用（ WeakMap 更干净但没必要）
     const rank = recentRank(entry);
     if (rank >= 0) total += Math.max(0, 12 - rank);   // 用过的略微加分
     out.push({ entry, score: total });
@@ -533,7 +540,23 @@ function renderList() {
     el.list.innerHTML = filtered.map((entry, i) => itemHtml(entry, i, true, '')).join('');
     el.count.textContent = `别名「${el.q.value.trim()}」→ ${aliasHit.plugin.name} · ${aliasHit.action.title}`;
     el.empty.classList.add('hidden');
-    el.list.querySelectorAll('.item').forEach((node) => {
+    // 批量篮浮条（有选中才显示）
+  const oldBar = document.getElementById('batchBar');
+  if (oldBar) oldBar.remove();
+  if (batch.length) {
+    const bar = document.createElement('div');
+    bar.className = 'batch-bar';
+    bar.id = 'batchBar';
+    bar.innerHTML = `已选 ${batch.length} 项
+      <button class="ghost mini" id="batchRun">顺序执行</button>
+      <button class="ghost mini" id="batchClear">清空</button>
+      <span class="help">destructive 排最后</span>`;
+    el.listView.insertBefore(bar, el.list);
+    bar.querySelector('#batchRun').addEventListener('click', runBatch);
+    bar.querySelector('#batchClear').addEventListener('click', () => { batch = []; renderList(); });
+  }
+
+  el.list.querySelectorAll('.item').forEach((node) => {
       node.addEventListener('click', () => { active = Number(node.dataset.i); openActive(); });
     });
     el.list.querySelector('.item')?.scrollIntoView({ block: 'nearest' });
@@ -642,6 +665,18 @@ function renderList() {
   el.list.querySelectorAll('.item').forEach((node) => {
     node.addEventListener('click', (ev) => {
       if (ev.target.closest('[data-fav]')) return;
+      // Alt+点击：不打开，而是加入批量篮（巡检/报表场景）
+      if (ev.altKey) {
+        ev.preventDefault();
+        const entry = filtered[Number(node.dataset.i)];
+        if (entry) {
+          const k = actionKey(entry.plugin.id, entry.action.id);
+          if (!batch.some((x) => actionKey(x.plugin.id, x.action.id) === k)) batch.push(entry);
+          const bar = document.getElementById('batchBar');
+          if (bar) bar.firstChild.textContent = `已选 ${batch.length} 项 `;
+        }
+        return;
+      }
       active = Number(node.dataset.i);
       openActive();
     });
@@ -755,6 +790,11 @@ function openDetail(plugin, action, prefill) {
   const aliasKey = actionKey(plugin.id, action.id);
   const aliasName = Object.entries(aliases).find(([, v]) => v === aliasKey)?.[0];
   const nickKey = actionKey(plugin.id, action.id);
+  const whyRows = (action.lastWhy ?? [])
+    .map((r) => `<tr><td>${esc(r[0])}</td><td>${r[1].toFixed(2)}</td><td>×${r[2]}</td></tr>`).join('');
+  const whyNote = whyRows
+    ? `<div class="mem-note why-note"><b>为什么命中</b><table class="why-table"><tr><th>信号</th><th>分</th><th>权重</th></tr>${whyRows}</table></div>`
+    : '';
   const aliasNote = `<div class="mem-note alias-note">别名：
     <input id="aliasInput" placeholder="起个短名（如 top）" value="${esc(aliasName ?? '')}"
       autocomplete="off" spellcheck="false" style="width:9em">
@@ -818,6 +858,7 @@ function openDetail(plugin, action, prefill) {
     ${depWarn}
     ${chainInfo}
     ${memNote}
+  ${whyNote}
   ${aliasNote}
   ${lastRunNote}
     ${fields}
@@ -828,6 +869,7 @@ function openDetail(plugin, action, prefill) {
       <button class="ghost" id="invokeBtn" title="这个动作在 CLI / MCP / 深链里怎么调">调用方式</button>
       ${plugin.settings?.length ? '<button class="ghost" id="cfgBtn" title="这个插件的长期配置（端点、密钥等），保存后立即生效">配置插件</button>' : ''}
       <button class="ghost" id="qrBtn" title="生成深链二维码，手机扫码直达这个动作">二维码</button>
+      <button class="ghost" id="shareBtn" title="复制带当前参数的完整深链">分享</button>
       <button class="ghost" id="timerBtn" title="只读动作按间隔自动执行（界面开着才跑）">定时</button>
       <button class="ghost" id="shareCardBtn" title="把这次结果生成一张摘要卡（复制到剪贴板）">分享卡</button>
       <button class="ghost" id="copyJsonBtn" title="复制动作定义 JSON（写文档 / 分享给他人用）">复制 JSON</button>
@@ -1048,6 +1090,18 @@ function openDetail(plugin, action, prefill) {
     }
     savePrefs();
     openDetail(plugin, action, prefill);
+  });
+
+  // 分享链接：带当前参数的完整深链（收的人打开就是填好的表单）
+  $('shareBtn')?.addEventListener('click', () => {
+    const vals = collectValues(action);
+    const qs = Object.entries(vals).filter(([, v]) => v !== '' && v !== undefined && v !== null)
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&');
+    const link = `${location.origin}${location.pathname}#/${plugin.id}/${action.id}${qs ? `?${qs}` : ''}`;
+    navigator.clipboard?.writeText(link).then(() => {
+      $('shareBtn').textContent = '已复制链接';
+      setTimeout(() => { $('shareBtn').textContent = '分享'; }, 1500);
+    }).catch(() => { window.__shareLinkFallback = link; alert('复制失败，链接已暂存：\n' + link); });
   });
 
   // 昵称：自己的叫法。搜索权重最高，列表里显示在原名旁
@@ -1275,8 +1329,29 @@ function renderRunHistory(plugin, action) {
       <span class="run-ms">${esc(String(r.ms))} ms</span>
       <button class="ghost" data-rerun>重跑</button>${list.length >= 2 ? `
       <button class="ghost" data-diff="${i}" ${i === list.length - 1 ? 'disabled title="这是最新一次，选更早的一条来对比"' : 'title="和最新一次的结果逐格对比"'}>与最新对比</button>` : ''}
-    </div>`).join('')}`;
+      <button class="ghost mini" data-pick="${i}" title="选进 A/B 对比槽">选比</button>
+    </div>`).join('')}
+    <div class="help" id="diffPickHint" style="margin-top:4px"></div>`;
   box.querySelectorAll('[data-rerun]').forEach((b) => b.addEventListener('click', () => submit(false)));
+  // A/B 槽：任选两次对比（第九轮④）
+  if (!window.__diffPicks) window.__diffPicks = [];
+  box.querySelectorAll('[data-pick]').forEach((b) => b.addEventListener('click', () => {
+    const i2 = Number(b.dataset.pick);
+    const picks = window.__diffPicks;
+    if (picks.includes(i2)) { picks.splice(picks.indexOf(i2), 1); }
+    else { picks.push(i2); if (picks.length > 2) picks.shift(); }
+    const hint = $('diffPickHint');
+    if (hint) hint.textContent = picks.length === 2
+      ? `已选第 ${picks[0] + 1}、${picks[1] + 1} 条（从上往下数）——再点一次任意已选条目取消`
+      : `已选 ${picks.length}/2 条`;
+    if (picks.length === 2) {
+      const [ia, ib] = picks;
+      if (list[ia]?.data !== undefined && list[ib]?.data !== undefined) showResultDiff(list[ia].data, list[ib].data);
+      else alert('这两次记录没存结果数据（可能是老记录），重跑一次后再对比。');
+      window.__diffPicks = [];
+      if (hint) hint.textContent = '';
+    }
+  }));
   box.querySelectorAll('[data-diff]').forEach((b) => b.addEventListener('click', () => {
     const older = list[Number(b.dataset.diff)];
     const latest = list[0];
@@ -3329,6 +3404,19 @@ function showStats() {
           </div>`).join('');
       })()}
     </div>` : ''}
+    ${total ? `
+    <h3 class="plug-home-h">一次跑多久（毫秒分布）</h3>
+    <div class="usage-block">
+      ${(() => {
+        const hist = msHistogram(runs.map((r) => r.ms ?? 0));
+        const maxC = Math.max(1, ...hist.map((x) => x.count));
+        return hist.map((b) => `
+          <div class="heat-cell" title="${b.label}ms — ${b.count} 次">
+            <i style="height:${Math.max(2, Math.round((b.count / maxC) * 32))}px"></i>
+            <span>${b.label}</span>
+          </div>`).join('');
+      })()}
+    </div>` : ''}
     ${total === 0 ? '<div class="ps-empty">还没有执行记录——随便跑一个只读动作，这里就会开始长出来。</div>' : ''}
     <h3 class="plug-home-h">偏好备份</h3>
     <div class="cmd-box prefs-box">
@@ -3751,12 +3839,9 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'End') {
     e.preventDefault();
     if (filtered.length) { active = filtered.length - 1; paintActive(); }
-  } else if (e.key === 'PageDown') {
+  } else if (e.key === 'PageDown' || e.key === 'PageUp') {
     e.preventDefault();
-    if (filtered.length) { active = Math.min(active + 10, filtered.length - 1); paintActive(); }
-  } else if (e.key === 'PageUp') {
-    e.preventDefault();
-    if (filtered.length) { active = Math.max(active - 10, 0); paintActive(); }
+    if (filtered.length) { active = pageJump(active, e.key, filtered.length); paintActive(); }
   } else if (e.key === 'Enter') {
     e.preventDefault();
     if (e.ctrlKey || e.metaKey) { openActive(); setTimeout(() => submit(true), 0); }
@@ -3764,6 +3849,11 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'Escape') {
     el.q.value = '';
     renderList();
+  } else if (/^Digit[1-9]$/.test(e.code) && e.altKey && filtered.length) {
+    // Alt+数字 = 直开第 N 条：搜索结果稳定时比方向键快
+    e.preventDefault();
+    const nth = Number(e.code.slice(5)) - 1;
+    if (filtered[nth]) { active = nth; openActive(); }
   }
 });
 
@@ -4004,10 +4094,17 @@ function applyHash() {
     if (q) setTimeout(() => wbSend(), 200);
     return;
   }
-  const m = /^#\/([\w.-]+)(?:\/([\w.-]+))?/.exec(location.hash || '');
+  const m = /^#\/([\w.-]+)(?:\/([\w.-]+))?(?:\?(.*))?/.exec(location.hash || '');
   if (!m) return;
+  // 深链带参数：#/插件/动作?字段=值&… → 打开详情并预填表单
+  // （只做预填，不自动执行——「打开就跑」会让分享链接变成钓鱼面）
+  let prefill = null;
+  if (m[3]) {
+    prefill = {};
+    for (const [k, v] of new URLSearchParams(m[3]).entries()) prefill[k] = v;
+  }
   const entry = entries.find((e) => e.plugin.id === m[1] && (!m[2] || e.action.id === m[2]));
-  if (entry) openDetail(entry.plugin, entry.action);
+  if (entry) openDetail(entry.plugin, entry.action, prefill);
 }
 
 window.addEventListener('hashchange', () => { if (!detail) applyHash(); });

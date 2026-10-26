@@ -890,3 +890,14 @@ html[data-font-scale='l'] { font-size: 16px; }
 html[data-font-scale='l'] .list .item .name { font-size: 15px; }
 html[data-font-scale='l'] pre.out { font-size: 13px; }
 .last-run-note button.mini { padding: 1px 8px; font-size: 11px; margin-left: 6px; }
+.why-note table { border-collapse: collapse; margin-top: 4px; }
+.why-note td, .why-note th { border: 1px solid var(--line); padding: 1px 8px; font-size: 12px; }
+.why-note th { background: var(--bg-soft, rgba(127,127,127,.12)); }
+@media (max-width: 720px) {
+  .shell { padding: 8px; }
+  .search-row { flex-wrap: wrap; }
+  .detail .card { padding: 10px; }
+  .foot { flex-wrap: wrap; gap: 8px; }
+}
+.batch-bar { display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+  border: 1px solid var(--line); border-radius: 8px; margin: 4px 0; background: var(--bg-soft, rgba(127,127,127,.08)); }
