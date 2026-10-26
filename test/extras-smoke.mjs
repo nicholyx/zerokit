@@ -208,6 +208,27 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
   })());
 }
 
+
+// ------------------------------------------------ 第十轮：自动化与粘性
+{
+  const { dailyBrief, trimRuns, idleSuggest } = await import('../web/extras.js');
+  const now = Date.now();
+  const today = now - 36e5;
+  check('dailyBrief: 只数今天', (() => {
+    const b = dailyBrief({ 'a.b': [{ ok: true, ms: 40, ts: today }, { ok: false, ms: 60, ts: today }], 'c.d': [{ ok: true, ms: 200, ts: now - 2 * 864e5 }] }, now);
+    return b.total === 2 && b.ok === 1 && b.failed === 1 && b.top[0][0] === 'a.b' && b.avgMs === 50;
+  })());
+  check('dailyBrief: 空记录', dailyBrief({}, now).total === 0);
+  check('trimRuns: 只留最近 N 份', trimRuns(Array.from({ length: 25 }, (_, i) => ({ ts: i })), 20).length === 20
+    && trimRuns([{ ts: 9 }, { ts: 1 }])[0].ts === 9);
+  check('idleSuggest: 超时且够常用才推', (() => {
+    const old3 = now - 3600e3;
+    return idleSuggest({ 'a.b': [{ ts: old3 }, { ts: old3 }, { ts: old3 }] }, now)?.key === 'a.b'
+      && idleSuggest({ 'a.b': [{ ts: old3 }] }, now) === null
+      && idleSuggest({ 'a.b': [{ ts: now - 60e3 }, { ts: old3 }, { ts: old3 }] }, now) === null;
+  })());
+}
+
 const failed = results.filter(([, ok]) => !ok);
 console.log('\n' + '='.repeat(60));
 console.log(`通过 ${results.length - failed.length} / ${results.length}`);

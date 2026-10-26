@@ -7,6 +7,7 @@ import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
 import { pickLang, makeT } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram } from './extras.js';
+import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
 import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport } from './extras.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
@@ -540,7 +541,9 @@ function renderList() {
     el.list.innerHTML = filtered.map((entry, i) => itemHtml(entry, i, true, '')).join('');
     el.count.textContent = `别名「${el.q.value.trim()}」→ ${aliasHit.plugin.name} · ${aliasHit.action.title}`;
     el.empty.classList.add('hidden');
-    // 批量篮浮条（有选中才显示）
+    renderQuickBar();
+
+  // 批量篮浮条（有选中才显示）
   const oldBar = document.getElementById('batchBar');
   if (oldBar) oldBar.remove();
   if (batch.length) {
@@ -951,13 +954,20 @@ function openDetail(plugin, action, prefill) {
     }
     const sec = Number(prompt('每多少秒自动执行一次？（界面开着才会执行；输 0 取消）', '60'));
     if (!Number.isFinite(sec)) return;
-    if (window.__zkTimer) { clearInterval(window.__zkTimer); window.__zkTimer = null; }
     if (sec <= 0) { el.count.textContent = '已取消定时执行'; return; }
-    window.__zkTimer = setInterval(() => {
-      // 静默跑：不抢焦点，只更新计数提示
-      submit(false).then(() => {}).catch(() => {});
-    }, sec * 1000);
-    el.count.textContent = `已开启定时执行：每 ${sec} 秒一次（关页面即停）`;
+    // 第十轮②：定时任务统一进注册表（#/timers 面板可查看/停止）
+    const reg = timerRegistry();
+    const key = actionKey(plugin.id, action.id);
+    if (reg[key]) { clearInterval(reg[key].id); delete reg[key]; }
+    reg[key] = {
+      id: setInterval(() => {
+        // 静默跑：不抢焦点，只更新计数提示
+        submit(false).then(() => {}).catch(() => {});
+      }, sec * 1000),
+      interval: sec,
+      title: `${plugin.name} · ${action.title}`,
+    };
+    el.count.textContent = `已开启定时执行：每 ${sec} 秒一次（#/timers 可管理）`;
   });
 
   // 二维码：深链 → SVG，模态展示（离线生成，不联网）
@@ -1218,6 +1228,127 @@ async function executeAction(plugin, action, values, remember = false) {
 let submitInFlight = 0;
 
 /** 队列可视化：连续触发执行时明确「排队中」，而不是看起来没反应。 */
+/** 第十轮⑦：集市来源插件的更新检查——只比较版本号提示，绝不自动装。 */
+async function checkPluginUpdate(p) {
+  const btn = document.getElementById('plugUpdateBtn');
+  if (!btn) return;
+  btn.textContent = '检查中…';
+  try {
+    const token = document.querySelector('meta[name=zk-token]')?.content ?? '';
+    const r = await fetch('/api/plugin/install', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-zerokit-token': token },
+      body: JSON.stringify({ plugin: p.id, dryRun: true }),
+    });
+    const j = await r.json();
+    const remote = j?.plugin?.version ?? j?.version;
+    if (!remote) { btn.textContent = '集市里没有这个插件'; return; }
+    if (String(remote) === String(p.version)) { btn.textContent = '已是最新 ' + remote; return; }
+    btn.textContent = `集市有新版 ${remote}（当前 ${p.version}）——去集市面板安装`;
+    btn.onclick = () => { location.hash = '#/market'; };
+  } catch {
+    btn.textContent = '检查失败（稍后再试）';
+  }
+}
+
+/** 第十轮⑤：每日简报——今天跑了多少、成败、最常用 top3、平均耗时。 */
+function showBrief() {
+  hidePanels();
+  mode = 'brief';
+  el.modeLabel.textContent = '简报';
+  el.listView.classList.add('hidden');
+  el.detailView.classList.add('hidden');
+  if (location.hash !== '#/brief') history.replaceState(null, '', '#/brief');
+  const b = dailyBrief(runStore, Date.now());
+  const names = Object.fromEntries(entries.map((e) => [actionKey(e.plugin.id, e.action.id), e.action.title]));
+  el.allowView.innerHTML = `
+    <h2 class="ps-title">今日简报</h2>
+    <div class="brief-grid">
+      <div class="brief-cell">今天执行<b>${b.total}</b>次</div>
+      <div class="brief-cell">成功<b class="ok">${b.ok}</b></div>
+      <div class="brief-cell">失败<b class="${b.failed ? 'bad' : ''}">${b.failed}</b></div>
+      <div class="brief-cell">平均耗时<b>${b.avgMs}ms</b></div>
+    </div>
+    ${b.top.length ? `<h3 class="plug-home-h">最常用</h3>
+      <div class="usage-block">${b.top.map(([k, n]) => `
+        <div class="run-row"><span class="run-when">${esc(names[k] ?? k)}</span><span class="badge">${n} 次</span></div>`).join('')}
+      </div>` : '<div class="ps-empty">今天还没有执行记录——跑一个动作，这里就会有数据。</div>'}`;
+  el.allowView.classList.remove('hidden');
+}
+
+/** 第十轮④：顶栏快速访问条——前 5 个收藏一键直达。 */
+function renderQuickBar() {
+  let bar = document.getElementById('quickBar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'quickBar';
+    bar.className = 'quick-bar';
+    const searchRow = document.getElementById('searchRow');
+    searchRow?.parentNode?.insertBefore(bar, searchRow);
+  }
+  // favorites 是 key 数组（'插件.动作'）
+  const top = favorites.slice(0, 5);
+  bar.innerHTML = top.length
+    ? top.map((k) => {
+        const e = entries.find((x) => actionKey(x.plugin.id, x.action.id) === k);
+        return e ? `<button class="chip" data-quick="${esc(k)}">${esc(e.action.title)}</button>` : '';
+      }).join('')
+    : '<span class="help">收藏动作后会钉在这里（最多 5 个）</span>';
+  bar.querySelectorAll('[data-quick]').forEach((b) => b.addEventListener('click', () => {
+    const e = entries.find((x) => actionKey(x.plugin.id, x.action.id) === b.dataset.quick);
+    if (e) openDetail(e.plugin, e.action);
+  }));
+}
+
+/** 第十轮②：定时任务面板——列出所有在跑的 interval，一键停。 */
+function timerRegistry() {
+  if (!window.__zkTimers) window.__zkTimers = {};
+  return window.__zkTimers;
+}
+function showTimers() {
+  hidePanels();
+  mode = 'timers';
+  el.modeLabel.textContent = '定时';
+  el.listView.classList.add('hidden');
+  el.detailView.classList.add('hidden');
+  if (location.hash !== '#/timers') history.replaceState(null, '', '#/timers');
+  const reg = timerRegistry();
+  const rows = Object.entries(reg).map(([k, t]) => `
+    <div class="run-row">
+      <span class="badge">⏱</span>
+      <span class="run-when">${esc(t.title)}（每 ${esc(String(t.interval))} 秒）</span>
+      <button class="ghost mini" data-stop="${esc(k)}">停止</button>
+    </div>`).join('');
+  el.allowView.innerHTML = `
+    <h2 class="ps-title">定时任务</h2>
+    <div class="help">界面开着才会跑（关掉页面即停）。在只读动作详情页点「定时」添加。</div>
+    ${rows || '<div class="ps-empty">没有在跑的定时任务。</div>'}`;
+  el.allowView.classList.remove('hidden');
+  el.allowView.querySelectorAll('[data-stop]').forEach((b) => b.addEventListener('click', () => {
+    const k = b.dataset.stop;
+    const t = timerRegistry()[k];
+    if (t) { clearInterval(t.id); delete timerRegistry()[k]; }
+    showTimers();
+  }));
+}
+
+/** 第十轮①：执行完成桌面通知。授权失败/不支持则静默跳过（通知是增强，不是依赖）。 */
+function notifyDone(plugin, action, res) {
+  try {
+    if (!('Notification' in window)) return;
+    const fire = () => {
+      try {
+        new Notification('zerokit', {
+          body: `${res.ok === true ? '✓' : '✗'} ${plugin.name} · ${action.title}（${res.ms ?? '?'}ms）`,
+          tag: 'zerokit-run',
+        });
+      } catch { /* 通知构造失败不影响主流程 */ }
+    };
+    if (Notification.permission === 'granted') fire();
+    else if (Notification.permission === 'default') Notification.requestPermission().then((p2) => { if (p2 === 'granted') fire(); }).catch(() => {});
+  } catch { /* no-op */ }
+}
+
 async function submit(remember) {
   submitInFlight++;
   const qEl = $('queueState');
@@ -1249,6 +1380,19 @@ async function submitInner(remember) {
     renderResult(res);
     if (res.ok === true && action.risk === 'destructive') renderUndoHint(plugin, action);
     // 结果可能很长，直接把卡片顶部带进视野（否则用户以为「点了没反应」）
+    if (res.ok === false && !window.__zkRetried) {
+      const retryNote = document.createElement('div');
+      retryNote.className = 'retry-note';
+      retryNote.innerHTML = `<button class="ghost mini" id="autoRetryBtn">重试一次</button> <span class="help">失败动作可一键重跑（网络类动作偶发超时很常见）</span>`;
+      setTimeout(() => {
+        const box2 = $('result') ?? document.querySelector('.detail');
+        box2?.appendChild(retryNote);
+        retryNote.querySelector('#autoRetryBtn')?.addEventListener('click', () => {
+          window.__zkRetried = true;
+          try { submit(remember); } finally { setTimeout(() => { window.__zkRetried = false; }, 2000); }
+        });
+      }, 0);
+    }
     setTimeout(() => $('result')?.scrollIntoView({ block: 'start' }), 0);
     rememberRecent(plugin.id, action.id);
     const secretNames = action.fields.filter((f) => f.secret).map((f) => f.name);
@@ -1257,7 +1401,11 @@ async function submitInner(remember) {
       ts: Date.now(), ok: res.ok === true, ms: res.ms ?? 0,
       data: res.data,   // 留着给「与最新对比」做逐格 diff
     }, 5);
+    // 第十轮⑥：每动作保留最近 20 份（pushRunHistory 只保 5，这里放宽存储、展示仍取前 5）
+    runStore[actionKey(plugin.id, action.id)] = trimRuns(runStore[actionKey(plugin.id, action.id)], 20);
     savePrefs();
+    // 第十轮①：执行完成桌面通知（页面在后台时最有用；需用户授权）
+    notifyDone(plugin, action, res);
     renderRunHistory(plugin, action);
     // 刚跑完的动作可能拉起了一个后台进程/服务，徽标要跟着变
     refreshPsCount();
@@ -2327,6 +2475,7 @@ async function showPluginHome(id) {
 
   // 能力清单导出：把插件主页的「动作/风险/依赖/设置」拼成 Markdown 报告下载。
   // 给的是「人能审阅」的形状——同事装之前先看这份就知道它会动什么。
+  if (p.source?.type === 'market') checkPluginUpdate(p);
   $('homeExport')?.addEventListener('click', () => {
     const md = [
       `# ${p.name}（\`${p.id}\`）能力清单`,
@@ -2388,6 +2537,7 @@ async function showPluginHome(id) {
       </div>` : ''}
     <div class="actions">
       <button class="ghost" id="homeExport" title="导出这个插件的能力清单（Markdown）">导出能力清单</button>
+      ${p.source?.type === 'market' ? '<button class="ghost" id="plugUpdateBtn">检查更新</button>' : ''}
       <button class="ghost" id="homeBackList">返回插件列表</button>
       <button class="primary" id="homeBack">返回</button>
     </div>`;
@@ -3531,7 +3681,28 @@ function showStats() {
         n++;
       }
       msg.textContent = `✓ 已导入 ${n} 项，刷新后生效`;
-      loadPrefs();
+      // 第十轮⑨：空闲推荐（只提示一次；点开即执行该动作详情）
+setTimeout(() => {
+  const sug = idleSuggest(runStore, Date.now());
+  if (!sug) return;
+  const e = entries.find((x) => actionKey(x.plugin.id, x.action.id) === sug.key);
+  if (!e) return;
+  const tip = document.createElement('div');
+  tip.className = 'idle-tip';
+  tip.innerHTML = `<span>有一阵子没用了——要不要跑一次「${esc(e.action.title)}」？</span>
+    <button class="ghost mini" id="idleGo">打开</button>
+    <button class="ghost mini" id="idleNo">不用</button>`;
+  document.body.appendChild(tip);
+  tip.querySelector('#idleGo').addEventListener('click', () => { tip.remove(); openDetail(e.plugin, e.action); });
+  tip.querySelector('#idleNo').addEventListener('click', () => tip.remove());
+  setTimeout(() => tip.remove(), 60_000);
+}, 35 * 60 * 1000);
+
+// 第十轮：footer 入口
+$('timersBtn')?.addEventListener('click', showTimers);
+$('briefBtn')?.addEventListener('click', showBrief);
+
+loadPrefs();
 applyFontScale(); applyTheme(); applyAccent();
     } catch (e) { msg.textContent = `导入失败：${e.message}`; }
   });
@@ -4015,6 +4186,11 @@ async function load(notify) {
 
 /** 支持 #/插件/动作 深链直达 */
 function applyHash() {
+  // #/timers 定时任务面板
+  if ((location.hash || '') === '#/timers') { showTimers(); return; }
+  // #/brief 每日简报
+  if ((location.hash || '') === '#/brief') { showBrief(); return; }
+
   // #/ps  直接打开「运行中」
   if ((location.hash || '') === '#/ps') {
     showPs();
@@ -4108,6 +4284,15 @@ function applyHash() {
 }
 
 window.addEventListener('hashchange', () => { if (!detail) applyHash(); });
+
+// 第十轮⑧：Ctrl/Cmd+K 全局聚焦搜索（与浏览器快捷键不冲突：我们 preventDefault）
+window.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+    e.preventDefault();
+    el.q.focus();
+    el.q.select();
+  }
+});
 
 // 把内部状态挂出来，便于排查，也方便以后用 CDP 做界面自动化测试
 window.__zerokit = {

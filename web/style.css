@@ -901,3 +901,14 @@ html[data-font-scale='l'] pre.out { font-size: 13px; }
 }
 .batch-bar { display: flex; align-items: center; gap: 8px; padding: 6px 12px;
   border: 1px solid var(--line); border-radius: 8px; margin: 4px 0; background: var(--bg-soft, rgba(127,127,127,.08)); }
+.quick-bar { display: flex; gap: 6px; padding: 2px 0 6px; flex-wrap: wrap; }
+.quick-bar .chip { border: 1px solid var(--line); border-radius: 999px; padding: 2px 12px;
+  background: transparent; cursor: pointer; font-size: 12px; color: var(--fg); }
+.quick-bar .chip:hover { border-color: var(--accent, #5aa9ff); }
+.retry-note { margin-top: 6px; padding: 6px 10px; border: 1px dashed var(--line); border-radius: 8px; }
+.idle-tip { position: fixed; right: 16px; bottom: 56px; z-index: 60; display: flex; gap: 8px;
+  align-items: center; padding: 8px 14px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--bg-panel, #1e1e1e); box-shadow: 0 6px 24px rgba(0,0,0,.25); font-size: 13px; }
+.brief-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 10px 0; }
+.brief-cell { border: 1px solid var(--line); border-radius: 10px; padding: 10px; text-align: center; }
+.brief-cell b { display: block; font-size: 22px; margin-top: 2px; }
