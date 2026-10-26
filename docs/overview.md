@@ -206,7 +206,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 
 ### 质量
 
-- 21 个测试文件、**587 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
+- 21 个测试文件、**596 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
 - `tsc --noEmit` 干净——**而且 CI 真的在跑它**（`typecheck` job）。
   曾经这里写着"干净"但没有任何地方执行这条命令，于是两个只有类型检查才看得见的
   错误在核心里躺了很久（`proxy.ts` 的 Buffer 泛型不兼容、`scaffold.ts` 的类型混用）。
@@ -236,6 +236,12 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
       其它语言（如果将来要支持）还没有对应方案。
 - [ ] **uTools 兼容层补关键字以外的检索维度。** 现在 `cmds` 的 `img` / `window`
       只能降级成关键字。
+
+- [x] **第十三轮启动器十项（v0.18.0，#80）。** 列表 roving tabindex
+  （↑/↓/Enter，只有选中项在 Tab 序里）、:focus-visible 焦点环、图标按钮
+  aria-label（星标/主题/批量条）、结果区 aria-live=polite + sr-only 播报、
+  prefers-reduced-motion 停动画、Esc 栈先关最上层浮层、18 处空态 role=status、
+  webui-smoke 新增 9 项 a11y 断言（全量 596/596）。
 
 ### 中期：能力边界上的大件
 

@@ -24,7 +24,7 @@
       <button class="ghost run-chip" id="marketBtn" title="浏览集市：装插件不用记地址">集市 <b id="marketCount">0</b></button>
       <button class="ghost" id="reloadBtn" title="重新读取插件">重新加载</button>
       <button class="ghost theme-btn" id="themeBtn" title="切换主题：跟随系统 → 深色 → 浅色">◐ 跟随系统</button>
-      <button class="ghost theme-btn" id="themeFast" title="深色 / 浅色一键切换（Ctrl+Shift+D）">☀</button>
+      <button class="ghost theme-btn" id="themeFast" title="深色 / 浅色一键切换（Ctrl+Shift+D）" aria-label="深色 / 浅色一键切换">☀</button>
       <button class="ghost" id="langBtn" title="Switch language / 切换语言">中/EN</button>
     </div>
   </header>
@@ -43,7 +43,7 @@
     <div id="listView" class="list-view">
       <div id="listTools" class="list-tools"></div>
       <ul id="list" class="list" role="listbox"></ul>
-      <div id="empty" class="empty">没有匹配的插件动作</div>
+      <div id="empty" class="empty" role="status">没有匹配的插件动作</div>
     </div>
     <div id="detailView" class="detail-view hidden"></div>
     <div id="plugView" class="plug-view hidden"></div>
