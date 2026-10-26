@@ -6,7 +6,7 @@ import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
 import { pickLang, makeT } from './extras.js';
-import { pageJump, explainScore, planBatch, msHistogram } from './extras.js';
+import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
 import { barsScale, sparkPoints, formatMs, paletteScore, p95Ms } from './extras.js';
@@ -899,27 +899,50 @@ function openDetail(plugin, action, prefill) {
       })()
     : '';
 
+  // 深链 query 预填：#/插件/动作?字段=值——比 prefill 更显式的传参方式
+  const linkParams = deepLinkParams(location.hash);
+  const effectiveInitial = { ...initial, ...linkParams };
   const fields = action.fields.map((f) => {
     const req = f.required ? ' <span class="req">*</span>' : '';
     const help = f.help ? `<div class="help">${esc(f.help)}</div>` : '';
+    const errId = `err_${esc(f.name)}`;
     if (f.type === 'checkbox') {
-      return `<div class="field check">
-        <input type="checkbox" id="f_${esc(f.name)}" ${f.default ? 'checked' : ''}>
+      const checked = effectiveInitial[f.name] !== undefined ? effectiveInitial[f.name] === 'true' || effectiveInitial[f.name] === true : Boolean(f.default);
+      return `<div class="field check" data-field="${esc(f.name)}">
+        <input type="checkbox" id="f_${esc(f.name)}" ${checked ? 'checked' : ''}>
         <label for="f_${esc(f.name)}">${esc(f.name)}${req}</label>
       </div>${help}`;
     }
     if (f.type === 'select') {
-      return `<div class="field"><label>${esc(f.name)}${req}</label>
+      const sel = effectiveInitial[f.name] !== undefined ? effectiveInitial[f.name] : f.default;
+      return `<div class="field" data-field="${esc(f.name)}"><label>${esc(f.name)}${req}</label>
         <select id="f_${esc(f.name)}">
-          ${(f.options || []).map((o) => `<option${o === f.default ? ' selected' : ''}>${esc(o)}</option>`).join('')}
+          ${(f.options || []).map((o) => `<option${o === sel ? ' selected' : ''}>${esc(o)}</option>`).join('')}
         </select>${help}</div>`;
     }
-    // 密钥字段：输入框就是 password，既不回显也不进参数记忆
+    // 密钥字段：输入框就是 password，既不回显也不进参数记忆；带 👁 切换明文
     const type = f.secret ? 'password' : (f.type === 'number' ? 'number' : 'text');
-    const given = initial[f.name] !== undefined ? initial[f.name] : f.default;
+    const given = effectiveInitial[f.name] !== undefined ? effectiveInitial[f.name] : f.default;
     const def = given === undefined ? '' : ` value="${esc(given)}"`;
-    return `<div class="field"><label>${esc(f.name)}${req}</label>
-      <input id="f_${esc(f.name)}" type="${type}"${def} autocomplete="off">${help}</div>`;
+    const numAttrs = f.type === 'number'
+      ? `${f.min !== undefined ? ` min="${esc(f.min)}"` : ''}${f.max !== undefined ? ` max="${esc(f.max)}"` : ''}${f.step !== undefined ? ` step="${esc(f.step)}"` : ''}`
+      : '';
+    if (f.multiline) {
+      return `<div class="field" data-field="${esc(f.name)}"><label>${esc(f.name)}${req}</label>
+        <textarea id="f_${esc(f.name)}" rows="3" class="auto-grow">${esc(given ?? '')}</textarea>${help}
+        <div class="field-err hidden" id="${errId}"></div></div>`;
+    }
+    if (f.secret) {
+      return `<div class="field secret-field" data-field="${esc(f.name)}"><label>${esc(f.name)}${req}</label>
+        <div class="secret-wrap">
+          <input id="f_${esc(f.name)}" type="password"${def} autocomplete="off">
+          <button type="button" class="ghost mini eye" data-eye="${esc(f.name)}" aria-label="显示或隐藏明文" title="显示/隐藏明文">👁</button>
+        </div>${help}
+        <div class="field-err hidden" id="${errId}"></div></div>`;
+    }
+    return `<div class="field" data-field="${esc(f.name)}"><label>${esc(f.name)}${req}</label>
+      <input id="f_${esc(f.name)}" type="${type}"${numAttrs}${def} autocomplete="off">${help}
+      <div class="field-err hidden" id="${errId}"></div></div>`;
   }).join('');
 
   el.detailView.innerHTML = `
@@ -957,6 +980,7 @@ function openDetail(plugin, action, prefill) {
       <button class="ghost" id="timerBtn" title="只读动作按间隔自动执行（界面开着才跑）">定时</button>
       <button class="ghost" id="shareCardBtn" title="把这次结果生成一张摘要卡（复制到剪贴板）">分享卡</button>
       <button class="ghost" id="copyJsonBtn" title="复制动作定义 JSON（写文档 / 分享给他人用）">复制 JSON</button>
+      <button class="ghost" id="resetBtn" title="把所有参数清回清单默认值">恢复默认</button>
       <button class="ghost" id="backBtn">返回</button>
     </div>
     <div id="queueState" class="queue-note hidden"></div>
@@ -964,6 +988,112 @@ function openDetail(plugin, action, prefill) {
     <div id="invokeBox"></div>
     <div id="detailCfg" class="cmd-box hidden"></div>
     <div id="result" aria-live="polite"></div>`;
+
+  // ---- 第十四轮：表单与输入体验 ----
+  // 即时校验：input/change 时校必填与数字范围，错误就地标红
+  const liveValidate = () => {
+    const values = collectValues(action);
+    const errs = validateFields(action.fields, values);
+    el.detailView.querySelectorAll('.field[data-field]').forEach((box) => {
+      const name = box.dataset.field;
+      const err = errs.find((e) => e.name === name);
+      const errEl = document.getElementById(`err_${name}`);
+      box.classList.toggle('has-err', Boolean(err));
+      if (errEl) { errEl.textContent = err ? `✗ ${err.reason}` : ''; errEl.classList.toggle('hidden', !err); }
+    });
+    return errs;
+  };
+  // 即时预览：表单一动就刷新命令预览（防抖 400ms，不打接口风暴）
+  let pvTimer = null;
+  const livePreview = () => {
+    clearTimeout(pvTimer);
+    pvTimer = setTimeout(async () => {
+      const box = $('previewBox');
+      if (!box || !box.dataset.live) return;   // 只有用户点过一次「预览命令」才持续刷新
+      try {
+        const r = await api('/api/preview', { method: 'POST', body: { plugin: plugin.id, action: action.id, values: collectValues(action) } });
+        box.innerHTML = `<div class="cmd-box">
+          <div class="cmd-box-head">将要执行${r.masked ? '（密钥已打码）' : ''}</div>
+          <pre>${esc(r.command || '（这个动作没有命令）')}</pre></div>`;
+      } catch { /* 静默：预览失败不刷屏 */ }
+    }, 400);
+  };
+  const onFormInput = () => { liveValidate(); livePreview(); markDirty(); };
+  el.detailView.querySelectorAll('.field input, .field textarea, .field select').forEach((input) => {
+    input.addEventListener('input', onFormInput);
+    input.addEventListener('change', onFormInput);
+  });
+  // secret 眼睛切换
+  el.detailView.querySelectorAll('.eye[data-eye]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const input = document.getElementById(`f_${btn.dataset.eye}`);
+      if (input) input.type = input.type === 'password' ? 'text' : 'password';
+    });
+  });
+  // textarea 自动增高
+  el.detailView.querySelectorAll('textarea.auto-grow').forEach((ta) => {
+    const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(320, ta.scrollHeight + 2) + 'px'; };
+    ta.addEventListener('input', grow);
+    grow();
+  });
+  // 恢复默认：清回清单默认值（含 select/checkbox）
+  $('resetBtn')?.addEventListener('click', () => {
+    for (const f of action.fields) {
+      const node = document.getElementById(`f_${f.name}`);
+      if (!node) continue;
+      if (f.type === 'checkbox') node.checked = Boolean(f.default);
+      else node.value = f.default === undefined ? '' : String(f.default);
+    }
+    onFormInput();
+  });
+  // 历史参数重选：最近 3 次成功组合
+  const histSets = recentParamSets((runStore[actionKey(plugin.id, action.id)] ?? []), 3);
+  if (histSets.length) {
+    const bar = document.createElement('div');
+    bar.className = 'param-sets';
+    bar.innerHTML = `<span class="help">用上次的参数：</span>` + histSets.map((set, i) =>
+      `<button class="chip" data-pset="${i}" title="${esc(new Date(set.ts).toLocaleString())}">${esc(Object.entries(set.params).map(([k, v]) => `${k}=${String(v).slice(0, 18)}`).join(' · ') || '（无参数）')}</button>`).join('');
+    const fieldsHost = el.detailView.querySelector('.field')?.parentElement;
+    fieldsHost?.insertBefore(bar, detailView.querySelector('.field'));
+    bar.querySelectorAll('[data-pset]').forEach((b) => {
+      b.addEventListener('click', () => {
+        const set = histSets[Number(b.dataset.pset)];
+        for (const [k, v] of Object.entries(set.params ?? {})) {
+          const node = document.getElementById(`f_${k}`);
+          if (!node) continue;
+          if (node.type === 'checkbox') node.checked = Boolean(v);
+          else node.value = String(v);
+        }
+        onFormInput();
+      });
+    });
+  }
+  // 脏状态：改过参数未执行就点返回 → 确认（标志挂在 DOM 上，避免依赖闭包外层可变对象）
+  const markDirty = () => {
+    const dirty = dirtyFields(action.fields, collectValues(action), effectiveInitial);
+    el.detailView.dataset.formDirty = String(dirty.length > 0);
+  };
+  markDirty();
+  const origBack = $('backBtn');
+  origBack?.addEventListener('click', (e) => {
+    if (el.detailView?.dataset.formDirty === 'true' && !confirm('参数已修改但还没执行，确定返回？')) {
+      e.stopImmediatePropagation();
+    }
+  }, { capture: true });
+  // 执行前校验：拦截并聚焦第一个错误字段
+  const origRun = $('runBtn');
+  origRun?.addEventListener('click', () => {
+    const errs = liveValidate();
+    if (errs.length) {
+      const first = document.getElementById(`f_${errs[0].name}`);
+      first?.focus();
+      first?.scrollIntoView({ block: 'center' });
+    }
+  }, { capture: true });
+  // 「预览命令」点过后进入持续刷新模式
+  const pb = $('previewBtn');
+  pb?.addEventListener('click', () => { if ($('previewBox')) $('previewBox').dataset.live = '1'; });
+  liveValidate();
 
   $('previewBtn').addEventListener('click', async () => {
     $('invokeBox').innerHTML = '';
@@ -4523,6 +4653,9 @@ async function load(notify) {
       .then((m) => { el.marketCount.textContent = String((m.markets || []).length); })
       .catch(() => { /* 集市读不到不影响命令面 */ });
     applyHash();
+    // 主页 ?q=词：URL 带查询词直达搜索结果（外部系统/文档里给入口链接用）
+    const qParam = new URLSearchParams(location.search).get('q');
+    if (qParam) { el.q.value = qParam; active = 0; renderList(); el.q.focus(); }
   } catch (e) {
     el.count.textContent = `加载失败：${e.message}`;
   }
@@ -4628,6 +4761,7 @@ function applyHash() {
 }
 
 window.addEventListener('hashchange', () => { if (!detail) applyHash(); });
+
 
 // 第十轮⑧：Ctrl/Cmd+K 全局聚焦搜索（与浏览器快捷键不冲突：我们 preventDefault）
 window.addEventListener('keydown', (e) => {

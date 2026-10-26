@@ -661,3 +661,69 @@ export function p95Ms(values) {
   const idx = Math.min(arr.length - 1, Math.ceil(arr.length * 0.95) - 1);
   return arr[idx];
 }
+
+// ---------------------------------------------------------------- 第十四轮：表单与输入体验
+
+/** 表单校验：必填空值收集成 {name, reason} 数列；数字字段顺带验 min/max。空数组 = 通过。 */
+export function validateFields(fields, values) {
+  const errs = [];
+  for (const f of fields ?? []) {
+    const v = values?.[f.name];
+    const empty = v === undefined || v === null || String(v).trim() === '';
+    if (f.required && empty) { errs.push({ name: f.name, reason: '必填' }); continue; }
+    if (empty) continue;
+    if (f.type === 'number') {
+      const n = Number(v);
+      if (!Number.isFinite(n)) { errs.push({ name: f.name, reason: '不是数字' }); continue; }
+      if (f.min !== undefined && n < f.min) errs.push({ name: f.name, reason: `小于最小值 ${f.min}` });
+      if (f.max !== undefined && n > f.max) errs.push({ name: f.name, reason: `大于最大值 ${f.max}` });
+    }
+  }
+  return errs;
+}
+
+/** 参数脏检查：当前值与默认值（或预填值）不同的字段名列表。 */
+export function dirtyFields(fields, values, initial = {}) {
+  const dirty = [];
+  for (const f of fields ?? []) {
+    const base = initial[f.name] !== undefined ? String(initial[f.name]) : String(f.default ?? '');
+    const now = values?.[f.name] === undefined || values?.[f.name] === null ? '' : String(values[f.name]);
+    if (f.type === 'checkbox') {
+      if (Boolean(values?.[f.name]) !== Boolean(f.default)) dirty.push(f.name);
+      continue;
+    }
+    if (now !== base && !(now === '' && base === '')) dirty.push(f.name);
+  }
+  return dirty;
+}
+
+/** 从 URL 深链 query 提取预填参数：#/插件/动作?字段=值。返回对象（无 query 返回 {}）。 */
+export function deepLinkParams(hash) {
+  const h = String(hash ?? '');
+  const qi = h.indexOf('?');
+  if (qi < 0) return {};
+  const out = {};
+  for (const pair of h.slice(qi + 1).split('&')) {
+    const eq = pair.indexOf('=');
+    if (eq <= 0) continue;
+    const k = pair.slice(0, eq);
+    if (!/^[\w.-]+$/.test(k)) continue;
+    try { out[k] = decodeURIComponent(pair.slice(eq + 1)); } catch { out[k] = pair.slice(eq + 1); }
+  }
+  return out;
+}
+
+/** 最近成功执行的参数组合（去重、留新）：给「历史参数重选」下拉用。 */
+export function recentParamSets(history, limit = 3) {
+  const seen = new Set();
+  const out = [];
+  for (const run of (Array.isArray(history) ? history : [])) {
+    if (!run?.ok || !run?.params) continue;
+    const key = JSON.stringify(run.params);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ ts: run.ts, params: run.params });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
