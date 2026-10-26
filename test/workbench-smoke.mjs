@@ -154,7 +154,7 @@ try {
   check('文本是流式分片到达的（不是一次性）',
     readRun.events.filter((e) => e.type === 'text').length > 20,
     readRun.events.filter((e) => e.type === 'text').length);
-  check('中文正常，没有替换字符', !textOf(readRun.events).includes('�'), textOf(readRun.events));
+  check('中文正常，没有替换字符', !textOf(readRun.events).includes(String.fromCharCode(0xfffd)), textOf(readRun.events));
 
   // ---- 2. 有副作用的动作 + 用户批准 ----
   let pendingSeen = null;
