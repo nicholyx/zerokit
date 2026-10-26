@@ -1003,3 +1003,24 @@ textarea.auto-grow { width: 100%; resize: vertical; font-family: inherit;
   margin: 6px 0 10px; }
 .param-sets .chip { max-width: 280px; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; }
+
+/* ---------------- 第十五轮：大数据量与导航 */
+/* 面包屑：全部 › 插件 › 动作 */
+.crumbs-host { margin-bottom: 8px; }
+.crumbs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  font-size: 13px; color: var(--fg-soft, #888); }
+.crumbs .c-link { background: none; border: none; color: var(--accent, #4f8ef7);
+  cursor: pointer; padding: 2px 4px; font-size: 13px; }
+.crumbs .c-link:hover { text-decoration: underline; }
+.crumbs .c-sep { opacity: .6; }
+.crumbs .c-cur { color: var(--fg, #ddd); font-weight: 600; padding: 2px 4px; }
+
+/* 分页条（日志/集市共用） */
+.pager { display: flex; align-items: center; gap: 10px; justify-content: center;
+  padding: 10px 0 4px; flex-wrap: wrap; }
+.pager .pg-info { color: var(--fg-soft, #888); font-size: 13px; }
+
+/* 虚拟滚动 spacer 与列表态 */
+ul.list.virtual .v-spacer { list-style: none; pointer-events: none; }
+
+/* 数字键快选提示（count 区域已有样式，这里只补强调色轮换无需额外） */

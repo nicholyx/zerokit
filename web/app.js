@@ -10,7 +10,7 @@ import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFi
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
 import { barsScale, sparkPoints, formatMs, paletteScore, p95Ms } from './extras.js';
-import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport } from './extras.js';
+import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport, virtualWindow, pageSlice, breadcrumb, listStateQuery, parseListState, digitPick } from './extras.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
 const $ = (id) => document.getElementById(id);
@@ -36,6 +36,7 @@ let mode = 'command';
 // 集市面板的状态：全量快照 + 搜索词 + 待确认的安装预览
 let marketData = { markets: [], total: 0 };
 let marketQuery = '';
+let marketLimit = 30;   // 集市条目递增加载：先看 30 条，「加载更多」再 +30
 let marketPreview = null;
 
 // ---------------------------------------------------------------- 本地偏好
@@ -711,10 +712,28 @@ function renderList() {
       });
     });
   } else {
-    el.list.innerHTML = filtered.map((entry, i) => itemHtml(entry, i, true, q)).join('');
+    // 虚拟滚动：条目多时只渲染视口附近（+缓冲），上下用 spacer 撑出总高度。
+    // 上百个动作时 DOM 节点从 N 降到 ~20，滚动不再卡。
+    if (filtered.length > 60) {
+      renderVirtualList(q);
+    } else {
+      el.list.innerHTML = filtered.map((entry, i) => itemHtml(entry, i, true, q)).join('');
+    }
   }
 
   renderListTools(baseEntries, q);
+  bindListItems(q);
+  el.count.textContent = q.trim()
+    ? `${filtered.length} / ${entries.length} 个动作`
+    : [favorites.length ? `收藏 ${favorites.length} 优先` : '',
+      loadRecent().length > 0 ? '最近使用优先' : '']
+      .filter(Boolean).concat([`${plugins.length} 个插件`, `${entries.length} 个动作`])
+      .join(' · ');
+  syncListHash();
+}
+
+/** 列表条目的事件绑定（渲染后调用；虚拟滚动重渲染窗口后也要再调）。 */
+function bindListItems(q) {
   el.list.querySelectorAll('[data-recent]').forEach((node) => {
     node.addEventListener('click', () => {
       const key = node.dataset.recent;
@@ -756,12 +775,16 @@ function renderList() {
       renderList();
     });
   });
-  el.count.textContent = q.trim()
-    ? `${filtered.length} / ${entries.length} 个动作`
-    : [favorites.length ? `收藏 ${favorites.length} 优先` : '',
-      loadRecent().length > 0 ? '最近使用优先' : '']
-      .filter(Boolean).concat([`${plugins.length} 个插件`, `${entries.length} 个动作`])
-      .join(' · ');
+}
+
+/** 列表状态写进 URL 的收口（renderList 末尾调用）：搜索词/筛选刷新不丢，
+ *  还能把「我筛好的视图」直接分享出去。 */
+function syncListHash() {
+  const st = listStateQuery({ q: el.q.value, filter: listFilter });
+  const wantHash = st ? `#/?${st}` : (location.hash.startsWith('#/?') ? location.pathname : location.hash);
+  if ((location.hash || '') !== wantHash && mode === 'command' && !detail) {
+    history.replaceState(null, '', wantHash || location.pathname);
+  }
 }
 
 /** 别名解析：`zz` -> 对应动作 entry；未命中返回 undefined */
@@ -773,6 +796,43 @@ function aliasEntry(word) {
   const dot = target.lastIndexOf('.');
   return entries.find((e) => e.plugin.id === target.slice(0, dot)
     && e.action.id === target.slice(dot + 1));
+}
+
+/** 虚拟滚动列表：行高按首屏实测（兜底 64px）。滚动时节流重渲染窗口。 */
+function renderVirtualList(q) {
+  const ROW_H_FALLBACK = 64;
+  el.list.classList.add('virtual');
+  const scroller = el.list.parentElement; // listView 是滚动容器
+  const viewH = scroller ? scroller.clientHeight : 600;
+  const scrollTop = scroller ? scroller.scrollTop : 0;
+  // 实测行高：渲染一页后取第一个 .item 的 offsetHeight
+  let rowH = ROW_H_FALLBACK;
+  const probe = el.list.querySelector('.item');
+  if (probe) rowH = Math.max(24, probe.offsetHeight);
+  const w = virtualWindow(filtered.length, scrollTop, rowH, viewH);
+  const pad = (h) => h > 0 ? `<li class="v-spacer" style="height:${h}px" aria-hidden="true"></li>` : '';
+  el.list.innerHTML = pad(w.padTop)
+    + filtered.slice(w.start, w.end).map((entry, i) => itemHtml(entry, w.start + i, true, q)).join('')
+    + pad(w.padBottom);
+  el.count.textContent = `${filtered.length} / ${entries.length} 个动作（虚拟滚动 ${w.start + 1}-${w.end}）`;
+}
+
+function setupVirtualScroll() {
+  const scroller = el.listView;
+  if (!scroller) return;
+  let raf = 0;
+  scroller.addEventListener('scroll', () => {
+    if (raf) return;
+    raf = requestAnimationFrame(() => {
+      raf = 0;
+      // 只有处于「命令态 + 无搜索分组」时才虚拟化；分组浏览保持全量渲染
+      if (mode === 'command' && el.q.value.trim() && filtered.length > 60 && !el.list.classList.contains('hidden')) {
+        renderVirtualList(el.q.value);
+        // 重渲染后把窗口内的监听器补上
+        bindListItems(el.q.value);
+      }
+    });
+  }, { passive: true });
 }
 
 function paintActive() {
@@ -804,7 +864,7 @@ function openDetail(plugin, action, prefill) {
   detail = { plugin, action };
   // 深链：CLI / MCP / 别人的消息里可以直接给 #/插件/动作 让界面跳到这一条
   const wantedHash = `#/${plugin.id}/${action.id}`;
-  if (location.hash !== wantedHash) history.replaceState(null, '', wantedHash);
+  if (location.hash !== wantedHash) history.pushState(null, '', wantedHash);
   el.listView.classList.add('hidden');
   el.workbench.classList.add('hidden');
   el.detailView.classList.remove('hidden');
@@ -988,6 +1048,34 @@ function openDetail(plugin, action, prefill) {
     <div id="invokeBox"></div>
     <div id="detailCfg" class="cmd-box hidden"></div>
     <div id="result" aria-live="polite"></div>`;
+
+  // 面包屑：全部 › 插件 › 动作（插件段可点回插件主页）。
+  // 必须在 innerHTML 赋值之后注入——模板重写会清掉宿主节点。
+  const crumbsHost = document.createElement('div');
+  crumbsHost.className = 'crumbs-host';
+  el.detailView.insertBefore(crumbsHost, el.detailView.firstChild);
+  crumbsHost.innerHTML = '';
+  {
+    const crumbs = breadcrumb(plugin, action);
+    const bc = document.createElement('nav');
+    bc.className = 'crumbs';
+    bc.setAttribute('aria-label', '路径');
+    bc.innerHTML = crumbs.map((c, i) => {
+      const last = i === crumbs.length - 1;
+      const attrs = c.kind === 'list' ? 'data-crumb="list"' : c.kind === 'plugin' ? `data-crumb="plugin" data-pid="${esc(c.id)}"` : '';
+      return `${i > 0 ? '<span class="c-sep" aria-hidden="true">›</span>' : ''}`
+        + (last ? `<span class="c-cur" aria-current="page">${esc(c.label)}</span>`
+          : `<button class="c-link" ${attrs}>${esc(c.label)}</button>`);
+    }).join('');
+    crumbsHost.appendChild(bc);
+    bc.querySelectorAll('[data-crumb]').forEach((b) => {
+      b.addEventListener('click', () => {
+        const kind = b.dataset.crumb;
+        if (kind === 'list') backToList();
+        else if (kind === 'plugin') showPluginHome(b.dataset.pid);
+      });
+    });
+  }
 
   // ---- 第十四轮：表单与输入体验 ----
   // 即时校验：input/change 时校必填与数字范围，错误就地标红
@@ -1381,6 +1469,18 @@ function openDetail(plugin, action, prefill) {
 
 function backToList() {
   detail = null;
+  // 浏览器后退语义：详情是用 pushState 压栈的，返回列表用 back 弹栈，
+  // 这样浏览器/鼠标的后退键也能一步步走回来（而不是直接跳出到应用外）。
+  if (/#\/[\w.-]+\/[\w.-]+/.test(location.hash || '')) {
+    history.back();
+    // history.back 是异步的：同步先把界面切回列表，hashchange 到来时幂等
+    el.detailView.classList.add('hidden');
+    el.detailView.innerHTML = '';
+    el.listView.classList.remove('hidden');
+    renderList();
+    el.q.focus();
+    return;
+  }
   history.replaceState(null, '', location.pathname);
   el.detailView.classList.add('hidden');
   el.detailView.innerHTML = '';
@@ -2473,6 +2573,7 @@ function exitMarket() {
 // ---------------------------------------------------------------- 审计日志
 // 日志只在本机（~/.zerokit/logs/），这里只读不写；被拒与失败能一眼筛出来。
 let logsFile = 'audit';
+let logsPage = 1;
 let logsDecision = '';
 let logsQuery = '';
 
@@ -2534,12 +2635,13 @@ async function renderLogs() {
     <div id="logList" class="log-list"><div class="ps-empty" role="status">读取中…</div></div>`;
 
   el.logsView.querySelectorAll('[data-log-decision]').forEach((b) => {
-    b.addEventListener('click', () => { logsDecision = b.dataset.logDecision; renderLogs(); });
+    b.addEventListener('click', () => { logsDecision = b.dataset.logDecision; logsPage = 1; renderLogs(); });
   });
-  $('logQuery').addEventListener('change', () => { logsQuery = $('logQuery').value.trim(); renderLogs(); });
+  $('logQuery').addEventListener('change', () => { logsQuery = $('logQuery').value.trim(); logsPage = 1; renderLogs(); });
   $('logReload').addEventListener('click', renderLogs);
   $('logFile').addEventListener('click', () => {
     logsFile = logsFile === 'audit' ? 'denied' : 'audit';
+    logsPage = 1;
     renderLogs();
   });
 
@@ -2554,9 +2656,24 @@ async function renderLogs() {
     return;
   }
   const rows = data.entries ?? [];
-  $('logList').innerHTML = rows.length
-    ? rows.map(logRowHtml).join('')
+  // 分页：日志会一直涨，一页 50 条翻着看
+  let logCur = logsPage;
+  if (!Number.isInteger(logCur) || logCur < 1) logCur = 1;
+  if (logCur > Math.max(1, Math.ceil(rows.length / 50))) { logCur = 1; logsPage = 1; }
+  const pg = pageSlice(rows, logCur, 50);
+  logsPage = pg.page;
+  const pager = pg.pages > 1 ? `
+    <div class="pager" role="navigation" aria-label="日志分页">
+      <button class="ghost mini" data-pg="${Math.max(1, pg.page - 1)}" ${pg.page === 1 ? 'disabled' : ''}>‹ 上一页</button>
+      <span class="pg-info">第 ${pg.page} / ${pg.pages} 页 · 共 ${rows.length} 条</span>
+      <button class="ghost mini" data-pg="${Math.min(pg.pages, pg.page + 1)}" ${pg.page === pg.pages ? 'disabled' : ''}>下一页 ›</button>
+    </div>` : '';
+  $('logList').innerHTML = pg.slice.length
+    ? pg.slice.map((e) => logRowHtml(e, rows.indexOf(e))).join('') + pager
     : `<div class="ps-empty" role="status">${data.exists ? '没有符合条件的记录' : '还没有日志——执行一次动作就会写进来'}</div>`;
+  $('logList').querySelectorAll('[data-pg]').forEach((b) => {
+    b.addEventListener('click', () => { logsPage = Number(b.dataset.pg); renderLogs(); });
+  });
   $('logList').querySelectorAll('[data-log]').forEach((row) => {
     row.addEventListener('click', () => {
       $(`logDetail${row.dataset.log}`)?.classList.toggle('hidden');
@@ -2844,10 +2961,15 @@ async function renderMarket() {
          </div>`}
     <div id="marketMsg" class="market-msg"></div>
     ${marketData.markets.map(marketCardHtml).join('')}
-    ${entries.length ? entries.map(([m, e]) => marketEntryHtml(m, e)).join('')
+    ${entries.length ? entries.slice(0, marketLimit).map(([m, e]) => marketEntryHtml(m, e)).join('')
+      + (entries.length > marketLimit
+        ? `<div class="pager"><button class="ghost" id="marketMore">加载更多（已显示 ${Math.min(marketLimit, entries.length)} / ${entries.length}）</button></div>`
+        : '')
       : (marketData.markets.length && q ? '<div class="ps-empty" role="status">没有匹配的插件。</div>' : '')}
     <div id="marketPreview"></div>
     <div class="actions"><button class="primary" id="marketBack">返回</button></div>`;
+
+  $('marketMore')?.addEventListener('click', () => { marketLimit += 30; renderMarket(); });
 
   $('marketAddBtn').addEventListener('click', doMarketAdd);
   if ($('marketSrc')) {
@@ -2858,6 +2980,7 @@ async function renderMarket() {
   if ($('marketQ')) {
     $('marketQ').addEventListener('input', (e) => {
       marketQuery = e.target.value;
+      marketLimit = 30;   // 新搜索从第一页开始
       renderMarket().then(() => {
         const box = $('marketQ');
         if (box) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); }
@@ -2923,10 +3046,13 @@ async function showPluginHome(id) {
     el.plugView.innerHTML = `<div class="ps-empty" role="status">找不到插件 ${esc(id)}</div>
       <div class="actions"><button class="primary" id="homeBackList">返回插件列表</button></div>`;
     $('homeBackList').addEventListener('click', showPlugins);
+    return;
+  }
 
   // 能力清单导出：把插件主页的「动作/风险/依赖/设置」拼成 Markdown 报告下载。
   // 给的是「人能审阅」的形状——同事装之前先看这份就知道它会动什么。
   if (p.source?.type === 'market') checkPluginUpdate(p);
+  // 锚点滚动：详情页顶部就是动作区，但插件列表很长时，锚点让「回到这个插件」一步到位
   $('homeExport')?.addEventListener('click', () => {
     const md = [
       `# ${p.name}（\`${p.id}\`）能力清单`,
@@ -2951,8 +3077,6 @@ async function showPluginHome(id) {
     a.click();
     URL.revokeObjectURL(a.href);
   });
-    return;
-  }
 
   const settings = p.settings ?? [];
   const deps = p.pluginDeps ?? [];
@@ -4499,6 +4623,16 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     const nth = Number(e.code.slice(5)) - 1;
     if (filtered[nth]) { active = nth; openActive(); }
+  } else if (/^[1-9]$/.test(e.key) && filtered.length > 0 && document.activeElement === el.q) {
+    // 纯数字键 1-9 = 选中第 N 条（不直接打开——选中后回车才开，防误触）。
+    // 与 Alt+数字 的差别：那是「直开」，这是「快选」，配合 roving tabindex。
+    const pick = digitPick(e.key, filtered.length);
+    if (pick >= 0) {
+      e.preventDefault();
+      active = pick;
+      paintActive();
+      el.count.textContent = `第 ${pick + 1} 项：${filtered[pick].action.title}（回车打开）`;
+    }
   }
 });
 
@@ -4653,6 +4787,13 @@ async function load(notify) {
       .then((m) => { el.marketCount.textContent = String((m.markets || []).length); })
       .catch(() => { /* 集市读不到不影响命令面 */ });
     applyHash();
+    // 列表态深链还原：#/?q=词&filter=… —— 刷新不丢搜索词/筛选
+    if (!detail && /^#\/\?(.+)/.test(location.hash || '')) {
+      const st = parseListState(location.hash);
+      if (st.q) el.q.value = st.q;
+      if (st.filter && FILTERS.some((f) => f.id === st.filter)) listFilter = st.filter;
+      renderList();
+    }
     // 主页 ?q=词：URL 带查询词直达搜索结果（外部系统/文档里给入口链接用）
     const qParam = new URLSearchParams(location.search).get('q');
     if (qParam) { el.q.value = qParam; active = 0; renderList(); el.q.focus(); }
@@ -4760,7 +4901,20 @@ function applyHash() {
   if (entry) openDetail(entry.plugin, entry.action, prefill);
 }
 
-window.addEventListener('hashchange', () => { if (!detail) applyHash(); });
+window.addEventListener('hashchange', () => {
+  // 从详情后退回列表：hash 已变回空/列表态，详情界面要自己收掉
+  if (detail && !/#\/[\w.-]+\/[\w.-]+/.test(location.hash || '')) {
+    detail = null;
+    el.detailView.classList.add('hidden');
+    el.detailView.innerHTML = '';
+    el.listView.classList.remove('hidden');
+    const st = parseListState(location.hash);
+    if (st.q) { el.q.value = st.q; }
+    renderList();
+    return;
+  }
+  if (!detail) applyHash();
+});
 
 
 // 第十轮⑧：Ctrl/Cmd+K 全局聚焦搜索（与浏览器快捷键不冲突：我们 preventDefault）
@@ -4783,8 +4937,9 @@ window.__zerokit = {
   get health() { return pluginHealth(plugins); },
   cycleTheme, showShortcuts, showPluginHome, renderPrompts, showLogs, showDoctor,
   openDetail, submit, backToList, renderResult,
-  showPalette, runBatch,
+  showPalette, runBatch, showMarket, showPlugins,
   get batch() { return batch; },
+  get logsPage() { return logsPage; },
 };
 
 /** ⑧ 深浅一键切换：记住切换前是深还是浅，往返即可 */
@@ -4834,4 +4989,5 @@ $('doctorBtn')?.addEventListener('click', showDoctor);
 $('helpBtn')?.addEventListener('click', showShortcuts);
 
 load();
+setupVirtualScroll();
 el.q.focus();

@@ -361,6 +361,51 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
   })());
 }
 
+
+// ------------------------------------------------ 第十五轮：大数据量与导航
+{
+  const { virtualWindow, pageSlice, breadcrumb, listStateQuery, parseListState, digitPick } = await import('../web/extras.js');
+
+  check('virtualWindow: 中段窗口 + spacer 高度守恒', (() => {
+    const w = virtualWindow(1000, 5000, 50, 500);
+    const total = w.padTop + (w.end - w.start) * 50 + w.padBottom;
+    return w.start === 94 && total === 1000 * 50 && w.padBottom > 0;
+  })());
+  check('virtualWindow: 顶部/底部钳制、非法输入空窗', (() => {
+    const top = virtualWindow(100, 0, 40, 400);
+    const bot = virtualWindow(100, 4000, 40, 400);
+    const bad = virtualWindow(0, 0, 40, 400);
+    const bad2 = virtualWindow(10, 0, 0, 400);
+    return top.start === 0 && bot.end === 100 && bot.padBottom === 0 && bad.end === 0 && bad2.end === 0;
+  })());
+  check('pageSlice: 页码钳制、空表单页、切片正确', (() => {
+    const list = Array.from({ length: 120 }, (_, i) => i);
+    const p1 = pageSlice(list, 1, 50);
+    const p3 = pageSlice(list, 3, 50);
+    const p9 = pageSlice(list, 9, 50);   // 越界 → 钳到最后一页
+    const pe = pageSlice([], 1, 50);
+    return p1.pages === 3 && p1.slice.length === 50 && p3.slice[0] === 100 && p9.page === 3 && pe.pages === 1;
+  })());
+  check('breadcrumb: 全部›插件›动作 / 只到插件', (() => {
+    const c1 = breadcrumb({ id: 'sysinfo', name: '系统信息' }, { id: 'top', title: '查看系统' });
+    const c2 = breadcrumb({ id: 'sysinfo', name: '系统信息' });
+    const c3 = breadcrumb(null);
+    return c1.length === 3 && c1[1].hash === '#/plugins/sysinfo' && c1[2].kind === 'action'
+      && c2.length === 2 && c3.length === 0;
+  })());
+  check('listStateQuery/parseListState: 编码还原对偶、all 省略', (() => {
+    const st = { q: '磁盘', filter: 'safe' };
+    const qs = listStateQuery(st);
+    const back = parseListState('#/?' + qs);
+    const st2 = listStateQuery({ q: 'x', filter: 'all' });
+    return back.q === '磁盘' && back.filter === 'safe' && st2 === 'q=x';
+  })());
+  check('digitPick: 1-9 有效、超界/非数字 -1', (() => {
+    return digitPick('1', 5) === 0 && digitPick('5', 5) === 4 && digitPick('6', 5) === -1
+      && digitPick('0', 5) === -1 && digitPick('a', 5) === -1;
+  })());
+}
+
 const failed = results.filter(([, ok]) => !ok);
 console.log('\n' + '='.repeat(60));
 console.log(`通过 ${results.length - failed.length} / ${results.length}`);
