@@ -912,3 +912,21 @@ html[data-font-scale='l'] pre.out { font-size: 13px; }
 .brief-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 10px 0; }
 .brief-cell { border: 1px solid var(--line); border-radius: 10px; padding: 10px; text-align: center; }
 .brief-cell b { display: block; font-size: 22px; margin-top: 2px; }
+
+/* ---------------- 第十一轮：专业工具感 */
+.res-menu { position: fixed; z-index: 999; background: var(--bg, #1e1e1e); border: 1px solid var(--line);
+  border-radius: 8px; padding: 4px; min-width: 200px; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+.res-menu-item { padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.res-menu-item:hover { background: var(--bg-soft, rgba(127,127,127,.15)); }
+.term-mode { font-family: ui-monospace, SFMono-Regular, Menlo, monospace !important;
+  background: #101418; color: #d5dde5; border-radius: 8px; padding: 12px; max-height: 420px; overflow: auto; }
+.term-mode .out { background: transparent; color: inherit; }
+.json-tree { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
+  line-height: 1.7; max-height: 420px; overflow: auto; }
+.jt-row.branch { cursor: pointer; }
+.jt-row.branch.collapsed ~ .jt-row[data-deeper] { display: none; }
+.jt-dot { display: inline-block; width: 12px; color: var(--fg-dim, #888); font-style: normal; }
+.jt-row b { color: var(--accent, #5aa9ff); font-weight: 600; }
+table.grid th.colresize { position: relative; }
+th.colresize::after { content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 5px; cursor: col-resize; }
+mark.find-hit.cur { outline: 2px solid var(--accent, #5aa9ff); border-radius: 2px; }

@@ -517,3 +517,59 @@ export function idleSuggest(runs, now = Date.now(), idleMs = 30 * 60 * 1000) {
   const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
   return best && best[1] >= 3 ? { key: best[0], sinceMs: now - latest } : null;
 }
+
+
+// ---------------------------------------------------------------- 第十一轮：专业工具感
+
+/**
+ * 结果工具条的动作集：右键菜单/工具条共用一份定义，避免两处漂移。
+ * 每项 {id, label, needs} —— needs 标注它需要什么数据形态（table/json/text）。
+ */
+export const RESULT_ACTIONS = [
+  { id: 'copyRow', label: '复制本行', needs: 'table' },
+  { id: 'copyTable', label: '复制表格（TSV）', needs: 'table' },
+  { id: 'copyMarkdown', label: '复制为 Markdown 表', needs: 'table' },
+  { id: 'csv', label: '导出 CSV', needs: 'table' },
+  { id: 'copyJson', label: '复制 JSON', needs: 'any' },
+  { id: 'copyText', label: '复制纯文本', needs: 'any' },
+];
+
+/** Markdown 表：首行表头，第二行对齐线；数字列右对齐语法 `---:`。 */
+export function markdownTable(rows) {
+  if (!Array.isArray(rows) || !rows.length || typeof rows[0] !== 'object') return '';
+  const cols = [];
+  for (const r of rows) for (const k of Object.keys(r)) if (!cols.includes(k)) cols.push(k);
+  const esc2 = (v) => String(v ?? '').replace(/\|/g, '\\|').replace(/\n/g, ' ');
+  const numeric = Object.fromEntries(cols.map((c) => [c, rows.every((r) => r[c] === undefined || r[c] === '' || Number.isFinite(Number(r[c])))]));
+  const head = `| ${cols.map(esc2).join(' | ')} |`;
+  const sep = `| ${cols.map((c) => (numeric[c] ? '---:' : '---')).join(' | ')} |`;
+  const body = rows.map((r) => `| ${cols.map((c) => esc2(r[c])).join(' | ')} |`).join('\n');
+  return [head, sep, body].join('\n');
+}
+
+/** TSV：Excel/Numbers 直接粘贴进单元格的格式。 */
+export function tsvTable(rows) {
+  if (!Array.isArray(rows) || !rows.length || typeof rows[0] !== 'object') return '';
+  const cols = [];
+  for (const r of rows) for (const k of Object.keys(r)) if (!cols.includes(k)) cols.push(k);
+  const cell = (v) => String(v ?? '').replace(/\t/g, ' ').replace(/\n/g, ' ');
+  return [cols.map(cell).join('\t'), ...rows.map((r) => cols.map((c) => cell(r[c])).join('\t'))].join('\n');
+}
+
+/** JSON 折叠树的行模型：每行 {depth, key, preview, isLeaf, isArrayItem}。 */
+export function jsonTreeLines(value, depth = 0, out = []) {
+  if (value === null || typeof value !== 'object') {
+    out.push({ depth, key: '', preview: JSON.stringify(value), isLeaf: true, isArrayItem: false });
+    return out;
+  }
+  const isArray = Array.isArray(value);
+  for (const [k, v] of Object.entries(value)) {
+    if (v !== null && typeof v === 'object') {
+      out.push({ depth, key: isArray ? `[${k}]` : k, preview: isArray ? `${(v).length} 项` : `${Object.keys(v).length} 键`, isLeaf: false, isArrayItem: isArray });
+      jsonTreeLines(v, depth + 1, out);
+    } else {
+      out.push({ depth, key: isArray ? `[${k}]` : k, preview: JSON.stringify(v) ?? 'null', isLeaf: true, isArrayItem: isArray });
+    }
+  }
+  return out;
+}
