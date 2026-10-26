@@ -473,3 +473,47 @@ export function msHistogram(runsMs) {
   }
   return labels.map((label, i) => ({ label, count: buckets[i] }));
 }
+
+
+// ---------------------------------------------------------------- 第十轮：自动化与粘性
+
+/**
+ * 每日简报：今天跑了多少、成败、最常用 top3、平均耗时。
+ * 纯函数：runs 是 {key: [{ok, ms, ts}...]} 的本地记录。
+ */
+export function dailyBrief(runs, now = Date.now()) {
+  const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
+  const from = dayStart.getTime();
+  const rows = [];
+  for (const [key, list] of Object.entries(runs ?? {})) {
+    for (const r of list ?? []) if ((r.ts ?? 0) >= from) rows.push({ key, ...r });
+  }
+  const ok = rows.filter((r) => r.ok).length;
+  const byKey = {};
+  for (const r of rows) byKey[r.key] = (byKey[r.key] ?? 0) + 1;
+  const top = Object.entries(byKey).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const avg = rows.length ? Math.round(rows.reduce((s2, r) => s2 + (r.ms ?? 0), 0) / rows.length) : 0;
+  return { total: rows.length, ok, failed: rows.length - ok, top, avgMs: avg };
+}
+
+/**
+ * 结果保留策略：每个动作只留最近 N 份（默认 20），超出丢弃最老的。
+ */
+export function trimRuns(list, keep = 20) {
+  const arr = [...(list ?? [])].sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0));
+  return arr.slice(0, keep);
+}
+
+/**
+ * 空闲推荐：距上次执行超过 idleMs 时，从历史里挑最常用动作 key。
+ */
+export function idleSuggest(runs, now = Date.now(), idleMs = 30 * 60 * 1000) {
+  let latest = 0; const counts = {};
+  for (const [key, list] of Object.entries(runs ?? {})) {
+    counts[key] = (list ?? []).length;
+    for (const r of list ?? []) if ((r.ts ?? 0) > latest) latest = r.ts ?? 0;
+  }
+  if (!latest || now - latest < idleMs) return null;
+  const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+  return best && best[1] >= 3 ? { key: best[0], sinceMs: now - latest } : null;
+}
