@@ -222,6 +222,17 @@ export function createOpenAiProvider(ai: AiSettings): Provider {
           }
         },
         next: run,
+        transcript() {
+          const out: Array<{ role: 'user' | 'assistant' | 'tool'; text: string }> = [];
+          for (const m of messages) {
+            const role = m.role as 'user' | 'assistant' | 'tool' | 'system';
+            if (role === 'system') continue;
+            const content = typeof m.content === 'string' ? m.content : '';
+            if (!content) continue;
+            out.push({ role, text: role === 'tool' ? content.slice(0, 200) : content });
+          }
+          return out;
+        },
       };
     },
   };

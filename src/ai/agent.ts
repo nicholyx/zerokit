@@ -143,6 +143,11 @@ export class Workbench {
     return true;
   }
 
+  /** 对话快照，透传给底层 session（没有就 undefined） */
+  transcript(): Array<{ role: 'user' | 'assistant' | 'tool'; text: string }> | undefined {
+    return this.session.transcript?.();
+  }
+
   private waitApproval(callId: string): Promise<boolean> {
     return new Promise((resolve) => {
       const timer = setTimeout(() => {

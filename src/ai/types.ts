@@ -51,6 +51,12 @@ export interface AgentSession {
   addToolResults(results: ToolOutcome[]): void;
   /** 跑出下一轮助手消息，期间通过 handlers 流式推送 */
   next(handlers: StreamHandlers): Promise<AssistantTurn>;
+  /**
+   * 当前对话的线性快照（持久化用）。返回条目的顺序就是对话顺序；
+   * 实现**不得**泄露内部结构（如 Anthropic 的 content block 数组），
+   * 只返回界面上能读的 { role, text }。
+   */
+  transcript?(): Array<{ role: 'user' | 'assistant' | 'tool'; text: string }>;
 }
 
 export interface Provider {

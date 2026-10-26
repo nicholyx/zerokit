@@ -817,3 +817,27 @@ html[data-theme="light"] body { background: var(--bg); }
 .deep-links .key-row { grid-template-columns: 90px 1fr; }
 .deep-links code { font-size: 12px; color: var(--fg-dim); }
 .detail-cfg { display: flex; flex-direction: column; gap: 10px; padding: 10px 0; }
+
+/* ---------- 第五轮：收藏夹 / 备注 / 快捷键 / 卡内查找 / 折叠 / 排序 ---------- */
+
+.saved-card .saved-cmd { font-family: var(--mono, monospace); font-size: 12px; color: var(--fg-dim); margin: 4px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-card .saved-data pre { max-height: 120px; overflow: hidden; margin: 0; font-size: 11px; color: var(--fg-dim); }
+
+.note-box { display: flex; gap: 8px; padding: 8px 12px; border-top: 1px dashed var(--border); align-items: center; }
+.note-box input { flex: 1; }
+.detail-note { margin-top: 6px; color: var(--warn, #f0b43c); font-size: 13px; }
+.detail-hotkey { margin-top: 6px; display: flex; gap: 10px; align-items: center; }
+.hk-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 12px 0; }
+.hk-grid .hk { position: relative; }
+.hk-grid .hk.on { border-color: var(--accent); color: var(--accent); }
+.hk-grid .hk-owner { display: block; font-size: 10px; color: var(--fg-dim); }
+
+.card-find { display: flex; gap: 8px; padding: 6px 12px; border-top: 1px dashed var(--border); align-items: center; }
+.card-find input { flex: 1; font-size: 12px; }
+mark.find-hit { background: var(--accent); color: var(--bg); border-radius: 2px; padding: 0 1px; }
+
+.head-sort { margin-left: auto; display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--fg-dim); }
+.head-sort select { background: var(--bg-elev, var(--bg)); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; }
+
+.wb-restored { color: var(--fg-dim); font-size: 12px; margin-bottom: 8px; }
+.wb-msg.tool { color: var(--fg-dim); font-size: 12px; }

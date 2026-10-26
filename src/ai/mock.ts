@@ -22,7 +22,7 @@ export function createMockProvider(_ai: AiSettings): Provider {
     createSession({ tools }): AgentSession {
       let pendingUser = '';
       let sawToolResult = false;
-      const history: string[] = [];
+      const transcript: Array<{ role: 'user' | 'assistant' | 'tool'; text: string }> = [];
 
       function pickTool(userText: string): { name: string; input: Record<string, unknown> } | null {
         if (tools.length === 0) return null;
@@ -93,13 +93,14 @@ export function createMockProvider(_ai: AiSettings): Provider {
       return {
         send(text: string) {
           pendingUser = text;
-          history.push(text);
+          transcript.push({ role: 'user', text });
         },
         addToolResults(results: ToolOutcome[]) {
           sawToolResult = results.length > 0;
-          history.push(...results.map((r) => r.content.slice(0, 200)));
+          for (const r of results) transcript.push({ role: 'tool', text: r.content.slice(0, 200) });
         },
         next: run,
+        transcript: () => transcript.map((t) => ({ ...t })),
       };
     },
   };
