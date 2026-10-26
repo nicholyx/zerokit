@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-10-27
+
 ### Added
 - 列表键盘流：roving tabindex（↑/↓ 移动、Enter 进入、只有选中项在 Tab 序里）
 - 全局 `:focus-visible` 焦点环与 `.sr-only` 视觉隐藏类
