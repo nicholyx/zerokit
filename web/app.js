@@ -9,6 +9,7 @@ import { pickLang, makeT } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
+import { barsScale, sparkPoints, formatMs, paletteScore, p95Ms } from './extras.js';
 import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport } from './extras.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
@@ -58,6 +59,7 @@ const PREF = {
 let favorites = [];
 let paramStore = {};
 let runStore = {};
+let batch = [];        // 批量篮：Alt+点击加入的 entry 列表（{plugin, action}）
 let savedList = [];   // 收藏的结果（本机）
 let notesStore = {};  // 执行备注：actionKey -> { text, ts }
 let accent = 'ocean';
@@ -534,6 +536,62 @@ function renderListTools(base, q) {
   });
 }
 
+/** 批量顺序执行：逐个跑篮子里的动作（destructive 排最后），完成后弹汇总卡片。
+ * 每项用已记忆的参数（参数记忆参数不存在时用默认值），失败不阻断后面的项。 */
+async function runBatch() {
+  if (!batch.length) return;
+  // destructive 排最后：失败不至于挡住只读项
+  const ordered = [...batch].sort((a, b) =>
+    (a.action.risk === 'destructive' ? 1 : 0) - (b.action.risk === 'destructive' ? 1 : 0));
+  const results = [];
+  const btn = document.getElementById('batchRun');
+  if (btn) { btn.disabled = true; btn.textContent = '执行中…'; }
+  for (const entry of ordered) {
+    const key = actionKey(entry.plugin.id, entry.action.id);
+    const values = paramStore[key] ?? {};
+    const payload = {
+      plugin: entry.plugin.id, action: entry.action.id, values,
+    };
+    try {
+      const r = await fetch('/api/run', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-zk-token': TOKEN },
+        body: JSON.stringify(payload),
+      });
+      const j = await r.json().catch(() => ({ ok: false, error: '响应不是 JSON' }));
+      results.push({ entry, ok: j.ok !== false && r.ok, ms: j.ms ?? 0, error: j.error });
+    } catch (err) {
+      results.push({ entry, ok: false, ms: 0, error: String(err) });
+    }
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '顺序执行'; }
+  batch = [];
+  renderList();
+  // 汇总卡片：成功 N / 失败 M / 总耗时，失败项可点开
+  const ok = results.filter((r) => r.ok).length;
+  const failed = results.length - ok;
+  const totalMs = results.reduce((s, r) => s + (r.ms || 0), 0);
+  const sum = document.createElement('div');
+  sum.id = 'batchSummary';
+  sum.className = 'batch-summary';
+  sum.innerHTML = `
+    <b>批量执行完成</b>
+    <span class="${ok ? 'ok' : ''}">✓ ${ok}</span>
+    ${failed ? `<span class="bad">✗ ${failed}</span>` : ''}
+    <span class="sub">总耗时 ${formatMs(totalMs)}</span>
+    ${failed ? `<ul class="batch-fails">${results.filter((r) => !r.ok).map((r, i) => `
+      <li data-fail="${i}" title="${esc(r.error || '失败')}">✗ ${esc(r.entry.action.title)}（${esc(r.entry.plugin.name)}）</li>`).join('')}</ul>` : ''}
+    <button class="ghost mini" id="batchSumClose">关闭</button>`;
+  el.listView.insertBefore(sum, el.list);
+  sum.querySelector('#batchSumClose').addEventListener('click', () => sum.remove());
+  const failItems = [...sum.querySelectorAll('[data-fail]')];
+  const fails = results.filter((r) => !r.ok);
+  failItems.forEach((li) => li.addEventListener('click', () => {
+    const r = fails[Number(li.dataset.fail)];
+    if (r) openDetail(r.entry.plugin, r.entry.action);
+  }));
+}
+
 function renderList() {
   const aliasHit = aliasEntry(el.q.value);
   if (aliasHit && el.q.value.trim()) {
@@ -543,7 +601,8 @@ function renderList() {
     el.count.textContent = `别名「${el.q.value.trim()}」→ ${aliasHit.plugin.name} · ${aliasHit.action.title}`;
     el.empty.classList.add('hidden');
     renderQuickBar();
-
+    return;
+  }
   // 批量篮浮条（有选中才显示）
   const oldBar = document.getElementById('batchBar');
   if (oldBar) oldBar.remove();
@@ -559,13 +618,11 @@ function renderList() {
     bar.querySelector('#batchRun').addEventListener('click', runBatch);
     bar.querySelector('#batchClear').addEventListener('click', () => { batch = []; renderList(); });
   }
+  const oldSum = document.getElementById('batchSummary');
+  if (oldSum) oldSum.remove();
 
-  el.list.querySelectorAll('.item').forEach((node) => {
-      node.addEventListener('click', () => { active = Number(node.dataset.i); openActive(); });
-    });
-    el.list.querySelector('.item')?.scrollIntoView({ block: 'nearest' });
-    return;
-  }
+
+
   const q = el.q.value;
   mode = 'command';
   el.modeLabel.textContent = '命令';
@@ -742,8 +799,8 @@ function openActive() {
 function openDetail(plugin, action, prefill) {
   detail = { plugin, action };
   // 深链：CLI / MCP / 别人的消息里可以直接给 #/插件/动作 让界面跳到这一条
-  const wanted = `#/${plugin.id}/${action.id}`;
-  if (location.hash !== wanted) history.replaceState(null, '', wanted);
+  const wantedHash = `#/${plugin.id}/${action.id}`;
+  if (location.hash !== wantedHash) history.replaceState(null, '', wantedHash);
   el.listView.classList.add('hidden');
   el.workbench.classList.add('hidden');
   el.detailView.classList.remove('hidden');
@@ -820,6 +877,24 @@ function openDetail(plugin, action, prefill) {
         <button class="ghost mini" id="peekLast" title="回看上次结果">回看</button></div>`
     : '';
 
+  // sparkline：这个动作近 20 次的耗时走势（成功点线、失败点红），有历史才画
+  const key = actionKey(plugin.id, action.id);
+  const runHist = (runStore[key] ?? []).slice(-20);
+  const sparkline = runHist.length >= 3
+    ? (() => {
+        const pts = sparkPoints(runHist, 24);
+        const maxMs = Math.max(1, ...pts.map((p) => p.ms));
+        const w = 120, h = 26;
+        const path = pts.map((p, i) =>
+          `${i === 0 ? 'M' : 'L'}${((i / Math.max(1, pts.length - 1)) * w).toFixed(1)},${(h - (p.ms / maxMs) * (h - 4) - 2).toFixed(1)}`).join(' ');
+        const dots = pts.filter((p) => !p.ok).map((p, j) => {
+          const i = pts.indexOf(p);
+          return `<circle cx="${((i / Math.max(1, pts.length - 1)) * w).toFixed(1)}" cy="${(h - (p.ms / maxMs) * (h - 4) - 2).toFixed(1)}" r="2.2" fill="var(--bad, #e5484d)"/>`;
+        }).join('');
+        return `<span class="spark" title="近 ${runHist.length} 次耗时走势（最高 ${formatMs(maxMs)}）"><svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}"><path d="${path}" fill="none" stroke="var(--accent, #5aa9ff)" stroke-width="1.5"/>${dots}</svg></span>`;
+      })()
+    : '';
+
   const fields = action.fields.map((f) => {
     const req = f.required ? ' <span class="req">*</span>' : '';
     const help = f.help ? `<div class="help">${esc(f.help)}</div>` : '';
@@ -851,6 +926,7 @@ function openDetail(plugin, action, prefill) {
         <span class="badge ${esc(action.risk)}">${esc(RISK_TEXT[action.risk] || action.risk)}</span>
         ${steps.length ? `<span class="badge">组合 ${steps.length} 步</span>` : ''}
         <span class="badge">${esc(action.tool)}</span>
+        ${sparkline}
       </div>
       <div class="desc">${esc(action.description || '（这个动作没写说明）')}</div>
       ${note ? `<div class="detail-note">📌 ${esc(note)}</div>` : ''}
@@ -1477,7 +1553,7 @@ function renderRunHistory(plugin, action) {
       <span class="run-when">${esc(new Date(r.ts).toLocaleString())}</span>
       <span class="run-ms">${esc(String(r.ms))} ms</span>
       <button class="ghost" data-rerun>重跑</button>${list.length >= 2 ? `
-      <button class="ghost" data-diff="${i}" ${i === list.length - 1 ? 'disabled title="这是最新一次，选更早的一条来对比"' : 'title="和最新一次的结果逐格对比"'}>与最新对比</button>` : ''}
+      <button class="ghost" data-diff="${i}" ${i === 0 ? 'disabled title="这就是最新一次，选更早的一条来对比"' : 'title="和最新一次的结果逐格对比"'}>与最新对比</button>` : ''}
       <button class="ghost mini" data-pick="${i}" title="选进 A/B 对比槽">选比</button>
     </div>`).join('')}
     <div class="help" id="diffPickHint" style="margin-top:4px"></div>`;
@@ -1495,7 +1571,7 @@ function renderRunHistory(plugin, action) {
       : `已选 ${picks.length}/2 条`;
     if (picks.length === 2) {
       const [ia, ib] = picks;
-      if (list[ia]?.data !== undefined && list[ib]?.data !== undefined) showResultDiff(list[ia].data, list[ib].data);
+      if (list[ia]?.data !== undefined && list[ib]?.data !== undefined) showResultDiff(list[ia].data, list[ib].data, { slotA: ia, slotB: ib });
       else alert('这两次记录没存结果数据（可能是老记录），重跑一次后再对比。');
       window.__diffPicks = [];
       if (hint) hint.textContent = '';
@@ -1648,7 +1724,18 @@ function renderResult(res) {
   const head = res.ok
     ? `<span class="ok">✓ 成功</span>`
     : `<span class="bad">✗ 失败</span>`;
-  const ms = res.ms !== undefined ? `${res.ms} ms` : '';
+  // 统一毫秒展示 + 「慢于平常」：超该动作历史 P95 才亮（历史 ≥3 次才参与判断）
+  const ms = res.ms !== undefined ? formatMs(res.ms) : '';
+  const slowBadge = (() => {
+    if (res.ms === undefined || !detail) return '';
+    const hist = (runStore[actionKey(detail.plugin.id, detail.action.id)] ?? [])
+      .slice(0, -1); // 不含本次
+    if (hist.length < 3) return '';
+    const p95 = p95Ms(hist);
+    return (p95 !== null && res.ms > p95)
+      ? `<span class="badge slow" title="慢于该动作历史 P95（${formatMs(p95)}）">🐢 慢于平常</span>`
+      : '';
+  })();
 
   let body = '';
   if (res.error) {
@@ -1690,7 +1777,7 @@ function renderResult(res) {
   const copyText = res.data !== undefined ? JSON.stringify(res.data, null, 2) : (res.stdout ?? '');
   box.innerHTML = `
     <div class="card">
-      <div class="card-head" id="cardHead" title="点这里折叠 / 展开结果">${head}
+      <div class="card-head" id="cardHead" title="点这里折叠 / 展开结果">${head}${slowBadge}
         <span style="margin-left:auto" class="aid">${esc(res.command || '')}</span>
         <button class="ghost" id="cardFold" title="折叠 / 展开结果">收起</button>
       </div>
@@ -1922,24 +2009,52 @@ function renderResult(res) {
 }
 
 /** 两次结果逐格对比：只对对象 / 对象数组有意义，标量给一句话 */
-function showResultDiff(a, b) {
+function showResultDiff(a, b, pairMode) {
+  // pairMode：{slotA, slotB} 显式两次（A/B 槽）；缺省为「上一次 → 最新」
   const diffs = diffResults(a, b);
   const overlay = document.createElement('div');
   overlay.className = 'overlay';
+  let onlyChanged = false;
   overlay.innerHTML = `
     <div class="modal diff-modal">
-      <h3>结果对比（上一次 → 最新）</h3>
-      ${diffs.length === 0
-        ? '<div class="help">两次结果完全一致。</div>'
-        : `<table class="grid diff-table"><thead><tr><th>字段</th><th>较早</th><th>最新</th></tr></thead>
-          <tbody>${diffs.map((d) => `<tr>
-            <td><code>${esc(d.path)}</code></td>
-            <td class="diff-from">${esc(d.from)}</td>
-            <td class="diff-to">${esc(d.to)}</td></tr>`).join('')}</tbody></table>`}
+      <h3>结果对比${pairMode ? '（自选两次）' : '（上一次 → 最新）'}</h3>
+      <div class="diff-opts">${diffs.length ? `
+        <label><input type="checkbox" id="diffOnly"> 仅看变化</label>
+        <label><input type="checkbox" id="diffSide"> 并排</label>` : ''}
+      </div>
+      <div id="diffBody">${renderDiffBody(diffs, false, false)}</div>
       <div class="actions"><button class="primary" id="diffClose">关闭</button>
         ${diffs.length ? '<button class="ghost" id="diffMd">导出 Markdown</button>' : ''}</div>
     </div>`;
   document.body.appendChild(overlay);
+  const body = overlay.querySelector('#diffBody');
+  overlay.querySelector('#diffOnly')?.addEventListener('change', (e) => {
+    onlyChanged = e.target.checked;
+    const side = overlay.querySelector('#diffSide')?.checked ?? false;
+    body.innerHTML = renderDiffBody(diffs, onlyChanged, side);
+  });
+  overlay.querySelector('#diffSide')?.addEventListener('change', (e) => {
+    body.innerHTML = renderDiffBody(diffs, onlyChanged, e.target.checked);
+  });
+/** diff 表体：onlyChanged 只留 from!==to 的行（diffResults 已只产出变化行——
+ * 开关留给「全部字段对比」的将来扩展，当前行为=只看变化恒真）；side 时每行上下并排 */
+function renderDiffBody(diffs, onlyChanged, side) {
+  if (diffs.length === 0) return '<div class="help">两次结果完全一致。</div>';
+  if (side) {
+    return diffs.map((d) => `
+      <div class="diff-pair">
+        <code class="diff-path">${esc(d.path)}</code>
+        <div class="diff-side diff-from">− ${esc(d.from)}</div>
+        <div class="diff-side diff-to">+ ${esc(d.to)}</div>
+      </div>`).join('');
+  }
+  return `<table class="grid diff-table"><thead><tr><th>字段</th><th>较早</th><th>最新</th></tr></thead>
+    <tbody>${diffs.map((d) => `<tr>
+      <td><code>${esc(d.path)}</code></td>
+      <td class="diff-from">${esc(d.from)}</td>
+      <td class="diff-to">${esc(d.to)}</td></tr>`).join('')}</tbody></table>`;
+}
+
   overlay.querySelector('#diffMd')?.addEventListener('click', () => {
     const md = ['| 字段 | 较早 | 最新 |', '| --- | --- | --- |',
       ...diffs.map((d) => `| \`${String(d.path).replace(/\|/g, '\\|')}\` | ${String(d.from).replace(/\|/g, '\\|')} | ${String(d.to).replace(/\|/g, '\\|')} |`)].join('\n');
@@ -2027,7 +2142,35 @@ window.addEventListener('message', (ev) => {
 });
 
 let resultSeq = 0;
+function barsData(data) {
+  // [{label,value}] 直接用；{label:[], value:[]} 平行数组转一下；其余返回 null
+  if (Array.isArray(data)) {
+    return data.every((r) => r && typeof r === 'object' && 'value' in r) ? data : null;
+  }
+  if (data && Array.isArray(data.label) && Array.isArray(data.value)
+      && data.label.length === data.value.length) {
+    return data.label.map((l, i) => ({ label: l, value: data.value[i] }));
+  }
+  return null;
+}
+
+function renderBars(rows) {
+  const bars = barsScale(rows);
+  if (!bars.length) return `<div class="help">（没有可画的柱子：需要 [{label, value}]）</div>`;
+  return `<div class="bar-chart" role="img" aria-label="柱状图，${bars.length} 个类别">${bars.map((b) => `
+    <div class="bar-col" title="${esc(b.label)}：${esc(b.display)}">
+      <span class="bar-val">${esc(b.display)}</span>
+      <i class="bar-stick${b.below ? ' below' : ''}" style="height:${Math.max(b.height, 2)}%"></i>
+      <span class="bar-label">${esc(b.label)}</span>
+    </div>`).join('')}</div>`;
+}
+
 function renderData(data, render, tableId = '') {
+  if (render === 'bars') {
+    const rows = barsData(data);
+    if (rows) return renderBars(rows);
+    // 数据形状不对时降级成默认渲染，不把用户晾在空卡片前
+  }
   if (Array.isArray(data)) {
     if (data.length === 0) return `<div class="help">（空结果）</div>`;
     if (typeof data[0] === 'object' && data[0] !== null) return renderTable(data, tableId);
@@ -2077,7 +2220,9 @@ function renderTable(rows, tableId = '') {
     const v = row[c];
     const val = (v && typeof v === 'object') ? JSON.stringify(v) : String(v ?? '');
     const shown = numeric[c] && val !== '' && Number.isFinite(Number(val)) ? formatNumber(val) : val;
-    return `<td${numeric[c] ? ' class="num"' : ''}>${esc(shown)}</td>`;
+    // 长单元格省略 + 点击展开：长路径/长 JSON 不再撑破表格
+    const clip = !numeric[c] && shown.length > 48;
+    return `<td${numeric[c] ? ' class="num"' : ''}${clip ? ` class="cell-clip" title="点击展开" data-full="${esc(val)}"` : ''}>${esc(clip ? `${shown.slice(0, 45)}…` : shown)}</td>`;
   }).join('')}</tr>`).join('');
   return `<table class="grid" data-table="${esc(tableId)}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
@@ -2119,6 +2264,16 @@ function bindTableSorts(scope) {
         document.addEventListener('mouseup', up);
       });
     });
+    // 长单元格点击展开：省略的完整内容弹层显示（点外面关）
+    tbl.querySelectorAll('td.cell-clip').forEach((td) => td.addEventListener('click', () => {
+      document.getElementById('cellFullPop')?.remove();
+      const pop = document.createElement('pre');
+      pop.id = 'cellFullPop';
+      pop.className = 'cell-full';
+      pop.textContent = td.dataset.full ?? td.textContent;
+      pop.addEventListener('click', () => pop.remove());
+      document.body.appendChild(pop);
+    }));
   });
   // JSON 折叠树：点分支行折叠/展开其直接子树
   scope.querySelectorAll('.json-tree').forEach((tree) => {
@@ -3722,10 +3877,12 @@ function showStats() {
       ${(() => {
         const hist = msHistogram(runs.map((r) => r.ms ?? 0));
         const maxC = Math.max(1, ...hist.map((x) => x.count));
+        const totalR = runs.length || 1;
         return hist.map((b) => `
-          <div class="heat-cell" title="${b.label}ms — ${b.count} 次">
+          <div class="heat-cell" title="${b.label}ms：${b.count} 次（占 ${Math.round((b.count / totalR) * 100)}%）">
             <i style="height:${Math.max(2, Math.round((b.count / maxC) * 32))}px"></i>
             <span>${b.label}</span>
+            <em class="heat-count">${b.count || ''}</em>
           </div>`).join('');
       })()}
     </div>` : ''}
@@ -4040,6 +4197,10 @@ function showPalette() {
     { icon: '✓', label: '环境自检', hint: '解释器/依赖/配置问题', act: () => showDoctor() },
     { icon: '🔑', label: 'MCP 授权', hint: '哪些动作允许 AI 调用', act: () => showMcpAllow() },
     { icon: '📈', label: '使用统计', hint: '总执行数 / 成功率 / 趋势', act: () => showStats() },
+    { icon: '⏱', label: '定时任务', hint: '管理界面内定时器', act: () => { location.hash = '#/timers'; } },
+    { icon: '📰', label: '今日简报', hint: '跑了多少 / 成败 / 最常用', act: () => { location.hash = '#/brief'; } },
+    { icon: '📌', label: '收藏结果', hint: '钉住的重要输出', act: () => { location.hash = '#/saved'; } },
+    { icon: '◐', label: '深色 / 浅色', hint: '一键切换主题（Ctrl+Shift+D）', act: () => toggleLightDark() },
   ];
   overlay.innerHTML = `
     <div class="modal palette">
@@ -4068,10 +4229,14 @@ function showPalette() {
       icon: '⚡', label: e.action.title, hint: `${e.plugin.name} · ${e.action.id}`,
       act: () => { exitPalette(); openDetail(e.plugin, e.action); },
     }));
+    const pluginItems = plugins.map((p) => ({
+      icon: '🧩', label: p.name, hint: `插件 · ${p.id}`,
+      act: () => { exitPalette(); location.hash = `#/plugins/${encodeURIComponent(p.id)}`; },
+    }));
     const all = [...pages.map((x) => ({ ...x, act: (() => { const f = x.act; return () => { exitPalette(); f(); }; })() })),
-      ...actionItems];
-    items = !needle ? all.slice(0, 20) : all.filter((x) =>
-      x.label.toLowerCase().includes(needle) || x.hint.toLowerCase().includes(needle)).slice(0, 20);
+      ...actionItems, ...pluginItems];
+    // 打分排序：精确 > 前缀 > 子串 > hint 子串 > 子序列（拼首字母）；空查询取前 20
+    items = paletteScore(all, needle);
     sel = 0;
     paint();
   };
@@ -4467,6 +4632,8 @@ window.__zerokit = {
   get health() { return pluginHealth(plugins); },
   cycleTheme, showShortcuts, showPluginHome, renderPrompts, showLogs, showDoctor,
   openDetail, submit, backToList, renderResult,
+  showPalette, runBatch,
+  get batch() { return batch; },
 };
 
 /** ⑧ 深浅一键切换：记住切换前是深还是浅，往返即可 */

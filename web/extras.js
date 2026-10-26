@@ -573,3 +573,91 @@ export function jsonTreeLines(value, depth = 0, out = []) {
   }
   return out;
 }
+/**
+ * 第十二轮纯函数：数据可视化与命令面板
+ */
+
+/** 柱状图定标：给定 [{label,value}]，返回画条用的归一化高度（0–100）与展示值。
+ * 负值整列翻转（min<0 时基线取 0 上移）；空数组/全零返回空。 */
+export function barsScale(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return [];
+  const vals = rows.map((r) => Number(r.value ?? 0));
+  const max = Math.max(...vals);
+  const min = Math.min(...vals, 0);
+  const span = max - min || 1;
+  return rows.map((r, i) => {
+    const v = Number(r.value ?? 0);
+    return {
+      label: String(r.label ?? `#${i + 1}`),
+      height: Math.round(Math.abs(v) / span * 100),
+      below: v < 0,
+      display: String(r.value ?? 0),
+    };
+  });
+}
+
+/** sparkline 降采样：把任意长度序列压到 ≤width 个点（等距取样，保留首尾）。
+ * 每点带 ok 标志（失败点在图上画成红点）。 */
+export function sparkPoints(values, width = 24) {
+  if (!Array.isArray(values) || values.length === 0) return [];
+  const n = values.length;
+  if (n <= width) return values.map((v) => ({ ms: Number(v?.ms ?? 0), ok: v?.ok !== false }));
+  const step = (n - 1) / (width - 1);
+  const out = [];
+  for (let i = 0; i < width; i++) {
+    const idx = Math.min(n - 1, Math.round(i * step));
+    const v = values[idx];
+    out.push({ ms: Number(v?.ms ?? 0), ok: v?.ok !== false });
+  }
+  return out;
+}
+
+/** 统一毫秒展示：<1000ms 原样；<60s 秒一位小数；其余 分秒。 */
+export function formatMs(ms) {
+  const n = Number(ms);
+  if (!Number.isFinite(n) || n < 0) return String(ms ?? '');
+  if (n < 1000) return `${Math.round(n)} ms`;
+  if (n < 60000) return `${(n / 1000).toFixed(1)} s`;
+  const m = Math.floor(n / 60000);
+  const s = Math.round((n % 60000) / 1000);
+  return `${m}m${String(s).padStart(2, '0')}s`;
+}
+
+/** 命令面板打分：label 精确 > 前缀 > 子串；hint 减半；返回降序排序的 items。 */
+export function paletteScore(items, needle) {
+  const q = String(needle ?? '').trim().toLowerCase();
+  if (!q) return items.slice(0, 20);
+  const scored = [];
+  for (const it of items) {
+    const label = String(it.label ?? '').toLowerCase();
+    const hint = String(it.hint ?? '').toLowerCase();
+    let score = 0;
+    if (label === q) score = 100;
+    else if (label.startsWith(q)) score = 80;
+    else if (label.includes(q)) score = 60;
+    else if (hint.includes(q)) score = 30;
+    else {
+      // 逐字符子序列匹配（拼首字母的体验）：label 里按顺序出现 q 的所有字符
+      let li = 0;
+      let seq = true;
+      for (const ch of q) {
+        li = label.indexOf(ch, li);
+        if (li < 0) { seq = false; break; }
+        li++;
+      }
+      if (seq) score = 20;
+    }
+    if (score > 0) scored.push({ it, score });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, 20).map((x) => x.it);
+}
+
+/** 历史毫秒列表的 P95：给「慢于平常」徽标用。空列表返回 null。 */
+export function p95Ms(values) {
+  const arr = (Array.isArray(values) ? values : [])
+    .map((v) => Number(v?.ms ?? 0)).filter((n) => Number.isFinite(n)).sort((a, b) => a - b);
+  if (!arr.length) return null;
+  const idx = Math.min(arr.length - 1, Math.ceil(arr.length * 0.95) - 1);
+  return arr[idx];
+}

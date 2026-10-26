@@ -255,6 +255,55 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
   })());
 }
 
+
+// ------------------------------------------------ 第十二轮：数据可视化与命令面板
+{
+  const { barsScale, sparkPoints, formatMs, paletteScore, p95Ms } = await import('../web/extras.js');
+  check('barsScale: 定标（span 含负值）、label 补位、负值标 below', (() => {
+    const r = barsScale([{ label: 'a', value: 100 }, { label: 'b', value: 50 }, { label: 'c', value: -25 }, {}]);
+    // span = 100-(-25) = 125：100/125=80、50/125=40、|-25|/125=20
+    return r[0].height === 80 && r[1].height === 40 && r[2].below === true && r[3].label === '#4';
+  })());
+  check('barsScale: 空输入与全零不炸', (() => {
+    const a = barsScale([]);
+    const b = barsScale([{ label: 'x', value: 0 }]);
+    return a.length === 0 && b[0].height === 0;
+  })());
+  check('sparkPoints: 短序列原样、长序列降采样保首尾', (() => {
+    const short = sparkPoints([{ ms: 1 }, { ms: 2 }], 24);
+    const long = sparkPoints(Array.from({ length: 100 }, (_, i) => ({ ms: i })), 24);
+    return short.length === 2 && long.length === 24 && long[0].ms === 0 && long[23].ms === 99;
+  })());
+  check('sparkPoints: ok 标志保留（失败点）', sparkPoints([{ ms: 1, ok: false }, { ms: 2 }])[0].ok === false);
+  check('formatMs: 三段式展示', (() => {
+    return formatMs(950) === '950 ms' && formatMs(2500) === '2.5 s' && formatMs(125000) === '2m05s';
+  })());
+  check('formatMs: 非法输入不炸', formatMs(NaN) === 'NaN' && formatMs(-5) === '-5');
+  check('paletteScore: 精确 > 前缀 > 子串 > hint > 子序列', (() => {
+    const items = [
+      { label: '系统信息', hint: 'sysinfo' },
+      { label: '系统信息 TOP', hint: 'top' },
+      { label: '别的', hint: '系统 x' },
+      { label: 'zz', hint: '无关' },
+    ];
+    const r1 = paletteScore(items, '系统信息');
+    const r2 = paletteScore(items, '系统');
+    const r3 = paletteScore(items, 'sysinfo');
+    // 子序列只看 label：拉丁 label 上 'st' 顺序命中 'sysinfo top'
+    const r4 = paletteScore([{ label: 'sysinfo top', hint: '' }, { label: '别的', hint: '' }], 'st');
+    const r5 = paletteScore(items, 'xt');   // 任何 label/hint 都不含 x 后跟 t → 空结果
+    return r1[0].label === '系统信息' && r2.length === 3 && r3[0].hint === 'sysinfo'
+      && r4.length === 1 && r4[0].label === 'sysinfo top' && r5.length === 0;
+  })());
+  check('paletteScore: 空查询取前 20', paletteScore(Array.from({ length: 30 }, (_, i) => ({ label: `i${i}`, hint: '' })), '').length === 20);
+  check('p95Ms: 空返回 null、分位数正确', (() => {
+    const a = p95Ms([]);
+    const b = p95Ms(Array.from({ length: 100 }, (_, i) => ({ ms: i + 1 })));
+    const c = p95Ms([{ ms: 'x' }, { ms: 5 }]);
+    return a === null && b === 95 && c === 5;
+  })());
+}
+
 const failed = results.filter(([, ok]) => !ok);
 console.log('\n' + '='.repeat(60));
 console.log(`通过 ${results.length - failed.length} / ${results.length}`);

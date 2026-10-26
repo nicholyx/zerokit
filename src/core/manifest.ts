@@ -24,7 +24,7 @@ export type OutputKind = 'text' | 'json' | 'markdown' | 'table' | 'file' | 'html
  * render = "web"：结果不由内置卡片渲染，而是交给插件自己的 web/index.html（沙箱 iframe）。
  * render = "html"：stdout 本身就是 HTML 片段，直接在沙箱 iframe 里渲染（output = "html" 的默认 render）。
  */
-export type RenderKind = 'text' | 'table' | 'json' | 'markdown' | 'keyvalue' | 'image' | 'link' | 'web' | 'html';
+export type RenderKind = 'text' | 'table' | 'json' | 'markdown' | 'keyvalue' | 'bars' | 'image' | 'link' | 'web' | 'html';
 /**
  * exec：起子进程跑脚本（最通用）
  * http：零代码插件，直接发一个请求
@@ -231,7 +231,7 @@ const DEFAULT_TIMEOUT = 60;
 /** 一步链路最多多少步：上限是为了让「链路」保持可读、可在安装时被看懂 */
 const MAX_CHAIN_STEPS = 20;
 const OUTPUTS: OutputKind[] = ['text', 'json', 'markdown', 'table', 'file', 'html'];
-const RENDERS: RenderKind[] = ['text', 'table', 'json', 'markdown', 'keyvalue', 'image', 'link', 'web', 'html'];
+const RENDERS: RenderKind[] = ['text', 'table', 'json', 'markdown', 'keyvalue', 'bars', 'image', 'link', 'web', 'html'];
 
 const RENDER_FOR_OUTPUT: Record<OutputKind, RenderKind> = {
   text: 'text',
