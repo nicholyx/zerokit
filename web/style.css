@@ -1024,3 +1024,31 @@ textarea.auto-grow { width: 100%; resize: vertical; font-family: inherit;
 ul.list.virtual .v-spacer { list-style: none; pointer-events: none; }
 
 /* 数字键快选提示（count 区域已有样式，这里只补强调色轮换无需额外） */
+
+/* ---------- 第十六轮：数据与结果的二次加工 ---------- */
+/* 表格筛选行：thead 第二行的小输入框 */
+tr.tfilter th { padding: 2px 4px; }
+tr.tfilter input {
+  width: 100%; box-sizing: border-box; font-size: 12px; padding: 2px 6px;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--bg-soft); color: var(--fg);
+}
+tr.tfilter input:focus { outline: 1px solid var(--accent); }
+/* 统计行：tfoot 紧凑展示 Σ·x̄ 与范围 */
+table.grid tfoot td { border-top: 2px solid var(--border); padding: 4px 8px; }
+td.tstat .sub { font-size: 11px; opacity: .75; display: block; line-height: 1.35; }
+/* 列显示/隐藏齿轮 + 弹出面板 */
+.colvis-btn { float: right; cursor: pointer; font-size: 14px; opacity: .6; padding: 0 4px; }
+.colvis-btn:hover { opacity: 1; }
+.colvis-pop {
+  position: absolute; z-index: 60; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 10px; padding: 8px; min-width: 160px; max-height: 260px; overflow: auto;
+  box-shadow: 0 6px 24px rgb(0 0 0 / .18);
+}
+.colvis-pop .pop-title { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+.colvis-pop .pop-row { display: flex; gap: 6px; align-items: center; padding: 2px 0; font-size: 12px; }
+.colvis-pop .actions { display: flex; gap: 6px; margin-top: 6px; }
+/* 单位换算条：表格上方的小按钮组 */
+.unit-bar { display: flex; gap: 8px; flex-wrap: wrap; font-size: 12px; margin: 2px 0 6px; opacity: .85; }
+.unit-conv .mini { padding: 0 6px; }
+/* 行计数 */
+.tcount { margin-top: 2px; }

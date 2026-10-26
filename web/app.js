@@ -10,6 +10,7 @@ import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFi
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
 import { barsScale, sparkPoints, formatMs, paletteScore, p95Ms } from './extras.js';
+import { filterRows, colStats, unitOf, isUnitColumn, convertUnitColumn, mergeTables, columnValues, toHtmlTable } from './extras.js';
 import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport, virtualWindow, pageSlice, breadcrumb, listStateQuery, parseListState, digitPick } from './extras.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
@@ -1781,7 +1782,7 @@ function renderRunHistory(plugin, action) {
     box.innerHTML = '<div class="run-empty">还没有执行记录——跑一次就会记在这里（只保存在本机）。</div>';
     return;
   }
-  box.innerHTML = `<div class="run-head">最近执行</div>${list.map((r, i) => `
+  box.innerHTML = `<div class="run-head">最近执行${list.filter((r) => Array.isArray(r.data)).length >= 2 ? ' <button class="ghost mini" id="mergeHist" title="把最近两次表格结果按共同键列拼成一张表（左连接）">⊕ 合并视图</button>' : ''}</div>${list.map((r, i) => `
     <div class="run-row">
       <span class="${r.ok ? 'ok' : 'bad'}">${r.ok ? '✓' : '✗'}</span>
       <span class="run-when">${esc(new Date(r.ts).toLocaleString())}</span>
@@ -1821,6 +1822,21 @@ function renderRunHistory(plugin, action) {
     }
     showResultDiff(a, older.data);
   }));
+  // 第十六轮⑤：合并视图——勾两条记录按共同键列拼成一张表（左连接，同名列加 _2 后缀）
+  $('mergeHist')?.addEventListener('click', () => {
+    const rows0 = list.filter((r) => Array.isArray(r.data) && r.data.length && typeof r.data[0] === 'object');
+    if (rows0.length < 2) { el.count.textContent = '至少要有两次「表格结果」才能合并（先各跑一次）'; return; }
+    const colsOf = (rs) => { const cs = []; for (const row of rs[0].data) for (const k of Object.keys(row ?? {})) if (!cs.includes(k)) cs.push(k); return cs; };
+    const c1 = colsOf([rows0[0]]), c2 = colsOf([rows0[1]]);
+    const common = c1.filter((c) => c2.includes(c));
+    const key = common[0] ?? c1[0];
+    const merged = mergeTables(rows0[0].data, rows0[1].data, key, common[0] ? key : c2[0]);
+    if (!merged) { el.count.textContent = '合并失败：数据形状不对'; return; }
+    // 合并结果作为一张普通表格渲染进结果卡，可继续排序/筛选/导出
+    renderResult({ ok: true, ms: 0, data: merged, render: undefined,
+      note: `合并视图：第 1、2 条记录按「${key}」列拼接（左连接）` });
+    el.count.textContent = `已合并 ${merged.length} 行（按「${key}」列；同名列加了 _2 后缀）`;
+  });
 }
 
 const HOTKEYS = ['F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'];
@@ -2007,6 +2023,8 @@ function renderResult(res) {
     body += `<pre class="out" style="color:var(--fg-dim)">${esc(res.stderr)}</pre>`;
   }
   if (!body) body = `<div class="help">（没有输出）</div>`;
+  // 第十六轮⑤：合并视图等场景的来源说明（顶在结果卡里，让人知道这张表从哪来）
+  const srcNote = res.note ? `<div class="detail-note">📌 ${esc(res.note)}</div>` : '';
 
   const copyText = res.data !== undefined ? JSON.stringify(res.data, null, 2) : (res.stdout ?? '');
   box.innerHTML = `
@@ -2022,14 +2040,15 @@ function renderResult(res) {
         ${res.data !== undefined ? `<button class="ghost" id="csvRes" title="导出成 CSV，Excel / Numbers 直接打开">导出 CSV</button>
         <button class="ghost" id="jsonRes" title="导出成 JSON，给脚本接着处理">导出 JSON</button>` : ''}
         ${Array.isArray(res.data) && res.data.length && typeof res.data[0] === 'object' ? `<button class="ghost" id="mdTableRes" title="复制为 Markdown 表格（数字列右对齐）">复制 MD 表</button>
-        <button class="ghost" id="tsvRes" title="复制为 TSV（Excel/Numbers 直接粘贴）">复制 TSV</button>` : ''}
+        <button class="ghost" id="tsvRes" title="复制为 TSV（Excel/Numbers 直接粘贴）">复制 TSV</button>
+        <button class="ghost" id="htmlRes" title="复制为 HTML 表格（贴进邮件/文档带格式）">复制 HTML 表</button>` : ''}
         <button class="ghost" id="termRes" title="终端模式查看：等宽字体、自动滚到底">终端</button>
         <button class="ghost" id="againRes" title="用同样的参数再跑一次">再跑一次</button>
         <button class="ghost" id="pinRes" title="把这条结果钉进收藏夹（#/saved），重启后还在">收藏</button>
         <button class="ghost" id="noteRes" title="给这次执行写一句备注（本机保存）">备注</button>
         <span class="ms">${esc(ms)}</span>
       </div>
-      <div class="card-body">${body}</div>
+      <div class="card-body">${srcNote}${body}</div>
       <div class="card-find">
         <input id="findInResult" type="text" placeholder="在结果里找…（实时高亮，Enter 下一个）" autocomplete="off" spellcheck="false">
         <span class="sub" id="findCount"></span>
@@ -2229,6 +2248,16 @@ function renderResult(res) {
     exportAs('csvRes', '\ufeff' + toCsv(res.data), 'text/csv;charset=utf-8', 'csv');  // BOM：Excel 中文不乱码
     exportAs('jsonRes', JSON.stringify(res.data, null, 2), 'application/json', 'json');
   }
+  // 第十六轮⑧：复制 HTML 表格——贴进邮件/文档带格式（writeText 写纯 HTML 源，富文本粘贴由目标应用解析）
+  $('htmlRes')?.addEventListener('click', async (ev) => {
+    if (!Array.isArray(res.data)) return;
+    const html = toHtmlTable(res.data, detail ? `${detail.plugin.name} · ${detail.action.title}` : 'zerokit 结果');
+    try {
+      await navigator.clipboard.writeText(html);
+      ev.currentTarget.textContent = '已复制';
+    } catch { ev.currentTarget.textContent = '复制失败'; }
+    setTimeout(() => { const b = $('htmlRes'); if (b) b.textContent = '复制 HTML 表'; }, 1500);
+  });
 
   // web 面的 iframe 加载完就发执行上下文（页面里的 hello 握手是双保险）
   const frame = box.querySelector('.web-frame:not(.html)');
@@ -2438,19 +2467,29 @@ function renderKV(obj) {
   return `<table class="kv">${rows}</table>`;
 }
 
-/** 结果表格：点列头排序（再点反向）、数字列右对齐 + 千分位。rowKey 让 diff 取「第 N 次」 */
-function renderTable(rows, tableId = '') {
+/** 结果表格：点列头排序（再点反向）、数字列右对齐 + 千分位。rowKey 让 diff 取「第 N 次」
+ * 第十六轮叠加：列筛选行、列显示/隐藏（⚙）、数字列统计行（tfoot）、单位列一键换算。 */
+function renderTable(rows0, tableId = '') {
+  // 第十六轮⑦：单位列换算先作用于数据副本（不改原结果）
+  const uc = tableUnitConv[tableId];
+  const rows = (uc && convertUnitColumn(rows0, uc.col, uc.to)) ?? rows0;
   const cols = [];
   for (const row of rows) {
     for (const k of Object.keys(row)) if (!cols.includes(k)) cols.push(k);
   }
+  // 列显示/隐藏（按 tableId 记忆）：默认全显
+  const colVis = readJson(`zerokit.colvis.${tableId || 't'}`, null) ?? Object.fromEntries(cols.map((c) => [c, true]));
+  const visCols = cols.filter((c) => colVis[c] !== false);
   const numeric = Object.fromEntries(cols.map((c) => [c, isNumericColumn(rows.map((r) => r[c]))]));
+  // 第十六轮③：表格筛选行——空格分词，每词都要在某列命中
+  const fterms = tableFilterTerms[tableId] ?? [];
+  const frows = filterRows(rows, fterms);
   const state = tableState[tableId] ?? { col: null, dir: 1 };
-  const view = state.col ? sortRows(rows, state.col, state.dir) : rows;
+  const view = state.col ? sortRows(frows, state.col, state.dir) : frows;
   const arrow = (c) => state.col === c ? (state.dir === 1 ? ' ▲' : ' ▼') : '';
-  const head = cols.map((c) =>
+  const head = visCols.map((c) =>
     `<th class="sortable${numeric[c] ? ' num' : ''}" data-col="${esc(c)}">${esc(c)}${arrow(c)}</th>`).join('');
-  const body = view.map((row) => `<tr>${cols.map((c) => {
+  const body = view.map((row) => `<tr>${visCols.map((c) => {
     const v = row[c];
     const val = (v && typeof v === 'object') ? JSON.stringify(v) : String(v ?? '');
     const shown = numeric[c] && val !== '' && Number.isFinite(Number(val)) ? formatNumber(val) : val;
@@ -2458,11 +2497,35 @@ function renderTable(rows, tableId = '') {
     const clip = !numeric[c] && shown.length > 48;
     return `<td${numeric[c] ? ' class="num"' : ''}${clip ? ` class="cell-clip" title="点击展开" data-full="${esc(val)}"` : ''}>${esc(clip ? `${shown.slice(0, 45)}…` : shown)}</td>`;
   }).join('')}</tr>`).join('');
-  return `<table class="grid" data-table="${esc(tableId)}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  // 第十六轮⑥：统计行——数字列给 Σ/均值/最小~最大，文本列给非空计数
+  const foot = visCols.map((c) => {
+    const st = colStats(view, c);
+    if (st.kind === 'num') {
+      const f = (n) => formatNumber(String(Math.round(n * 100) / 100));
+      return `<td class="num tstat" title="合计 ${f(st.sum)} · 均值 ${f(st.avg)}">${f(st.sum)}<span class="sub"> Σ·x̄${f(st.avg)}<br>${f(st.min)}~${f(st.max)}</span></td>`;
+    }
+    return `<td class="tstat" title="非空 ${st.count} 条"><span class="sub">${st.count} 条</span></td>`;
+  }).join('');
+  // 第十六轮⑦：单位列换算按钮（KB↔MB↔GB…），非单位列不显示
+  const unitBtns = visCols.filter((c) => isUnitColumn(view, c)).map((c) => {
+    const sample = unitOf(view.find((r) => unitOf(r?.[c]))?.[c]);
+    const unit = sample?.unit ?? '';
+    const targets = { ms: ['s'], s: ['ms'], B: ['KB', 'MB'], KB: ['MB', 'GB'], MB: ['GB', 'KB'], GB: ['MB', 'TB'], TB: ['GB'] }[unit] ?? [];
+    return `<span class="unit-conv" data-ucol="${esc(c)}">${esc(c)}: ${targets.map((t) => `<button class="link mini" data-uconv="${esc(c)}:${esc(t)}" title="把 ${esc(c)} 列换算成 ${esc(t)}">→${esc(t)}</button>`).join(' ')}</span>`;
+  }).join(' ');
+  // 第十六轮③：筛选输入行（thead 第二行）
+  const fRow = `<tr class="tfilter">${visCols.map((c) => `<th><input data-tf="${esc(c)}" placeholder="筛…" value="${esc((fterms[0] && tableFilterTerms[tableId]?.join(' ')) || '')}" autocomplete="off" spellcheck="false"></th>`).join('')}</tr>`;
+  const gear = `<span class="colvis-btn" data-colvis="${esc(tableId || 't')}" title="显示/隐藏列" role="button" tabindex="0">⚙</span>`;
+  return `${unitBtns ? `<div class="unit-bar">${unitBtns}</div>` : ''}${gear}<table class="grid" data-table="${esc(tableId)}"><thead><tr>${head}</tr>${fRow}</tr></thead><tbody>${body}</tbody><tfoot><tr>${foot}</tr></tfoot></table>
+  <div class="tcount sub">${view.length === rows.length ? `共 ${rows.length} 行` : `${view.length} / ${rows.length} 行（筛选中）`}</div>`;
 }
 
 // 表格排序状态（按 tableId 记，重渲染后保留）
 const tableState = {};
+// 第十六轮③：每张表的筛选词（tableId → 词组），输入即时过滤
+const tableFilterTerms = {};
+// 第十六轮⑦：单位换算请求（tableId → {col, to}），换算后的数据走 refreshResult 重画
+const tableUnitConv = {};
 function bindTableSorts(scope) {
   scope.querySelectorAll('table.grid[data-table]').forEach((tbl) => {
     const id = tbl.dataset.table || 't';
@@ -2508,6 +2571,71 @@ function bindTableSorts(scope) {
       pop.addEventListener('click', () => pop.remove());
       document.body.appendChild(pop);
     }));
+    // ---- 第十六轮：筛选行 / 单位换算 / 列复制 ----
+    tbl.querySelectorAll('input[data-tf]').forEach((inp) => {
+      inp.addEventListener('input', () => {
+        tableFilterTerms[id] = inp.value.split(/\s+/).filter(Boolean);
+        refreshResult();
+        // 重画后焦点回筛选框（光标在末尾）
+        const again = document.querySelector(`table.grid[data-table="${CSS.escape(id)}"] input[data-tf]`);
+        if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+      });
+    });
+    tbl.querySelectorAll('button[data-uconv]').forEach((b) => b.addEventListener('click', () => {
+      const [col, to] = b.dataset.uconv.split(':');
+      const cur = tableUnitConv[id];
+      tableUnitConv[id] = (cur && cur.col === col && cur.to === to) ? null : { col, to };
+      refreshResult();
+    }));
+    // 列名右键：复制这一列（去重可选）——右键不抢交互，提示走 count 栏
+    tbl.querySelectorAll('th.sortable').forEach((th) => th.addEventListener('contextmenu', (ev) => {
+      ev.preventDefault();
+      const col = th.dataset.col;
+      const rows0 = currentResult?.data;
+      if (!Array.isArray(rows0)) return;
+      const vals = columnValues(rows0, col, { dedupe: ev.altKey });
+      navigator.clipboard?.writeText(vals.join('\n')).then(() => {
+        el.count.textContent = `已复制列「${col}」${ev.altKey ? '（去重后' : '（'}${vals.length} 行）`;
+      }).catch(() => {});
+    }));
+  });
+  // 列显示/隐藏面板（⚙）：点击表格外右上角齿轮
+  scope.querySelectorAll('[data-colvis]').forEach((gear) => {
+    gear.addEventListener('click', () => {
+      const tid = gear.dataset.colvis;
+      document.getElementById('colvisPop')?.remove();
+      const rows0 = Array.isArray(currentResult?.data) ? currentResult.data : [];
+      const cols = [];
+      for (const row of rows0) for (const k of Object.keys(row ?? {})) if (!cols.includes(k)) cols.push(k);
+      const vis = readJson(`zerokit.colvis.${tid}`, null) ?? Object.fromEntries(cols.map((c) => [c, true]));
+      const pop = document.createElement('div');
+      pop.id = 'colvisPop';
+      pop.className = 'colvis-pop';
+      pop.innerHTML = `<div class="pop-title">显示哪些列？</div>${cols.map((c) =>
+        `<label class="pop-row"><input type="checkbox" data-cv="${esc(c)}" ${vis[c] !== false ? 'checked' : ''}>${esc(c)}</label>`).join('')}
+        <div class="actions"><button class="ghost mini" id="cvAll">全选</button><button class="ghost mini" id="cvClose">关闭</button></div>`;
+      document.body.appendChild(pop);
+      const r = gear.getBoundingClientRect();
+      pop.style.left = `${Math.max(8, r.right - pop.offsetWidth)}px`;
+      pop.style.top = `${r.bottom + 4}px`;
+      pop.addEventListener('change', (ev2) => {
+        if (!ev2.target.dataset?.cv) return;
+        vis[ev2.target.dataset.cv] = ev2.target.checked;
+        writeJson(`zerokit.colvis.${tid}`, vis);
+        refreshResult();
+      });
+      pop.querySelector('#cvAll')?.addEventListener('click', () => {
+        Object.keys(vis).forEach((k) => { vis[k] = true; });
+        writeJson(`zerokit.colvis.${tid}`, vis);
+        refreshResult();
+        pop.remove();
+      });
+      pop.querySelector('#cvClose')?.addEventListener('click', () => pop.remove());
+      setTimeout(() => {
+        const off = (e2) => { if (!pop.contains(e2.target) && e2.target !== gear) { pop.remove(); document.removeEventListener('mousedown', off); } };
+        document.addEventListener('mousedown', off);
+      });
+    });
   });
   // JSON 折叠树：点分支行折叠/展开其直接子树
   scope.querySelectorAll('.json-tree').forEach((tree) => {

@@ -404,6 +404,61 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
     return digitPick('1', 5) === 0 && digitPick('5', 5) === 4 && digitPick('6', 5) === -1
       && digitPick('0', 5) === -1 && digitPick('a', 5) === -1;
   })());
+
+  // ---- 第十六轮：数据与结果的二次加工 ----
+  const { filterRows, colStats, unitOf, isUnitColumn, convertUnitColumn, mergeTables, columnValues, toHtmlTable } = await import('../web/extras.js');
+  check('filterRows: 多词 AND、空词组原样、大小写不敏感', (() => {
+    const rows = [
+      { name: 'disk-a', size: '512 MB', kind: 'ssd' },
+      { name: 'disk-b', size: '2 GB', kind: 'hdd' },
+      { name: 'net-a', size: '1 MB', kind: 'nic' },
+    ];
+    return filterRows(rows, ['mb']).length === 2
+      && filterRows(rows, ['a', 'MB']).length === 2
+      && filterRows(rows, ['']).length === 3
+      && filterRows(rows, ['zzz']).length === 0
+      && filterRows(rows, []).length === 3;
+  })());
+  check('colStats: 数字列给 Σ/均值/极差、文本列给非空计数', (() => {
+    const num = colStats([{ x: 10 }, { x: 20 }, { x: 30 }], 'x');
+    const txt = colStats([{ n: 'a' }, { n: '' }, {}], 'n');
+    return num.kind === 'num' && num.sum === 60 && num.avg === 20 && num.min === 10 && num.max === 30
+      && txt.kind === 'text' && txt.count === 1;
+  })());
+  check('unitOf/isUnitColumn: 认 ms/s/B/KB/MB/GB/TB、>60% 才算单位列', (() => {
+    const u1 = unitOf('512 MB');
+    const u2 = unitOf('2.5 s');
+    const u3 = unitOf('hello');
+    const rows = [{ s: '1 MB' }, { s: '2 MB' }, { s: 'x' }];
+    const rowsBad = [{ s: '1 MB' }, { s: 'x' }, { s: 'y' }];
+    return u1.num === 512 && u1.unit === 'MB' && u2.num === 2.5 && u2.unit === 's' && u3 === null
+      && isUnitColumn(rows, 's') === true && isUnitColumn(rowsBad, 's') === false;
+  })());
+  check('convertUnitColumn: MB→GB 精度分层、非单位列返回 null', (() => {
+    const rows = [{ s: '512 MB' }, { s: '2048 MB' }];
+    const out = convertUnitColumn(rows, 's', 'GB');
+    const bad = convertUnitColumn([{ s: 'x' }], 's', 'GB');
+    return out[0].s === '0.5 GB' && out[1].s === '2 GB' && bad === null;
+  })());
+  check('mergeTables: 共同键左连接、无命中留空、同名列加后缀', (() => {
+    const A = [{ k: 'x', v: 1 }, { k: 'y', v: 2 }];
+    const B = [{ k: 'x', w: 9 }, { k: 'z', w: 7 }];
+    const m = mergeTables(A, B, 'k', 'k');
+    const clash = mergeTables([{ k: 'x', v: 1 }], [{ k: 'x', v: 8 }], 'k', 'k');
+    return m.length === 2 && m[0].w === 9 && m[1].w === undefined
+      && clash[0].v === 1 && clash[0].v_2 === 8
+      && mergeTables(null, B, 'k', 'k') === null;
+  })());
+  check('columnValues: 取列、去重保序', (() => {
+    const rows = [{ n: 'a' }, { n: 'b' }, { n: 'a' }];
+    return JSON.stringify(columnValues(rows, 'n')) === '["a","b","a"]'
+      && JSON.stringify(columnValues(rows, 'n', { dedupe: true })) === '["a","b"]';
+  })());
+  check('toHtmlTable: 内联样式完整表格、转义特殊字符', (() => {
+    const h = toHtmlTable([{ a: '<x>', b: 1 }], '标题');
+    return h.includes('<table') && h.includes('caption') && h.includes('&lt;x&gt;')
+      && toHtmlTable([]) === '' && toHtmlTable('not array') === '';
+  })());
 }
 
 const failed = results.filter(([, ok]) => !ok);

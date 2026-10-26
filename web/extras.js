@@ -793,3 +793,109 @@ export function digitPick(key, n) {
   const i = Number(d[0]) - 1;   // 无捕获组：整段匹配就是数字本身
   return i < n ? i : -1;
 }
+
+/** ---------- 第十六轮：数据与结果的二次加工 ---------- */
+
+/** 表格筛选：按各列子串过滤行（每个词都要在某列命中；空词组返回原表）。 */
+export function filterRows(rows, terms) {
+  const qs = (Array.isArray(terms) ? terms : []).map((t) => String(t ?? '').trim().toLowerCase()).filter(Boolean);
+  if (!qs.length) return rows;
+  return rows.filter((row) => {
+    const hay = Object.values(row).map((v) => String(v ?? '')).join('\n').toLowerCase();
+    return qs.every((q) => hay.includes(q));
+  });
+}
+
+/** 列统计：数字列给 合计/均值/最小/最大；非数字列给 非空计数。 */
+export function colStats(rows, col) {
+  const nums = rows.map((r) => r?.[col])
+    .filter((v) => v !== undefined && v !== null && String(v).trim() !== '')
+    .map(Number).filter((n) => Number.isFinite(n));
+  if (!nums.length) {
+    const filled = rows.filter((r) => r?.[col] !== undefined && r?.[col] !== null && String(r[col]) !== '').length;
+    return { kind: 'text', count: filled };
+  }
+  const sum = nums.reduce((a, b) => a + b, 0);
+  return { kind: 'num', count: nums.length, sum, avg: sum / nums.length, min: Math.min(...nums), max: Math.max(...nums) };
+}
+
+/** 单位识别：值看起来像「数字+单位后缀」的列才可换算。 */
+export function unitOf(v) {
+  const m = /^\s*(-?[\d.,]+)\s*(ms|s|KB|MB|GB|TB|B)\b/i.exec(String(v ?? ''));
+  return m ? { num: Number(m[1].replace(/,/g, '')), unit: m[2] } : null;
+}
+
+/** 单位列检测：>60% 的值带单位才算单位列。 */
+export function isUnitColumn(rows, col) {
+  const vals = rows.map((r) => r?.[col]).filter((v) => v !== undefined && v !== null && String(v) !== '');
+  if (!vals.length) return false;
+  return vals.filter((v) => unitOf(v)).length / vals.length > 0.6;
+}
+
+const UNIT_FACTORS = {
+  ms: { s: 0.001 }, s: { ms: 1000 },
+  B: { KB: 1 / 1024, MB: 1 / (1024 ** 2), GB: 1 / (1024 ** 3), TB: 1 / (1024 ** 4) },
+  KB: { B: 1024, MB: 1 / 1024, GB: 1 / (1024 ** 2), TB: 1 / (1024 ** 3) },
+  MB: { B: 1024 ** 2, KB: 1024, GB: 1 / 1024, TB: 1 / (1024 ** 2) },
+  GB: { B: 1024 ** 3, KB: 1024 ** 2, MB: 1024, TB: 1 / 1024 },
+  TB: { B: 1024 ** 4, KB: 1024 ** 3, MB: 1024 ** 2, GB: 1024 },
+};
+
+/** 单位换算：把单位列整列换到目标单位（保持合适精度；不可换返回 null）。 */
+export function convertUnitColumn(rows, col, to) {
+  if (!isUnitColumn(rows, col)) return null;
+  const out = rows.map((row) => {
+    const u = unitOf(row?.[col]);
+    if (!u) return row;
+    const f = UNIT_FACTORS[u.unit.toUpperCase()]?.[String(to)] ?? UNIT_FACTORS[u.unit]?.[String(to)];
+    if (f === undefined) return row;
+    const n = u.num * f;
+    const raw = Math.abs(n) >= 100 ? n.toFixed(0) : Math.abs(n) >= 1 ? n.toFixed(2) : n.toPrecision(3);
+    const shown = String(Number(raw));  // 去尾零：2.00 → 2、0.500 → 0.5
+    return { ...row, [col]: `${shown} ${to}` };
+  });
+  return out;
+}
+
+/** 跨动作合并：两份数组结果按 key 列拼接（左连接语义；b 的同名列加后缀）。 */
+export function mergeTables(a, b, keyA, keyB, suffix = '_2') {
+  if (!Array.isArray(a) || !Array.isArray(b)) return null;
+  const idx = new Map();
+  b.forEach((row, i) => {
+    const k = String(row?.[keyB] ?? '');
+    if (!idx.has(k)) idx.set(k, i);
+  });
+  return a.map((row) => {
+    const k = String(row?.[keyA] ?? '');
+    const hit = idx.has(k) ? b[idx.get(k)] : null;
+    const extra = hit ? Object.fromEntries(Object.entries(hit)
+      .filter(([c]) => c !== keyB)
+      .map(([c, v]) => [a.some((r) => c in r) ? `${c}${suffix}` : c, v])) : {};
+    return { ...row, ...extra };
+  });
+}
+
+/** 列值提取：取一列的所有值（可选去重、保持出现顺序）。 */
+export function columnValues(rows, col, { dedupe = false } = {}) {
+  let vals = rows.map((r) => String(r?.[col] ?? ''));
+  if (dedupe) {
+    const seen = new Set();
+    vals = vals.filter((v) => (seen.has(v) ? false : (seen.add(v), true)));
+  }
+  return vals;
+}
+
+/** HTML 表格导出：贴进邮件/文档带格式的完整 HTML（含 style 内联）。 */
+export function toHtmlTable(data, title = 'zerokit 结果') {
+  if (!Array.isArray(data) || !data.length) return '';
+  const cols = [];
+  for (const row of data) for (const k of Object.keys(row ?? {})) if (!cols.includes(k)) cols.push(k);
+  const th = cols.map((c) => `<th style="border:1px solid #ccc;padding:4px 8px;background:#f5f5f5;text-align:left">${c}</th>`).join('');
+  const trs = data.map((row) => `<tr>${cols.map((c) => {
+    const v = row?.[c];
+    const val = (v && typeof v === 'object') ? JSON.stringify(v) : String(v ?? '');
+    const esc = String(val).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return `<td style="border:1px solid #ccc;padding:4px 8px">${esc}</td>`;
+  }).join('')}</tr>`).join('');
+  return `<table style="border-collapse:collapse;font-family:system-ui,sans-serif;font-size:13px"><caption style="text-align:left;font-weight:600;padding:4px 0">${title}</caption><thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table>`;
+}
