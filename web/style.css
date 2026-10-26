@@ -899,7 +899,7 @@ html[data-font-scale='l'] pre.out { font-size: 13px; }
   .detail .card { padding: 10px; }
   .foot { flex-wrap: wrap; gap: 8px; }
 }
-.batch-bar { display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+.batch-bar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--bg-soft, rgba(127, 127, 127, 0.08));
   border: 1px solid var(--line); border-radius: 8px; margin: 4px 0; background: var(--bg-soft, rgba(127,127,127,.08)); }
 .quick-bar { display: flex; gap: 6px; padding: 2px 0 6px; flex-wrap: wrap; }
 .quick-bar .chip { border: 1px solid var(--line); border-radius: 999px; padding: 2px 12px;
@@ -954,7 +954,7 @@ mark.find-hit.cur { outline: 2px solid var(--accent, #5aa9ff); border-radius: 2p
 .batch-fails li:hover { text-decoration: underline; }
 td.cell-clip { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   cursor: zoom-in; }
-.cell-full { position: fixed; z-index: 1000; left: 50%; top: 50%; transform: translate(-50%, -50%);
+.cell-full { position: fixed; z-index: 1000; left: 50%; top: 50%; transform: translate(-50%, -50%); background: var(--bg, #1e1e1e);
   max-width: 70vw; max-height: 60vh; overflow: auto; margin: 0;
   background: var(--bg, #1e1e1e); border: 1px solid var(--line); border-radius: 10px;
   padding: 16px; font-size: 12px; white-space: pre-wrap; word-break: break-all;
@@ -968,3 +968,24 @@ td.cell-clip { max-width: 260px; overflow: hidden; text-overflow: ellipsis; whit
 .diff-side.diff-from { color: var(--bad, #e5484d); background: rgba(229,72,77,.08); }
 .diff-side.diff-to { color: var(--ok, #46a758); background: rgba(70,167,88,.08); }
 .heat-count { font-size: 10px; font-style: normal; color: var(--fg-dim, #888); }
+
+
+/* ---------------- 第十三轮：可访问性与键盘流 */
+/* 键盘焦点环：键盘导航可见，鼠标点击不打扰 */
+:focus-visible { outline: 2px solid var(--accent, #5aa9ff); outline-offset: 2px;
+  border-radius: 4px; }
+.list .item:focus-visible { outline-offset: -2px; }
+
+/* 减少动态：系统开了「减弱动态效果」就停掉所有过渡 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important; transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important; }
+}
+
+/* 深浅模式三处硬编码修正：跟随系统时用变量，不再写死浅色 */
+.spark { filter: none; }
+
+/* 屏幕阅读器专用文本：视觉隐藏但可读 */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }

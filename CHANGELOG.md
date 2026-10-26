@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+### Added
+- 列表键盘流：roving tabindex（↑/↓ 移动、Enter 进入、只有选中项在 Tab 序里）
+- 全局 `:focus-visible` 焦点环与 `.sr-only` 视觉隐藏类
+- 图标按钮补 `aria-label`（星标、主题一键切换、批量条）
+- 结果区 `aria-live=polite` + 屏幕阅读器播报（成功带耗时、失败带错误摘要）
+- `prefers-reduced-motion`：系统「减弱动态效果」时停掉所有过渡动画
+- Esc 栈：优先关闭最上层浮层（长单元格弹层 > 面板 > 页面），不再一按就退出页面
+- 空态/加载态统一 `role=status`（18 处）
+
+
 ## [0.17.0] - 2026-10-27
 
 ### Added

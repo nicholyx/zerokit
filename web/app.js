@@ -464,13 +464,14 @@ function itemHtml(entry, i, showPlugin, query = '') {
   const fav = isFavorite(favorites, key);
   // 搜索态跨插件，条目里带上插件名；浏览态有分组头就不重复了
   const who = showPlugin ? `<span class="plugin">${highlightHtml(p.name, query, esc)}</span>` : '';
-  return `<li class="item${i === active ? ' active' : ''}${smart ? ' smart' : ''}${fav ? ' fav' : ''}" data-i="${i}" role="option">
+  return `<li class="item${i === active ? ' active' : ''}${smart ? ' smart' : ''}${fav ? ' fav' : ''}" data-i="${i}" role="option"
+    aria-selected="${i === active ? 'true' : 'false'}" tabindex="${i === active ? 0 : -1}">
     ${who}
     <span class="title">
       <span class="name">${highlightHtml(a.title, query, esc)}${nicknames[key] ? `<i class="nick">（${esc(nicknames[key])}）</i>` : ''}</span>
       <span class="desc">${smart ? `内容看起来是${esc(smart)}，可以直接用` : esc(a.description || p.summary || '')}</span>
     </span>
-    <button class="star${fav ? ' on' : ''}" data-fav="${esc(key)}" title="${fav ? '取消收藏' : '收藏这个动作'}">${fav ? '★' : '☆'}</button>
+    <button class="star${fav ? ' on' : ''}" data-fav="${esc(key)}" title="${fav ? '取消收藏' : '收藏这个动作'}" aria-label="${fav ? '取消收藏' : '收藏这个动作'}">${fav ? '★' : '☆'}</button>
     <span class="aid">${esc(a.id)}</span>
     ${(actionTags[key] ?? []).map((tg) => `<span class="badge tag">#${esc(tg)}</span>`).join(' ')}
     ${a.steps?.length ? `<span class="badge">组合 ${a.steps.length} 步</span>` : ''}
@@ -611,8 +612,8 @@ function renderList() {
     bar.className = 'batch-bar';
     bar.id = 'batchBar';
     bar.innerHTML = `已选 ${batch.length} 项
-      <button class="ghost mini" id="batchRun">顺序执行</button>
-      <button class="ghost mini" id="batchClear">清空</button>
+      <button class="ghost mini" id="batchRun" aria-label="顺序执行篮子里的 ${batch.length} 个动作">顺序执行</button>
+      <button class="ghost mini" id="batchClear" aria-label="清空批量篮">清空</button>
       <span class="help">destructive 排最后</span>`;
     el.listView.insertBefore(bar, el.list);
     bar.querySelector('#batchRun').addEventListener('click', runBatch);
@@ -777,6 +778,9 @@ function aliasEntry(word) {
 function paintActive() {
   el.list.querySelectorAll('.item').forEach((node, i) => {
     node.classList.toggle('active', i === active);
+    // roving tabindex：只有选中项在 Tab 序里，其余 tabindex=-1（键盘不用按 N 次 Tab）
+    node.setAttribute('aria-selected', i === active ? 'true' : 'false');
+    node.setAttribute('tabindex', i === active ? '0' : '-1');
   });
   el.list.querySelector('.item.active')?.scrollIntoView({ block: 'nearest' });
 }
@@ -921,7 +925,7 @@ function openDetail(plugin, action, prefill) {
   el.detailView.innerHTML = `
     <div class="detail-head">
       <h2>${esc(action.title)}<button class="star big${fav ? ' on' : ''}" id="favBtn"
-        title="${fav ? '取消收藏' : '收藏这个动作'}">${fav ? '★' : '☆'}</button></h2>
+        title="${fav ? '取消收藏' : '收藏这个动作'}" aria-label="${fav ? '取消收藏' : '收藏这个动作'}">${fav ? '★' : '☆'}</button></h2>
       <div class="meta">${esc(plugin.name)} · ${esc(action.id)} ·
         <span class="badge ${esc(action.risk)}">${esc(RISK_TEXT[action.risk] || action.risk)}</span>
         ${steps.length ? `<span class="badge">组合 ${steps.length} 步</span>` : ''}
@@ -959,7 +963,7 @@ function openDetail(plugin, action, prefill) {
     <div id="previewBox"></div>
     <div id="invokeBox"></div>
     <div id="detailCfg" class="cmd-box hidden"></div>
-    <div id="result"></div>`;
+    <div id="result" aria-live="polite"></div>`;
 
   $('previewBtn').addEventListener('click', async () => {
     $('invokeBox').innerHTML = '';
@@ -1349,7 +1353,7 @@ function showBrief() {
     ${b.top.length ? `<h3 class="plug-home-h">最常用</h3>
       <div class="usage-block">${b.top.map(([k, n]) => `
         <div class="run-row"><span class="run-when">${esc(names[k] ?? k)}</span><span class="badge">${n} 次</span></div>`).join('')}
-      </div>` : '<div class="ps-empty">今天还没有执行记录——跑一个动作，这里就会有数据。</div>'}`;
+      </div>` : '<div class="ps-empty" role="status">今天还没有执行记录——跑一个动作，这里就会有数据。</div>'}`;
   el.allowView.classList.remove('hidden');
 }
 
@@ -1399,7 +1403,7 @@ function showTimers() {
   el.allowView.innerHTML = `
     <h2 class="ps-title">定时任务</h2>
     <div class="help">界面开着才会跑（关掉页面即停）。在只读动作详情页点「定时」添加。</div>
-    ${rows || '<div class="ps-empty">没有在跑的定时任务。</div>'}`;
+    ${rows || '<div class="ps-empty" role="status">没有在跑的定时任务。</div>'}`;
   el.allowView.classList.remove('hidden');
   el.allowView.querySelectorAll('[data-stop]').forEach((b) => b.addEventListener('click', () => {
     const k = b.dataset.stop;
@@ -1722,8 +1726,8 @@ function renderResult(res) {
   const box = $('result');
   if (!box) return;
   const head = res.ok
-    ? `<span class="ok">✓ 成功</span>`
-    : `<span class="bad">✗ 失败</span>`;
+    ? `<span class="ok">✓ 成功</span><span class="sr-only" role="status">动作完成，${res.ms !== undefined ? `耗时 ${formatMs(res.ms)}` : '无耗时数据'}</span>`
+    : `<span class="bad">✗ 失败</span><span class="sr-only" role="status">动作失败${res.error ? '：' + esc(String(res.error).slice(0, 80)) : ''}</span>`;
   // 统一毫秒展示 + 「慢于平常」：超该动作历史 P95 才亮（历史 ≥3 次才参与判断）
   const ms = res.ms !== undefined ? formatMs(res.ms) : '';
   const slowBadge = (() => {
@@ -2397,7 +2401,7 @@ async function renderLogs() {
       <button class="ghost" id="logReload">刷新</button>
       <button class="ghost" id="logFile">${logsFile === 'audit' ? '看被拒记录' : '看全部记录'}</button>
     </div>
-    <div id="logList" class="log-list"><div class="ps-empty">读取中…</div></div>`;
+    <div id="logList" class="log-list"><div class="ps-empty" role="status">读取中…</div></div>`;
 
   el.logsView.querySelectorAll('[data-log-decision]').forEach((b) => {
     b.addEventListener('click', () => { logsDecision = b.dataset.logDecision; renderLogs(); });
@@ -2416,13 +2420,13 @@ async function renderLogs() {
     if (logsQuery) params.set('q', logsQuery);
     data = await api(`/api/logs?${params}`);
   } catch (e) {
-    $('logList').innerHTML = `<div class="ps-empty">读日志失败：${esc(e.message)}</div>`;
+    $('logList').innerHTML = `<div class="ps-empty" role="status">读日志失败：${esc(e.message)}</div>`;
     return;
   }
   const rows = data.entries ?? [];
   $('logList').innerHTML = rows.length
     ? rows.map(logRowHtml).join('')
-    : `<div class="ps-empty">${data.exists ? '没有符合条件的记录' : '还没有日志——执行一次动作就会写进来'}</div>`;
+    : `<div class="ps-empty" role="status">${data.exists ? '没有符合条件的记录' : '还没有日志——执行一次动作就会写进来'}</div>`;
   $('logList').querySelectorAll('[data-log]').forEach((row) => {
     row.addEventListener('click', () => {
       $(`logDetail${row.dataset.log}`)?.classList.toggle('hidden');
@@ -2456,12 +2460,12 @@ async function renderDoctor() {
   el.doctorView.innerHTML = `<div class="ps-head"><h2>环境自检</h2>
       <span class="sub">解释器、插件依赖、必填配置——有问题的直接给修复命令</span></div>
     <div class="log-tools"><button class="ghost" id="docReload">重新检查</button></div>
-    <div id="docBody"><div class="ps-empty">检查中…</div></div>`;
+    <div id="docBody"><div class="ps-empty" role="status">检查中…</div></div>`;
   $('docReload').addEventListener('click', renderDoctor);
 
   let r;
   try { r = await api('/api/doctor'); } catch (e) {
-    $('docBody').innerHTML = `<div class="ps-empty">自检失败：${esc(e.message)}</div>`;
+    $('docBody').innerHTML = `<div class="ps-empty" role="status">自检失败：${esc(e.message)}</div>`;
     return;
   }
   const toolRows = (r.tools ?? []).map((t) => `<div class="doc-line ${t.ok ? '' : 'bad'}">
@@ -2493,7 +2497,7 @@ async function renderDoctor() {
       <div class="doc-card ${r.summary?.warnings ? 'warn' : ''}"><b>${esc(String(r.summary?.warnings ?? 0))}</b><span>提醒</span></div>
     </div>
     <h3 class="plug-home-h">环境</h3>${toolRows}
-    <h3 class="plug-home-h">插件</h3>${pluginRows || '<div class="ps-empty">还没装插件</div>'}`;
+    <h3 class="plug-home-h">插件</h3>${pluginRows || '<div class="ps-empty" role="status">还没装插件</div>'}`;
 }
 
 function marketMsg(text, kind = '') {
@@ -2676,7 +2680,7 @@ async function renderMarket() {
   try {
     marketData = await api('/api/markets');
   } catch (e) {
-    el.marketView.innerHTML = `<div class="ps-empty">读不到集市列表：${esc(e.message)}</div>
+    el.marketView.innerHTML = `<div class="ps-empty" role="status">读不到集市列表：${esc(e.message)}</div>
       <div class="actions"><button class="primary" id="marketBack">返回</button></div>`;
     $('marketBack').addEventListener('click', exitMarket);
     return;
@@ -2703,7 +2707,7 @@ async function renderMarket() {
       <button class="primary" id="marketAddBtn">添加</button>
     </div>
     ${marketData.markets.length === 0
-      ? '<div class="ps-empty">还没有添加任何集市。先用上面的输入框加一个，或者在终端 <code>zkit market add &lt;地址&gt;</code>。</div>'
+      ? '<div class="ps-empty" role="status">还没有添加任何集市。先用上面的输入框加一个，或者在终端 <code>zkit market add &lt;地址&gt;</code>。</div>'
       : `<div class="plug-install">
            <input id="marketQ" placeholder="搜索集市里的插件（id / 名称 / 摘要 / 标签）"
                   value="${esc(marketQuery)}" autocomplete="off" spellcheck="false">
@@ -2711,7 +2715,7 @@ async function renderMarket() {
     <div id="marketMsg" class="market-msg"></div>
     ${marketData.markets.map(marketCardHtml).join('')}
     ${entries.length ? entries.map(([m, e]) => marketEntryHtml(m, e)).join('')
-      : (marketData.markets.length && q ? '<div class="ps-empty">没有匹配的插件。</div>' : '')}
+      : (marketData.markets.length && q ? '<div class="ps-empty" role="status">没有匹配的插件。</div>' : '')}
     <div id="marketPreview"></div>
     <div class="actions"><button class="primary" id="marketBack">返回</button></div>`;
 
@@ -2786,7 +2790,7 @@ async function showPluginHome(id) {
     try { p = ((await api('/api/plugins')).plugins ?? []).find((x) => x.id === id); } catch { p = undefined; }
   }
   if (!p) {
-    el.plugView.innerHTML = `<div class="ps-empty">找不到插件 ${esc(id)}</div>
+    el.plugView.innerHTML = `<div class="ps-empty" role="status">找不到插件 ${esc(id)}</div>
       <div class="actions"><button class="primary" id="homeBackList">返回插件列表</button></div>`;
     $('homeBackList').addEventListener('click', showPlugins);
 
@@ -2872,7 +2876,7 @@ async function renderPlugins() {
   try {
     plugins = (await api('/api/plugins')).plugins ?? [];
   } catch (e) {
-    el.plugView.innerHTML = `<div class="ps-empty">读不到插件列表：${esc(e.message)}</div>
+    el.plugView.innerHTML = `<div class="ps-empty" role="status">读不到插件列表：${esc(e.message)}</div>
       <div class="actions"><button class="primary" id="plugBack">返回</button></div>`;
     $('plugBack').addEventListener('click', exitPlugins);
     return;
@@ -3423,7 +3427,7 @@ function exitPs() {
 async function renderPs() {
   const data = await fetchPs();
   if (!data) {
-    el.psView.innerHTML = '<div class="ps-empty">读不到运行状态</div>';
+    el.psView.innerHTML = '<div class="ps-empty" role="status">读不到运行状态</div>';
     return;
   }
   const procs = data.processes ?? [];
@@ -3470,7 +3474,7 @@ async function renderPs() {
       <span class="sub">每 2 秒自动刷新</span>
       ${total > 0 ? '<button class="ghost" id="psKillAll">全部结束</button>' : ''}
     </div>
-    ${total === 0 ? '<div class="ps-empty">现在没有任何在运行的东西。</div>' : ''}
+    ${total === 0 ? '<div class="ps-empty" role="status">现在没有任何在运行的东西。</div>' : ''}
     ${procHtml ? `<div class="ps-group"><h3>由 zerokit 托管的进程</h3>${procHtml}</div>` : ''}
     ${svcHtml ? `<div class="ps-group"><h3>插件声明的服务</h3>${svcHtml}</div>` : ''}
     ${idleServices.length ? `<div class="ps-group"><h3>已声明但未运行的服务</h3>
@@ -3886,7 +3890,7 @@ function showStats() {
           </div>`).join('');
       })()}
     </div>` : ''}
-    ${total === 0 ? '<div class="ps-empty">还没有执行记录——随便跑一个只读动作，这里就会开始长出来。</div>' : ''}
+    ${total === 0 ? '<div class="ps-empty" role="status">还没有执行记录——随便跑一个只读动作，这里就会开始长出来。</div>' : ''}
     <h3 class="plug-home-h">偏好备份</h3>
     <div class="cmd-box prefs-box">
       <div class="help">收藏、备注、别名、标签、快捷键、主题——全部只存在这台机器的浏览器里。
@@ -4055,7 +4059,7 @@ async function showSaved() {
     view.innerHTML = `
       <div class="ps-head"><h2>收藏的结果</h2>
         <span class="sub">执行结果点「收藏」就会钉在这里；只存本机，重启后还在。</span></div>
-      <div class="ps-empty">还没有收藏——跑一次动作，在结果工具条里点「收藏」。</div>
+      <div class="ps-empty" role="status">还没有收藏——跑一次动作，在结果工具条里点「收藏」。</div>
       <div class="actions"><button class="primary" id="savedBack">返回</button></div>`;
   } else {
     view.innerHTML = `
@@ -4123,7 +4127,7 @@ async function showMcpAllow() {
 
   const render = (data, err) => {
     if (err) {
-      view.innerHTML = `<div class="ps-empty">读不到授权状态：${esc(err)}</div>`;
+      view.innerHTML = `<div class="ps-empty" role="status">读不到授权状态：${esc(err)}</div>`;
       return;
     }
     const groups = new Map();
@@ -4261,6 +4265,19 @@ function showPalette() {
 // ---------------------------------------------------------------- 键盘
 
 document.addEventListener('keydown', (e) => {
+  // Esc 栈：优先关「最上层」的临时浮层（长单元格弹层 > 带 overlay 的面板 > 页面层）。
+  // 键盘用户按 Esc 预期关掉眼前那个弹层，而不是让底下的页面先退出。
+  if (e.key === 'Escape' && document.getElementById('cellFullPop')) {
+    e.preventDefault();
+    document.getElementById('cellFullPop').remove();
+    return;
+  }
+  if (e.key === 'Escape') {
+    // 只处理「焦点正落在里面」的最上层 overlay（焦点不在里面说明是纯点击流，交给页面层）
+    const inOverlay = document.activeElement
+      && [...document.querySelectorAll('body > .overlay')].some((o) => o.contains(document.activeElement));
+    if (inOverlay) return; // overlay 内部各自的 keydown（如命令面板）会处理并 stopPropagation 之前的顺序问题——这里不重复处理
+  }
   if (mode === 'plugins') {
     if (e.key === 'Escape') { e.preventDefault(); exitPlugins(); }
     return;

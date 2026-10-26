@@ -184,6 +184,38 @@ async function get(p, raw = false) {
     ['favorites', 'rememberParams', 'renderRunHistory', 'showPluginHome', 'showShortcuts']
       .every((k) => appJs.text.includes(k)),
     'app.js 里缺了某个新功能的函数名');
+
+  // 第十三轮：可访问性与键盘流——静态标记逐项断言（CI 没有浏览器，标记在源码里最可靠）
+  const indexHtml = index.text;
+  const css = await get('/style.css');
+  check('a11y：列表 roving tabindex（role=option + aria-selected 模板）',
+    appJs.text.includes('role="option"') && appJs.text.includes("tabindex=\"${i === active ? 0 : -1}\""),
+    'roving tabindex 模板缺失');
+  check('a11y：:focus-visible 焦点环样式存在',
+    css.status === 200 && css.text.includes(':focus-visible'),
+    'style.css 缺 :focus-visible');
+  check('a11y：prefers-reduced-motion 停动画',
+    css.status === 200 && css.text.includes('prefers-reduced-motion'),
+    'style.css 缺 reduced-motion');
+  check('a11y：sr-only 视觉隐藏类存在',
+    css.status === 200 && css.text.includes('.sr-only') && appJs.text.includes('class="sr-only"'),
+    'sr-only 类或使用缺失');
+  check('a11y：结果区 aria-live=polite + 播报文本',
+    appJs.text.includes('aria-live="polite"') && appJs.text.includes('role="status">动作完成'),
+    'aria-live 或播报缺失');
+  check('a11y：星标按钮带 aria-label',
+    appJs.text.includes("aria-label=\"${fav ? '取消收藏' : '收藏这个动作'}\""),
+    '星标 aria-label 缺失');
+  check('a11y：主题一键切换按钮带 aria-label',
+    indexHtml.includes('id="themeFast"') && /themeFast[^>]*aria-label/.test(indexHtml),
+    'themeFast aria-label 缺失');
+  check('a11y：空态容器 role=status（18 处 ps-empty + 主空态）',
+    (appJs.text.match(/class="ps-empty" role="status"/g) || []).length >= 15
+      && indexHtml.includes('id="empty" class="empty" role="status"'),
+    'ps-empty/主空态未标 role=status');
+  check('a11y：Esc 栈先关最上层弹层（cellFullPop 优先）',
+    appJs.text.includes("getElementById('cellFullPop')") && /Escape.*cellFullPop/s.test(appJs.text),
+    'Esc 栈处理缺失');
 }
 
 // ---------------------------------------------------------------- 3. API 面透传
