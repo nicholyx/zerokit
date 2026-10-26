@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-10-27
+
 ### Added
 - 启动器：结果复制支持 `copy_template` 清单声明——插件可以定义复制模板（如查 IP 后复制成
   `ssh user@{result.data.ip}`），点「复制」得到可直接用的命令而不是一坨 JSON
