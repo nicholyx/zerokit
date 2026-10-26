@@ -727,3 +727,69 @@ export function recentParamSets(history, limit = 3) {
   }
   return out;
 }
+
+// ------------------------------------------------------- 第十五轮：大数据量与导航
+
+/**
+ * 虚拟滚动窗口计算：给定总数 / 滚动位置 / 视口能容纳的行数，
+ * 返回渲染区间 [start, end)（end 不含）与上下撑高的 spacer 高度。
+ * overscan 是缓冲行数，快速滚动时不闪白。
+ */
+export function virtualWindow(total, scrollTop, rowH, viewH, overscan = 6) {
+  if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(rowH) || rowH <= 0) {
+    return { start: 0, end: 0, padTop: 0, padBottom: 0 };
+  }
+  const visible = Math.ceil((Number.isFinite(viewH) && viewH > 0 ? viewH : 600) / rowH);
+  let start = Math.floor(scrollTop / rowH) - overscan;
+  if (start < 0) start = 0;
+  let end = start + visible + overscan * 2;
+  if (end > total) end = total;
+  if (start > end) start = end;
+  return { start, end, padTop: start * rowH, padBottom: (total - end) * rowH };
+}
+
+/** 分页切片：页码从 1 起，越界钳回有效范围。返回 {page, pages, slice}。 */
+export function pageSlice(list, page, per = 50) {
+  const n = Array.isArray(list) ? list.length : 0;
+  const pages = Math.max(1, Math.ceil(n / per));
+  const p = Number.isInteger(page) && page >= 1 ? Math.min(page, pages) : 1;
+  return { page: p, pages, slice: (list ?? []).slice((p - 1) * per, p * per) };
+}
+
+/** 面包屑路径：全部 › 插件 › 动作，插件段带 id 用于跳转。 */
+export function breadcrumb(plugin, action) {
+  if (!plugin) return [];
+  const crumbs = [{ kind: 'list', label: '全部', hash: '' }];
+  crumbs.push({ kind: 'plugin', label: plugin.name || plugin.id, id: plugin.id, hash: `#/plugins/${plugin.id}` });
+  if (action) crumbs.push({ kind: 'action', label: action.title || action.id, id: action.id });
+  return crumbs;
+}
+
+/** 列表状态编码进 hash query：搜索词/筛选（白名单键）。 */
+export function listStateQuery(state = {}) {
+  const params = new URLSearchParams();
+  if (state.q) params.set('q', state.q);
+  if (state.filter && state.filter !== 'all') params.set('filter', state.filter);
+  return params.toString();
+}
+
+/** 从 hash query 还原列表状态（与 listStateQuery 对偶）。 */
+export function parseListState(hash) {
+  const h = String(hash ?? '');
+  const qm = h.indexOf('?');
+  const out = { q: '', filter: 'all' };
+  if (qm < 0) return out;
+  for (const [k, v] of new URLSearchParams(h.slice(qm + 1))) {
+    if (k === 'q') out.q = v.slice(0, 100);
+    if (k === 'filter') out.filter = v;
+  }
+  return out;
+}
+
+/** 数字键 1-9 快选：按下的数字是否落在列表长度内，返回目标下标或 -1。 */
+export function digitPick(key, n) {
+  const d = /^[1-9]$/.exec(String(key ?? ''));
+  if (!d) return -1;
+  const i = Number(d[0]) - 1;   // 无捕获组：整段匹配就是数字本身
+  return i < n ? i : -1;
+}
