@@ -304,6 +304,63 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
   })());
 }
 
+
+// ------------------------------------------------ 第十四轮：表单与输入体验
+{
+  const { validateFields, dirtyFields, deepLinkParams, recentParamSets } = await import('../web/extras.js');
+  const FIELDS = [
+    { name: 'host', required: true },
+    { name: 'port', type: 'number', min: 1, max: 65535 },
+    { name: 'note' },
+    { name: 'flag', type: 'checkbox', default: false },
+  ];
+  check('validateFields: 必填空值报「必填」', (() => {
+    const errs = validateFields(FIELDS, {});
+    return errs.length === 1 && errs[0].name === 'host' && errs[0].reason === '必填';
+  })());
+  check('validateFields: 数字范围 min/max', (() => {
+    const e1 = validateFields(FIELDS, { host: 'x', port: 0 });
+    const e2 = validateFields(FIELDS, { host: 'x', port: 70000 });
+    const e3 = validateFields(FIELDS, { host: 'x', port: 8080 });
+    return e1.some((e) => e.name === 'port' && e.reason.includes('1')) && e2.length === 1 && e3.length === 0;
+  })());
+  check('validateFields: 非数字报错、空可选跳过', (() => {
+    const e1 = validateFields(FIELDS, { host: 'x', port: 'abc' });
+    return e1.length === 1 && e1[0].reason === '不是数字';
+  })());
+  check('dirtyFields: 与默认不同才算脏、checkbox 单独比', (() => {
+    const d1 = dirtyFields(FIELDS, { host: 'a' }, {});
+    const d2 = dirtyFields(FIELDS, { flag: true }, {});
+    const d3 = dirtyFields(FIELDS, { note: '' }, {});
+    return d1.includes('host') && d2.includes('flag') && d3.length === 0;
+  })());
+  check('dirtyFields: 预填值改变后回原值不算脏', (() => {
+    const d = dirtyFields(FIELDS, { note: 'x' }, { note: 'x' });
+    return d.length === 0;
+  })());
+  check('deepLinkParams: 正常 query、非法键忽略、无 query 空', (() => {
+    const a = deepLinkParams('#/sysinfo/top?host=local&port=8080');
+    const b = deepLinkParams('#/sysinfo/top');
+    const c = deepLinkParams('#/x/y?%E4%B8%AD=%E6%96%87');
+    return a.host === 'local' && a.port === '8080' && Object.keys(b).length === 0 && Object.keys(c).length === 0;
+  })());
+  check('deepLinkParams: 值解码', (() => {
+    const a = deepLinkParams('#/p/a?q=' + encodeURIComponent('磁盘 C:'));
+    return a.q === '磁盘 C:';
+  })());
+  check('recentParamSets: 只取成功、去重、限量', (() => {
+    const h = [
+      { ok: true, ts: 3, params: { a: 1 } },
+      { ok: true, ts: 2, params: { a: 1 } },
+      { ok: false, ts: 2.5, params: { b: 9 } },
+      { ok: true, ts: 1, params: { c: 2 } },
+      { ok: true, ts: 0, params: { d: 3 } },
+    ];
+    const r = recentParamSets(h, 3);
+    return r.length === 3 && r[0].params.a === 1 && !r.some((x) => x.params.b);
+  })());
+}
+
 const failed = results.filter(([, ok]) => !ok);
 console.log('\n' + '='.repeat(60));
 console.log(`通过 ${results.length - failed.length} / ${results.length}`);

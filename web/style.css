@@ -989,3 +989,17 @@ td.cell-clip { max-width: 260px; overflow: hidden; text-overflow: ellipsis; whit
 /* 屏幕阅读器专用文本：视觉隐藏但可读 */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ---------------- 第十四轮：表单与输入体验 */
+.field.has-err input, .field.has-err textarea, .field.has-err select {
+  border-color: var(--bad, #e5484d); }
+.field-err { color: var(--bad, #e5484d); font-size: 12px; margin-top: 2px; }
+.secret-wrap { display: flex; gap: 6px; align-items: center; }
+.secret-wrap input { flex: 1; }
+.eye { flex: 0 0 auto; padding: 2px 8px !important; }
+textarea.auto-grow { width: 100%; resize: vertical; font-family: inherit;
+  min-height: 60px; overflow: hidden; }
+.param-sets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  margin: 6px 0 10px; }
+.param-sets .chip { max-width: 280px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
