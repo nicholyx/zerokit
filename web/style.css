@@ -19,7 +19,10 @@ html, body {
   height: 100%;
   background: var(--bg);
   color: var(--fg);
-  font: 14px/1.55 system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  /* 基准字号交给 html[data-font-scale]（三档），这里只兜底 */
+  font-size: 14px;
+  line-height: 1.55;
+  font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
 }
 
 .shell {
@@ -873,3 +876,17 @@ mark.find-hit { background: var(--accent); color: var(--bg); border-radius: 2px;
 /* 键盘焦点环：Tab 导航可见（只给键盘，不给鼠标点击） */
 .item:focus-visible, .plug-action:focus-visible, .ghost:focus-visible, .primary:focus-visible,
 .foot-link:focus-visible, .chip:focus-visible { outline: 2px solid var(--accent, #5aa9ff); outline-offset: 2px; }
+
+/* 第八轮 */
+.nick { font-style: normal; font-size: 11px; color: var(--muted); margin-left: 4px; }
+.nick-note input { background: transparent; border: 1px solid var(--line); border-radius: 4px; color: inherit; padding: 2px 6px; }
+.fold-hint { display: block; color: var(--muted); font-size: 11px; margin: 4px 0; }
+.fold-btn { display: block; margin: 4px 0; }
+.fold-rest.hidden { display: none; }
+/* 字体三档：html[data-font-scale]（基准字号 14 → 13/14/16） */
+html[data-font-scale='s'] { font-size: 13px; }
+html[data-font-scale='m'] { font-size: 14px; }
+html[data-font-scale='l'] { font-size: 16px; }
+html[data-font-scale='l'] .list .item .name { font-size: 15px; }
+html[data-font-scale='l'] pre.out { font-size: 13px; }
+.last-run-note button.mini { padding: 1px 8px; font-size: 11px; margin-left: 6px; }

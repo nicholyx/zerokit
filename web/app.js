@@ -5,6 +5,7 @@
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
+import { pickLang, makeT } from './extras.js';
 import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport } from './extras.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
@@ -45,6 +46,8 @@ const PREF = {
   searches: 'zerokit.searches',
   tags: 'zerokit.plugin-tags',
   aliases: 'zerokit.aliases',
+  nicknames: 'zerokit.nicknames',
+  actionTags: 'zerokit.action-tags',
   saved: 'zerokit.saved-results',
   notes: 'zerokit.run-notes',
   hotkeys: 'zerokit.action-hotkeys',
@@ -59,6 +62,10 @@ let searchHistory = [];
 let listFilter = 'all';
 let pluginTags = {};
 let aliases = {};
+let nicknames = {};
+let actionTags = {};
+let lang = 'zh';
+let t = makeT(lang);
 
 function readJson(key, fallback) {
   try {
@@ -79,6 +86,39 @@ function savePrefs() {
   writeJson(PREF.runs, runStore);
   writeJson(PREF.tags, pluginTags);
   writeJson(PREF.aliases, aliases);
+  writeJson(PREF.nicknames, nicknames);
+  writeJson(PREF.actionTags, actionTags);
+}
+
+/** 收集可快照的偏好（主题/强调色/收藏/别名/昵称/标签/快捷键/字体） */
+function collectPrefsSnapshot() {
+  return {
+    theme: localStorage.getItem('zerokit.theme'),
+    accent: localStorage.getItem('zerokit.accent'),
+    fontScale: localStorage.getItem('zerokit.font-scale'),
+    favorites, aliases, nicknames, pluginTags,
+    hotkeys: readJson('zerokit.hotkeys', {}),
+    savedList: readJson('zerokit.saved', []),
+  };
+}
+
+/** 应用一组偏好快照并立即生效 */
+function applyPrefsSnapshot(snap) {
+  if (!snap || typeof snap !== 'object') return;
+  if (typeof snap.theme === 'string') localStorage.setItem('zerokit.theme', snap.theme);
+  if (typeof snap.accent === 'string') localStorage.setItem('zerokit.accent', snap.accent);
+  if (typeof snap.fontScale === 'string') localStorage.setItem('zerokit.font-scale', snap.fontScale);
+  favorites = Array.isArray(snap.favorites) ? snap.favorites.filter((x) => typeof x === 'string') : [];
+  aliases = snap.aliases && typeof snap.aliases === 'object' ? snap.aliases : {};
+  nicknames = snap.nicknames && typeof snap.nicknames === 'object' ? snap.nicknames : {};
+  pluginTags = snap.pluginTags && typeof snap.pluginTags === 'object' ? snap.pluginTags : {};
+  writeJson('zerokit.hotkeys', snap.hotkeys ?? {});
+  writeJson('zerokit.saved', Array.isArray(snap.savedList) ? snap.savedList : []);
+  applyTheme();
+  applyAccent();
+  applyFontScale();
+  savePrefs();
+  renderList();
 }
 
 function loadPrefs() {
@@ -98,7 +138,19 @@ function loadPrefs() {
   pluginTags = readJson(PREF.tags) ?? {};
   if (typeof pluginTags !== 'object' || Array.isArray(pluginTags)) pluginTags = {};
   aliases = readJson(PREF.aliases) ?? {};
+  nicknames = readJson(PREF.nicknames) ?? {};
+  actionTags = readJson(PREF.actionTags) ?? {};
+  lang = pickLang(localStorage.getItem('zerokit.lang'));
+  t = makeT(lang);
+  if (typeof actionTags !== 'object' || Array.isArray(actionTags)) actionTags = {};
+  if (typeof nicknames !== 'object' || Array.isArray(nicknames)) nicknames = {};
   if (typeof aliases !== 'object' || Array.isArray(aliases)) aliases = {};
+}
+
+/** 字体三档（小/中/大）：html[data-font-scale]，CSS 用 rem 级放大 */
+function applyFontScale() {
+  const v = localStorage.getItem('zerokit.font-scale') || 'm';
+  document.documentElement.dataset.fontScale = v;
 }
 
 function applyAccent() {
@@ -138,13 +190,25 @@ function openThemePop() {
     <div class="tp-swatches">
       ${ACCENTS.map((a) => `<button data-accent="${a.id}" title="${esc(a.label)}"
         style="background:${a.color}" class="${normalizeAccent(accent) === a.id ? 'on' : ''}"></button>`).join('')}
+    </div>
+    <div class="tp-head">字体大小</div>
+    <div class="tp-row">
+      ${[['s', '小'], ['m', '中'], ['l', '大']].map(([id, label]) => `
+        <button data-font="${id}" class="${(localStorage.getItem('zerokit.font-scale') || 'm') === id ? 'on' : ''}">${label}</button>`).join('')}
     </div>`;
   pop.classList.remove('hidden');
   // 选中后就地更新高亮，不重建 DOM、也不收起面板：重建会让本次点击的目标
   // 变成游离节点，document 上的「点外面关掉」判断就会误判成点了外面。
   const paint = () => {
     const choice = normalizeTheme(localStorage.getItem(PREF.theme));
-    pop.querySelectorAll('[data-theme-choice]').forEach((b) => {
+    pop.querySelectorAll('[data-font]').forEach((b) => {
+    b.addEventListener('click', () => {
+      localStorage.setItem('zerokit.font-scale', b.dataset.font);
+      applyFontScale();
+      pop.querySelectorAll('[data-font]').forEach((x) => x.classList.toggle('on', x === b));
+    });
+  });
+  pop.querySelectorAll('[data-theme-choice]').forEach((b) => {
       b.classList.toggle('on', b.dataset.themeChoice === choice);
     });
     pop.querySelectorAll('[data-accent]').forEach((b) => {
@@ -273,13 +337,19 @@ function scoreEntry(entry, token) {
     for (const [value, weight] of pairs) if (value * weight > m) m = value * weight;
     return m;
   };
+  // 昵称：用户自己起的名字，权重最高——他们叫它什么，搜它就该第一个出来
+  const key0 = actionKey(p.id, a.id);
+  const nick = nicknames[key0];
+  const atags = actionTags[key0] ?? [];
 
   // 动作自己这一层：名字里直接命中，"打开这个动作"的意图最明确
   const own = best(
+    [nick ? scoreOne(nick, token) * 1.2 : 0, 1.0],
     [scoreOne(a.id, token), 1.0],
     [scoreOne(a.title, token), 1.05],
     [scoreOne(entry.hayId, token), 0.9],
     [scorePinyin(entry.py.title, token), 1.05],
+    [atags.length ? scoreOne(atags.join(' '), token) * 0.95 : 0, 1.0],
   );
   if (own > 0) return own;
 
@@ -386,11 +456,12 @@ function itemHtml(entry, i, showPlugin, query = '') {
   return `<li class="item${i === active ? ' active' : ''}${smart ? ' smart' : ''}${fav ? ' fav' : ''}" data-i="${i}" role="option">
     ${who}
     <span class="title">
-      <span class="name">${highlightHtml(a.title, query, esc)}</span>
+      <span class="name">${highlightHtml(a.title, query, esc)}${nicknames[key] ? `<i class="nick">（${esc(nicknames[key])}）</i>` : ''}</span>
       <span class="desc">${smart ? `内容看起来是${esc(smart)}，可以直接用` : esc(a.description || p.summary || '')}</span>
     </span>
     <button class="star${fav ? ' on' : ''}" data-fav="${esc(key)}" title="${fav ? '取消收藏' : '收藏这个动作'}">${fav ? '★' : '☆'}</button>
     <span class="aid">${esc(a.id)}</span>
+    ${(actionTags[key] ?? []).map((tg) => `<span class="badge tag">#${esc(tg)}</span>`).join(' ')}
     ${a.steps?.length ? `<span class="badge">组合 ${a.steps.length} 步</span>` : ''}
     ${smart ? `<span class="badge smart-badge">智能匹配</span>` : ''}
     ${dep}
@@ -683,10 +754,27 @@ function openDetail(plugin, action, prefill) {
 
   const aliasKey = actionKey(plugin.id, action.id);
   const aliasName = Object.entries(aliases).find(([, v]) => v === aliasKey)?.[0];
+  const nickKey = actionKey(plugin.id, action.id);
   const aliasNote = `<div class="mem-note alias-note">别名：
     <input id="aliasInput" placeholder="起个短名（如 top）" value="${esc(aliasName ?? '')}"
       autocomplete="off" spellcheck="false" style="width:9em">
-    <span class="help">之后在搜索框直接输入短名，回车就是这个动作</span></div>`;
+    <span class="help">之后在搜索框直接输入短名，回车就是这个动作</span></div>
+    <div class="mem-note nick-note">昵称：
+    <input id="nickInput" placeholder="给这个动作起个自己的名字" value="${esc(nicknames[nickKey] ?? '')}"
+      autocomplete="off" spellcheck="false" style="width:14em">
+    <span class="help">搜索时优先命中；列表里显示在原名旁</span></div>
+    <div class="mem-note tag-note">标签：
+    <input id="atagInput" placeholder="逗号分隔，如：巡检, 报表" value="${esc((actionTags[nickKey] ?? []).join(', '))}"
+      autocomplete="off" spellcheck="false" style="width:14em">
+    <span class="help">#标签可搜索，列表里显示</span></div>`;
+
+  // 上次结果提示：同动作最近一次执行可一键回看（不是缓存复用——那会让「跑一次」
+  // 语义变味；只是给「我刚才是不是跑过这个」一个不用翻历史的入口）
+  const lastRun = (runStore[aliasKey] ?? []).at(-1);
+  const lastRunNote = lastRun
+    ? `<div class="mem-note last-run-note">上次：${lastRun.ok ? '✓ 成功' : '✗ 失败'} · ${Math.max(1, Math.round((Date.now() - lastRun.ts) / 60000))} 分钟前
+        <button class="ghost mini" id="peekLast" title="回看上次结果">回看</button></div>`
+    : '';
 
   const fields = action.fields.map((f) => {
     const req = f.required ? ' <span class="req">*</span>' : '';
@@ -731,6 +819,7 @@ function openDetail(plugin, action, prefill) {
     ${chainInfo}
     ${memNote}
   ${aliasNote}
+  ${lastRunNote}
     ${fields}
     <div id="runHistory" class="run-history"></div>
     <div class="actions">
@@ -960,6 +1049,51 @@ function openDetail(plugin, action, prefill) {
     savePrefs();
     openDetail(plugin, action, prefill);
   });
+
+  // 昵称：自己的叫法。搜索权重最高，列表里显示在原名旁
+  $('nickInput')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const key = actionKey(plugin.id, action.id);
+    const v = $('nickInput').value.trim();
+    if (v) nicknames[key] = v;
+    else delete nicknames[key];
+    savePrefs();
+    openDetail(plugin, action, prefill);
+  });
+
+  // 动作标签：自由打标，搜索与列表都认
+  $('atagInput')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const key = actionKey(plugin.id, action.id);
+    const list = $('atagInput').value.split(/[,，]/).map((x) => x.trim()).filter(Boolean).slice(0, 8);
+    if (list.length) actionTags[key] = list;
+    else delete actionTags[key];
+    savePrefs();
+    openDetail(plugin, action, prefill);
+  });
+
+  // 回看上次结果：直接用存的 data 渲染（不再发请求）
+  $('peekLast')?.addEventListener('click', () => {
+    const rec = (runStore[aliasKey] ?? []).at(-1);
+    if (!rec) return;
+    lastResult = { ok: rec.ok, ms: rec.ms, data: rec.data, stdout: rec.data === undefined ? '（上次输出未保存结构化数据）' : undefined, render: rec.data === undefined ? 'text' : 'json', ts: rec.ts };
+    renderResult(lastResult);
+    setTimeout(() => $('result')?.scrollIntoView({ block: 'start' }), 0);
+  });
+
+  // 昵称：自己的叫法。搜索权重最高，列表里显示在原名旁
+  $('nickInput')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const key = actionKey(plugin.id, action.id);
+    const v = $('nickInput').value.trim();
+    if (v) nicknames[key] = v;
+    else delete nicknames[key];
+    savePrefs();
+    openDetail(plugin, action, prefill);
+  });
     savePrefs();
     openDetail(plugin, action);
   });
@@ -995,6 +1129,17 @@ function collectValues(action) {
 
 /** 走一遍完整执行：需要确认就先弹确认框，用户取消时返回 null */
 async function executeAction(plugin, action, values, remember = false) {
+  // 高风险动作的最后一道闸：输入动作原名才能跑。确认弹窗看得见命令行，
+  // 但「看了一眼就点确认」的肌肉记忆挡不住——输入名字强迫停半秒。
+  if (action.risk === 'destructive' && !window.__zkDestructiveOk) {
+    const typed = prompt(`这是高风险动作。请输入动作名「${action.title}」以确认执行：`);
+    if (typed !== action.title) {
+      if (typed !== null) alert('输入的动作名不一致，已取消执行。');
+      return null;
+    }
+    window.__zkDestructiveOk = true;
+    setTimeout(() => { window.__zkDestructiveOk = false; }, 10_000);
+  }
   let res = await api('/api/run', {
     method: 'POST',
     body: { plugin: plugin.id, action: action.id, values },
@@ -1242,7 +1387,19 @@ function renderResult(res) {
   } else if (res.data !== undefined) {
     body += renderData(res.data, res.render, `r${++resultSeq}`);
   } else if (res.stdout) {
-    body += `<pre class="out">${esc(res.stdout)}</pre>`;
+    // 长输出折叠：超 60 行时收起后 40+ 行，一个按钮展开——翻 2000 行日志不废手
+    const lines = String(res.stdout).split('\n');
+    if (lines.length > 60) {
+      const shown = lines.slice(0, 60).join('\n');
+      const rest = lines.slice(60).join('\n');
+      const id = `fold${++resultSeq}`;
+      body += `<pre class="out">${esc(shown)}`
+        + `<span class="fold-hint">… 还有 ${lines.length - 60} 行</span>`
+        + `<button class="fold-btn" data-fold="${id}">展开全部</button>`
+        + `<span class="fold-rest hidden" id="${id}">${esc(rest)}</span></pre>`;
+    } else {
+      body += `<pre class="out">${esc(res.stdout)}</pre>`;
+    }
   }
   if (res.truncated && res.artifactPath) {
     body += `<div class="cmd-line">输出过长已截断，完整内容：${esc(res.artifactPath)}</div>`;
@@ -1429,6 +1586,11 @@ function renderResult(res) {
   // web 面的 iframe 加载完就发执行上下文（页面里的 hello 握手是双保险）
   const frame = box.querySelector('.web-frame:not(.html)');
   if (frame) frame.addEventListener('load', () => sendContext(frame));
+  box.querySelectorAll('.fold-btn').forEach((b) => b.addEventListener('click', () => {
+    const rest = document.getElementById(b.dataset.fold);
+    if (rest) rest.classList.remove('hidden');
+    b.remove();
+  }));
   bindTableSorts(box);
 }
 
@@ -3179,6 +3341,17 @@ function showStats() {
         <span class="sub" id="prefsMsg"></span>
       </div>
     </div>
+    <h3 class="plug-home-h">偏好快照（两组切换）</h3>
+    <div class="cmd-box prefs-box">
+      <div class="help">工作、生活各存一套（主题/强调色/字体/收藏/别名/昵称/标签/快捷键），
+        一键切换整套偏好。快照存在本机，不进任何云端。</div>
+      <div class="actions">
+        <button class="ghost" id="snapSaveA">存入 A 组</button>
+        <button class="ghost" id="snapSaveB">存入 B 组</button>
+        <button class="primary" id="snapUse">切换到另一组</button>
+        <span class="sub" id="snapState"></span>
+      </div>
+    </div>
     <div class="actions">
       <button class="ghost" id="statsBack">返回</button>
       ${total ? '<button class="primary" id="dailyReportBtn">生成今天的日报</button>' : ''}
@@ -3212,6 +3385,33 @@ function showStats() {
     });
   });
 
+  // 偏好快照：两组一键切换（工作/生活各一套：主题、强调色、收藏、别名、昵称、标签）
+  const renderSnap = () => {
+    const snapA = readJson('zerokit.snapA');
+    const snapB = readJson('zerokit.snapB');
+    const cur = readJson('zerokit.snapCur') ?? 'A';
+    $('snapState') && ($('snapState').textContent = `当前：${cur}`
+      + `${snapA ? ' · A 已存' : ''}${snapB ? ' · B 已存' : ''}`);
+  };
+  $('snapSaveA')?.addEventListener('click', () => {
+    writeJson('zerokit.snapA', collectPrefsSnapshot());
+    writeJson('zerokit.snapCur', 'A'); renderSnap();
+  });
+  $('snapSaveB')?.addEventListener('click', () => {
+    writeJson('zerokit.snapB', collectPrefsSnapshot());
+    writeJson('zerokit.snapCur', 'B'); renderSnap();
+  });
+  $('snapUse')?.addEventListener('click', () => {
+    const cur = readJson('zerokit.snapCur') ?? 'A';
+    const next = cur === 'A' ? 'B' : 'A';
+    const snap = readJson(next === 'A' ? 'zerokit.snapA' : 'zerokit.snapB');
+    if (!snap) { $('snapState').textContent = `${next} 组还没存过快照`; return; }
+    applyPrefsSnapshot(snap);
+    writeJson('zerokit.snapCur', next);
+    renderSnap();
+  });
+  renderSnap();
+
   $('prefsExport').addEventListener('click', async () => {
     const msg = $('prefsMsg');
     const prefs = {};
@@ -3243,7 +3443,8 @@ function showStats() {
         n++;
       }
       msg.textContent = `✓ 已导入 ${n} 项，刷新后生效`;
-      loadPrefs(); applyTheme(); applyAccent();
+      loadPrefs();
+applyFontScale(); applyTheme(); applyAccent();
     } catch (e) { msg.textContent = `导入失败：${e.message}`; }
   });
 }
@@ -3834,6 +4035,17 @@ function toggleLightDark() {
   applyTheme();
   const b = $('themeFast');
   if (b) b.textContent = next === 'light' ? '🌙' : '☀';
+}
+$('langBtn')?.addEventListener('click', () => {
+  lang = pickLang(lang === 'zh' ? 'en' : 'zh');
+  localStorage.setItem('zerokit.lang', lang);
+  t = makeT(lang);
+  applyLang();
+});
+function applyLang() {
+  el.q.placeholder = t('searchPlaceholder');
+  const run = $('runBtn');
+  if (run) run.textContent = t('run');
 }
 $('themeFast')?.addEventListener('click', toggleLightDark);
 document.addEventListener('keydown', (e) => {

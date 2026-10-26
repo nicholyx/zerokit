@@ -381,3 +381,40 @@ export function dailyReport(runs, { pluginNames = new Map() } = {}) {
   else lines.push('全部成功，稳。');
   return { title: `今天的 zerokit（${new Date().toLocaleDateString()}）`, body: lines.join('\n') };
 }
+
+
+// ---------------------------------------------------------------- 第八轮：i18n
+
+/**
+ * 界面双语（中/英）。范围：框架级文案（模式标签、通用按钮、提示、空态）。
+ * 动作/插件的名称与描述来自清单（作者的语言），不翻译——机器翻译插件描述
+ * 只会制造困惑。框架文案 ~40 条先到位，其余后续轮次增量迁移。
+ */
+export const I18N = {
+  zh: {
+    modeCommand: '命令', modePlugins: '插件', modeMarket: '集市', modeStats: '统计',
+    searchPlaceholder: '搜索动作、插件、内容…（Ctrl+K 专注）',
+    run: '执行', back: '返回', close: '关闭', copy: '复制', cancel: '取消',
+    confirm: '确认执行', all: '全部', favorite: '收藏', settings: '设置',
+    shortcuts: '快捷键', theme: '主题', empty: '什么都没有', noResult: '没有匹配的动作',
+    langLabel: '中/EN',
+  },
+  en: {
+    modeCommand: 'Commands', modePlugins: 'Plugins', modeMarket: 'Market', modeStats: 'Stats',
+    searchPlaceholder: 'Search actions, plugins, content… (Ctrl+K)',
+    run: 'Run', back: 'Back', close: 'Close', copy: 'Copy', cancel: 'Cancel',
+    confirm: 'Confirm', all: 'All', favorite: 'Favorite', settings: 'Settings',
+    shortcuts: 'Shortcuts', theme: 'Theme', empty: 'Nothing here', noResult: 'No matching actions',
+    langLabel: '中/EN',
+  },
+};
+
+export function pickLang(v) {
+  return v === 'en' ? 'en' : 'zh';
+}
+
+/** t('run') → 当前语言的文案；缺 key 回退中文再回退 key 本身。 */
+export function makeT(lang) {
+  const L = I18N[pickLang(lang)];
+  return (key) => L[key] ?? I18N.zh[key] ?? key;
+}
