@@ -1052,3 +1052,16 @@ td.tstat .sub { font-size: 11px; opacity: .75; display: block; line-height: 1.35
 .unit-conv .mini { padding: 0 6px; }
 /* 行计数 */
 .tcount { margin-top: 2px; }
+
+/* ---------- 第十七轮：导出与外部对接 ---------- */
+.term-mode.term-wrap pre { white-space: pre-wrap; word-break: break-all; }
+.export-path { font-size: 12px; opacity: .8; }
+.export-actions { display: flex; gap: 6px; }
+.flash-card { animation: zk-flash 1.2s ease-out; }
+@keyframes zk-flash {
+  0% { box-shadow: 0 0 0 3px var(--accent); }
+  100% { box-shadow: 0 0 0 3px transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flash-card { animation: none; }
+}
