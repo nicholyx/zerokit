@@ -11,6 +11,7 @@ import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
 import { barsScale, sparkPoints, formatMs, paletteScore, p95Ms } from './extras.js';
 import { filterRows, colStats, unitOf, isUnitColumn, convertUnitColumn, mergeTables, columnValues, toHtmlTable } from './extras.js';
+import { renderCopyTemplate, toJsonl, exportFilename, toMarkdownProps } from './extras.js';
 import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport, virtualWindow, pageSlice, breadcrumb, listStateQuery, parseListState, digitPick } from './extras.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
@@ -1650,9 +1651,19 @@ function notifyDone(plugin, action, res) {
     if (!('Notification' in window)) return;
     const fire = () => {
       try {
-        new Notification('zerokit', {
+        // 第十七轮⑨：点击通知聚焦窗口并滚到结果卡（后台执行完不用再找窗口）
+        const n = new Notification('zerokit', {
           body: `${res.ok === true ? '✓' : '✗'} ${plugin.name} · ${action.title}（${res.ms ?? '?'}ms）`,
           tag: 'zerokit-run',
+        });
+        n.addEventListener('click', () => {
+          try { window.focus(); } catch { /* 最小化时可能失败 */ }
+          const card = document.getElementById('result');
+          if (card) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            card.classList.add('flash-card');
+            setTimeout(() => card.classList.remove('flash-card'), 1200);
+          }
         });
       } catch { /* 通知构造失败不影响主流程 */ }
     };
@@ -1909,6 +1920,7 @@ function renderUndoHint(plugin, action) {
 }
 
 let currentResult = null;
+let lastExport = null;  // 第十七轮④⑥：最近一次导出（文件名/大小/内容），供「外部接力」用
 function refreshResult() {
   if (currentResult) renderResult(currentResult);
 }
@@ -1969,6 +1981,7 @@ function downloadCsv(data) {
 
 function renderResult(res) {
   currentResult = res;
+  lastExport = null;  // 第十七轮④⑥：每次新结果清掉旧导出记录
   const box = $('result');
   if (!box) return;
   const head = res.ok
@@ -2038,17 +2051,21 @@ function renderResult(res) {
         <button class="ghost" id="saveRes" title="把结果存成文本文件">下载</button>
         <button class="ghost" id="mdRes" title="导出成 Markdown（表格/代码块），方便贴进文档或 Issue">导出 Markdown</button>
         ${res.data !== undefined ? `<button class="ghost" id="csvRes" title="导出成 CSV，Excel / Numbers 直接打开">导出 CSV</button>
-        <button class="ghost" id="jsonRes" title="导出成 JSON，给脚本接着处理">导出 JSON</button>` : ''}
+        <button class="ghost" id="jsonRes" title="导出成 JSON，给脚本接着处理">导出 JSON</button>
+        ${toJsonl(res.data) ? `<button class="ghost" id="jsonlRes" title="导出 JSONL（每行一个 JSON，jq / ndjson 友好）">导出 JSONL</button>` : ''}` : ''}
         ${Array.isArray(res.data) && res.data.length && typeof res.data[0] === 'object' ? `<button class="ghost" id="mdTableRes" title="复制为 Markdown 表格（数字列右对齐）">复制 MD 表</button>
         <button class="ghost" id="tsvRes" title="复制为 TSV（Excel/Numbers 直接粘贴）">复制 TSV</button>
         <button class="ghost" id="htmlRes" title="复制为 HTML 表格（贴进邮件/文档带格式）">复制 HTML 表</button>` : ''}
-        <button class="ghost" id="termRes" title="终端模式查看：等宽字体、自动滚到底">终端</button>
+        <button class="ghost" id="termRes" title="终端模式查看：等宽字体、自动滚到底（进入后 w=换行开关 t=顶 b=底）">终端</button>
+        <button class="ghost" id="editRes" title="把结果文本丢给外部编辑器（ZEROKIT_EDITOR 环境变量，没配用系统默认）">编辑器打开</button>
         <button class="ghost" id="againRes" title="用同样的参数再跑一次">再跑一次</button>
         <button class="ghost" id="pinRes" title="把这条结果钉进收藏夹（#/saved），重启后还在">收藏</button>
         <button class="ghost" id="noteRes" title="给这次执行写一句备注（本机保存）">备注</button>
         <span class="ms">${esc(ms)}</span>
       </div>
       <div class="card-body">${srcNote}${body}</div>
+      <div class="export-path sub hidden" role="status" style="padding:2px 10px"> </div>
+      <div class="export-actions hidden" style="padding:0 10px 6px"><button class="ghost mini" id="openDirRes" title="在系统文件管理器里打开导出目录">打开目录</button></div>
       <div class="card-find">
         <input id="findInResult" type="text" placeholder="在结果里找…（实时高亮，Enter 下一个）" autocomplete="off" spellcheck="false">
         <span class="sub" id="findCount"></span>
@@ -2061,9 +2078,17 @@ function renderResult(res) {
 
   $('copyRes')?.addEventListener('click', async (ev) => {
     const btn = ev.currentTarget;
+    // 第十七轮①②：清单 copy_template 优先；Shift+点=美化 JSON（默认紧凑）
+    let text = copyText;
+    if (detail?.action?.copy_template) {
+      const rendered = renderCopyTemplate(detail.action.copy_template, res);
+      if (rendered !== null) text = rendered;
+    } else if (ev.shiftKey && res.data !== undefined) {
+      text = JSON.stringify(res.data, null, 2);
+    }
     try {
-      await navigator.clipboard.writeText(copyText);
-      btn.textContent = '已复制';
+      await navigator.clipboard.writeText(text);
+      btn.textContent = ev.shiftKey ? '已复制(缩进)' : '已复制';
     } catch {
       btn.textContent = '复制失败';
     }
@@ -2159,7 +2184,49 @@ function renderResult(res) {
     const body = box.querySelector('.card-body');
     if (!body) return;
     body.classList.toggle('term-mode');
-    if (body.classList.contains('term-mode')) body.scrollTop = body.scrollHeight;
+    if (body.classList.contains('term-mode')) {
+      body.scrollTop = body.scrollHeight;
+      // 第十七轮⑦：终端模式键盘——w 换行开关 / t 跳顶 / b 跳底（不抢输入框）
+      if (!body.dataset.termBound) {
+        body.dataset.termBound = '1';
+        body.tabIndex = 0;
+        body.addEventListener('keydown', (ke) => {
+          if (ke.key !== 'w' && ke.key !== 't' && ke.key !== 'b') return;
+          if (ke.target.tagName === 'INPUT' || ke.target.tagName === 'TEXTAREA') return;
+          ke.preventDefault();
+          if (ke.key === 'w') body.classList.toggle('term-wrap');
+          else if (ke.key === 't') body.scrollTop = 0;
+          else body.scrollTop = body.scrollHeight;
+        });
+      }
+      body.focus();
+    }
+  });
+  // 第十七轮⑤⑥：外部接力——编辑器打开 + 打开导出目录（走服务端 API，路径白名单在那边）
+  $('editRes')?.addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget;
+    btn.textContent = '打开中…';
+    try {
+      const r = await api('/api/edit', { method: 'POST', body: { text: copyText, name: lastExport?.name ?? (detail ? `${detail.plugin.id}-${detail.action.id}.txt` : 'result.txt') } });
+      el.count.textContent = `已在编辑器打开：${r.file ?? ''}`;
+      btn.textContent = '已打开';
+    } catch (e) {
+      el.count.textContent = `编辑器打不开：${String(e.message || e).slice(0, 120)}`;
+      btn.textContent = '失败';
+    }
+    setTimeout(() => { const b = $('editRes'); if (b) b.textContent = '编辑器打开'; }, 1600);
+  });
+  $('openDirRes')?.addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget;
+    try {
+      const r = await api('/api/open', { method: 'POST', body: (lastExport?.dir || window.__zkExportsDir) ? { target: lastExport?.dir ?? window.__zkExportsDir } : { dir: 'exports' } });
+      el.count.textContent = `已在文件管理器打开：${r.opened ?? ''}`;
+      btn.textContent = '已打开';
+    } catch (e) {
+      el.count.textContent = `目录打不开：${String(e.message || e).slice(0, 120)}`;
+      btn.textContent = '失败';
+    }
+    setTimeout(() => { const b = $('openDirRes'); if (b) b.textContent = '打开目录'; }, 1600);
   });
   $('mdTableRes')?.addEventListener('click', async (ev) => {
     const btn = ev.currentTarget;
@@ -2232,12 +2299,21 @@ function renderResult(res) {
   });
 
   const exportAs = (btnId, text, mime, ext) => {
-    $(btnId)?.addEventListener('click', () => {
+    $(btnId)?.addEventListener('click', async () => {
       const blob = new Blob([text], { type: `${mime};charset=utf-8` });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `zerokit-${detail ? `${detail.plugin.id}-${detail.action.id}` : 'result'}.${ext}`;
+      // 第十七轮④：可预测文件名 插件-动作-时间戳.扩展名（取代随机/固定名，批量导出不混淆）
+      a.download = exportFilename(detail?.plugin?.id, detail?.action?.id, ext);
+      lastExport = { name: a.download, mime: `${mime};charset=utf-8`, size: blob.size, text };
+      const pathRow = box.querySelector('.export-path');
+      if (pathRow) {
+        pathRow.textContent = `已导出：${a.download}（${Math.max(1, Math.round(blob.size / 1024))} KB）`;
+        pathRow.classList.remove('hidden');
+      }
+      const actRow = box.querySelector('.export-actions');
+      if (actRow) actRow.classList.remove('hidden');
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       const btn = $(btnId);
@@ -2247,6 +2323,9 @@ function renderResult(res) {
   if (res.data !== undefined) {
     exportAs('csvRes', '\ufeff' + toCsv(res.data), 'text/csv;charset=utf-8', 'csv');  // BOM：Excel 中文不乱码
     exportAs('jsonRes', JSON.stringify(res.data, null, 2), 'application/json', 'json');
+    // 第十七轮③：JSONL 导出（每行一个对象，jq / ndjson 友好）
+    const jsonl = toJsonl(res.data);
+    if (jsonl) exportAs('jsonlRes', jsonl, 'application/x-ndjson', 'jsonl');
   }
   // 第十六轮⑧：复制 HTML 表格——贴进邮件/文档带格式（writeText 写纯 HTML 源，富文本粘贴由目标应用解析）
   $('htmlRes')?.addEventListener('click', async (ev) => {

@@ -246,10 +246,11 @@ export function resultMarkdown(title, res) {
       out.push('```json', JSON.stringify(data, null, 2), '```');
     }
   } else if (data && typeof data === 'object') {
-    out.push('| 字段 | 值 |', '| --- | --- |');
-    for (const [k, v] of Object.entries(data)) {
-      out.push(`| ${cell(k)} | ${cell(typeof v === 'object' ? JSON.stringify(v) : v)} |`);
-    }
+    // 第十七轮⑧：对象结果导出成属性行列表（**键**: 值）——比两列表格更像「报告」，
+    // 嵌套对象缩进一层；数组值逗号连排
+    const props = toMarkdownProps(data);
+    if (props) out.push(props);
+    else out.push('| 字段 | 值 |', '| --- | --- |');
   } else if (data !== undefined && data !== null) {
     out.push(String(data));
   } else if (res.stdout) {
@@ -898,4 +899,58 @@ export function toHtmlTable(data, title = 'zerokit 结果') {
     return `<td style="border:1px solid #ccc;padding:4px 8px">${esc}</td>`;
   }).join('')}</tr>`).join('');
   return `<table style="border-collapse:collapse;font-family:system-ui,sans-serif;font-size:13px"><caption style="text-align:left;font-weight:600;padding:4px 0">${title}</caption><thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table>`;
+}
+
+// ---------- 第十七轮：导出与外部对接 ----------
+
+/** ① 复制模板：把 {a.b.c} 占位符按路径取值填进模板；取不到就原样返回 null（调用方回退纯文本）。 */
+export function renderCopyTemplate(tpl, result) {
+  if (typeof tpl !== 'string' || !tpl.includes('{')) return null;
+  let hit = false;
+  const out = tpl.replace(/\{([^{}]+)\}/g, (_, rawPath) => {
+    // 模板根名约定是 result：{result.data.ip} 的第一段映射到结果对象自身
+    const segs = String(rawPath).trim().split('.');
+    if (segs[0] === 'result') segs.shift();
+    let cur = result;
+    for (const seg of segs) {
+      if (cur == null || typeof cur !== 'object') { cur = undefined; break; }
+      cur = cur[seg];
+    }
+    if (cur === undefined || cur === null) return '';
+    hit = true;
+    return typeof cur === 'object' ? JSON.stringify(cur) : String(cur);
+  });
+  return hit ? out : null;
+}
+
+/** ③ JSONL：对象数组每行一个 JSON（jq / ndjson 友好）；非对象数组返回 null。 */
+export function toJsonl(data) {
+  if (!Array.isArray(data) || !data.length || typeof data[0] !== 'object' || Array.isArray(data[0])) return null;
+  return data.map((row) => JSON.stringify(row)).join('\n') + '\n';
+}
+
+/** ④ 可预测导出文件名：插件-动作-时间戳.扩展名（非法字符归一成 -，防路径穿越）。 */
+export function exportFilename(pluginId, actionId, ext, now = new Date()) {
+  const clean = (s) => String(s || 'result').replace(/[^\w.-]+/g, '-').replace(/^-+|\.+/g, '').replace(/-+$/g, '').slice(0, 40) || 'result';
+  const pad = (n) => String(n).padStart(2, '0');
+  const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  return `${clean(pluginId)}-${clean(actionId)}-${ts}.${clean(ext === '' ? 'txt' : ext)}`;
+}
+
+/** ⑧ 对象结果的 Markdown：属性行列表（**键**: 值），嵌套对象缩进；非对象返回 null。 */
+export function toMarkdownProps(data, indent = '') {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+  const lines = [];
+  for (const [k, v] of Object.entries(data)) {
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      lines.push(`${indent}- **${k}**:`);
+      const sub = toMarkdownProps(v, `${indent}  `);
+      if (sub) lines.push(sub);
+    } else if (Array.isArray(v)) {
+      lines.push(`${indent}- **${k}**: ${v.map((x) => (typeof x === 'object' ? JSON.stringify(x) : String(x))).join(', ')}`);
+    } else {
+      lines.push(`${indent}- **${k}**: ${v === null || v === undefined ? '' : String(v)}`);
+    }
+  }
+  return lines.join('\n');
 }

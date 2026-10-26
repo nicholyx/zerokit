@@ -117,6 +117,8 @@ function wirePlugins(): WiredPlugin[] {
         needsConfirm: confirmPolicy(a.risk) === 'always',
         // 内容智能匹配的声明：前端据此判断"输入像什么"然后推荐
         match: a.match ?? null,
+        // 复制模板（第十七轮）：结果卡「复制」按它渲染
+        copy_template: a.copy_template ?? null,
         // 组合动作的链路（只有 use/as；参数留在清单里，前端不需要知道）
         // 组合动作的链路：use/as 给前端画链路图，params 是模板原文（可能含 {占位符}，
         // 静态就写在清单里，不含运行值）
@@ -482,6 +484,74 @@ export function createServer(): http.Server {
           processes: listProcesses(),
           services: listServices(),
         });
+        return;
+      }
+
+      // 第十七轮⑤⑥：外部接力——在系统文件管理器里揭示文件 / 用外部编辑器打开文本。
+      // target 走白名单：只接受 DATA_DIR/LOG_DIR/PKG_ROOT 之内的绝对路径（防任意目录探测）。
+      if (url.pathname === '/api/open' && req.method === 'POST') {
+        const body = await readBody(req);
+        if (body['dir'] === 'exports') {
+          // 简写：浏览器下载目录拿不到绝对路径，给个一键开导出目录的入口
+          const dir = path.join(DATA_DIR, 'exports');
+          fs.mkdirSync(dir, { recursive: true });
+          json(res, 200, { opened: dir, hint: '提示：浏览器「下载」的文件在系统下载目录，此目录是「编辑器打开」落盘的位置' });
+          return;
+        }
+        const target = String(body['target'] ?? '');
+        const abs = path.resolve(target);
+        const inSandbox = [DATA_DIR, LOG_DIR, PKG_ROOT].some((base) => abs.startsWith(path.resolve(base) + path.sep) || abs === path.resolve(base));
+        if (!target || !path.isAbsolute(abs) || !inSandbox) {
+          json(res, 400, { error: '只允许打开 zerokit 数据/日志/程序目录内的路径' });
+          return;
+        }
+        if (!fs.existsSync(abs)) {
+          json(res, 404, { error: `路径不存在：${abs}` });
+          return;
+        }
+        const { spawn } = await import('node:child_process');
+        // explorer 打开「文件所在目录并选中」要 /select,；macOS/Linux 直接 open/xdg-open 目标
+        const exe = process.platform === 'win32' ? 'explorer' : process.platform === 'darwin' ? 'open' : 'xdg-open';
+        const argv = process.platform === 'win32' && fs.statSync(abs).isFile() ? ['/select,', abs] : [abs];
+        await new Promise<void>((resolve) => {
+          const child: import('node:child_process').ChildProcess = spawn(exe, argv, { windowsHide: true, detached: true });
+          child.on('error', () => resolve());
+          child.on('spawn', () => resolve());
+          setTimeout(resolve, 3000);
+        });
+        json(res, 200, { opened: abs });
+        return;
+      }
+
+      // 第十七轮⑤：把文本丢给外部编辑器（ZEROKIT_EDITOR 环境变量，或系统默认）。
+      // 内容先落到数据目录 exports/ 再打开——编辑器改的是文件，不碰剪贴板。
+      if (url.pathname === '/api/edit' && req.method === 'POST') {
+        const body = await readBody(req);
+        const text = String(body['text'] ?? '');
+        const name = String(body['name'] ?? 'result.txt').replace(/[^\w.-]+/g, '-').slice(0, 60) || 'result.txt';
+        const editorRaw = process.env['ZEROKIT_EDITOR'] ?? '';
+        let editor = editorRaw.split(/\s+/).filter(Boolean);
+        if (!editor.length) {
+          // 没配就按平台给默认：macOS 的 open -t、Windows notepad、Linux xdg-open
+          editor = process.platform === 'darwin' ? ['open', '-t']
+            : process.platform === 'win32' ? ['notepad'] : ['xdg-open'];
+        }
+        const dir = path.join(DATA_DIR, 'exports');
+        fs.mkdirSync(dir, { recursive: true });
+        const file = path.join(dir, `${Date.now()}-${name}`);
+        fs.writeFileSync(file, text, 'utf-8');
+        const { spawn } = await import('node:child_process');
+        const ok = await new Promise<boolean>((resolve) => {
+          const child: import('node:child_process').ChildProcess = spawn(editor[0] ?? 'open', [...editor.slice(1), file], { windowsHide: true, detached: true });
+          child.on('error', () => resolve(false));
+          child.on('spawn', () => resolve(true));
+          setTimeout(() => resolve(false), 3000);
+        });
+        if (!ok) {
+          json(res, 500, { error: `打不开编辑器「${editorRaw || editor.join(' ')}」——设置环境变量 ZEROKIT_EDITOR 指向你的编辑器（如 code --wait）后重试`, file });
+          return;
+        }
+        json(res, 200, { file, editor: editor.join(' ') });
         return;
       }
 

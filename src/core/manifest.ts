@@ -150,6 +150,12 @@ export interface Action {
    * 只在文本类输出（output 不是 json）时生效；不写就按顺序拼接各步的 stdout。
    */
   template?: string;
+  /**
+   * 复制模板（第十七轮）：`{result.data.字段}` 形式的占位符按路径取值渲染，
+   * 点结果卡「复制」时优先用它（取不到值回退纯文本）。
+   * 典型用法：IP 查询动作复制成 `ssh user@{result.data.ip}` 直接可用。
+   */
+  copy_template?: string;
 }
 
 /**
@@ -798,6 +804,15 @@ function parseAction(raw: unknown, errors: string[], warnings: string[]): Action
     steps,
   };
   if (type === 'chain' && template !== undefined && output !== 'json') action.template = template;
+  // 复制模板（第十七轮）：任意类型动作都可声明；占位符语法 {result.data.x} 在渲染层校验
+  const copyTemplate = asString(a['copy_template']);
+  if (copyTemplate !== undefined) {
+    if (!copyTemplate.trim()) {
+      errors.push(`动作 ${id}: copy_template 不能是空白`);
+      return undefined;
+    }
+    action.copy_template = copyTemplate;
+  }
 
   // 引用名不能和动作自己的参数重名：`{keyword}` 到底是参数还是某一步的结果？
   // 这种歧义必须在安装时挡掉，否则只能在运行时猜。

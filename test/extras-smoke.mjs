@@ -163,8 +163,8 @@ const mdObj = resultMarkdown('系统信息 · 占用最高的进程', {
   ok: true, ms: 42, command: 'node sysinfo.mjs top --limit 10',
   data: { 主机名: 'mac', 内存占用率: '61%' },
 });
-check('导出 Markdown：对象转两列表 + 页脚',
-  mdObj.includes('| 字段 | 值 |') && mdObj.includes('| 主机名 | mac |') && mdObj.includes('> 成功 · 42 ms'), mdObj);
+check('导出 Markdown：对象转属性行 + 页脚',
+  mdObj.includes('- **主机名**: mac') && mdObj.includes('> 成功 · 42 ms'), mdObj);
 const mdArr = resultMarkdown('列表', { ok: false, error: 'boom', data: [{ a: 1, b: 2 }, { a: 3, b: 4 }] });
 check('导出 Markdown：数组转表格、失败原因进引用块',
   mdArr.includes('| a | b |') && mdArr.includes('| 1 | 2 |') && mdArr.includes('> 失败：boom'), mdArr);
@@ -458,6 +458,43 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
     const h = toHtmlTable([{ a: '<x>', b: 1 }], '标题');
     return h.includes('<table') && h.includes('caption') && h.includes('&lt;x&gt;')
       && toHtmlTable([]) === '' && toHtmlTable('not array') === '';
+  })());
+
+  // ---------------- 第十七轮：导出与外部对接 ----------------
+  const { renderCopyTemplate, toJsonl, exportFilename, toMarkdownProps } = await import('../web/extras.js');
+  check('renderCopyTemplate: 路径取值、对象 JSON 化、取不到留空', (() => {
+    const res = { data: { ip: '1.2.3.4', meta: { city: '深圳' } } };
+    return renderCopyTemplate('ssh u@{result.data.ip}', res) === 'ssh u@1.2.3.4'
+      && renderCopyTemplate('{result.data.meta}', res) === '{"city":"深圳"}'
+      && renderCopyTemplate('x{result.data.no}y', res) === null
+      && renderCopyTemplate('no placeholder', res) === null
+      && renderCopyTemplate(undefined, res) === null;
+  })());
+  check('toJsonl: 每行一个对象、非对象数组拒绝', (() => {
+    const rows = [{ a: 1 }, { a: 2 }];
+    const l = toJsonl(rows);
+    return l === '{"a":1}\n{"a":2}\n'
+      && toJsonl([1, 2]) === null && toJsonl('x') === null && toJsonl([]) === null;
+  })());
+  check('exportFilename: 插件-动作-时间戳.扩展名、非法字符归一', (() => {
+    const d = new Date(2026, 9, 27, 4, 5, 6);
+    return exportFilename('sysinfo', 'top', 'csv', d) === 'sysinfo-top-20261027-040506.csv'
+      && exportFilename('a b/c', 'd', 'txt', d).startsWith('a-b-c-d-')
+      && !exportFilename('../etc', 'x', 'txt', d).includes('/')
+      && exportFilename('', '', '', d) === 'result-result-20261027-040506.txt';
+  })());
+  check('toMarkdownProps: 属性行、嵌套缩进、数组连排、null 留空', (() => {
+    const md = toMarkdownProps({ ip: '1.2.3.4', tags: ['a', 'b'], sub: { x: 1 }, none: null });
+    return md.includes('- **ip**: 1.2.3.4')
+      && md.includes('- **tags**: a, b')
+      && md.includes('- **sub**:') && md.includes('  - **x**: 1')
+      && md.includes('- **none**: ')
+      && toMarkdownProps([1, 2]) === null && toMarkdownProps('str') === null;
+  })());
+  check('resultMarkdown: 对象结果走属性行（不再是两列表格）', (() => {
+    const md = resultMarkdown('t', { ok: true, ms: 5, data: { ip: '1.2.3.4', who: 'me' } });
+    return md.includes('- **ip**: 1.2.3.4') && md.includes('- **who**: me')
+      && !md.includes('| 字段 | 值 |');
   })());
 }
 

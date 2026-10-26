@@ -25,3 +25,5 @@ url         = "{setting.endpoint}"
 output      = "json"
 render      = "keyvalue"
 risk        = "read"
+# 第十七轮示例：复制模板——点「复制」得到 ssh 命令而不是一坨 JSON
+copy_template = "ssh user@{result.data.ip}  # 出口 {result.data.ip}"
