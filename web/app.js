@@ -7,6 +7,7 @@ import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
 import { pickLang, makeT } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram } from './extras.js';
+import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
 import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport } from './extras.js';
 
@@ -1586,6 +1587,60 @@ function refreshResult() {
   if (currentResult) renderResult(currentResult);
 }
 
+/** 结果卡右键菜单：复制行/表格/Markdown/CSV/JSON/文本——工具条太长，右键是补充入口 */
+function bindResultMenu(box, res) {
+  box.addEventListener('contextmenu', (ev) => {
+    if (!ev.target.closest('.card')) return;
+    ev.preventDefault();
+    const old = document.getElementById('resMenu');
+    if (old) old.remove();
+    const menu = document.createElement('div');
+    menu.className = 'res-menu';
+    menu.id = 'resMenu';
+    const isTable = Array.isArray(res.data) && res.data.length && typeof res.data[0] === 'object';
+    const acts = RESULT_ACTIONS.filter((a) => a.needs === 'any' || (a.needs === 'table' && isTable));
+    menu.innerHTML = acts.map((a) => `<div class="res-menu-item" data-mid="${a.id}">${a.label}</div>`).join('');
+    menu.style.left = `${Math.min(ev.clientX, window.innerWidth - 220)}px`;
+    menu.style.top = `${Math.min(ev.clientY, window.innerHeight - 40 * acts.length)}px`;
+    document.body.appendChild(menu);
+    const close = () => menu.remove();
+    setTimeout(() => document.addEventListener('click', close, { once: true }), 0);
+    menu.querySelectorAll('[data-mid]').forEach((it) => it.addEventListener('click', () => {
+      const id = it.dataset.mid;
+      const tr = it.closest('.res-menu') ? null : null;
+      const row = ev.target.closest('tr');
+      const tbl = ev.target.closest('table.grid');
+      if (id === 'copyRow' && row) {
+        const cells = [...row.querySelectorAll('td')].map((td) => td.textContent).join('\t');
+        navigator.clipboard?.writeText(cells);
+      } else if (id === 'copyTable' && tbl) {
+        const lines = [...tbl.querySelectorAll('tr')].map((tr2) => [...tr2.querySelectorAll('th,td')].map((c) => c.textContent).join('\t'));
+        navigator.clipboard?.writeText(lines.join('\n'));
+      } else if (id === 'copyMarkdown' && Array.isArray(res.data)) {
+        navigator.clipboard?.writeText(markdownTable(res.data));
+      } else if (id === 'csv') {
+        downloadCsv(res.data);
+      } else if (id === 'copyJson') {
+        navigator.clipboard?.writeText(res.data !== undefined ? JSON.stringify(res.data, null, 2) : (res.stdout ?? ''));
+      } else if (id === 'copyText') {
+        navigator.clipboard?.writeText(res.data !== undefined ? JSON.stringify(res.data, null, 2) : (res.stdout ?? ''));
+      }
+      close();
+    }));
+  });
+}
+
+function downloadCsv(data) {
+  const { toCsv } = window.__zerokit;
+  const blob = new Blob(['\ufeff' + toCsv(data)], { type: 'text/csv;charset=utf-8' });  // BOM：Excel 双击打开不乱码
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `zerokit-${detail ? `${detail.plugin.id}-${detail.action.id}` : 'result'}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function renderResult(res) {
   currentResult = res;
   const box = $('result');
@@ -1645,6 +1700,9 @@ function renderResult(res) {
         <button class="ghost" id="mdRes" title="导出成 Markdown（表格/代码块），方便贴进文档或 Issue">导出 Markdown</button>
         ${res.data !== undefined ? `<button class="ghost" id="csvRes" title="导出成 CSV，Excel / Numbers 直接打开">导出 CSV</button>
         <button class="ghost" id="jsonRes" title="导出成 JSON，给脚本接着处理">导出 JSON</button>` : ''}
+        ${Array.isArray(res.data) && res.data.length && typeof res.data[0] === 'object' ? `<button class="ghost" id="mdTableRes" title="复制为 Markdown 表格（数字列右对齐）">复制 MD 表</button>
+        <button class="ghost" id="tsvRes" title="复制为 TSV（Excel/Numbers 直接粘贴）">复制 TSV</button>` : ''}
+        <button class="ghost" id="termRes" title="终端模式查看：等宽字体、自动滚到底">终端</button>
         <button class="ghost" id="againRes" title="用同样的参数再跑一次">再跑一次</button>
         <button class="ghost" id="pinRes" title="把这条结果钉进收藏夹（#/saved），重启后还在">收藏</button>
         <button class="ghost" id="noteRes" title="给这次执行写一句备注（本机保存）">备注</button>
@@ -1693,6 +1751,19 @@ function renderResult(res) {
     if (btn) { btn.textContent = '已导出'; setTimeout(() => { btn.textContent = '导出 Markdown'; }, 1500); }
   });
   // ⑤ 卡内查找：用 Highlight API 的兜底方案——把命中文本包成 <mark>
+  $('findInResult')?.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter') return;
+    const card = box.querySelector('.card-body');
+    if (!card) return;
+    const marks = [...card.querySelectorAll('mark.find-hit')];
+    if (!marks.length) return;
+    const idx = Number(card.dataset.findIdx || '0');
+    const next = (idx + (ev.shiftKey ? marks.length - 1 : 1)) % marks.length;
+    card.dataset.findIdx = String(next);
+    marks[next].scrollIntoView({ block: 'center' });
+    marks.forEach((m2, i) => m2.classList.toggle('cur', i === next));
+    $('findCount').textContent = `${next + 1}/${marks.length}`;
+  });
   $('findInResult')?.addEventListener('input', () => {
     const card = box.querySelector('.card-body');
     const needle = $('findInResult').value.trim();
@@ -1728,6 +1799,8 @@ function renderResult(res) {
         node.replaceWith(frag);
       }
       $('findCount').textContent = hits ? `${hits} 处` : '没有命中';
+      card.dataset.findHits = String(hits);
+      card.dataset.findIdx = '0';
       card.querySelector('mark.find-hit')?.scrollIntoView({ block: 'nearest' });
     } catch { /* 非法正则已在上面转义，到这里就算了 */ }
   });
@@ -1742,6 +1815,36 @@ function renderResult(res) {
     if (btn) btn.textContent = folded ? '展开' : '收起';
   });
 
+  $('termRes')?.addEventListener('click', () => {
+    const body = box.querySelector('.card-body');
+    if (!body) return;
+    body.classList.toggle('term-mode');
+    if (body.classList.contains('term-mode')) body.scrollTop = body.scrollHeight;
+  });
+  $('mdTableRes')?.addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget;
+    try { await navigator.clipboard.writeText(markdownTable(res.data)); btn.textContent = '已复制'; }
+    catch { btn.textContent = '失败'; }
+    setTimeout(() => { btn.textContent = '复制 MD 表'; }, 1500);
+  });
+  $('tsvRes')?.addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget;
+    try { await navigator.clipboard.writeText(tsvTable(res.data)); btn.textContent = '已复制'; }
+    catch { btn.textContent = '失败'; }
+    setTimeout(() => { btn.textContent = '复制 TSV'; }, 1500);
+  });
+  $('mdTableRes')?.addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget;
+    try { await navigator.clipboard.writeText(markdownTable(res.data)); btn.textContent = '已复制'; }
+    catch { btn.textContent = '失败'; }
+    setTimeout(() => { btn.textContent = '复制 MD 表'; }, 1500);
+  });
+  $('tsvRes')?.addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget;
+    try { await navigator.clipboard.writeText(tsvTable(res.data)); btn.textContent = '已复制'; }
+    catch { btn.textContent = '失败'; }
+    setTimeout(() => { btn.textContent = '复制 TSV'; }, 1500);
+  });
   $('againRes')?.addEventListener('click', () => submit(false));
   $('pinRes')?.addEventListener('click', () => {
     if (!detail) return;
@@ -1802,7 +1905,7 @@ function renderResult(res) {
     });
   };
   if (res.data !== undefined) {
-    exportAs('csvRes', toCsv(res.data), 'text/csv', 'csv');
+    exportAs('csvRes', '\ufeff' + toCsv(res.data), 'text/csv;charset=utf-8', 'csv');  // BOM：Excel 中文不乱码
     exportAs('jsonRes', JSON.stringify(res.data, null, 2), 'application/json', 'json');
   }
 
@@ -1815,6 +1918,7 @@ function renderResult(res) {
     b.remove();
   }));
   bindTableSorts(box);
+  bindResultMenu(box, res);
 }
 
 /** 两次结果逐格对比：只对对象 / 对象数组有意义，标量给一句话 */
@@ -1931,6 +2035,16 @@ function renderData(data, render, tableId = '') {
   }
   if (data && typeof data === 'object') {
     if (render === 'json') {
+      // 折叠树：键多/嵌套深时树比一整坨 JSON 可读；浅对象仍走 KV
+      const lines = jsonTreeLines(data);
+      const deep = lines.some((l) => l.depth >= 1);
+      if (deep) {
+        const id = `jt${++resultSeq}`;
+        return `<div class="json-tree" id="${id}">${lines.map((l, i) => `
+          <div class="jt-row${l.isLeaf ? ' leaf' : ' branch'}" data-jt="${i}" style="padding-left:${l.depth * 14}px">
+            ${l.isLeaf ? '' : '<i class="jt-dot">▾</i>'}${l.key !== '' ? `<b>${esc(l.key)}</b>: ` : ''}<span>${esc(l.preview)}</span>
+          </div>`).join('')}</div>`;
+      }
       return `<pre class="out">${esc(JSON.stringify(data, null, 2))}</pre>`;
     }
     return renderKV(data);
@@ -1973,12 +2087,60 @@ const tableState = {};
 function bindTableSorts(scope) {
   scope.querySelectorAll('table.grid[data-table]').forEach((tbl) => {
     const id = tbl.dataset.table || 't';
+    // 列宽记忆恢复
+    const saved = readJson(`zerokit.colw.${id}`, null);
+    if (saved) {
+      const ths = [...tbl.querySelectorAll('th')];
+      for (const [i, w] of saved.entries()) if (w && ths[i]) ths[i].style.width = `${w}px`;
+    }
     tbl.querySelectorAll('th.sortable').forEach((th) => th.addEventListener('click', () => {
       const col = th.dataset.col;
       const st = tableState[id] ?? { col: null, dir: 1 };
       tableState[id] = st.col === col ? { col, dir: -st.dir } : { col, dir: 1 };
       refreshResult();  // 用同样的数据重画整张结果卡
     }));
+    // 列宽拖拽（第十一轮①）：th 右缘 5px 热区，松手写 localStorage 记忆
+    tbl.querySelectorAll('th').forEach((th, i) => {
+      th.classList.add('colresize');
+      th.addEventListener('mousedown', (ev) => {
+        const rect = th.getBoundingClientRect();
+        if (ev.clientX < rect.right - 6) return;  // 只在右缘热区触发，别抢排序点击
+        ev.preventDefault();
+        const startX = ev.clientX;
+        const startW = rect.width;
+        const move = (e2) => { th.style.width = `${Math.max(40, startW + e2.clientX - startX)}px`; };
+        const up = () => {
+          document.removeEventListener('mousemove', move);
+          document.removeEventListener('mouseup', up);
+          const widths = [...tbl.querySelectorAll('th')].map((x) => Math.round(x.getBoundingClientRect().width));
+          try { localStorage.setItem(`zerokit.colw.${id}`, JSON.stringify(widths)); } catch { /* 私密模式忽略 */ }
+        };
+        document.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', up);
+      });
+    });
+  });
+  // JSON 折叠树：点分支行折叠/展开其直接子树
+  scope.querySelectorAll('.json-tree').forEach((tree) => {
+    const rows = [...tree.querySelectorAll('.jt-row')];
+    rows.forEach((row) => {
+      if (!row.classList.contains('branch')) return;
+      row.addEventListener('click', () => {
+        const idx = Number(row.dataset.jt);
+        const depth = jsonTreeLines(currentResult?.data ?? {}).length ? undefined : undefined;
+        // 折叠：本行 depth 之后、直到下一个 <= depth 的行
+        const all = rows;
+        const myDepth = Number(row.style.paddingLeft.replace(/px$/, '')) / 14;
+        let hide = false;
+        for (let j = idx + 1; j < all.length; j++) {
+          const d = Number(all[j].style.paddingLeft.replace(/px$/, '')) / 14;
+          if (d <= myDepth) break;
+          all[j].classList.toggle('hidden', !row.classList.contains('collapsed'));
+          hide = true;
+        }
+        if (hide) row.classList.toggle('collapsed');
+      });
+    });
   });
 }
 
@@ -4304,7 +4466,7 @@ window.__zerokit = {
   get theme() { return document.documentElement.dataset.theme; },
   get health() { return pluginHealth(plugins); },
   cycleTheme, showShortcuts, showPluginHome, renderPrompts, showLogs, showDoctor,
-  openDetail, submit, backToList,
+  openDetail, submit, backToList, renderResult,
 };
 
 /** ⑧ 深浅一键切换：记住切换前是深还是浅，往返即可 */

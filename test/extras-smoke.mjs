@@ -229,6 +229,32 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
   })());
 }
 
+
+// ------------------------------------------------ 第十一轮：专业工具感
+{
+  const { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } = await import('../web/extras.js');
+  check('markdownTable: 表头+右对齐分隔线', (() => {
+    const md = markdownTable([{ name: '磁盘', used: 123 }, { name: '内存', used: 456 }]);
+    return md.split('\n')[0] === '| name | used |' && md.split('\n')[1] === '| --- | ---: |';
+  })());
+  check('markdownTable: 竖线转义、换行压平', (() => {
+    const a = markdownTable([{ a: 'x|y' }]);
+    const b = markdownTable([{ a: 'line1' + String.fromCharCode(10) + 'line2' }]);
+    return a.includes('x\\|y') && !b.includes(String.fromCharCode(10) + 'line2 |');
+  })());
+  check('tsvTable: 制表符分隔', tsvTable([{ a: 1, b: '两' }]).includes('a\tb') && tsvTable([{ a: 1, b: '两' }]).split('\n').length === 2);
+  check('jsonTreeLines: 深度与叶子', (() => {
+    const lines = jsonTreeLines({ a: { b: 1 }, c: [1, 2] });
+    return lines[0].depth === 0 && !lines[0].isLeaf && lines[1].isLeaf && lines.some((l) => l.key === '[0]');
+  })());
+  check('RESULT_ACTIONS: 至少含表格三件套', ['copyRow', 'copyTable', 'csv'].every((id) => RESULT_ACTIONS.some((a) => a.id === id)));
+  const { toCsv } = await import('../web/extras.js');
+  check('csv 中文：首行表头 + 值原样（BOM 由下载层加）', (() => {
+    const csv = toCsv([{ 名称: '磁盘', 用量: 123 }]);
+    return csv.split('\n')[0] === '名称,用量' && csv.includes('磁盘');
+  })());
+}
+
 const failed = results.filter(([, ok]) => !ok);
 console.log('\n' + '='.repeat(60));
 console.log(`通过 ${results.length - failed.length} / ${results.length}`);

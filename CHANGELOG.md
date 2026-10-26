@@ -6,6 +6,16 @@
 
 ## [Unreleased]
 
+### Added
+- 结果表格列宽拖拽 + 记忆（按表保存到本机）
+- 结果卡右键菜单：复制本行/复制表格 TSV/复制 Markdown 表/导出 CSV/复制 JSON
+- 终端模式查看结果：等宽字体、深底、自动滚底
+- JSON 结果折叠树（嵌套对象按键/数组项缩进，点击分支折叠）
+- 结果内查找增强：Enter/Shift+Enter 逐个跳转，计数「N/M」
+- 复制为 Markdown 表格（数字列右对齐语法）与 TSV（Excel 直接粘贴）
+- CSV 导出补 BOM：Excel 双击打开中文不乱码
+- __zerokit 导出 renderResult（CDP 自动化可直接驱动结果渲染）
+
 ## [0.15.0] - 2026-10-27
 
 ### Added
