@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-27
+
 ### Added
 - 执行完成桌面通知（Notification API，后台跑长任务不再盯屏）
 - 定时任务面板 #/timers（在跑的 interval 一览、一键停止）
