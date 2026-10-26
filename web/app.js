@@ -4,6 +4,7 @@
 
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
+import { qrSvg } from './qrcode.js';
 import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport } from './extras.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
@@ -737,9 +738,13 @@ function openDetail(plugin, action, prefill) {
       <button class="ghost" id="previewBtn" title="先看真正会执行的命令行（密钥打码），再决定跑不跑">预览命令</button>
       <button class="ghost" id="invokeBtn" title="这个动作在 CLI / MCP / 深链里怎么调">调用方式</button>
       ${plugin.settings?.length ? '<button class="ghost" id="cfgBtn" title="这个插件的长期配置（端点、密钥等），保存后立即生效">配置插件</button>' : ''}
+      <button class="ghost" id="qrBtn" title="生成深链二维码，手机扫码直达这个动作">二维码</button>
+      <button class="ghost" id="timerBtn" title="只读动作按间隔自动执行（界面开着才跑）">定时</button>
+      <button class="ghost" id="shareCardBtn" title="把这次结果生成一张摘要卡（复制到剪贴板）">分享卡</button>
       <button class="ghost" id="copyJsonBtn" title="复制动作定义 JSON（写文档 / 分享给他人用）">复制 JSON</button>
       <button class="ghost" id="backBtn">返回</button>
     </div>
+    <div id="queueState" class="queue-note hidden"></div>
     <div id="previewBox"></div>
     <div id="invokeBox"></div>
     <div id="detailCfg" class="cmd-box hidden"></div>
@@ -806,6 +811,63 @@ function openDetail(plugin, action, prefill) {
       btn.textContent = '复制失败';
     }
   });
+  // 定时任务（界面内）：只读动作可设间隔自动跑。页面开着才执行——这是刻意边界，
+  // 不做后台守护：守护需要常驻进程与错过补跑策略，那是一个服务，不是一个启动器功能。
+  $('timerBtn')?.addEventListener('click', () => {
+    if (action.risk !== 'read') {
+      el.count.textContent = '只有只读动作能定时执行（有副作用的自动跑风险太大）';
+      return;
+    }
+    const sec = Number(prompt('每多少秒自动执行一次？（界面开着才会执行；输 0 取消）', '60'));
+    if (!Number.isFinite(sec)) return;
+    if (window.__zkTimer) { clearInterval(window.__zkTimer); window.__zkTimer = null; }
+    if (sec <= 0) { el.count.textContent = '已取消定时执行'; return; }
+    window.__zkTimer = setInterval(() => {
+      // 静默跑：不抢焦点，只更新计数提示
+      submit(false).then(() => {}).catch(() => {});
+    }, sec * 1000);
+    el.count.textContent = `已开启定时执行：每 ${sec} 秒一次（关页面即停）`;
+  });
+
+  // 二维码：深链 → SVG，模态展示（离线生成，不联网）
+  $('qrBtn')?.addEventListener('click', () => {
+    const deepLink = `${location.origin}${location.pathname}#/${plugin.id}/${action.id}`;
+    const overlay = document.createElement('div');
+    overlay.className = 'overlay';
+    overlay.innerHTML = `
+      <div class="modal qr-modal">
+        <h3>扫码直达这个动作</h3>
+        <div class="qr-box">${qrSvg(deepLink, { scale: 5, margin: 3 })}</div>
+        <div class="help" style="word-break:break-all">${esc(deepLink)}</div>
+        <div class="actions"><button class="ghost" id="qrClose">关闭</button></div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#qrClose').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  });
+
+  // 分享卡：结果摘要（标题/成败/耗时/命令行截断）→ 纯文本，复制到剪贴板
+  $('shareCardBtn')?.addEventListener('click', async () => {
+    const last = (runStore[actionKey(plugin.id, action.id)] ?? []).at(-1);
+    if (!last) {
+      el.count.textContent = '还没有执行结果，先跑一次再分享';
+      return;
+    }
+    const card = [
+      `【${plugin.name} · ${action.title}】`,
+      `结果：${last.ok ? '✓ 成功' : '✗ 失败'}　耗时 ${last.ms} ms`,
+      last.stdout ? `输出：${String(last.stdout).slice(0, 200)}` : '',
+      `来自 zerokit · ${new Date(last.ts).toLocaleString()}`,
+    ].filter(Boolean).join('\n');
+    try {
+      await navigator.clipboard.writeText(card);
+      el.count.textContent = '分享卡已复制到剪贴板';
+    } catch {
+      window.__shareCardFallback = card;
+      el.count.textContent = '复制被拒绝；已暂存（__shareCardFallback）';
+    }
+  });
+
   $('cfgBtn')?.addEventListener('click', async () => {
     $('previewBox').innerHTML = '';
     $('invokeBox').innerHTML = '';
@@ -954,7 +1016,25 @@ async function executeAction(plugin, action, values, remember = false) {
   return res;
 }
 
+let submitInFlight = 0;
+
+/** 队列可视化：连续触发执行时明确「排队中」，而不是看起来没反应。 */
 async function submit(remember) {
+  submitInFlight++;
+  const qEl = $('queueState');
+  if (submitInFlight > 1 && qEl) {
+    qEl.textContent = `⏳ 已有 ${submitInFlight - 1} 个在执行，本条排队中…`;
+    qEl.classList.remove('hidden');
+  }
+  try {
+    await submitInner(remember);
+  } finally {
+    submitInFlight = Math.max(0, submitInFlight - 1);
+    if (submitInFlight === 0 && qEl) qEl.classList.add('hidden');
+  }
+}
+
+async function submitInner(remember) {
   if (!detail) return;
   const { plugin, action } = detail;
   const btn = $('runBtn');
@@ -2007,6 +2087,33 @@ async function showPluginHome(id) {
     el.plugView.innerHTML = `<div class="ps-empty">找不到插件 ${esc(id)}</div>
       <div class="actions"><button class="primary" id="homeBackList">返回插件列表</button></div>`;
     $('homeBackList').addEventListener('click', showPlugins);
+
+  // 能力清单导出：把插件主页的「动作/风险/依赖/设置」拼成 Markdown 报告下载。
+  // 给的是「人能审阅」的形状——同事装之前先看这份就知道它会动什么。
+  $('homeExport')?.addEventListener('click', () => {
+    const md = [
+      `# ${p.name}（\`${p.id}\`）能力清单`,
+      '',
+      `- 版本：v${p.version}　来源：${p.sourceText}`,
+      `- 摘要：${p.summary || '（无）'}`,
+      p.description ? `- 说明：${p.description}` : '',
+      '',
+      '## 动作',
+      ...p.actions.map((a) => '- **' + a.title + '**（`' + a.id + '`）：风险 `' + a.risk + '`'
+        + (a.steps?.length ? '，组合 ' + a.steps.length + ' 步' : '') + ' —— ' + (a.description || a.title)),
+      '',
+      p.pluginDeps?.length ? '## 插件依赖\n' + p.pluginDeps.map((d) => '- `' + d.id + '`' + (d.installed ? '（已装）' : '（未装）')).join('\n') : '',
+      p.settings?.length ? '## 设置项\n' + p.settings.map((x) => '- `' + x.name + '`' + (x.required ? '（必填）' : '') + (x.secret ? '（密钥）' : '')).join('\n') : '',
+      '',
+      `> 由 zerokit 于 ${new Date().toLocaleString()} 生成`,
+    ].filter(Boolean).join('\n');
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${p.id}-capabilities.md`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
     return;
   }
 
@@ -2018,6 +2125,7 @@ async function showPluginHome(id) {
       <span class="sub">${esc(p.sourceText)}</span>
     </div>
     <div class="plug-home-desc">${esc(p.description || p.summary || '')}</div>
+    <div class="plug-home-history">📥 装于 ${esc(p.installedAt ? new Date(p.installedAt).toLocaleString() : '未知时间')} · ${esc(p.sourceText)}${p.installedVersion && p.installedVersion !== p.version ? `（记录自 v${esc(p.installedVersion)}）` : ''}</div>
     <div class="plug-home-meta">
       <span class="badge">${p.actions.length} 个动作</span>
       ${deps.length ? `<span class="badge">插件依赖 ${deps.map((d) => `${esc(d.id)}${d.installed ? '' : '（未装）'}`).join('、')}</span>` : ''}
@@ -2042,6 +2150,7 @@ async function showPluginHome(id) {
         </div>`).join('')}
       </div>` : ''}
     <div class="actions">
+      <button class="ghost" id="homeExport" title="导出这个插件的能力清单（Markdown）">导出能力清单</button>
       <button class="ghost" id="homeBackList">返回插件列表</button>
       <button class="primary" id="homeBack">返回</button>
     </div>`;
@@ -3029,7 +3138,8 @@ function showStats() {
     <h3 class="plug-home-h">最活跃的插件</h3>
     <div class="usage-block">
       ${top.map(([pid, n]) => `
-        <div class="usage-row"><span class="usage-name">${esc(pid)}</span>
+        <div class="usage-row stat-top-plugin" data-plugin="${esc(pid)}" title="点开插件主页">
+          <span class="usage-name">${esc(pid)}</span>
           <span class="usage-bar"><i style="width:${Math.round((n / maxTop) * 100)}%"></i></span>
           <span class="usage-n">${n} 次</span></div>`).join('')}
     </div>` : ''}
@@ -3074,6 +3184,9 @@ function showStats() {
       ${total ? '<button class="primary" id="dailyReportBtn">生成今天的日报</button>' : ''}
     </div>`;
   $('statsBack').addEventListener('click', exitStats);
+  view.querySelectorAll('.stat-top-plugin').forEach((row) => row.addEventListener('click', () => {
+    showPluginHome(row.dataset.plugin);
+  }));
   $('dailyReportBtn')?.addEventListener('click', () => {
     const names = new Map(plugins.map((p) => [p.id, p.name]));
     const rep = dailyReport(runs, { pluginNames: names });
@@ -3672,6 +3785,13 @@ function applyHash() {
     el.q.value = decodeURIComponent(qHash[1]);
     active = 0;
     renderList();
+    // 分享链接进来的人可能想常驻这个搜索：给一条可点的提示
+    const term = decodeURIComponent(qHash[1]);
+    if (term.trim()) {
+      el.count.textContent = `来自分享链接的搜索「${term}」`;
+      searchHistory = pushSearch(searchHistory, term);   // 记进最近搜索，下次一点即回
+      writeJson(PREF.searches, searchHistory);
+    }
     return;
   }
 
