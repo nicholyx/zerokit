@@ -143,6 +143,25 @@ export function createAnthropicProvider(ai: AiSettings): Provider {
           });
         },
         next: run,
+        // 快照只给界面读：tool_result 与 thinking 块折叠成一行文字，不泄露内部结构
+        transcript() {
+          const out: Array<{ role: 'user' | 'assistant' | 'tool'; text: string }> = [];
+          for (const m of messages) {
+            const blocks = Array.isArray(m.content) ? m.content : [{ type: 'text' as const, text: m.content }];
+            for (const b of blocks) {
+              if (b.type === 'text') out.push({ role: m.role === 'user' ? 'user' : 'assistant', text: b.text });
+              else if (b.type === 'tool_result') {
+                const inner = typeof b.content === 'string' ? b.content
+                  : Array.isArray(b.content)
+                    ? b.content.map((c) => (c.type === 'text' ? c.text : '')).join('')
+                    : '';
+                out.push({ role: 'tool', text: inner.slice(0, 200) });
+              }
+              // thinking / tool_use 块是内部结构，界面上不展示
+            }
+          }
+          return out;
+        },
       };
     },
   };

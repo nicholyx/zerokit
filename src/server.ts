@@ -48,6 +48,8 @@ const CONFIRM_SECRET = crypto.randomBytes(32);
 
 /** 工作台会话：持有该会话的模型上下文与待审批的调用 */
 const sessions = new Map<string, Workbench>();
+/** 会话档案：transcript 快照，供界面恢复对话（内存级，重启即清） */
+const chatArchives = new Map<string, Array<{ role: 'user' | 'assistant' | 'tool'; text: string }>>();
 const SESSION_TTL_MS = 30 * 60 * 1000;
 
 export interface ServerOptions {
@@ -950,7 +952,12 @@ export function createServer(): http.Server {
           onToolPending: (c) => { if (!closed) send('tool_pending', { call: c }); },
           onToolStart: (c) => { if (!closed) send('tool_start', { call: c }); },
           onToolResult: (r) => { if (!closed) send('tool_result', { result: r }); },
-          onDone: (info) => { if (!closed) send('done', info); },
+          onDone: (info) => {
+            if (!closed) send('done', info);
+            // 每轮结束存一次快照：界面刷新后能接上刚才的对话
+            const t = wb.transcript?.();
+            if (t) chatArchives.set(sessionId, t);
+          },
           onError: (m) => { if (!closed) send('error', { message: m }); },
         });
         if (!closed) res.end();

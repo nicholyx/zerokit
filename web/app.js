@@ -44,10 +44,15 @@ const PREF = {
   searches: 'zerokit.searches',
   tags: 'zerokit.plugin-tags',
   aliases: 'zerokit.aliases',
+  saved: 'zerokit.saved-results',
+  notes: 'zerokit.run-notes',
+  hotkeys: 'zerokit.action-hotkeys',
 };
 let favorites = [];
 let paramStore = {};
 let runStore = {};
+let savedList = [];   // 收藏的结果（本机）
+let notesStore = {};  // 执行备注：actionKey -> { text, ts }
 let accent = 'ocean';
 let searchHistory = [];
 let listFilter = 'all';
@@ -82,6 +87,10 @@ function loadPrefs() {
   paramStore = params && typeof params === 'object' ? params : {};
   const runs = readJson(PREF.runs, {});
   runStore = runs && typeof runs === 'object' ? runs : {};
+  savedList = readJson(PREF.saved, []);
+  if (!Array.isArray(savedList)) savedList = [];
+  notesStore = readJson(PREF.notes, {});
+  if (!notesStore || typeof notesStore !== 'object') notesStore = {};
   accent = normalizeAccent(localStorage.getItem(PREF.accent));
   const searches = readJson(PREF.searches, []);
   searchHistory = Array.isArray(searches) ? searches.filter((x) => typeof x === 'string') : [];
@@ -660,6 +669,7 @@ function openDetail(plugin, action, prefill) {
 
   const favKey = actionKey(plugin.id, action.id);
   const fav = isFavorite(favorites, favKey);
+  const note = notesStore[favKey]?.text ?? '';
   const mem = paramStore[favKey] ?? {};
   const initial = { ...mem, ...(prefill ?? {}) };
   const memNote = Object.keys(mem).length
@@ -706,6 +716,11 @@ function openDetail(plugin, action, prefill) {
         <span class="badge">${esc(action.tool)}</span>
       </div>
       <div class="desc">${esc(action.description || '（这个动作没写说明）')}</div>
+      ${note ? `<div class="detail-note">📌 ${esc(note)}</div>` : ''}
+      <div class="detail-hotkey">
+        <button class="ghost" id="hkBtn" title="把 F1–F12 里某个键绑给这个动作，全局按一下就打开">⚡ 绑定快捷键</button>
+        <span class="sub" id="hkHint">${hotkeyFor(favKey) ? `当前绑定：${hotkeyFor(favKey)}` : '未绑定（F1–F12）'}</span>
+      </div>
     </div>
     ${depWarn}
     ${chainInfo}
@@ -769,6 +784,7 @@ function openDetail(plugin, action, prefill) {
     out.innerHTML = `<div class="cmd-box"><div class="cmd-box-head">推演结果（占位符将在执行时用真实值替换）</div>${rows}</div>`;
   });
 
+  $('hkBtn')?.addEventListener('click', () => bindHotkey(favKey, action.title));
   $('cfgBtn')?.addEventListener('click', async () => {
     $('previewBox').innerHTML = '';
     $('invokeBox').innerHTML = '';
@@ -1027,6 +1043,56 @@ function renderRunHistory(plugin, action) {
   }));
 }
 
+const HOTKEYS = ['F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'];
+
+function hotkeyMap() { return readJson(PREF.hotkeys, {}); }
+
+function hotkeyFor(key) {
+  const m = hotkeyMap();
+  for (const [hk, k] of Object.entries(m)) if (k === key) return hk;
+  return null;
+}
+
+/** 给当前动作挑一个功能键；被占用的键会显示成「被 XX 占用」，点了就换绑 */
+function bindHotkey(actionKeyStr, title) {
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  const m = hotkeyMap();
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>绑定到 ${esc(title)}</h3>
+      <div class="hk-grid">${HOTKEYS.map((hk) => {
+        const owner = m[hk];
+        return `<button class="ghost hk${owner === actionKeyStr ? ' on' : ''}" data-hk="${hk}">
+          ${hk}${owner && owner !== actionKeyStr ? '<span class="hk-owner">已占用</span>' : ''}</button>`;
+      }).join('')}</div>
+      <div class="actions"><button class="ghost" id="hkClear">解除绑定</button>
+        <button class="ghost" id="hkClose">关闭</button></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-hk]');
+    if (btn) {
+      const hk = btn.dataset.hk;
+      const map = hotkeyMap();
+      // 一个键只绑一个动作；换绑时清掉旧的
+      for (const [k, v] of Object.entries(map)) if (v === actionKeyStr) delete map[k];
+      map[hk] = actionKeyStr;
+      writeJson(PREF.hotkeys, map);
+      overlay.remove();
+      const hint = $('hkHint');
+      if (hint) hint.textContent = `当前绑定：${hk}`;
+    } else if (e.target.id === 'hkClear') {
+      const map = hotkeyMap();
+      for (const [k, v] of Object.entries(map)) if (v === actionKeyStr) delete map[k];
+      writeJson(PREF.hotkeys, map);
+      overlay.remove();
+      const hint = $('hkHint');
+      if (hint) hint.textContent = '未绑定（F1–F12）';
+    } else if (e.target === overlay || e.target.id === 'hkClose') overlay.remove();
+  });
+}
+
 /** 高风险动作执行后的「安心提示」：给出审计日志入口，并提示没有自动回滚 */
 function renderUndoHint(plugin, action) {
   const box = $('result');
@@ -1088,8 +1154,9 @@ function renderResult(res) {
   const copyText = res.data !== undefined ? JSON.stringify(res.data, null, 2) : (res.stdout ?? '');
   box.innerHTML = `
     <div class="card">
-      <div class="card-head">${head}
+      <div class="card-head" id="cardHead" title="点这里折叠 / 展开结果">${head}
         <span style="margin-left:auto" class="aid">${esc(res.command || '')}</span>
+        <button class="ghost" id="cardFold" title="折叠 / 展开结果">收起</button>
       </div>
       <div class="result-tools">
         <button class="ghost" id="copyRes" title="把结果复制到剪贴板">复制</button>
@@ -1098,9 +1165,19 @@ function renderResult(res) {
         ${res.data !== undefined ? `<button class="ghost" id="csvRes" title="导出成 CSV，Excel / Numbers 直接打开">导出 CSV</button>
         <button class="ghost" id="jsonRes" title="导出成 JSON，给脚本接着处理">导出 JSON</button>` : ''}
         <button class="ghost" id="againRes" title="用同样的参数再跑一次">再跑一次</button>
+        <button class="ghost" id="pinRes" title="把这条结果钉进收藏夹（#/saved），重启后还在">收藏</button>
+        <button class="ghost" id="noteRes" title="给这次执行写一句备注（本机保存）">备注</button>
         <span class="ms">${esc(ms)}</span>
       </div>
       <div class="card-body">${body}</div>
+      <div class="card-find">
+        <input id="findInResult" type="text" placeholder="在结果里找…（实时高亮，Enter 下一个）" autocomplete="off" spellcheck="false">
+        <span class="sub" id="findCount"></span>
+      </div>
+      <div id="noteBox" class="note-box hidden">
+        <input id="noteInput" type="text" placeholder="备注：这次执行有什么值得记的？（存本机）" autocomplete="off">
+        <button class="primary" id="noteSave">保存</button>
+      </div>
     </div>`;
 
   $('copyRes')?.addEventListener('click', async (ev) => {
@@ -1134,7 +1211,101 @@ function renderResult(res) {
     const btn = $('mdRes');
     if (btn) { btn.textContent = '已导出'; setTimeout(() => { btn.textContent = '导出 Markdown'; }, 1500); }
   });
+  // ⑤ 卡内查找：用 Highlight API 的兜底方案——把命中文本包成 <mark>
+  $('findInResult')?.addEventListener('input', () => {
+    const card = box.querySelector('.card-body');
+    const needle = $('findInResult').value.trim();
+    // 先还原上次的高亮（缓存原始 HTML 代价高；用 mark/data 反解不可靠，直接重渲染）
+    if (!card) return;
+    if (!card.dataset.orig) card.dataset.orig = card.innerHTML;
+    if (!needle) { card.innerHTML = card.dataset.orig; $('findCount').textContent = ''; return; }
+    try {
+      const re = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+      // 只处理文本节点，避免把标签剪坏
+      const walker = document.createTreeWalker(card, NodeFilter.SHOW_TEXT);
+      const texts = [];
+      while (walker.nextNode()) texts.push(walker.currentNode);
+      let hits = 0;
+      for (const node of texts) {
+        if (!node.textContent.toLowerCase().includes(needle.toLowerCase())) continue;
+        const frag = document.createDocumentFragment();
+        let rest = node.textContent;
+        let m2;
+        re.lastIndex = 0;
+        let last = 0;
+        while ((m2 = re.exec(rest))) {
+          frag.append(rest.slice(last, m2.index));
+          const mark = document.createElement('mark');
+          mark.className = 'find-hit';
+          mark.textContent = m2[0];
+          frag.append(mark);
+          hits++;
+          last = m2.index + m2[0].length;
+          if (m2[0].length === 0) re.lastIndex++;
+        }
+        frag.append(rest.slice(last));
+        node.replaceWith(frag);
+      }
+      $('findCount').textContent = hits ? `${hits} 处` : '没有命中';
+      card.querySelector('mark.find-hit')?.scrollIntoView({ block: 'nearest' });
+    } catch { /* 非法正则已在上面转义，到这里就算了 */ }
+  });
+
+  // ⑨ 折叠结果：大结果看完一眼就可以收起来，参数还在上面可以改了重跑
+  $('cardFold')?.addEventListener('click', () => {
+    const bodyEl = box.querySelector('.card-body');
+    const find = box.querySelector('.card-find');
+    const btn = $('cardFold');
+    const folded = bodyEl.classList.toggle('hidden');
+    find?.classList.toggle('hidden', folded);
+    if (btn) btn.textContent = folded ? '展开' : '收起';
+  });
+
   $('againRes')?.addEventListener('click', () => submit(false));
+  $('pinRes')?.addEventListener('click', () => {
+    if (!detail) return;
+    savedList.unshift({
+      key: actionKey(detail.plugin.id, detail.action.id),
+      plugin: detail.plugin.name,
+      action: detail.action.title,
+      command: res.command || '',
+      ok: Boolean(res.ok),
+      ms: res.ms ?? null,
+      ts: Date.now(),
+      data: res.data,
+      stdout: res.stdout,
+    });
+    savedList = savedList.slice(0, 50);
+    writeJson(PREF.saved, savedList);
+    const btn = $('pinRes');
+    if (btn) { btn.textContent = '已收藏'; btn.disabled = true; }
+  });
+  $('noteRes')?.addEventListener('click', () => {
+    const box = $('noteBox');
+    if (!box) return;
+    box.classList.toggle('hidden');
+    if (!box.classList.contains('hidden')) {
+      const k = detail ? actionKey(detail.plugin.id, detail.action.id) : '';
+      $('noteInput').value = notesStore[k]?.text ?? '';
+      $('noteInput').focus();
+    }
+  });
+  $('noteSave')?.addEventListener('click', () => {
+    if (!detail) return;
+    const k = actionKey(detail.plugin.id, detail.action.id);
+    const text = $('noteInput').value.trim();
+    if (text) notesStore[k] = { text, ts: Date.now() };
+    else delete notesStore[k];
+    writeJson(PREF.notes, notesStore);
+    const box = $('noteBox');
+    if (box) box.classList.add('hidden');
+    // 详情页头部显示备注（下次打开还能看见）
+    const head = document.querySelector('.detail-note');
+    if (head) {
+      head.textContent = text ? `📌 ${text}` : '';
+      head.classList.toggle('hidden', !text);
+    }
+  });
 
   const exportAs = (btnId, text, mime, ext) => {
     $(btnId)?.addEventListener('click', () => {
@@ -1869,6 +2040,14 @@ async function renderPlugins() {
     <div class="ps-head">
       <h2>插件（${plugins.length}）</h2>
       <span class="sub">来源与版本 · 安装 · 更新</span>
+      <span class="head-sort">
+        <label>排序：</label>
+        <select id="plugSort">
+          <option value="name"${readJson('zerokit.plugin-sort', 'name') === 'name' ? ' selected' : ''}>名称</option>
+          <option value="actions"${readJson('zerokit.plugin-sort', 'name') === 'actions' ? ' selected' : ''}>动作数</option>
+          <option value="installed"${readJson('zerokit.plugin-sort', 'name') === 'installed' ? ' selected' : ''}>最近安装</option>
+        </select>
+      </span>
     </div>
     <div class="stat-row">
       <div class="stat-card"><b>${health.actions}</b><span>个动作</span></div>
@@ -1916,7 +2095,15 @@ async function renderPlugins() {
       <button class="ghost" id="plugBatchCheck" disabled>批量检查更新</button>
       <span class="sub" id="plugBatchNote"></span>
     </div>
-    ${plugins.map((p) => {
+    ${(() => {
+      // ⑥ 面板排序：名称 / 动作数 / 最近安装（选择只存本机）
+      const sortMode = readJson('zerokit.plugin-sort', 'name');
+      const sorted = [...plugins].sort((a, b) => {
+        if (sortMode === 'actions') return b.actions.length - a.actions.length;
+        if (sortMode === 'installed') return String(b.installedAt ?? '').localeCompare(String(a.installedAt ?? ''));
+        return a.name.localeCompare(b.name, 'zh');
+      });
+      return sorted.map((p) => {
       const tags = pluginTags[p.id] ?? [];
       return `
       <div class="plug-card" data-id="${esc(p.id)}">
@@ -1947,7 +2134,8 @@ async function renderPlugins() {
         <div class="plug-config" hidden></div>
         <div class="plug-card-foot" hidden></div>
       </div>`;
-    }).join('')}
+    }).join('');
+    })()}
     <div class="actions"><button class="primary" id="plugBack">返回</button></div>`;
 
   $('installSrc').addEventListener('keydown', (e) => {
@@ -1955,6 +2143,10 @@ async function renderPlugins() {
   });
   $('installBtn').addEventListener('click', doInstall);
   $('plugBack').addEventListener('click', exitPlugins);
+  $('plugSort')?.addEventListener('change', (e) => {
+    writeJson('zerokit.plugin-sort', e.target.value);
+    renderPlugins();
+  });
 
   // 新建插件：三个问题（id / 名字 / 语言）→ 生成骨架 → 开发模式装好
   $('newPluginBtn')?.addEventListener('click', () => {
@@ -2476,6 +2668,7 @@ async function killTarget(ids, btn, all = false) {
 
 const wb = {
   sessionId: '',
+  restored: false,
   model: '',
   busy: false,
   log: null,
@@ -2493,6 +2686,26 @@ function exitWorkbench() {
   el.q.value = '';
   renderList();
   el.q.focus();
+}
+
+/** 恢复上次的工作台对话：服务端内存里有这个 sessionId 的转录就重画出来 */
+async function restoreWb() {
+  if (!wb.sessionId || wb.restored || !wb.log) return;
+  wb.restored = true;
+  try {
+    const r = await api(`/api/chat/state?sessionId=${encodeURIComponent(wb.sessionId)}`);
+    if (!r.exists || !r.messages?.length) return;
+    wb.log.innerHTML = r.messages.map((m) => {
+      if (m.role === 'user') return `<div class="wb-msg user">${esc(m.text)}</div>`;
+      if (m.role === 'tool') return `<div class="wb-msg tool">${esc(m.text)}</div>`;
+      return `<div class="wb-msg assistant">${esc(m.text)}</div>`;
+    }).join('');
+    wb.log.scrollTop = wb.log.scrollHeight;
+    const note = document.createElement('div');
+    note.className = 'wb-restored';
+    note.textContent = '（已恢复上次会话——重新加载页面后对话还在）';
+    wb.log.prepend(note);
+  } catch { /* 服务端重启后档案没了，就当新会话 */ }
 }
 
 function showWorkbench(question) {
@@ -2525,9 +2738,14 @@ function showWorkbench(question) {
     $('wbQ').addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); wbSend(); }
     });
-    $('wbReset').addEventListener('click', () => { wb.sessionId = ''; wb.log.innerHTML = ''; });
+    $('wbReset').addEventListener('click', () => {
+      wb.sessionId = '';
+      wb.restored = false;
+      wb.log.innerHTML = '';
+    });
     loadAiInfo();
     renderPrompts();
+    restoreWb();
   }
 
   if (question) {
@@ -2809,6 +3027,77 @@ function exitStats() {
   el.q.focus();
 }
 
+
+// ---------------------------------------------------------------- 结果收藏夹
+
+/** 收藏的结果：钉住某次执行的关键输出，重启后还在（本机 localStorage）。 */
+async function showSaved() {
+  mode = 'saved';
+  el.modeLabel.textContent = '收藏';
+  el.searchRow.classList.add('hidden');
+  hidePanels();
+  const view = el.allowView;
+  view.classList.remove('hidden');
+  if (location.hash !== '#/saved') history.replaceState(null, '', '#/saved');
+
+  if (!savedList.length) {
+    view.innerHTML = `
+      <div class="ps-head"><h2>收藏的结果</h2>
+        <span class="sub">执行结果点「收藏」就会钉在这里；只存本机，重启后还在。</span></div>
+      <div class="ps-empty">还没有收藏——跑一次动作，在结果工具条里点「收藏」。</div>
+      <div class="actions"><button class="primary" id="savedBack">返回</button></div>`;
+  } else {
+    view.innerHTML = `
+      <div class="ps-head"><h2>收藏的结果 <span class="sub">${savedList.length} 条 · 只存本机</span></h2></div>
+      ${savedList.map((x, i) => `
+        <div class="plug-card saved-card">
+          <div class="plug-card-head">
+            <b>${esc(x.action)}</b>
+            <span class="aid">${esc(x.plugin)}</span>
+            <span class="badge ${x.ok ? 'read' : 'destructive'}">${x.ok ? '成功' : '失败'}</span>
+            ${x.ms != null ? `<span class="badge">${x.ms} ms</span>` : ''}
+            <span class="plug-ops">
+              <button class="ghost" data-open="${i}">打开动作</button>
+              <button class="ghost" data-del="${i}">移除</button>
+            </span>
+          </div>
+          <div class="saved-cmd">${esc(x.command)}</div>
+          <div class="saved-data"><pre>${esc(x.data !== undefined ? JSON.stringify(x.data, null, 1) : (x.stdout ?? '')).slice(0, 400)}</pre></div>
+        </div>`).join('')}
+      <div class="actions"><button class="primary" id="savedBack">返回</button>
+        <button class="ghost" id="savedClear">清空收藏</button></div>`;
+    view.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => {
+      const x = savedList[Number(b.dataset.open)];
+      const dot = x.key.indexOf('.');
+      const e = __zerokit.entries.find((en) => en.plugin.id === x.key.slice(0, dot)
+        && en.action.id === x.key.slice(dot + 1));
+      if (e) { exitSaved(); __zerokit.openDetail(e.plugin, e.action); }
+    }));
+    view.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => {
+      savedList.splice(Number(b.dataset.del), 1);
+      writeJson(PREF.saved, savedList);
+      showSaved();
+    }));
+    $('savedClear')?.addEventListener('click', () => {
+      savedList = [];
+      writeJson(PREF.saved, savedList);
+      showSaved();
+    });
+  }
+  $('savedBack')?.addEventListener('click', exitSaved);
+}
+
+function exitSaved() {
+  mode = 'command';
+  el.allowView.classList.add('hidden');
+  el.searchRow.classList.remove('hidden');
+  el.listView.classList.remove('hidden');
+  el.modeLabel.textContent = '命令';
+  history.replaceState(null, '', location.pathname);
+  renderList();
+  el.q.focus();
+}
+
 // ---------------------------------------------------------------- MCP 授权面板
 
 /** MCP 授权：哪些「有副作用」的动作允许 AI 直接调。只读动作默认放行，不在这里。 */
@@ -2973,6 +3262,10 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { e.preventDefault(); exitMcpAllow(); }
     return;
   }
+  if (mode === 'saved') {
+    if (e.key === 'Escape') { e.preventDefault(); exitSaved(); }
+    return;
+  }
   if (mode === 'stats') {
     if (e.key === 'Escape') { e.preventDefault(); exitStats(); }
     return;
@@ -2991,6 +3284,21 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { e.preventDefault(); backToList(); }
     else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(true); }
     return;
+  }
+  // F1–F12：绑定的动作一键直达（在任何模式下都生效）
+  if (/^F([1-9]|1[0-2])$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    const target = hotkeyMap()[e.key];
+    if (target) {
+      e.preventDefault();
+      const dot = target.indexOf('.');
+      const entry = entries.find((en) => en.plugin.id === target.slice(0, dot)
+        && en.action.id === target.slice(dot + 1));
+      if (entry) {
+        if (detail) __zerokit.backToList();
+        openDetail(entry.plugin, entry.action);
+      }
+    }
+    return; // 没绑定的功能键不拦，让浏览器自己处理
   }
   // Ctrl+P / Ctrl+K：全局命令面板（键盘党不用碰鼠标）
   if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.key === 'k' || e.key === 'K')) {
@@ -3036,6 +3344,17 @@ el.clipBtn.addEventListener('click', async () => {
     el.q.value = text.trim();
     active = 0;
     renderList();
+    // 剪贴板里的东西往往就是「输入」：有智能匹配时把推荐条目置顶并提示
+    if (filteredSmart.size > 0) {
+      const firstOrder = filteredSmart.keys().next().value;
+      const label = filteredSmart.get(firstOrder);
+      const idx = filtered.findIndex((x) => x.order === firstOrder);
+      if (idx >= 0) {
+        active = idx;
+        paintActive();
+        el.count.textContent = `剪贴板识别为「${label}」——回车直接用`;
+      }
+    }
   } catch {
     // 浏览器要求授权才能读剪贴板；直接说清楚，别静默失败
     el.count.textContent = '读剪贴板被浏览器拒绝了，请允许剪贴板权限';
@@ -3199,6 +3518,12 @@ function applyHash() {
     return;
   }
 
+  // #/saved  直接打开「收藏的结果」
+  if ((location.hash || '') === '#/saved') {
+    showSaved();
+    return;
+  }
+
   // #/stats  全局统计
   if ((location.hash || '') === '#/stats') {
     showStats();
@@ -3243,6 +3568,25 @@ window.__zerokit = {
   openDetail, submit, backToList,
 };
 
+/** ⑧ 深浅一键切换：记住切换前是深还是浅，往返即可 */
+function toggleLightDark() {
+  const now = document.documentElement.dataset.theme;
+  const prev = readJson('zerokit.theme-before-fast', null);
+  const next = now === 'light' ? (prev && prev !== 'light' ? prev : 'dark') : 'light';
+  if (now !== 'light') writeJson('zerokit.theme-before-fast', now);
+  try { localStorage.setItem(PREF.theme, next); } catch { /* 隐私模式 */ }
+  applyTheme();
+  const b = $('themeFast');
+  if (b) b.textContent = next === 'light' ? '🌙' : '☀';
+}
+$('themeFast')?.addEventListener('click', toggleLightDark);
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'd' || e.key === 'D')) {
+    e.preventDefault();
+    toggleLightDark();
+  }
+});
+
 loadPrefs();
 applyTheme();
 applyAccent();
@@ -3255,6 +3599,7 @@ document.addEventListener('click', (e) => {
   pop.classList.add('hidden');
 });
 $('logsBtn')?.addEventListener('click', showLogs);
+$('savedBtn')?.addEventListener('click', () => { if (mode === 'saved') exitSaved(); else showSaved(); });
 $('doctorBtn')?.addEventListener('click', showDoctor);
 $('helpBtn')?.addEventListener('click', showShortcuts);
 
