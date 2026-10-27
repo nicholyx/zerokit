@@ -1503,3 +1503,55 @@ export function pushHistory(list, entry, limit = 10) {
   const rest = (Array.isArray(list) ? list : []).filter((x) => x !== entry);
   return [entry, ...rest].slice(0, limit);
 }
+
+// ================================================================ 第二十五轮：执行链路与批处理进阶
+
+/** ②链占位符：把 `{result.data.字段}` / `{result.stdout}` 换成上一步结果值（同 CLI chain 语义） */
+export function chainFill(tpl, prev) {
+  if (tpl == null) return tpl;
+  let s = String(tpl);
+  const stdout = prev?.stdout ?? '';
+  const data = prev?.data ?? {};
+  s = s.replace(/\{result\.stdout\}/g, String(stdout));
+  s = s.replace(/\{result\.data\.([\w\u4e00-\u9fa5.-]+)\}/g, (_, k) => {
+    let v = data;
+    for (const part of k.split('.')) {
+      if (v == null || typeof v !== 'object') return '';
+      v = v[part];
+    }
+    return v == null ? '' : String(v);
+  });
+  return s;
+}
+
+/** ⑤批量去重：同插件+动作+参数视为重复。返回 {uniq, dups}（dups 是重复项索引） */
+export function batchDedup(items) {
+  const seen = new Set(); const uniq = []; const dups = [];
+  (Array.isArray(items) ? items : []).forEach((it, i) => {
+    const sig = `${it?.pluginId ?? it?.plugin ?? ''}.${it?.actionId ?? it?.action ?? ''}:${JSON.stringify(it?.values ?? {})}`;
+    if (seen.has(sig)) { dups.push(i); return; }
+    seen.add(sig); uniq.push(it);
+  });
+  return { uniq, dups };
+}
+
+/** ⑧并发分窗：把 N 项切成最多 size 个一组的窗口（1=串行）。返回下标数组 */
+export function chunkWindows(n, size) {
+  const total = Math.max(0, Math.floor(n));
+  const sz = Math.max(1, Math.floor(size));
+  const out = [];
+  for (let i = 0; i < total; i += sz) {
+    out.push(Array.from({ length: Math.min(sz, total - i) }, (_, j) => i + j));
+  }
+  return out;
+}
+
+/** ⑦批量清单导入校验：数组且每项有 plugin/action 才算合法。返回 {ok, items|error} */
+export function parseBatchList(text) {
+  let j;
+  try { j = JSON.parse(text); } catch { return { ok: false, error: '不是合法 JSON' }; }
+  if (!Array.isArray(j)) return { ok: false, error: '清单必须是数组' };
+  const bad = j.find((x) => !x || typeof x !== 'object' || !x.plugin || !x.action);
+  if (bad !== undefined) return { ok: false, error: '存在缺少 plugin/action 的条目' };
+  return { ok: true, items: j };
+}

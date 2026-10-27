@@ -1293,3 +1293,16 @@ kbd {
 .cheat-grid li { padding: 3px 0; font-size: 13px; }
 #result table tbody tr.row-sel td { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 #rtabs .rtab-cmp { margin-left: auto; }
+
+/* ================================================================ 第二十五轮：执行链路与批处理进阶 */
+.batch-items { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.batch-items li { display: flex; align-items: center; gap: 6px; padding: 2px 6px; border-radius: 6px; background: var(--bg-soft); }
+.batch-items li.dup { outline: 1px dashed var(--warn); }
+.batch-items li.dup::after { content: '重复'; color: var(--warn); font-size: 11px; margin-left: auto; }
+.batch-bar .warn { color: var(--warn); }
+.batch-bar label.mini { font-size: 12px; color: var(--sub); display: inline-flex; align-items: center; gap: 4px; }
+.chain-next .chain-cands { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.chain-next .chain-cands button.on { background: var(--accent); color: #fff; }
+.chain-next .chain-row { display: flex; gap: 6px; margin-top: 6px; }
+.chain-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 6px 0; padding: 4px 8px; border-radius: 8px; background: var(--bg-soft); font-size: 12px; }
+.chain-bar .chain-step.on { background: var(--accent); color: #fff; }
