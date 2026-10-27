@@ -1,6 +1,6 @@
 {
   "name": "zerokit",
-  "version": "0.27.0",
+  "version": "0.28.0",
   "description": "一份清单，四个面：启动器 / CLI / MCP / Web。不绑定宿主的插件集市。",
   "type": "module",
   "license": "MIT",
