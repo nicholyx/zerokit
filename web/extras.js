@@ -1149,6 +1149,7 @@ export const BACKUP_GROUPS = [
 const PREFIX_GROUPS = [
   { prefix: 'zerokit.colvis.', label: '表格列显隐' },
   { prefix: 'zerokit.colw.', label: '表格列宽' },
+  { prefix: 'zerokit.profile.', label: '配置档' },
 ];
 const OTHER_LABEL = '其它';
 
@@ -1233,4 +1234,62 @@ export function backupFilename(now = Date.now()) {
   const d = new Date(now);
   const p = (n) => String(n).padStart(2, '0');
   return `zerokit-backup-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.json`;
+}
+
+// ============ 第二十一轮：多环境与配置档 ============
+// 一套 localStorage 只有一套「当前状态」。工作/个人/演示分档 = 多个配置档
+// 信封 + 当前档名。这里只做纯函数；localStorage 读写与面板 UI 在 app.js。
+
+/** 列出全部配置档名（profiles 是 {name: envelope} 表，envelope 形如第二十轮 collectBackup 的 keys 表）。
+ *  保证返回至少含 '默认'——没有存任何档时视作只有一个隐式默认档。 */
+export function profileList(profiles) {
+  const names = Object.keys(profiles ?? {}).filter((n) => n && typeof n === 'string');
+  if (!names.length) return ['默认'];
+  // 固定顺序：默认在前，其余按创建时间（信封里的 createdAt）排
+  const rows = names.map((n) => ({ n, at: profiles[n]?.createdAt ?? 0 }));
+  rows.sort((a, b) => (a.n === '默认' ? -1 : b.n === '默认' ? 1 : a.at - b.at));
+  return rows.map((r) => r.n);
+}
+
+/** 校验配置档名：非空、去掉首尾空白、≤20 字符、不含 / 与控制字符（要进 localStorage 键名）。
+ *  返回 {ok, name} 或 {ok:false, error}——错误说人话。 */
+export function validProfileName(raw) {
+  const name = String(raw ?? '').trim();
+  if (!name) return { ok: false, error: '名字不能为空' };
+  if (name.length > 20) return { ok: false, error: '名字最多 20 个字符' };
+  if (/[\\/\u0000-\u001f]/.test(name)) return { ok: false, error: '名字里不能有斜杠或控制字符' };
+  return { ok: true, name };
+}
+
+/** 新建/覆盖一个配置档（从当前状态复制）。
+ *  profiles 加一个 {name: envelope}，envelope 带 createdAt 排序用。 */
+export function upsertProfile(profiles, name, keysTable, now = Date.now()) {
+  return {
+    ...(profiles ?? {}),
+    [name]: { keys: keysTable ?? {}, createdAt: now },
+  };
+}
+
+/** 删除配置档。最后一个档不可删（返回原表 + error 说人话）——
+ *  没有档的「当前档名」就没有意义，UI 也不该进入无档状态。 */
+export function deleteProfile(profiles, current, name) {
+  const list = profileList(profiles);
+  if (list.length <= 1) return { profiles: profiles ?? {}, current, error: '至少保留一个配置档' };
+  if (!(name in (profiles ?? {}))) return { profiles: profiles ?? {}, current, error: '配置档不存在' };
+  const next = { ...profiles };
+  delete next[name];
+  // 删的是当前档 → 切到列表第一个
+  const nextCurrent = current === name ? profileList(next)[0] : current;
+  return { profiles: next, current: nextCurrent, error: null };
+}
+
+/** 重命名配置档：保留原 createdAt（改名不等于重建）。 */
+export function renameProfile(profiles, from, to) {
+  const v = validProfileName(to);
+  if (!v.ok) return { profiles: profiles ?? {}, current: null, error: v.error };
+  if (!(from in (profiles ?? {}))) return { profiles: profiles ?? {}, current: null, error: '配置档不存在' };
+  if (v.name !== from && v.name in (profiles ?? {})) return { profiles: profiles ?? {}, current: null, error: '已有同名配置档' };
+  const next = {};
+  for (const [k, val] of Object.entries(profiles)) next[k === from ? v.name : k] = val;
+  return { profiles: next, current: v.name, error: null };
 }

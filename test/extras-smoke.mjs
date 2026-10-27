@@ -8,7 +8,8 @@ import {
   favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS,
   ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch,
   topActions, recentRuns, invocationText, resultMarkdown,
-} from '../web/extras.js';
+  classifyKey,
+  profileList, validProfileName, upsertProfile, deleteProfile, renameProfile } from '../web/extras.js';
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -648,6 +649,43 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
     return backupFilename(d.getTime()) === 'zerokit-backup-20261027-221341.json';
   })());
 }
+
+  // ===== 第二十一轮：配置档 =====
+  check('profileList: 空表返回隐式默认档', profileList({}).length === 1 && profileList({})[0] === '默认');
+  check('profileList: 默认在前、其余按 createdAt 排', (() => {
+    const ps = { b: { createdAt: 2 }, 默认: { createdAt: 0 }, a: { createdAt: 1 } };
+    const l = profileList(ps);
+    return l.length === 3 && l[0] === '默认' && l[1] === 'a' && l[2] === 'b';
+  })());
+  check('validProfileName: 三种拒绝 + 通过', (() => {
+    return validProfileName('').ok === false && validProfileName('  ').ok === false
+      && validProfileName('a'.repeat(21)).ok === false && validProfileName('a/b').ok === false
+      && validProfileName('  工作  ').ok === true && validProfileName('  工作  ').name === '工作';
+  })());
+  check('upsertProfile: 新建带 createdAt 与 keys 子表', (() => {
+    const ps = upsertProfile({}, '工作', { 'zerokit.theme': 'dark' }, 123);
+    return ps['工作'].createdAt === 123 && ps['工作'].keys['zerokit.theme'] === 'dark';
+  })());
+  check('deleteProfile: 最后一个不可删', (() => {
+    const r = deleteProfile({ 默认: {} }, '默认', '默认');
+    return r.error === '至少保留一个配置档' && '默认' in r.profiles;
+  })());
+  check('deleteProfile: 删当前档切到第一个', (() => {
+    const ps = { 默认: {}, 工作: {} };
+    const r = deleteProfile(ps, '工作', '工作');
+    return r.error === null && !('工作' in r.profiles) && r.current === '默认';
+  })());
+  check('renameProfile: 保留 createdAt + 改当前名', (() => {
+    const ps = { 默认: { createdAt: 5 } };
+    const r = renameProfile(ps, '默认', '个人');
+    return r.error === null && r.profiles['个人'].createdAt === 5 && r.current === '个人' && !('默认' in r.profiles);
+  })());
+  check('renameProfile: 重名拒绝', (() => {
+    const ps = { a: {}, b: {} };
+    const r = renameProfile(ps, 'a', 'b');
+    return r.error === '已有同名配置档';
+  })());
+  check('classifyKey: 配置档键归「配置档」组', classifyKey('zerokit.profile.工作') === '配置档' && classifyKey('zerokit.profile.cur') === '配置档');
 
 const failed = results.filter(([, ok]) => !ok);
 console.log('\n' + '='.repeat(60));

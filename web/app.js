@@ -15,6 +15,7 @@ import { renderCopyTemplate, toJsonl, exportFilename, toMarkdownProps } from './
 import { WATCH_INTERVALS, intervalLabel, cellDiff, sparkSeries, watchStopCondition, tabTitle, watchCsv } from './extras.js';
 import { dangerousPattern, maskSecrets, rateLimitHits, trimAuditLog, actionRiskCard } from './extras.js';
 import { BACKUP_GROUPS, classifyKey, collectBackup, parseBackup, mergeBackup, backupFilename } from './extras.js';
+import { profileList, validProfileName, upsertProfile, deleteProfile, renameProfile } from './extras.js';
 import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport, virtualWindow, pageSlice, breadcrumb, listStateQuery, parseListState, digitPick } from './extras.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
@@ -182,6 +183,13 @@ function applyTheme() {
   }
 }
 
+/** 面板里展示的档名：落盘档 + 隐式默认档（「默认」没落盘过也要能看见、能切） */
+function panelProfileNames() {
+  const list = profileList(loadProfiles());
+  if (!list.includes('默认') && (curProfileName() === '默认' || list.length === 0)) return ['默认', ...list];
+  return list;
+}
+
 /** 外观面板：主题三档 + 六个强调色。以前只能循环切换，想回上一档要再点两轮。 */
 function openThemePop() {
   const pop = $('themePop');
@@ -212,6 +220,16 @@ function openThemePop() {
       <button data-backup="export" title="把所有个性化数据（收藏、历史、参数记忆、外观设置）打包成 JSON 下载">⬇ 导出数据</button>
       <button data-backup="import" title="从备份 JSON 恢复：可预览、可选择类别、合并不覆盖">⬆ 导入数据</button>
       <button data-backup="purge" title="清除本地结果与运行历史（含参数记忆），审计日志不动">🧹 清除痕迹</button>
+    </div>
+    <div class="tp-head">配置档 <small class="tp-profile-cur">${esc(curProfileName())}</small></div>
+    <div class="tp-row tp-profiles">
+      ${panelProfileNames().map((n) => `
+        <button data-profile="${esc(n)}" class="${n === curProfileName() ? 'on' : ''}" title="切换到此配置档">${esc(n)}</button>`).join('')}
+      <button data-profile-new="1" title="以当前状态为基础新建配置档">＋ 新建</button>
+    </div>
+    <div class="tp-row tp-profiles-actions">
+      <button data-profile-rename="1" title="重命名当前配置档">✏ 重命名</button>
+      <button data-profile-del="1" title="删除当前配置档（至少保留一个）">🗑 删除</button>
     </div>`;
   pop.classList.remove('hidden');
   // 选中后就地更新高亮，不重建 DOM、也不收起面板：重建会让本次点击的目标
@@ -259,6 +277,123 @@ function openThemePop() {
       else if (act === 'purge') purgeSensitive();
     });
   });
+  // ---- 第二十一轮：配置档分组（新建 / 切换 / 重命名 / 删除） ----
+  pop.querySelectorAll('[data-profile]').forEach((b) => {
+    b.addEventListener('click', () => {
+      switchProfile(b.dataset.profile);
+      openThemePop(); // 重建面板刷新高亮
+      openThemePop();
+    });
+  });
+  pop.querySelector('[data-profile-new]')?.addEventListener('click', () => {
+    const raw = prompt('新配置档名字（以当前状态为基础）：');
+    if (raw == null) return;
+    const v = validProfileName(raw);
+    if (!v.ok) { el.count.textContent = v.error; return; }
+    createProfileFromCurrent(v.name);
+    pop.classList.add('hidden');
+    openThemePop();
+  });
+  pop.querySelector('[data-profile-rename]')?.addEventListener('click', () => {
+    const raw = prompt('重命名当前配置档为：', curProfileName());
+    if (raw == null) return;
+    const v = validProfileName(raw);
+    if (!v.ok) { el.count.textContent = v.error; return; }
+    const r = renameProfile(loadProfiles(), curProfileName(), v.name);
+    if (r.error) { el.count.textContent = r.error; return; }
+    saveProfiles(r.profiles);
+    localStorage.setItem('zerokit.profile.cur', r.current);
+    pop.classList.add('hidden');
+    openThemePop();
+  });
+  pop.querySelector('[data-profile-del]')?.addEventListener('click', () => {
+    const r = deleteProfile(loadProfiles(), curProfileName(), curProfileName());
+    if (r.error) { el.count.textContent = r.error; return; }
+    if (!confirm(`删除配置档「${curProfileName()}」？该档的外观/收藏/参数记忆将一并删除。`)) return;
+    saveProfiles(r.profiles);
+    localStorage.setItem('zerokit.profile.cur', r.current);
+    switchProfile(r.current);
+    pop.classList.add('hidden');
+    openThemePop();
+  });
+}
+
+// ---------------------------------------------------------------- 第二十一轮：配置档存取
+//
+// 档 = 一个 collectBackup 形状的 keys 信封（+createdAt 排序）。
+// 当前档名 zerokit.profile.cur；各档数据 zerokit.profile.<name>。
+// 切换 = 当前状态存回旧档 → 新档 keys 整批写回 localStorage → 刷新模块级变量。
+
+function loadProfiles() {
+  const out = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!k.startsWith('zerokit.profile.')) continue;
+    const name = k.slice('zerokit.profile.'.length);
+    if (name === 'cur') continue;
+    try { out[name] = JSON.parse(localStorage.getItem(k) || '{}'); } catch { /* 坏档跳过 */ }
+  }
+  return out;
+}
+function saveProfiles(profiles) {
+  // 先清旧档键再写新表（重命名/删除会留孤儿键）
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith('zerokit.profile.') && k !== 'zerokit.profile.cur') localStorage.removeItem(k);
+  }
+  for (const [name, env] of Object.entries(profiles ?? {})) {
+    try { localStorage.setItem(`zerokit.profile.${name}`, JSON.stringify(env)); } catch { /* 私密模式 */ }
+  }
+}
+function curProfileName() {
+  return localStorage.getItem('zerokit.profile.cur') || '默认';
+}
+/** 当前个性化状态 → keys 表（外观+收藏+参数记忆+表格设置，与第二十轮同口径） */
+function currentProfileKeys() {
+  const out = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!k.startsWith('zerokit.')) continue;
+    if (k.startsWith('zerokit.profile.')) continue; // 档管理键不属于档内容
+    if (k === 'zerokit.runs' || k === 'zerokit.saved-results' || k === 'zerokit.run-notes' || k === 'zerokit.recent') continue; // 执行历史是全局事实
+    out[k] = localStorage.getItem(k);
+  }
+  return out;
+}
+function createProfileFromCurrent(name) {
+  const next = upsertProfile(loadProfiles(), name, currentProfileKeys());
+  saveProfiles(next);
+  el.count.textContent = `已新建配置档「${name}」（以当前状态为基础）`;
+}
+/** 切换：旧档存回 → 新档整批写回 → 模块级变量重载（不整页刷新，列表与主题就地生效） */
+function switchProfile(name) {
+  const profiles = loadProfiles();
+  const list = profileList(profiles);
+  const target = list.includes(name) ? name : list[0];
+  // 1. 当前状态存回当前档（隐式默认档也落盘，下次切换才有完整现场）
+  const curName = curProfileName();
+  if (curName !== target) {
+    saveProfiles(upsertProfile(profiles, curName, currentProfileKeys()));
+  }
+  // 2. 新档 keys 写回（先清个性化键，保留档管理键与执行历史）
+  const env = (loadProfiles()[target] ?? {});
+  const keep = new Set(['zerokit.profile.cur', 'zerokit.runs', 'zerokit.saved-results', 'zerokit.run-notes', 'zerokit.recent']);
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith('zerokit.') && !keep.has(k) && !k.startsWith('zerokit.profile.')) localStorage.removeItem(k);
+  }
+  for (const [k, v] of Object.entries(env.keys ?? {})) {
+    if (k.startsWith('zerokit.profile.')) continue;
+    try { localStorage.setItem(k, v); } catch { /* 私密模式 */ }
+  }
+  localStorage.setItem('zerokit.profile.cur', target);
+  // 3. 模块级变量重载 + 就地重绘
+  loadPrefs();
+  applyTheme();
+  applyAccent();
+  applyFontScale();
+  renderList();
+  el.count.textContent = `已切换到配置档「${target}」`;
 }
 
 function cycleTheme() {
@@ -5727,6 +5862,25 @@ window.addEventListener('keydown', (e) => {
 
 // 把内部状态挂出来，便于排查，也方便以后用 CDP 做界面自动化测试
 window.__zerokit = {
+  // 第二十一轮：配置档（截图脚本与深度自动化用）
+  get __zerokitProfileNames() { return profileList(loadProfiles()); },
+  __zerokitCreateProfile: createProfileFromCurrent,
+  __zerokitSwitchProfile: switchProfile,
+  __zerokitRenameProfile(from, to) {
+    const r = renameProfile(loadProfiles(), from, to);
+    if (r.error) return r;
+    saveProfiles(r.profiles);
+    localStorage.setItem('zerokit.profile.cur', r.current);
+    return r;
+  },
+  __zerokitDeleteProfile(name) {
+    const r = deleteProfile(loadProfiles(), curProfileName(), name);
+    if (r.error) return r;
+    saveProfiles(r.profiles);
+    localStorage.setItem('zerokit.profile.cur', r.current);
+    if (curProfileName() !== r.current) switchProfile(r.current);
+    return r;
+  },
   get entries() { return entries; },
   get filtered() { return filtered; },
   get mode() { return mode; },
