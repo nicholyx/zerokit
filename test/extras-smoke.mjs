@@ -11,7 +11,8 @@ import {
   classifyKey,
   profileList, validProfileName, upsertProfile, deleteProfile, renameProfile,
   HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions,
-  resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader } from '../web/extras.js';
+  resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader,
+  COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory } from '../web/extras.js';
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -725,6 +726,50 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
 
 const failed = results.filter(([, ok]) => !ok);
 // ---------------- 第二十三轮：结果工作台 ----------------
+check('COMMAND_LIST: 至少 10 个命令且字段齐全', (() => {
+  return COMMAND_LIST.length >= 10
+    && COMMAND_LIST.every((c) => c.name && c.hint && c.go && c.icon);
+})());
+check('COMMAND_LIST: 页面命令 go 是 hash，UI 动作是标记', (() => {
+  const hashOnes = COMMAND_LIST.filter((c) => c.go.startsWith('#'));
+  const uiOnes = COMMAND_LIST.filter((c) => !c.go.startsWith('#'));
+  return hashOnes.length >= 6 && uiOnes.length >= 3;
+})());
+check('quickRunKey: ;插件.动作 解析', (() => {
+  const r = quickRunKey(';sysinfo.overview');
+  return r && r.plugin === 'sysinfo' && r.action === 'overview';
+})());
+check('quickRunKey: 非法输入返回 null', (() => {
+  return quickRunKey('sysinfo.overview') === null
+    && quickRunKey(';nodot') === null
+    && quickRunKey(';a.') === null
+    && quickRunKey(';.b') === null;
+})());
+check('gotoTarget: g 后 600ms 内按目标键', (() => {
+  return gotoTarget('l', 1000, 600) === '#/'
+    && gotoTarget('h', 1000, 600) === '#/help'
+    && gotoTarget('s', 1000, 600) === '#/stats'
+    && gotoTarget('m', 1000, 600) === '#/watch';
+})());
+check('gotoTarget: 超时/未知键/未武装返回 null', (() => {
+  return gotoTarget('l', 2000, 600) === null
+    && gotoTarget('x', 1000, 600) === null
+    && gotoTarget('l', 1000, 0) === null;
+})());
+check('cycleTabIndex: 环形回绕', (() => {
+  return cycleTabIndex(2, 3, 1) === 0
+    && cycleTabIndex(0, 3, -1) === 2
+    && cycleTabIndex(1, 3, 1) === 2
+    && cycleTabIndex(0, 0, 1) === 0;
+})());
+check('pushHistory: 新置顶/去重挪顶/超限挤尾', (() => {
+  const a = pushHistory(['监控', '帮助'], '统计');
+  const b = pushHistory(['监控', '帮助', '统计'], '监控');
+  const c = pushHistory(['1','2','3','4','5','6','7','8','9','10'], '新', 10);
+  return a[0] === '统计' && a.length === 3
+    && b[0] === '监控' && b.length === 3
+    && c.length === 10 && c[0] === '新' && c[9] === '2';
+})());
 check('resultTabTitle: 刚刚/分钟/小时/天', (() => {
   const now = Date.now();
   return resultTabTitle('查IP', now - 5 * 1000, now) === '查IP · 刚刚'
