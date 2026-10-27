@@ -394,24 +394,67 @@ export function dailyReport(runs, { pluginNames = new Map() } = {}) {
 export const I18N = {
   zh: {
     modeCommand: '命令', modePlugins: '插件', modeMarket: '集市', modeStats: '统计',
+    modeBrief: '简报', modeWatch: '监控', modeHelp: '帮助', modeTimers: '定时',
+    modeLogs: '日志', modeDoctor: '自检', modePs: '运行中', modeWorkbench: '工作台',
+    modeSaved: '收藏', modeMcp: 'MCP', modeDetail: '详情',
     searchPlaceholder: '搜索动作、插件、内容…（Ctrl+K 专注）',
     run: '执行', back: '返回', close: '关闭', copy: '复制', cancel: '取消',
     confirm: '确认执行', all: '全部', favorite: '收藏', settings: '设置',
     shortcuts: '快捷键', theme: '主题', empty: '什么都没有', noResult: '没有匹配的动作',
-    langLabel: '中/EN',
+    langLabel: '中/EN', langTitle: '切换语言 / Switch language',
+    // 第二十八轮扩充：高频共享键（盘点出现次数：执行141/复制72/返回78/失败94…）
+    delete: '删除', save: '保存', edit: '编辑', export: '导出', importLabel: '导入',
+    success: '成功', failed: '失败', loading: '加载中…', retry: '重试', open: '打开',
+    more: '加载更多', copied: '已复制到剪贴板', required: '必填', total: '共',
+    riskRead: '只读', riskWrite: '会改动', riskHigh: '高风险',
+    emptyRuns: '还没有执行记录——跑一次就会记在这里',
+    emptyMarket: '集市是空的——先添加一个集市源', emptyLogs: '还没有日志',
+    emptySaved: '还没有收藏——点列表项的 ☆ 收藏常用动作',
+    confirmDelete: '确认删除？', notFound: '没有找到', actions: '个动作',
+    reload: '重新加载', plugins: '插件', action: '动作', actionUnit: '个动作',
+    langSystem: '跟随系统', langZh: '中文', langEn: 'English',
   },
   en: {
     modeCommand: 'Commands', modePlugins: 'Plugins', modeMarket: 'Market', modeStats: 'Stats',
+    modeBrief: 'Brief', modeWatch: 'Watch', modeHelp: 'Help', modeTimers: 'Timers',
+    modeLogs: 'Logs', modeDoctor: 'Doctor', modePs: 'Running', modeWorkbench: 'Workbench',
+    modeSaved: 'Saved', modeMcp: 'MCP', modeDetail: 'Detail',
     searchPlaceholder: 'Search actions, plugins, content… (Ctrl+K)',
     run: 'Run', back: 'Back', close: 'Close', copy: 'Copy', cancel: 'Cancel',
     confirm: 'Confirm', all: 'All', favorite: 'Favorite', settings: 'Settings',
     shortcuts: 'Shortcuts', theme: 'Theme', empty: 'Nothing here', noResult: 'No matching actions',
-    langLabel: '中/EN',
+    langLabel: '中/EN', langTitle: 'Switch language / 切换语言',
+    delete: 'Delete', save: 'Save', edit: 'Edit', export: 'Export', importLabel: 'Import',
+    success: 'Success', failed: 'Failed', loading: 'Loading…', retry: 'Retry', open: 'Open',
+    more: 'Load more', copied: 'Copied to clipboard', required: 'Required', total: 'Total',
+    riskRead: 'Read-only', riskWrite: 'Writes', riskHigh: 'High risk',
+    emptyRuns: 'No runs yet — run something and it will show up here',
+    emptyMarket: 'Market is empty — add a market source first', emptyLogs: 'No logs yet',
+    emptySaved: 'Nothing saved — tap ☆ on a list item to favorite actions',
+    confirmDelete: 'Delete?', notFound: 'Not found', actions: 'actions',
+    reload: 'Reload', plugins: 'plugins', action: 'Action', actionUnit: 'actions',
+    langSystem: 'System', langZh: '中文', langEn: 'English',
   },
 };
 
-export function pickLang(v) {
-  return v === 'en' ? 'en' : 'zh';
+/**
+ * 语言档解析：'en'|'zh' 原样；'system' 由 navLang 判定（默认 zh——本项目中文用户为主，
+ * 非中文系统给 en）。任何非法值兜底 'zh'。返回值域恒为 'zh'|'en'，makeT/备份分类
+ * 不受影响（第二十八轮：三档「跟随系统/中文/英文」的解析层）。
+ */
+export function pickLang(v, navLang = '') {
+  if (v === 'en') return 'en';
+  if (v === 'system' || v == null || v === '') {
+    // 无 navLang 信息（Node 测试环境/隐私模式）时兜底 zh——本项目中文用户为主
+    if (!navLang) return 'zh';
+    return navLang.startsWith('zh') ? 'zh' : 'en';
+  }
+  return 'zh';
+}
+
+/** 语言档原始值（'system'|'zh'|'en'）是否合法——外观面板下拉用。 */
+export function validLangPref(v) {
+  return v === 'system' || v === 'zh' || v === 'en';
 }
 
 /** t('run') → 当前语言的文案；缺 key 回退中文再回退 key 本身。 */
@@ -1364,16 +1407,19 @@ export function emptySearchSuggestions(entries, limit = 5) {
 // ---------------- 第二十三轮：结果工作台 ----------------
 
 /** ②结果页签标题：动作名 + 相对时间（紧凑；区别于第十八轮的标签页标题 tabTitle） */
-export function resultTabTitle(name, ts, now = Date.now()) {
-  if (typeof name !== 'string' || !name) return '结果';
+export function resultTabTitle(name, ts, now = Date.now(), lg = 'zh') {
+  const L = lg === 'en'
+    ? { fallback: 'Result', now: 'just now', sec: (n) => `${n}s ago`, min: (n) => `${n}m ago`, hour: (n) => `${n}h ago`, day: (n) => `${n}d ago` }
+    : { fallback: '结果', now: '刚刚', sec: (n) => `${n} 秒前`, min: (n) => `${n} 分钟前`, hour: (n) => `${n} 小时前`, day: (n) => `${n} 天前` };
+  if (typeof name !== 'string' || !name) return L.fallback;
   if (!ts || typeof ts !== 'number') return name;
   const s = Math.max(0, Math.floor((now - ts) / 1000));
   let rel;
-  if (s < 10) rel = '刚刚';
-  else if (s < 60) rel = `${s} 秒前`;
-  else if (s < 3600) rel = `${Math.floor(s / 60)} 分钟前`;
-  else if (s < 86400) rel = `${Math.floor(s / 3600)} 小时前`;
-  else rel = `${Math.floor(s / 86400)} 天前`;
+  if (s < 10) rel = L.now;
+  else if (s < 60) rel = L.sec(s);
+  else if (s < 3600) rel = L.min(Math.floor(s / 60));
+  else if (s < 86400) rel = L.hour(Math.floor(s / 3600));
+  else rel = L.day(Math.floor(s / 86400));
   return `${name} · ${rel}`;
 }
 

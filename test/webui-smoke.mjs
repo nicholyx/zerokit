@@ -233,6 +233,29 @@ async function get(p, raw = false) {
   check('帮助：分组头悬停提示（动作数与风险构成）',
     appJs.text.includes('riskTally') && appJs.text.includes('只读 ${riskTally.read || 0}'),
     '分组头 title 缺失');
+
+  // 第二十八轮：国际化——静态断言
+  check('i18n：三档语言切换（system/zh/en）接线',
+    appJs.text.includes('validLangPref') && appJs.text.includes("data-lang-choice")
+      && appJs.text.includes("localStorage.getItem('zerokit.lang')"),
+    '语言三档切换缺失');
+  check('i18n：applyLang 全量重渲 + html lang 同步',
+    /document\.documentElement\.lang = lang === 'en'/.test(appJs.text)
+      && appJs.text.includes('applyLang(true)'),
+    'applyLang 重渲/html lang 缺失');
+  check('i18n：静态节点 data-i18n 标注',
+    (indexHtml.match(/data-i18n="/g) || []).length >= 8,
+    'index.html data-i18n 不足 8 处');
+  check('i18n：modeLabel 走 t()（25 处硬编码已迁）',
+    (appJs.text.match(/el\.modeLabel\.textContent = t\('/g) || []).length >= 24
+      && !appJs.text.includes("el.modeLabel.textContent = '命令'"),
+    'modeLabel 仍有硬编码中文');
+  check('i18n：风险等级走 riskText()',
+    appJs.text.includes('function riskText(') && !appJs.text.includes("RISK_TEXT = { read: '只读'"),
+    'RISK_TEXT 未迁 i18n');
+  check('i18n：术语统一（无命令→无动作）',
+    !appJs.text.includes('无命令'),
+    '仍有「无命令」混用');
   check('a11y：Esc 栈先关最上层弹层（cellFullPop 优先）',
     appJs.text.includes("getElementById('cellFullPop')") && /Escape.*cellFullPop/s.test(appJs.text),
     'Esc 栈处理缺失');
