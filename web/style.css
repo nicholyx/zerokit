@@ -1315,3 +1315,20 @@ kbd {
 .dep-tree { background: var(--bg-soft); border-radius: 8px; padding: 10px 14px; font-size: 12px; overflow-x: auto; }
 .bad-plugin { outline: 1px solid var(--danger); color: var(--fg); }
 .plug-list-actions { margin: 6px 0; }
+
+/* ---------------- 第二十七轮：搜索与发现的深度 ---------------- */
+.badge.why-badge {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font-weight: 500;
+  max-width: 16em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.group-head.search-group { cursor: default; }
+.hist-chips.while-typing { opacity: 0.75; }
+.hist-chips.while-typing .hist-label { opacity: 0.8; }
+@media (prefers-reduced-motion: reduce) {
+  .badge.why-badge { transition: none; }
+}

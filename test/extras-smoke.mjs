@@ -2,19 +2,7 @@
 //
 // 这些函数都在 web/extras.js 里，不碰 DOM / localStorage / fetch，
 // 所以可以直接在 Node 里跑。界面接线另由 webui-smoke 断言。
-import {
-  THEMES, normalizeTheme, resolveTheme, SHORTCUTS,
-  highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite,
-  favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS,
-  ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch,
-  topActions, recentRuns, invocationText, resultMarkdown,
-  classifyKey,
-  profileList, validProfileName, upsertProfile, deleteProfile, renameProfile,
-  HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions,
-  resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader,
-  COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory,
-  chainFill, batchDedup, chunkWindows, parseBatchList,
-  pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand } from '../web/extras.js';
+import { THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords } from '../web/extras.js';
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -925,6 +913,57 @@ check('installCommand: 集市/内置/null 三态', (() => {
   return installCommand({ id: 'pp', source: { type: 'market', market: 'demo' } }) === 'zkit plugin install pp --market demo'
     && installCommand({ source: { type: 'bundled' } }) === 'zkit plugin bundled'
     && installCommand(null) === '';
+})());
+
+// ---------------- 第二十七轮：搜索与发现的深度 ----------------
+check('whyLabel: 多信号合并去重', (() => {
+  return whyLabel([['动作名', 82, 1.05], ['拼音', 60, 1.05], ['动作名', 40, 1.0]]) === '命中：动作名·拼音'
+    && whyLabel([]) === '' && whyLabel(null) === '';
+})());
+check('expandSynonyms: 内存/时间/看看 展开', (() => {
+  const t = expandSynonyms(['内存']);
+  return t.includes('memory') && t.includes('mem') && t.includes('内存')
+    && expandSynonyms(['看看']).includes('查看')
+    && expandSynonyms(['剪贴板']).includes('clipboard')
+    && expandSynonyms(['随便的词']).length === 0;
+})());
+check('highlightSegmentsCaseKept: 大小写保真', (() => {
+  const parts = highlightSegmentsCaseKept('My IP is 1.2.3.4', 'ip');
+  const hit = parts.filter((p2) => p2.hit).map((p2) => p2.text).join('');
+  return hit === 'IP' && parts[0].text === 'My ';
+})());
+check('parseHistoryHash: 合法/非法', (() => {
+  return parseHistoryHash('#/history/sysinfo.overview') === 'sysinfo.overview'
+    && parseHistoryHash('#/history/a.b.c') === 'a.b.c'
+    && parseHistoryHash('#/history/no-dot') === null
+    && parseHistoryHash('#/logs') === null
+    && parseHistoryHash('') === null;
+})());
+check('recencyBoost: 递减/越界归零', (() => {
+  return recencyBoost(0) === 12 && recencyBoost(5) === 7 && recencyBoost(11) === 1
+    && recencyBoost(12) === 0 && recencyBoost(-1) === 0 && recencyBoost(null) === 0;
+})());
+check('pushSearch: 上限 8 去重保新', (() => {
+  let h = [];
+  for (let i = 0; i < 10; i++) h = pushSearch(h, '词' + i);
+  return h.length === 8 && h[0] === '词9'
+    && (h = pushSearch(h, '词5'))[0] === '词5' && h.length === 8;
+})());
+check('highlightSegments: 大小写不敏感匹配（既有行为回归）', (() => {
+  const parts = highlightSegments('System Info', 'info');
+  return parts.some((p2) => p2.hit && p2.text === 'Info');
+})());
+check('stripStopwords: 虚词剥离/粘连剥离/实词保留', (() => {
+  return JSON.stringify(stripStopwords(['看看', '内存'])) === JSON.stringify(['内存'])
+    && JSON.stringify(stripStopwords(['看看内存'])) === JSON.stringify(['内存'])
+    && JSON.stringify(stripStopwords(['帮我看看磁盘'])) === JSON.stringify(['磁盘'])
+    && stripStopwords(['帮我', '看看', '磁盘']).length === 1
+    && stripStopwords(['系统', '内存']).length === 2
+    && stripStopwords(['看看']).length === 0
+    && stripStopwords([]).length === 0;
+})());
+check('SYNONYMS 表结构：值全是字符串数组', (() => {
+  return Object.values(SYNONYMS).every((v) => Array.isArray(v) && v.every((x) => typeof x === 'string'));
 })());
 
 console.log('\n' + '='.repeat(60));
