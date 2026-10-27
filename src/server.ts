@@ -6,6 +6,16 @@ import process from 'node:process';
 import { type Plugin, toolName } from './core/manifest.ts';
 import { DATA_DIR, LOG_DIR, PKG_ROOT } from './core/paths.ts';
 import { needsConfirm, rememberApproval } from './core/approvals.ts';
+import { readFileSync } from 'node:fs';
+
+/** server 版本号：与 package.json 同源（无构建步骤，运行时读）。 */
+const SERVER_VERSION: string = (() => {
+  try {
+    return (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;
+  } catch {
+    return '0.0.0-unknown';
+  }
+})();
 import { killAllProcesses, killProcess, listProcesses } from './core/runtime.ts';
 import { listServices, stopService } from './core/services.ts';
 import { shutdownHosts } from './core/host.ts';
@@ -341,6 +351,17 @@ export function createServer(): http.Server {
     }
 
     try {
+      // ⑥无鉴权探活端点：给监控/巡检脚本用（不泄露任何数据面信息，
+      // 只有存活+版本+uptime）。GET 且无敏感内容，刻意不设防。
+      if (url.pathname === '/api/health' && req.method === 'GET') {
+        json(res, 200, {
+          app: 'zerokit',
+          version: SERVER_VERSION,
+          uptimeSec: Math.round(process.uptime()),
+          pid: process.pid,
+        });
+        return;
+      }
       if (url.pathname === '/api/plugins') {
         json(res, 200, { plugins: wirePlugins() });
         return;

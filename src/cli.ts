@@ -4,6 +4,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { type Plugin, type RiskLevel, toolName } from './core/manifest.ts';
 import { HOME, LOG_DIR, PLUGINS_DIR } from './core/paths.ts';
+import { actionStats, gcAudit, readAudit, readAuditDetailed, recentErrors, SLOW_MS } from './core/ops.ts';
 import { needsConfirm, rememberApproval } from './core/approvals.ts';
 import type { ConfirmPolicy } from './core/runner.ts';
 import {
@@ -903,11 +904,16 @@ function cmdDesktop(args: string[]): number {
 
 function cmdDoctor(): number {
   const report = buildDoctorReport();
+  // ⑨最近错误计数：审计里的 deny/非零退出——「环境没坏但一直在失败」要浮出来
+  const auditView = readAuditDetailed();
+  const recentErrs = recentErrors(auditView.records, 50);
+  const last24h = recentErrs.filter((r) => Date.now() - new Date(r.ts).getTime() < 86400_000).length;
   // 第二十九轮⑥：--json 机读输出——CI/脚本消费诊断结果；退出码语义不变
   if (process.argv.includes('--json')) {
     process.stdout.write(JSON.stringify({
       ok: report.summary.errors === 0,
       summary: report.summary,
+      recentErrors: { last24h, total: recentErrs.length },
       tools: report.tools.map((t) => ({ name: t.name, ok: t.ok, version: t.version ?? null, path: t.path ?? null })),
       dirs: report.dirs,
       desktop: report.desktop,
@@ -928,6 +934,10 @@ function cmdDoctor(): number {
       ? `  ${c.green('✓')} ${tool.name} ${c.dim(tool.version ?? '')}  ${c.dim(tool.path ?? '')}\n`
       : `  ${c.yellow('!')} ${tool.name} 没找到（用到它的插件无法执行）\n`);
   }
+  // ⑨人读面：最近 24h 错误行
+  process.stdout.write(last24h > 0
+    ? `  ${c.red('✗')} 最近 24 小时执行失败 ${last24h} 次（zkit audit --last 10 看明细）\n`
+    : `  ${c.green('✓')} 最近 24 小时无执行失败\n`);
   process.stdout.write(`\n数据目录 ${c.dim(report.dirs.home)}\n`);
   process.stdout.write(`插件目录 ${c.dim(report.dirs.plugins)}\n`);
 
@@ -964,13 +974,13 @@ function cmdPath(): number {
 function cmdLogs(args: string[]): number {
   const tailIdx = args.indexOf('--tail');
   const tail = tailIdx >= 0 ? Number(args[tailIdx + 1] ?? 30) : 30;
+  const follow = args.includes('--follow') || args.includes('-f');
   const file = path.join(LOG_DIR, args[0] === 'denied' ? 'denied.log' : 'audit.log');
   if (!fs.existsSync(file)) {
     process.stdout.write(c.dim(`还没有日志：${file}\n`));
     return 0;
   }
-  const lines = fs.readFileSync(file, 'utf8').trimEnd().split('\n');
-  for (const line of lines.slice(-tail)) {
+  const printLine = (line: string) => {
     try {
       const r = JSON.parse(line);
       const mark = r.decision === 'allow' ? c.green('✓') : c.red('✗');
@@ -982,9 +992,123 @@ function cmdLogs(args: string[]): number {
     } catch {
       process.stdout.write(line + '\n');
     }
+  };
+  const lines = fs.readFileSync(file, 'utf8').trimEnd().split('\n');
+  for (const line of lines.slice(-tail)) printLine(line);
+  // ③--follow：从文件尾开始盯新增行（轮询 500ms——audit 是低频流，inotify 不值得引）
+  if (follow) {
+    process.stdout.write(c.dim('-- 跟读中（Ctrl+C 退出）--\n'));
+    let offset = fs.statSync(file).size;
+    const timer = setInterval(() => {
+      try {
+        const size = fs.statSync(file).size;
+        if (size > offset) {
+          const fd = fs.openSync(file, 'r');
+          const buf = Buffer.alloc(size - offset);
+          fs.readSync(fd, buf, 0, buf.length, offset);
+          fs.closeSync(fd);
+          for (const line of buf.toString('utf8').split('\n')) if (line.trim()) printLine(line);
+          offset = size;
+        } else if (size < offset) {
+          offset = 0; // 被截断（gc/轮转）——从头重读
+        }
+      } catch { /* 文件被删：等它重建 */ }
+    }, 500);
+    // Ctrl+C 时正常退出（清 timer 防止句柄挂着）
+    process.on('SIGINT', () => { clearInterval(timer); process.exit(0); });
+    return new Promise<number>(() => 0) as unknown as number; // eslint 不在——直接挂住
   }
   return 0;
 }
+
+/** ①②zkit stats：动作级耗时统计（来自审计日志，不另设记录器）。 */
+function cmdStats(args: string[]): number {
+    const stats = actionStats(readAudit());
+  if (stats.length === 0) {
+    process.stdout.write(c.dim('还没有执行记录（跑几个动作再来看）。\n'));
+    return 0;
+  }
+  if (args.includes('--json')) {
+    process.stdout.write(JSON.stringify({ actions: stats }, null, 2) + '\n');
+    return 0;
+  }
+  process.stdout.write(`动作耗时统计（${stats.length} 个动作，来自审计日志）：\n`);
+  process.stdout.write(`${pad('动作', 34)}${pad('次数', 6)}${pad('失败', 6)}${pad('P50', 10)}${pad('P95', 10)}${pad('最慢', 10)}最近\n`);
+  for (const s of stats) {
+    const fmt = (v: number | undefined) => (v == null ? '—' : v >= 1000 ? (v / 1000).toFixed(1) + 's' : Math.round(v) + 'ms');
+    const warn = (s.p95Ms ?? 0) >= SLOW_MS ? c.yellow('⚠') : ' ';
+    process.stdout.write(
+      `${warn}${pad(s.key, 33)}${pad(String(s.count), 6)}${pad(s.failCount ? c.red(String(s.failCount)) : '0', s.failCount ? 12 : 6)}`
+      + `${pad(fmt(s.p50Ms), 10)}${pad(fmt(s.p95Ms), 10)}${pad(fmt(s.maxMs), 10)}${c.dim(s.lastTs?.slice(5, 16) ?? '')}\n`,
+    );
+  }
+  return 0;
+}
+
+/** ④zkit health：一条命令给出「服务活着吗/插件健康吗/最近有错吗」。退出码给脚本用。 */
+function cmdHealth(): number {
+    const plugins = listPlugins();
+  const { records } = readAuditDetailed();
+  const errs = recentErrors(records, 5);
+  let problems = 0;
+  process.stdout.write(`zerokit 健康概况：\n`);
+  // server 探测：ui.port 是启动器落盘的端口记录（没有=没起过）
+  let portLine = c.dim('未运行（zkit ui 启动）');
+  try {
+    const port = Number(fs.readFileSync(path.join(HOME, 'ui.port'), 'utf8').trim());
+    if (Number.isFinite(port) && port > 0) portLine = `曾在端口 ${port} 运行（/api/health 探活）`;
+  } catch { /* 没有 ui.port：未运行 */ }
+  const broken = plugins.filter((p) => p.plugin === undefined && p.errors && p.errors.length > 0);
+  process.stdout.write(`  插件：${plugins.length} 个装在案${broken.length ? c.red(`，${broken.length} 个加载失败`) : c.green('，全部可加载')}\n`);
+  if (broken.length) problems += broken.length;
+  process.stdout.write(`  审计记录：${records.length} 条，最近错误 ${errs.length} 条${errs.length ? '' : c.green('（干净）')}\n`);
+  for (const e of errs.slice(0, 3)) {
+    process.stdout.write(c.red(`    ✗ ${e.ts?.slice(5, 16)} ${e.plugin}.${e.action} ${e.error ?? e.reason ?? ''}\n`));
+  }
+  process.stdout.write(`  ${portLine}\n`);
+  return problems > 0 ? 1 : 0;
+}
+
+/** ⑤zkit audit --last N：最近 N 条审计记录表格式输出。 */
+function cmdAudit(args: string[]): number {
+    const lastIdx = args.indexOf('--last');
+  const n = lastIdx >= 0 ? Number(args[lastIdx + 1] ?? 20) : 20;
+  const records = readAudit().slice(-n);
+  if (records.length === 0) {
+    process.stdout.write(c.dim('还没有审计记录。\n'));
+    return 0;
+  }
+  if (args.includes('--json')) {
+    process.stdout.write(JSON.stringify({ records }, null, 2) + '\n');
+    return 0;
+  }
+  process.stdout.write(`最近 ${records.length} 条审计记录：\n`);
+  for (const r of records) {
+    const mark = r.decision === 'allow' ? c.green('✓') : c.red('✗');
+    const slow = (r as { slow?: boolean }).slow ? c.yellow(' ⏱slow') : '';
+    const ms = typeof r.ms === 'number' ? ` ${r.ms}ms` : '';
+    process.stdout.write(
+      `${mark} ${c.dim(r.ts?.slice(0, 19) ?? '')} ${pad(r.caller ?? '', 8)}${pad(`${r.plugin}.${r.action}`, 36)}`
+      + `${ms}${slow}${r.error ? ' ' + c.red(String(r.error).slice(0, 60)) : ''}\n`,
+    );
+  }
+  return 0;
+}
+
+/** ⑧zkit gc：清 30 天前的审计数据（默认 dry-run，--apply 执行）。 */
+function cmdGc(args: string[]): number {
+    const daysIdx = args.indexOf('--days');
+  const days = daysIdx >= 0 ? Number(args[daysIdx + 1] ?? 30) : 30;
+  const apply = args.includes('--apply');
+  const { removed, kept } = gcAudit(days, !apply);
+  if (apply) {
+    process.stdout.write(`已清理 ${removed} 条早于 ${days} 天的记录，保留 ${kept} 条。\n`);
+  } else {
+    process.stdout.write(`预览：将清理 ${removed} 条早于 ${days} 天的记录，保留 ${kept} 条。加 --apply 执行。\n`);
+  }
+  return 0;
+}
+
 
 /**
  * 从集市安装。
@@ -1340,6 +1464,14 @@ async function main(): Promise<number> {
       return cmdDoctor();
     case 'desktop':
       return cmdDesktop(rest);
+    case 'stats':
+      return cmdStats(rest);
+    case 'health':
+      return cmdHealth();
+    case 'audit':
+      return cmdAudit(rest);
+    case 'gc':
+      return cmdGc(rest);
     case 'path':
       return cmdPath();
     case 'logs':
