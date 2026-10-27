@@ -1332,3 +1332,26 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   .badge.why-badge { transition: none; }
 }
+
+/* ---------------- 第三十轮：触屏与窄屏适配 */
+/* ①② 触屏（pointer: coarse）上工具按钮常显——hover 不可用，藏起来等于没有 */
+@media (pointer: coarse) {
+  .colvis-btn, .rtab-x, .rtab-note { opacity: 1 !important; }
+  .res-menu-item { padding: 9px 14px; }       /* 菜单项加高，手指点得中 */
+  .rtab { padding: 7px 12px; }                /* 页签加高 */
+  button, .chip, .star { min-height: 30px; }  /* 命中区不小于 30px */
+}
+/* ⑥ 窄屏（<720px）单栏：阶段区改纵向堆叠、字号微收、页签栏可横滚 */
+@media (max-width: 720px) {
+  .shell { padding: 6px; }
+  #stage { flex-direction: column; }
+  .rtabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .rtab { max-width: 160px; flex: 0 0 auto; }
+  .brief-grid { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+  .search-row input { font-size: 15px; }      /* iOS 低于 16px 会自动放大——15px 折中 */
+}
+/* ⑦ 结果表格横向滚动容器：table 天然溢出，包一层滚动防挤爆布局（宽屏同样受益） */
+.tbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+.tbl-wrap table.grid { min-width: 420px; }   /* 列多时保下限，触发横向滚动而不是压扁 */
+.rtab-note { opacity: .55; font-size: 11px; padding: 0 2px; }
+.rtab-note:hover { opacity: 1; color: var(--accent, #5aa9ff); }

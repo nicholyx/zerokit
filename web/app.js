@@ -2921,6 +2921,7 @@ function renderTabBar() {
     <button class="rtab${t.id === activeTab ? ' active' : ''}" data-rtab="${esc(t.id)}"
       title="${esc(t.note ? `备注：${t.note}` : '点击切换 · 双击写备注 · 右键固定/取消固定')}${t.pinned ? '（已固定）' : ''}">
       ${t.pinned ? '📌 ' : ''}${esc(resultTabTitle(t.name, t.ts, Date.now(), lang))}
+      <span class="rtab-note" data-rn="${esc(t.id)}" title="写备注">✎</span>
       <span class="rtab-x" data-rx="${esc(t.id)}" title="关闭">✕</span>
     </button>`).join('')
     + (resultTabs.length >= 2 ? '<button class="rtab rtab-cmp ghost" data-rcmp title="选两个页签并排对比">⇄ 对比</button>' : '');
@@ -2928,6 +2929,11 @@ function renderTabBar() {
     const tid = b.dataset.rtab;
     b.addEventListener('click', (e) => {
       if (e.target.closest('[data-rx]')) return;
+      if (e.target.closest('[data-rn]')) {   // 第三十轮④：✎ 按钮=双击的显式入口（触屏无双击）
+        e.stopPropagation();
+        b.dispatchEvent(new MouseEvent('dblclick', { bubbles: false }));
+        return;
+      }
       const t = tabById(tid);
       if (!t) return;
       activeTab = t.id;
@@ -2998,6 +3004,33 @@ function showCompareView(ta, tb) {
 function refreshResult() {
   if (currentResult) renderResult(currentResult);
 }
+
+
+// 第三十轮③：触屏长按（500ms 不动）合成 contextmenu——移动端浏览器不派发右键事件，
+// 列复制/固定页签/结果菜单这些右键入口在触屏上够不着。全局一次监听，合成事件
+// 带原生手势（preventDefault 可用），已存在的 contextmenu 监听器无需改动。
+(function bindLongPressContextmenu() {
+  let timer = 0; let sx = 0; let sy = 0; let target = null;
+  document.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    target = e.target; sx = t.clientX; sy = t.clientY;
+    timer = setTimeout(() => {
+      timer = 0;
+      target?.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true, cancelable: true, clientX: sx, clientY: sy,
+      }));
+    }, 500);
+  }, { passive: true });
+  const cancel = () => { if (timer) { clearTimeout(timer); timer = 0; } };
+  document.addEventListener('touchmove', (e) => {
+    if (!timer) return;
+    const t = e.touches[0];
+    if (Math.abs(t.clientX - sx) > 8 || Math.abs(t.clientY - sy) > 8) cancel();
+  }, { passive: true });
+  document.addEventListener('touchend', cancel, { passive: true });
+  document.addEventListener('touchcancel', cancel, { passive: true });
+})();
 
 /** 结果卡右键菜单：复制行/表格/Markdown/CSV/JSON/文本——工具条太长，右键是补充入口 */
 function bindResultMenu(box, res) {
@@ -3811,7 +3844,7 @@ function renderTable(rows0, tableId = '') {
   const gear = `<span class="colvis-btn" data-colvis="${esc(tableId || 't')}" title="显示/隐藏列" role="button" tabindex="0">⚙</span>`;
   // 第二十三轮⑤⑥：查询框（与第十六轮筛选行不同：这是整表查询，支持 > < = 数字比较）
   const qbar = `<div class="rquery"><input data-rq="${esc(tableId || 't')}" placeholder="查询：词 或 size>100 …" value="${esc(resultQueryTerms[tableId] ?? '')}" autocomplete="off" spellcheck="false"><span class="sub" data-rqc="${esc(tableId || 't')}">${rq ? `${qrows.length} / ${frows.length} 行` : ''}</span></div>`;
-  return `${unitBtns ? `<div class="unit-bar">${unitBtns}</div>` : ''}${gear}${qbar}<table class="grid" data-table="${esc(tableId)}"><thead><tr>${head}</tr>${fRow}</tr></thead><tbody>${body}</tbody><tfoot><tr>${foot}</tr></tfoot></table>
+  return `${unitBtns ? `<div class="unit-bar">${unitBtns}</div>` : ''}${gear}${qbar}<div class="tbl-wrap"><table class="grid" data-table="${esc(tableId)}"><thead><tr>${head}</tr>${fRow}</tr></thead><tbody>${body}</tbody><tfoot><tr>${foot}</tr></tfoot></table></div>
   ${bigTable ? `<div class="tcount"><span class="sub">${viewRows.length} / ${view.length} 行（大表只画前 ${PAGE_ROWS} 行保流畅）</span> <button class="ghost mini" data-loadall="${esc(tableId || 't')}">加载全部 ${view.length} 行</button></div>` : `<div class="tcount sub">${view.length === rows.length ? `共 ${rows.length} 行` : `${view.length} / ${rows.length} 行（筛选中）`}</div>`}`;
 }
 
@@ -3850,6 +3883,10 @@ function bindTableSorts(scope) {
     // 列宽拖拽（第十一轮①）：th 右缘 5px 热区，松手写 localStorage 记忆
     tbl.querySelectorAll('th').forEach((th, i) => {
       th.classList.add('colresize');
+      const colwSave = () => {
+        const widths = [...tbl.querySelectorAll('th')].map((x) => Math.round(x.getBoundingClientRect().width));
+        try { localStorage.setItem(`zerokit.colw.${id}`, JSON.stringify(widths)); } catch { /* 私密模式忽略 */ }
+      };
       th.addEventListener('mousedown', (ev) => {
         const rect = th.getBoundingClientRect();
         if (ev.clientX < rect.right - 6) return;  // 只在右缘热区触发，别抢排序点击
@@ -3860,12 +3897,28 @@ function bindTableSorts(scope) {
         const up = () => {
           document.removeEventListener('mousemove', move);
           document.removeEventListener('mouseup', up);
-          const widths = [...tbl.querySelectorAll('th')].map((x) => Math.round(x.getBoundingClientRect().width));
-          try { localStorage.setItem(`zerokit.colw.${id}`, JSON.stringify(widths)); } catch { /* 私密模式忽略 */ }
+          colwSave();
         };
         document.addEventListener('mousemove', move);
         document.addEventListener('mouseup', up);
       });
+      // 第三十轮⑤：触屏拖列宽——touchstart 在同一热区（右缘 12px，手指比鼠标大放宽些）
+      th.addEventListener('touchstart', (ev) => {
+        const rect = th.getBoundingClientRect();
+        const x = ev.touches[0].clientX;
+        if (x < rect.right - 12) return;
+        ev.preventDefault();
+        const startX = x;
+        const startW = rect.width;
+        const move = (e2) => { th.style.width = `${Math.max(40, startW + e2.touches[0].clientX - startX)}px`; };
+        const up = () => {
+          document.removeEventListener('touchmove', move);
+          document.removeEventListener('touchend', up);
+          colwSave();
+        };
+        document.addEventListener('touchmove', move, { passive: false });
+        document.addEventListener('touchend', up);
+      }, { passive: false });
     });
     // 长单元格点击展开：省略的完整内容弹层显示（点外面关）
     tbl.querySelectorAll('td.cell-clip').forEach((td) => td.addEventListener('click', () => {
