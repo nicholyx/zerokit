@@ -12,7 +12,8 @@ import {
   profileList, validProfileName, upsertProfile, deleteProfile, renameProfile,
   HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions,
   resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader,
-  COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory } from '../web/extras.js';
+  COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory,
+  chainFill, batchDedup, chunkWindows, parseBatchList } from '../web/extras.js';
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -824,6 +825,44 @@ check('withNoteHeader: 有备注带头/无备注原样', (() => {
     && withNoteHeader('body', '', 1) === 'body'
     && withNoteHeader('body', '   ', 1) === 'body';
 })());
+
+// ---------------- 第二十五轮：执行链路与批处理进阶 ----------------
+check('chainFill: {result.data.字段} 与 {result.stdout} 替换', (() => {
+  const prev = { stdout: 'hello', data: { ip: '1.2.3.4', nested: { port: 22 } } };
+  return chainFill('ssh root@{result.data.ip} -p {result.data.nested.port} #{result.stdout}', prev)
+    === 'ssh root@1.2.3.4 -p 22 #hello';
+})());
+check('chainFill: 缺字段兜底空串/null 安全', (() => {
+  return chainFill('{result.data.nothere}', { data: {} }) === ''
+    && chainFill('plain', null) === 'plain'
+    && chainFill(undefined, { data: {} }) === undefined;
+})());
+check('batchDedup: 同插件+动作+参数判重', (() => {
+  const a = { pluginId: 'p', actionId: 'a', values: { x: 1 } };
+  const b = { pluginId: 'p', actionId: 'a', values: { x: 2 } };
+  const { uniq, dups } = batchDedup([a, { ...a }, b]);
+  return uniq.length === 2 && dups.length === 1 && dups[0] === 1;
+})());
+check('batchDedup: 空数组/非数组安全', batchDedup([]).uniq.length === 0 && batchDedup(null).dups.length === 0);
+check('chunkWindows: 并发分窗（7 项并发 3 → 3/3/1）', (() => {
+  const w = chunkWindows(7, 3);
+  return w.length === 3 && w[0].length === 3 && w[2].length === 1
+    && w.flat().length === 7;
+})());
+check('chunkWindows: 1=纯串行 / size 兜底≥1', (() => {
+  const w = chunkWindows(3, 1);
+  return w.length === 3 && w.every((x) => x.length === 1)
+    && chunkWindows(5, 0).every((x) => x.length >= 1);
+})());
+check('parseBatchList: 合法清单/坏 JSON/缺字段', (() => {
+  const ok = parseBatchList('[{"plugin":"sysinfo","action":"overview","values":{}}]');
+  const badJson = parseBatchList('not json');
+  const noAction = parseBatchList('[{"plugin":"sysinfo"}]');
+  return ok.ok === true && ok.items.length === 1
+    && badJson.ok === false && badJson.error.includes('JSON')
+    && noAction.ok === false && noAction.error.includes('plugin/action');
+})());
+check('parseBatchList: 非数组拒绝', parseBatchList('{"a":1}').ok === false);
 
 console.log('\n' + '='.repeat(60));
 console.log(`通过 ${results.length - failed.length} / ${results.length}`);

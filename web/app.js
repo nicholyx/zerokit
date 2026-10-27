@@ -19,6 +19,7 @@ import { HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions } f
 import { profileList, validProfileName, upsertProfile, deleteProfile, renameProfile } from './extras.js';
 import { resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader } from './extras.js';
 import { COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory } from './extras.js';
+import { chainFill, batchDedup, chunkWindows, parseBatchList } from './extras.js';
 import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport, virtualWindow, pageSlice, breadcrumb, listStateQuery, parseListState, digitPick } from './extras.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
@@ -701,20 +702,19 @@ function renderListTools(base, q) {
 
 /** 批量顺序执行：逐个跑篮子里的动作（destructive 排最后），完成后弹汇总卡片。
  * 每项用已记忆的参数（参数记忆参数不存在时用默认值），失败不阻断后面的项。 */
-async function runBatch() {
-  if (!batch.length) return;
+async function runBatch(retryItems) {
+  const source = retryItems ?? batch;
+  if (!source.length) return;
   // destructive 排最后：失败不至于挡住只读项
-  const ordered = [...batch].sort((a, b) =>
+  const ordered = [...source].sort((a, b) =>
     (a.action.risk === 'destructive' ? 1 : 0) - (b.action.risk === 'destructive' ? 1 : 0));
   const results = [];
   const btn = document.getElementById('batchRun');
   if (btn) { btn.disabled = true; btn.textContent = '执行中…'; }
-  for (const entry of ordered) {
+  const runOne = async (entry) => {
     const key = actionKey(entry.plugin.id, entry.action.id);
     const values = paramStore[key] ?? {};
-    const payload = {
-      plugin: entry.plugin.id, action: entry.action.id, values,
-    };
+    const payload = { plugin: entry.plugin.id, action: entry.action.id, values };
     try {
       const r = await fetch('/api/run', {
         method: 'POST',
@@ -722,14 +722,20 @@ async function runBatch() {
         body: JSON.stringify(payload),
       });
       const j = await r.json().catch(() => ({ ok: false, error: '响应不是 JSON' }));
-      results.push({ entry, ok: j.ok !== false && r.ok, ms: j.ms ?? 0, error: j.error });
+      return { entry, ok: j.ok !== false && r.ok, ms: j.ms ?? 0, error: j.error };
     } catch (err) {
-      results.push({ entry, ok: false, ms: 0, error: String(err) });
+      return { entry, ok: false, ms: 0, error: String(err) };
     }
+  };
+  // 第二十五轮⑧：并发窗口——窗口内并行、窗口间串行（1=纯串行，默认 3）
+  const conc = Math.max(1, Math.min(8, Number(readJson('zerokit.batchconc', 3)) || 3));
+  for (const win of chunkWindows(ordered.length, conc)) {
+    const rs = await Promise.all(win.map((i) => runOne(ordered[i])));
+    results.push(...rs);
   }
   if (btn) { btn.disabled = false; btn.textContent = '顺序执行'; }
-  batch = [];
-  renderList();
+  if (!retryItems) { batch = []; renderList(); }
+  else renderList();
   // 汇总卡片：成功 N / 失败 M / 总耗时，失败项可点开
   const ok = results.filter((r) => r.ok).length;
   const failed = results.length - ok;
@@ -738,15 +744,22 @@ async function runBatch() {
   sum.id = 'batchSummary';
   sum.className = 'batch-summary';
   sum.innerHTML = `
-    <b>批量执行完成</b>
+    <b>${retryItems ? '失败项重跑完成' : '批量执行完成'}（并发 ${conc}）</b>
     <span class="${ok ? 'ok' : ''}">✓ ${ok}</span>
     ${failed ? `<span class="bad">✗ ${failed}</span>` : ''}
     <span class="sub">总耗时 ${formatMs(totalMs)}</span>
     ${failed ? `<ul class="batch-fails">${results.filter((r) => !r.ok).map((r, i) => `
-      <li data-fail="${i}" title="${esc(r.error || '失败')}">✗ ${esc(r.entry.action.title)}（${esc(r.entry.plugin.name)}）</li>`).join('')}</ul>` : ''}
+      <li data-fail="${i}" title="${esc(r.error || '失败')}">✗ ${esc(r.entry.action.title)}（${esc(r.entry.plugin.name)}）</li>`).join('')}</ul>
+      <button class="ghost mini" id="batchRetry">只重跑失败的（${failed} 项）</button>` : ''}
     <button class="ghost mini" id="batchSumClose">关闭</button>`;
   el.listView.insertBefore(sum, el.list);
   sum.querySelector('#batchSumClose').addEventListener('click', () => sum.remove());
+  // 第二十五轮⑥：一键重跑失败项（参数保持原样）
+  sum.querySelector('#batchRetry')?.addEventListener('click', () => {
+    const failEntries = results.filter((r) => !r.ok).map((r) => r.entry);
+    sum.remove();
+    runBatch(failEntries);
+  });
   const failItems = [...sum.querySelectorAll('[data-fail]')];
   const fails = results.filter((r) => !r.ok);
   failItems.forEach((li) => li.addEventListener('click', () => {
@@ -770,16 +783,86 @@ function renderList() {
   const oldBar = document.getElementById('batchBar');
   if (oldBar) oldBar.remove();
   if (batch.length) {
+    // 第二十五轮⑤：重复项标记（同插件+动作+参数）
+    const { dups } = batchDedup(batch.map((b) => ({ pluginId: b.plugin.id, actionId: b.action.id, values: paramStore[actionKey(b.plugin.id, b.action.id)] ?? {} })));
     const bar = document.createElement('div');
     bar.className = 'batch-bar';
     bar.id = 'batchBar';
-    bar.innerHTML = `已选 ${batch.length} 项
+    bar.innerHTML = `已选 ${batch.length} 项${dups.length ? `（<span class="warn">重复 ${dups.length}</span>）` : ''}
       <button class="ghost mini" id="batchRun" aria-label="顺序执行篮子里的 ${batch.length} 个动作">顺序执行</button>
+      <button class="ghost mini" id="batchDedup" aria-label="去掉同动作同参数的重复项">去重</button>
+      <button class="ghost mini" id="batchExport" aria-label="导出批量清单 JSON">导出清单</button>
+      <button class="ghost mini" id="batchImport" aria-label="导入批量清单 JSON">导入</button>
+      <label class="mini">并发 <input type="number" id="batchConc" min="1" max="8" value="${readJson('zerokit.batchconc', 3)}" style="width:3em"></label>
       <button class="ghost mini" id="batchClear" aria-label="清空批量篮">清空</button>
-      <span class="help">destructive 排最后</span>`;
+      <span class="help">destructive 排最后</span>
+      <ol class="batch-items">${batch.map((b, i) => `
+        <li data-bi="${i}" class="${dups.includes(i) ? 'dup' : ''}">${esc(b.action.title)}
+          <button class="ghost mini" data-bup="${i}" title="上移">↑</button>
+          <button class="ghost mini" data-bdown="${i}" title="下移">↓</button>
+          <button class="ghost mini" data-bdel="${i}" title="移出篮子">✕</button>
+        </li>`).join('')}</ol>`;
     el.listView.insertBefore(bar, el.list);
     bar.querySelector('#batchRun').addEventListener('click', runBatch);
     bar.querySelector('#batchClear').addEventListener('click', () => { batch = []; renderList(); });
+    // ④排序：↑↓ 按钮交换相邻项（destructive 排序仍由 runBatch 兜底）
+    bar.querySelectorAll('[data-bup]').forEach((btn2) => btn2.addEventListener('click', () => {
+      const i = Number(btn2.dataset.bup);
+      if (i > 0) { [batch[i - 1], batch[i]] = [batch[i], batch[i - 1]]; renderList(); }
+    }));
+    bar.querySelectorAll('[data-bdown]').forEach((btn2) => btn2.addEventListener('click', () => {
+      const i = Number(btn2.dataset.bdown);
+      if (i < batch.length - 1) { [batch[i + 1], batch[i]] = [batch[i], batch[i + 1]]; renderList(); }
+    }));
+    bar.querySelectorAll('[data-bdel]').forEach((btn2) => btn2.addEventListener('click', () => {
+      batch.splice(Number(btn2.dataset.bdel), 1); renderList();
+    }));
+    // ⑤一键去重
+    bar.querySelector('#batchDedup')?.addEventListener('click', () => {
+      const { uniq } = batchDedup(batch.map((b) => ({ pluginId: b.plugin.id, actionId: b.action.id, values: paramStore[actionKey(b.plugin.id, b.action.id)] ?? {}, ref: b })));
+      batch = uniq.map((u) => u.ref);
+      renderList();
+      el.count.textContent = '已去掉重复项';
+    });
+    // ⑦导出清单
+    bar.querySelector('#batchExport')?.addEventListener('click', () => {
+      const list = batch.map((b) => ({ plugin: b.plugin.id, action: b.action.id, values: paramStore[actionKey(b.plugin.id, b.action.id)] ?? {} }));
+      const blob = new Blob([JSON.stringify(list, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = exportFilename('batch', 'json');
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+    // ⑦导入清单
+    bar.querySelector('#batchImport')?.addEventListener('click', () => {
+      const inp = document.createElement('input');
+      inp.type = 'file'; inp.accept = '.json,application/json';
+      inp.addEventListener('change', async () => {
+        const text = await inp.files?.[0]?.text();
+        if (!text) return;
+        const parsed = parseBatchList(text);
+        if (!parsed.ok) { el.count.textContent = `导入失败：${parsed.error}`; return; }
+        let added = 0;
+        for (const it of parsed.items) {
+          const entry = entries.find((en) => en.plugin.id === it.plugin && en.action.id === it.action);
+          if (entry) {
+            batch.push({ plugin: entry.plugin, action: entry.action });
+            paramStore[actionKey(it.plugin, it.action)] = it.values ?? {};
+            added += 1;
+          }
+        }
+        renderList();
+        el.count.textContent = `导入了 ${added} 项（${parsed.items.length - added} 个动作不存在）`;
+      });
+      inp.click();
+    });
+    // ⑧并发上限记忆
+    bar.querySelector('#batchConc')?.addEventListener('change', (ev) => {
+      const v = Math.max(1, Math.min(8, Number(ev.target.value) || 3));
+      ev.target.value = v;
+      try { localStorage.setItem('zerokit.batchconc', String(v)); } catch { /* 忽略 */ }
+    });
   }
   const oldSum = document.getElementById('batchSummary');
   if (oldSum) oldSum.remove();
@@ -931,9 +1014,12 @@ function bindListItems(q) {
         const entry = filtered[Number(node.dataset.i)];
         if (entry) {
           const k = actionKey(entry.plugin.id, entry.action.id);
-          if (!batch.some((x) => actionKey(x.plugin.id, x.action.id) === k)) batch.push(entry);
-          const bar = document.getElementById('batchBar');
-          if (bar) bar.firstChild.textContent = `已选 ${batch.length} 项 `;
+          const existed = batch.some((x) => actionKey(x.plugin.id, x.action.id) === k);
+          if (!existed) batch.push(entry);
+          // 第二十五轮：篮子内容变了就要重渲染浮条（此前只在第一次创建，
+          // 之后加项不刷新条目列表，看起来像只有第一项进了篮子）
+          renderList();
+          el.count.textContent = existed ? `已在篮子里：${entry.action.title}` : `已加入批量篮：${entry.action.title}（共 ${batch.length} 项）`;
         }
         return;
       }
@@ -2182,7 +2268,8 @@ async function submitInner(remember) {
   try {
     $('previewBox').innerHTML = '';
     $('invokeBox').innerHTML = '';
-    const values = collectValues(action);
+    // 第二十五轮②：链模式下参数里的 {result.data.字段} 占位符先填再校验（危险检测看到真实值）
+    const values = chainFillValues(collectValues(action));
     // 第十九轮②：危险参数值检测（黄条警示，可继续）
     for (const f of action.fields ?? []) {
       const why = dangerousPattern(values?.[f.name]);
@@ -2209,6 +2296,7 @@ async function submitInner(remember) {
     renderResult(res);
     if (res.ok === true) pushResultTab(res);   // 第二十三轮①：成功结果进页签工作台
     if (res.ok === true && action.risk === 'destructive') renderUndoHint(plugin, action);
+    if (res.ok === true) renderChainNext(plugin, action, res);   // 第二十五轮①②③：链下一步
     // 结果可能很长，直接把卡片顶部带进视野（否则用户以为「点了没反应」）
     if (res.ok === false && !window.__zkRetried) {
       const retryNote = document.createElement('div');
@@ -2230,6 +2318,7 @@ async function submitInner(remember) {
     runStore = pushRunHistory(runStore, actionKey(plugin.id, action.id), {
       ts: Date.now(), ok: res.ok === true, ms: res.ms ?? 0,
       data: res.data,   // 留着给「与最新对比」做逐格 diff
+      values,           // 第二十五轮⑨：留参数给「用这些参数重跑」
     }, 5);
     // 第十轮⑥：每动作保留最近 20 份（pushRunHistory 只保 5，这里放宽存储、展示仍取前 5）
     runStore[actionKey(plugin.id, action.id)] = trimRuns(runStore[actionKey(plugin.id, action.id)], 20);
@@ -2441,12 +2530,23 @@ function renderRunHistory(plugin, action) {
       <span class="${r.ok ? 'ok' : 'bad'}">${r.ok ? '✓' : '✗'}</span>
       <span class="run-when">${esc(new Date(r.ts).toLocaleString())}</span>
       <span class="run-ms">${esc(String(r.ms))} ms</span>
-      <button class="ghost" data-rerun>重跑</button>${list.length >= 2 ? `
+      <button class="ghost" data-rerun>重跑</button>
+      ${r.values ? `<button class="ghost" data-rerunp="${i}" title="用这次的历史参数回填表单再跑">用这些参数重跑</button>` : ''}${list.length >= 2 ? `
       <button class="ghost" data-diff="${i}" ${i === 0 ? 'disabled title="这就是最新一次，选更早的一条来对比"' : 'title="和最新一次的结果逐格对比"'}>与最新对比</button>` : ''}
       <button class="ghost mini" data-pick="${i}" title="选进 A/B 对比槽">选比</button>
     </div>`).join('')}
     <div class="help" id="diffPickHint" style="margin-top:4px"></div>`;
   box.querySelectorAll('[data-rerun]').forEach((b) => b.addEventListener('click', () => submit(false)));
+  // 第二十五轮⑨：一键回填历史参数再跑
+  box.querySelectorAll('[data-rerunp]').forEach((b) => b.addEventListener('click', () => {
+    const r = list[Number(b.dataset.rerunp)];
+    if (r?.values) {
+      paramStore[actionKey(plugin.id, action.id)] = { ...r.values };
+      openDetail(plugin, action);
+      el.count.textContent = '已回填该次参数';
+      submit(false);
+    }
+  }));
   // A/B 槽：任选两次对比（第九轮④）
   if (!window.__diffPicks) window.__diffPicks = [];
   box.querySelectorAll('[data-pick]').forEach((b) => b.addEventListener('click', () => {
@@ -2564,6 +2664,87 @@ function renderUndoHint(plugin, action) {
 
 let currentResult = null;
 let lastExport = null;  // 第十七轮④⑥：最近一次导出（文件名/大小/内容），供「外部接力」用
+
+// 第二十五轮①②③：手动链。chainSteps 记录当前链（[{pluginId, actionId, title, res}]），
+// 成功后弹「接着跑」选择器；下一步参数里 {result.data.字段} 用上一步结果填。
+let chainSteps = [];
+function chainActive() { return chainSteps.length > 0; }
+
+/** ①链下一步选择器：只读动作用收藏/最近优先列出；destructive 不进链（链是自动化，风险要显式） */
+function renderChainNext(plugin, action, res) {
+  chainSteps.push({ pluginId: plugin.id, actionId: action.id, title: action.title, res });
+  const box = $('result');
+  if (!box) return;
+  renderChainSteps(box);
+  // 候选：只读动作，收藏优先
+  const cands = entries.filter((e) => e.action.risk === 'read')
+    .sort((a, b) => (favorites.includes(actionKey(b.plugin.id, b.action.id)) ? 1 : 0)
+      - (favorites.includes(actionKey(a.plugin.id, a.action.id)) ? 1 : 0))
+    .slice(0, 8);
+  const next = document.createElement('div');
+  next.className = 'cmd-box chain-next';
+  next.id = 'chainNext';
+  next.innerHTML = `
+    <div class="cmd-box-head">完成后接着跑（第 ${chainSteps.length + 1} 步）</div>
+    <div class="chain-cands">${cands.map((e, i) => `
+      <button class="ghost mini" data-chain="${i}" title="${esc(e.plugin.name)} · ${esc(e.action.id)}">${esc(e.action.title)}</button>`).join('')}</div>
+    <div class="help">下一步的参数里可用 <code>{result.data.字段}</code> / <code>{result.stdout}</code> 引用本步结果（同 CLI chain 语义）。</div>
+    <div class="chain-row">
+      <button class="ghost mini" id="chainEnd">结束链</button>
+      <button class="ghost mini" id="chainRunNext" disabled>先选一个动作</button>
+    </div>`;
+  box.appendChild(next);
+  let picked = null;
+  next.querySelectorAll('[data-chain]').forEach((b) => b.addEventListener('click', () => {
+    picked = cands[Number(b.dataset.chain)];
+    next.querySelectorAll('[data-chain]').forEach((x) => x.classList.remove('on'));
+    b.classList.add('on');
+    const runBtn2 = next.querySelector('#chainRunNext');
+    if (runBtn2) { runBtn2.disabled = false; runBtn2.textContent = `去填参数：${picked.action.title}`; }
+  }));
+  next.querySelector('#chainEnd')?.addEventListener('click', () => {
+    chainSteps = [];
+    next.remove();
+    const bar2 = document.getElementById('chainStepsBar');
+    bar2?.remove();
+    el.count.textContent = '链已结束';
+  });
+  next.querySelector('#chainRunNext')?.addEventListener('click', () => {
+    if (!picked) return;
+    next.remove();
+    openDetail(picked.plugin, picked.action);
+    el.count.textContent = `链第 ${chainSteps.length + 1} 步：参数里可用 {result.data.字段} 引用上一步`;
+  });
+}
+
+/** ③链步骤条：显示在结果卡上方，点击回看每步结果 */
+function renderChainSteps(box) {
+  if (chainSteps.length < 1) return;
+  let bar = document.getElementById('chainStepsBar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'chainStepsBar';
+    bar.className = 'chain-bar';
+    box.prepend(bar);
+  }
+  bar.innerHTML = `链：${chainSteps.map((s, i) => `
+    <button class="ghost mini chain-step" data-cstep="${i}" title="回看第 ${i + 1} 步结果">${i + 1}. ${esc(s.title)} ✓</button>`).join(' <span class="sub">→</span> ')}`;
+  bar.querySelectorAll('[data-cstep]').forEach((b) => b.addEventListener('click', () => {
+    const s = chainSteps[Number(b.dataset.cstep)];
+    if (s?.res) renderResult(s.res);
+  }));
+}
+
+/** ②链占位符注入：提交前把 {result.data.x}/{result.stdout} 换成链上一步的值 */
+function chainFillValues(values) {
+  if (!chainActive() || !values || typeof values !== 'object') return values;
+  const prev = chainSteps.at(-1)?.res;
+  const out = {};
+  for (const [k, v] of Object.entries(values)) {
+    out[k] = typeof v === 'string' ? chainFill(v, prev) : v;
+  }
+  return out;
+}
 
 // 第二十三轮：结果页签工作台。tabs=[{id,res,name,ts,pinned,note}]；activeTab=当前页签 id。
 const resultTabs = [];
