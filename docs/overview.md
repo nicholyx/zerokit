@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-10-28（第三十四轮，v0.39.0）
+> 最后更新：2026-10-28（第三十五轮，v0.40.0）
 
 ---
 
@@ -206,7 +206,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 
 ### 质量
 
-- 24 个测试文件、**800 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
+- 25 个测试文件、**815 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
 - `tsc --noEmit` 干净——**而且 CI 真的在跑它**（`typecheck` job）。
   曾经这里写着"干净"但没有任何地方执行这条命令，于是两个只有类型检查才看得见的
   错误在核心里躺了很久（`proxy.ts` 的 Buffer 泛型不兼容、`scaffold.ts` 的类型混用）。
@@ -259,6 +259,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 - 第三十二轮（v0.37.0）：桌面壳与系统集成——托盘菜单扩充、热键可配、窗口几何记忆、Alt+←/→ 历史导航、外部链接拦截、`zkit desktop` 体检（Issue #137）
 - 第三十三轮（v0.38.0）：内核可观测性与运维面——`zkit stats` 耗时统计、`logs --follow`、`zkit health`、`audit --last`、`/api/health` 探活、慢动作水位线、`zkit gc`、doctor 24h 错误计数；修复审计写入丢行（Issue #140）
 - 第三十四轮（v0.39.0）：插件市场与分发——`plugin pack/unpack` zip 打包安装（零依赖 zip 实现+穿越防线）、`publish-ready` 上架检查、`market lint` 登记表校验、`plugin info/recommend`、`market add` 源健康检查（Issue #143）
+- 第三十五轮（v0.40.0）：错误预防与自愈——命令/动作模糊建议（编辑距离+前缀加权）、参数缺失附参数表、失败输出「下一步」自诊断（五类 stderr 关键词）、`doctor --fix` 清半安装残留、异平台路径提前点破（Issue #146）
   （↑/↓/Enter，只有选中项在 Tab 序里）、:focus-visible 焦点环、图标按钮
   aria-label（星标/主题/批量条）、结果区 aria-live=polite + sr-only 播报、
   prefers-reduced-motion 停动画、Esc 栈先关最上层浮层、18 处空态 role=status、
