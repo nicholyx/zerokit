@@ -69,7 +69,8 @@ run(['plugin', 'bundled']);
 // ---- 穿越攻击：手工构造 zip（直接 import 纯函数——不走子进程脚本，
 // 避免路径插值在 Windows 反斜杠下被打穿）
 {
-  const { zipFiles, unpackPlugin } = await import(path.join(ROOT, 'src/core/distro.ts'));
+  const { pathToFileURL } = await import('node:url');
+  const { zipFiles, unpackPlugin } = await import(pathToFileURL(path.join(ROOT, 'src/core/distro.ts')).href);
   const evil = zipFiles([
     { name: 'plugin.toml', data: Buffer.from('[plugin]\nid = "evil"\nversion = "1.0.0"') },
     { name: '../evil-payload.txt', data: Buffer.from('pwned') },
