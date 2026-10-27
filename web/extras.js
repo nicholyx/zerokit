@@ -1293,3 +1293,70 @@ export function renameProfile(profiles, from, to) {
   for (const [k, val] of Object.entries(profiles)) next[k === from ? v.name : k] = val;
   return { profiles: next, current: v.name, error: null };
 }
+
+// ---------------------------------------------------------------- 第二十一轮后追加：帮助与上手
+
+/**
+ * 帮助主题表：#/help 页的数据源。每段 = 标题 + 简明说明 + 「去试用」深链。
+ * tryHash 用 app 内路由（#/…），由帮助页直接 location.hash 赋值跳转。
+ */
+export const HELP_TOPICS = [
+  {
+    id: 'search',
+    title: '搜索',
+    body: '支持中文关键词、拼音全拼、拼音首字母。打「dl」出「代理」、「xtxx」出「系统信息」。空格分词是多词 AND（每个词都要命中）。数字可直接选第 N 项。',
+    tryHash: '#/',
+  },
+  {
+    id: 'run',
+    title: '执行与结果',
+    body: '只读动作点「执行」直接跑；会改动/高风险动作要确认。结果可复制、下载、重跑，表格结果支持排序/筛选/列显隐/单位换算，还能跨两次执行做合并视图与逐格 diff。',
+    tryHash: '#/sysinfo/overview',
+  },
+  {
+    id: 'watch',
+    title: '监控',
+    body: '只读动作可设间隔自动重跑：倒计时环显示下次采样、变化格子黄高亮、数值字段带迷你趋势线；连续失败或命中指定串自动停。#/watch 面板聚合所有在跑的监控，可导出采样 CSV。',
+    tryHash: '#/watch',
+  },
+  {
+    id: 'profiles',
+    title: '配置档',
+    body: '外观面板里可建多个配置档（工作/个人…）：主题、收藏、参数记忆随档切换，执行历史全局共享。以当前状态一键新建，重命名/删除都有守卫。',
+    tryHash: '#/',
+  },
+  {
+    id: 'backup',
+    title: '数据备份',
+    body: '外观面板「数据」分组：全部个性化数据一键导出 JSON（文件名可预测）；导入有格式校验、分组预览、按类别勾选，合并不覆盖本地独有数据。',
+    tryHash: '#/',
+  },
+  {
+    id: 'safety',
+    title: '安全防护',
+    body: '危险参数值（rm -rf / 系统目录 / dd 直写）执行前黄条警示；同一动作 3 秒内连点会弹确认；结果与日志里的 token 默认打码；动作详情页有风险横条与失败率。',
+    tryHash: '#/sysinfo/overview',
+  },
+];
+
+/** 首访标记：读 localStorage 判断是否首次访问（无标记即首次）。 */
+export function firstRunSeen(get) {
+  try { return String(get('zerokit.firstrun') ?? '') === 'done'; } catch { return false; }
+}
+
+/** 标记首访完成（用户看完或跳过引导后调用）。 */
+export function markFirstRunDone(set) {
+  try { set('zerokit.firstrun', 'done'); } catch { /* 隐私模式 */ }
+}
+
+/**
+ * 空搜索建议：无结果时推荐的动作。从全量动作里挑只读、带描述的，
+ * 按清单顺序取前 N 个——够稳定也够便宜，不需要热度统计。
+ */
+export function emptySearchSuggestions(entries, limit = 5) {
+  const list = Array.isArray(entries) ? entries : [];
+  return list
+    .filter((e) => e?.action?.risk === 'read' && e?.action?.description)
+    .slice(0, Math.max(1, limit))
+    .map((e) => ({ key: `${e.plugin.id}.${e.action.id}`, title: e.action.title, plugin: e.plugin.name }));
+}

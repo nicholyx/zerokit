@@ -15,6 +15,7 @@ import { renderCopyTemplate, toJsonl, exportFilename, toMarkdownProps } from './
 import { WATCH_INTERVALS, intervalLabel, cellDiff, sparkSeries, watchStopCondition, tabTitle, watchCsv } from './extras.js';
 import { dangerousPattern, maskSecrets, rateLimitHits, trimAuditLog, actionRiskCard } from './extras.js';
 import { BACKUP_GROUPS, classifyKey, collectBackup, parseBackup, mergeBackup, backupFilename } from './extras.js';
+import { HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions } from './extras.js';
 import { profileList, validProfileName, upsertProfile, deleteProfile, renameProfile } from './extras.js';
 import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport, virtualWindow, pageSlice, breadcrumb, listStateQuery, parseListState, digitPick } from './extras.js';
 
@@ -816,6 +817,14 @@ function renderList() {
       suggestions.push(`<button class="link" data-sug="clear">清空搜索，浏览全部动作</button>`);
       suggestions.push(`<button class="link" data-sug="market">去集市找一个能做这件事的插件</button>`);
       suggestions.push(`<button class="link" data-sug="wb">问 AI 工作台：「${esc(q.trim())}」</button>`);
+      // 第二十二轮③：无结果时给「试试这些」——只读动作直达，新用户有路可走
+      const picks = emptySearchSuggestions(entries, 5);
+      if (picks.length) {
+        suggestions.push('<div class="empty-sug-title">试试这些（都是只读、安全）：</div>');
+        for (const p of picks) {
+          suggestions.push(`<button class="link" data-sug="go" data-go="${esc(p.key)}">${esc(p.plugin)} · ${esc(p.title)}</button>`);
+        }
+      }
     } else if (!plugins.length) {
       suggestions.push(`<button class="link" data-sug="market">还没有插件——去集市装一个</button>`);
       suggestions.push(`<button class="link" data-sug="doctor">检查环境哪里没配好</button>`);
@@ -835,6 +844,12 @@ function renderList() {
       else if (act2 === 'market') showMarket();
       else if (act2 === 'doctor') showDoctor();
       else if (act2 === 'wb') showWorkbench(el.q.value.trim());
+      else if (act2 === 'go') {
+        const key = b.dataset.go || '';
+        const dot = key.lastIndexOf('.');
+        const entry = entries.find((e) => e.plugin.id === key.slice(0, dot) && e.action.id === key.slice(dot + 1));
+        if (entry) openDetail(entry.plugin, entry.action);
+      }
     }));
   }
 
@@ -852,7 +867,11 @@ function renderList() {
       const p = items[0][0].plugin;
       const isCollapsed = collapsed.has(id);
       const dep = p.requiresOk ? '' : `<span class="badge destructive">缺依赖</span>`;
-      return `<li class="group-head${isCollapsed ? ' collapsed' : ''}" data-group="${esc(id)}">
+      // 第二十二轮④：悬停可见风险构成——一行 title 说清这个插件只读/会改/高危各几个
+      const riskTally = { read: 0, mutate: 0, destructive: 0 };
+      for (const [entry2] of items) riskTally[entry2.action.risk] = (riskTally[entry2.action.risk] || 0) + 1;
+      const riskTip = `动作数 ${items.length}：只读 ${riskTally.read || 0}、会改动 ${riskTally.mutate || 0}、高风险 ${riskTally.destructive || 0}（点击整行折叠/展开）`;
+      return `<li class="group-head${isCollapsed ? ' collapsed' : ''}" data-group="${esc(id)}" title="${esc(riskTip)}">
           <span class="g-arrow">${isCollapsed ? '▸' : '▾'}</span>
           <span class="g-name">${esc(p.name)}</span>
           <span class="g-meta">${esc(p.id)} · v${esc(p.version)} · ${items.length} 个动作</span>
@@ -1178,6 +1197,7 @@ function openDetail(plugin, action, prefill) {
         ${sparkline}
       </div>
       <div class="desc">${esc(action.description || '（这个动作没写说明）')}</div>
+      ${action.risk !== 'read' ? `<div class="risk-explain callout">⚠ 风险等级「${esc(RISK_TEXT[action.risk] || action.risk)}」是什么意思：只读=只是看、不改任何东西；会改动=会修改文件/配置/服务，执行前想清楚；高风险=可能删除数据或不可逆，确认明白了再执行。</div>` : ''}
       ${note ? `<div class="detail-note">📌 ${esc(note)}</div>` : ''}
       <div class="detail-hotkey">
         <button class="ghost" id="hkBtn" title="把 F1–F12 里某个键绑给这个动作，全局按一下就打开">⚡ 绑定快捷键</button>
@@ -2050,6 +2070,39 @@ function showWatchPanel() {
   }));
 }
 
+/** 第二十二轮⑤⑥⑦：帮助页 #/help——HELP_TOPICS 逐段渲染，每段「去试用」深链 */
+function showHelpPanel() {
+  hidePanels();
+  mode = 'help';
+  el.modeLabel.textContent = '帮助';
+  el.listView.classList.add('hidden');
+  el.detailView.classList.add('hidden');
+  if (location.hash !== '#/help') history.replaceState(null, '', '#/help');
+  const sections = HELP_TOPICS.map((t) => `
+    <div class="help-topic" id="help-${esc(t.id)}">
+      <h3>${esc(t.title)}</h3>
+      <p>${esc(t.body)}</p>
+      <button class="ghost mini" data-try="${esc(t.tryHash)}" title="跳到这个功能试一下">去试用 →</button>
+    </div>`).join('');
+  el.allowView.innerHTML = `
+    <h2 class="ps-title">使用指南</h2>
+    <div class="help">启动器能做什么、怎么上手，都在这一页。每段都有「去试用」直达。</div>
+    ${sections}`;
+  el.allowView.classList.remove('hidden');
+  el.allowView.querySelectorAll('[data-try]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const h = b.dataset.try || '#/';
+      location.hash = h;
+      // 首页深链：applyHash 不跑（hash 可能没变），手动回列表
+      if (h === '#/' && location.hash === '#/') {
+        hidePanels();
+        renderList();
+      }
+    });
+  });
+}
+
+/** 第二十二轮②：快捷键速查表增强——帮助页入口（原 helpBtn 已指向这里升级为双入口） */
 function showTimers() {
   hidePanels();
   mode = 'timers';
@@ -5714,9 +5767,49 @@ async function load(notify) {
     // 主页 ?q=词：URL 带查询词直达搜索结果（外部系统/文档里给入口链接用）
     const qParam = new URLSearchParams(location.search).get('q');
     if (qParam) { el.q.value = qParam; active = 0; renderList(); el.q.focus(); }
+    // 第二十二轮①：首访引导——三步卡片（搜索→执行→看结果），可跳过、不再打扰
+    if (!firstRunSeen((k) => localStorage.getItem(k))) showFirstRunGuide();
   } catch (e) {
     el.count.textContent = `加载失败：${e.message}`;
   }
+}
+
+/** 第二十二轮①：首访三步引导。点完/跳过都标记 done，之后永不再弹。 */
+function showFirstRunGuide() {
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  const steps = [
+    { icon: '🔍', t: '搜一下', d: '顶部搜索框支持中文、拼音、首字母。打「xtxx」试试「系统信息」。' },
+    { icon: '▶', t: '执行', d: '选一个动作回车进入详情。只读的直接跑；会改动的要确认。' },
+    { icon: '📊', t: '看结果', d: '结果可复制/下载/重跑，表格能排序筛选，还能开监控自动盯变化。' },
+  ];
+  overlay.innerHTML = `
+    <div class="modal firstrun-modal">
+      <h3>欢迎使用 zerokit 启动器</h3>
+      <div class="firstrun-steps">
+        ${steps.map((s2, i) => `<div class="firstrun-step">
+          <div class="firstrun-icon">${s2.icon}</div>
+          <div><b>${i + 1}. ${esc(s2.t)}</b><br>${esc(s2.d)}</div>
+        </div>`).join('')}
+      </div>
+      <div class="modal-actions">
+        <button class="primary" id="frDone">开始使用</button>
+        <button class="ghost" id="frHelp">先看使用指南</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const finish = (toHelp) => {
+    markFirstRunDone((k, v) => localStorage.setItem(k, v));
+    overlay.remove();
+    if (toHelp) location.hash = '#/help';
+  };
+  overlay.querySelector('#frDone').addEventListener('click', () => finish(false));
+  overlay.querySelector('#frHelp').addEventListener('click', () => finish(true));
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(false); });
+  document.addEventListener('keydown', function frEsc(e) {
+    if (e.key === 'Escape') { finish(false); document.removeEventListener('keydown', frEsc); }
+  });
+  overlay.querySelector('#frDone').focus();
 }
 
 /** 支持 #/插件/动作 深链直达 */
@@ -5826,6 +5919,11 @@ window.addEventListener('hashchange', () => {
     showWatchPanel();
     return;
   }
+  // 第二十二轮⑤：#/help 帮助页——界面内说明，不跳出应用
+  if ((location.hash || '') === '#/help') {
+    showHelpPanel();
+    return;
+  }
   // 从详情后退回列表：hash 已变回空/列表态，详情界面要自己收掉
   if (detail && !/#\/[\w.-]+\/[\w.-]+/.test(location.hash || '')) {
     detail = null;
@@ -5866,6 +5964,8 @@ window.__zerokit = {
   get __zerokitProfileNames() { return profileList(loadProfiles()); },
   __zerokitCreateProfile: createProfileFromCurrent,
   __zerokitSwitchProfile: switchProfile,
+  __zerokitShowHelp: showHelpPanel,
+  __zerokitShowFirstRun: showFirstRunGuide,
   __zerokitRenameProfile(from, to) {
     const r = renameProfile(loadProfiles(), from, to);
     if (r.error) return r;
@@ -5940,7 +6040,9 @@ document.addEventListener('click', (e) => {
 $('logsBtn')?.addEventListener('click', showLogs);
 $('savedBtn')?.addEventListener('click', () => { if (mode === 'saved') exitSaved(); else showSaved(); });
 $('doctorBtn')?.addEventListener('click', showDoctor);
+// 第二十二轮②⑤：页脚「快捷键」保留原速查表；旁边加「使用指南」进 #/help
 $('helpBtn')?.addEventListener('click', showShortcuts);
+$('guideBtn')?.addEventListener('click', () => { location.hash = '#/help'; });
 
 // 第十九轮⑤：启动时算一遍审计日志超期条目（只统计并亮提示；物理清理由内核侧做）
 (async () => {
