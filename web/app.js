@@ -13,6 +13,7 @@ import { barsScale, sparkPoints, formatMs, paletteScore, p95Ms } from './extras.
 import { filterRows, colStats, unitOf, isUnitColumn, convertUnitColumn, mergeTables, columnValues, toHtmlTable } from './extras.js';
 import { renderCopyTemplate, toJsonl, exportFilename, toMarkdownProps } from './extras.js';
 import { WATCH_INTERVALS, intervalLabel, cellDiff, sparkSeries, watchStopCondition, tabTitle, watchCsv } from './extras.js';
+import { dangerousPattern, maskSecrets, rateLimitHits, trimAuditLog, actionRiskCard } from './extras.js';
 import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport, virtualWindow, pageSlice, breadcrumb, listStateQuery, parseListState, digitPick } from './extras.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
@@ -1036,6 +1037,7 @@ function openDetail(plugin, action, prefill) {
   ${aliasNote}
   ${lastRunNote}
     ${fields}
+    <div id="riskCard" class="risk-card"></div>
     <div id="runHistory" class="run-history"></div>
     <div class="actions">
       <button class="primary" id="runBtn">执行</button>
@@ -1046,6 +1048,8 @@ function openDetail(plugin, action, prefill) {
       <button class="ghost" id="shareBtn" title="复制带当前参数的完整深链">分享</button>
       <button class="ghost" id="timerBtn" title="只读动作按间隔自动执行（界面开着才跑）">定时</button>
       <button class="ghost" id="watchBtn" title="监控模式：自动重跑+变更追踪+倒计时环（#/watch 聚合面板）">监控</button>
+      <button class="ghost" id="maskBtn" title="结果里的 token/密钥/长十六进制串默认打码——切换显示明文">🕶 脱敏中</button>
+      <button class="ghost" id="purgeBtn" title="清除当前结果与本地运行历史（含参数记忆），审计日志不动">🧹 清除痕迹</button>
       <button class="ghost" id="shareCardBtn" title="把这次结果生成一张摘要卡（复制到剪贴板）">分享卡</button>
       <button class="ghost" id="copyJsonBtn" title="复制动作定义 JSON（写文档 / 分享给他人用）">复制 JSON</button>
       <button class="ghost" id="resetBtn" title="把所有参数清回清单默认值">恢复默认</button>
@@ -1290,6 +1294,9 @@ function openDetail(plugin, action, prefill) {
     if (reg[key]) { stopWatch(key); renderWatchBar(); return; }
     openWatchDialog(plugin, action, key);
   });
+  // 第十九轮④⑧：脱敏开关 + 一键清除敏感痕迹
+  $('maskBtn')?.addEventListener('click', toggleMask);
+  $('purgeBtn')?.addEventListener('click', purgeSensitive);
   renderWatchBar();
 
   // 二维码：深链 → SVG，模态展示（离线生成，不联网）
@@ -1483,6 +1490,7 @@ function openDetail(plugin, action, prefill) {
     savePrefs();
     openDetail(plugin, action);
   });
+  renderRiskCard(plugin, action);
   renderRunHistory(plugin, action);
   el.detailView.querySelectorAll('input, select').forEach((node) => {
     node.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') submit(false); });
@@ -1563,6 +1571,34 @@ async function executeAction(plugin, action, values, remember = false) {
 }
 
 let submitInFlight = 0;
+
+/** 第十九轮③：同动作执行时间戳（限速窗口），key 是 actionKey。 */
+const rateWindow = {};
+
+/** 第十九轮②：危险参数黄条——显示哪个字段、命中什么模式、值本身；用户可「仍要执行」或「回去改」。 */
+function showDangerNote(field, why, value) {
+  const host = $('result') ?? document.querySelector('.detail');
+  if (!host) return;
+  const note = document.createElement('div');
+  note.className = 'danger-note';
+  note.innerHTML = `
+    <div class="danger-title">⚠ 参数值命中危险模式：${esc(why)}</div>
+    <div class="danger-field">字段 <code>${esc(field.name)}</code> 的值：</div>
+    <div class="danger-val">${esc(String(value ?? '').slice(0, 200))}</div>
+    <div class="help">递归删除、系统目录、格式化磁盘这类操作不可逆。确认命令与预期一致再继续。</div>
+    <div class="actions">
+      <button class="ghost" id="dangerBack">回去改</button>
+      <button class="warn-btn" id="dangerGo">仍要执行</button>
+    </div>`;
+  host.prepend(note);
+  note.querySelector('#dangerBack').addEventListener('click', () => note.remove());
+  note.querySelector('#dangerGo').addEventListener('click', () => {
+    note.remove();
+    window.__zkDangerAck = true;
+    submit(false);
+  });
+  note.scrollIntoView({ block: 'center' });
+}
 
 /** 队列可视化：连续触发执行时明确「排队中」，而不是看起来没反应。 */
 /** 第十轮⑦：集市来源插件的更新检查——只比较版本号提示，绝不自动装。 */
@@ -1938,6 +1974,25 @@ async function submitInner(remember) {
     $('previewBox').innerHTML = '';
     $('invokeBox').innerHTML = '';
     const values = collectValues(action);
+    // 第十九轮②：危险参数值检测（黄条警示，可继续）
+    for (const f of action.fields ?? []) {
+      const why = dangerousPattern(values?.[f.name]);
+      if (why && !window.__zkDangerAck) {
+        showDangerNote(f, why, values?.[f.name]);
+        return;   // 用户点「仍要执行」后走 __zkDangerAck 通道重进
+      }
+    }
+    window.__zkDangerAck = false;
+    // 第十九轮③：限速——同一动作 3 秒内第 3 次起要确认（防手抖连点/宏误触）
+    const rk = actionKey(plugin.id, action.id);
+    rateWindow[rk] = (rateWindow[rk] ?? []).filter((t) => Date.now() - t < 3000);
+    if (rateLimitHits(rateWindow[rk], Date.now(), 3000, 2) && !window.__zkRateAck) {
+      const go = confirm('同一个动作 3 秒内已执行 2 次。\n\n可能是手抖连点或宏误触——点「确定」继续执行，点「取消」停下。');
+      if (!go) return;
+      window.__zkRateAck = true;
+      setTimeout(() => { window.__zkRateAck = false; }, 4000);
+    }
+    rateWindow[rk] = [...(rateWindow[rk] ?? []), Date.now()];
     const res = await executeAction(plugin, action, values, remember);
     if (!res) return;   // 用户在确认框点了取消，不算失败也不算成功
     lastValues = values;
@@ -2023,6 +2078,56 @@ function askConfirm(plugin, action, res) {
     overlay.addEventListener('click', (e) => { if (e.target === overlay) done(false); });
     overlay.querySelector('#okBtn').focus();
   });
+}
+
+// ---------------------------------------------------------------- 第十九轮：危险度卡与脱敏
+
+/** ⑥⑨ 危险度提示卡：风险等级横条（红/黄/绿）+ 历史失败率 + 平均耗时 + 为什么危险。 */
+function renderRiskCard(plugin, action) {
+  const box = $('riskCard');
+  if (!box) return;
+  const runs = runStore[actionKey(plugin.id, action.id)] ?? [];
+  const card = actionRiskCard(runs, action.risk);
+  const WHY = {
+    read: '只读动作：只读取信息，不改任何状态。随便跑，跑错了也没损失。',
+    mutate: '会改动：写文件、发请求或起进程。改动可见、可重做，但先确认参数再跑。',
+    destructive: '高风险：改动或删除数据且不可自动撤销。本启动器要求输入动作名才能执行。',
+  };
+  const why = WHY[action.risk] ?? '未知风险等级。';
+  const pct = Math.round(card.failRate * 100);
+  const barColor = card.level === 'destruct' ? 'var(--bad, #e5484d)' : (card.level === 'risky' || card.level === 'mutate') ? 'var(--warn, #e8b13a)' : 'var(--ok, #30a46c)';
+  box.innerHTML = `
+    <div class="risk-bar"><span class="risk-fill" style="width:${action.risk === 'destructive' ? 100 : action.risk === 'mutate' ? 55 : 12}%;background:${barColor}"></span></div>
+    <div class="risk-line">
+      <span class="badge ${esc(action.risk)}">${esc(RISK_TEXT[action.risk] || action.risk)}</span>
+      <span class="sub">${esc(why)}</span>
+    </div>
+    ${card.runs ? `<div class="risk-stats">历史 ${card.runs} 次 · 失败率 ${pct}%${pct >= 40 ? ' ⚠' : ''} · 平均 ${esc(formatMs(card.avgMs))}</div>` : '<div class="risk-stats sub">还没有执行记录——首次执行没有历史可参考。</div>'}`;
+}
+
+/** ④ 脱敏开关：默认打码。状态挂在 body data 上，renderResult / 日志渲染都读它。 */
+function maskState() { return document.body.dataset.zkMask !== 'off'; }
+function toggleMask() {
+  document.body.dataset.zkMask = maskState() ? 'off' : 'on';
+  const btn = $('maskBtn');
+  if (btn) btn.textContent = maskState() ? '🕶 脱敏中' : '👁 已显示明文';
+  // 当前结果重画一遍（历史记录里存的是原始 data，重画走同一脱敏管线）
+  if (lastResult) renderResult(lastResult);
+}
+
+/** ⑧ 一键清除敏感痕迹：当前结果 + 运行历史参数（secret 字段）+ 导出记录。 */
+function purgeSensitive() {
+  if (!confirm('清除当前结果与本地运行历史（含参数记忆）？\n\n不可恢复。审计日志不受影响（那是插件的执行凭证）。')) return;
+  lastResult = null;
+  $('result')?.replaceChildren();
+  for (const k of Object.keys(runStore)) {
+    runStore[k] = runStore[k].map((r) => ({ ...r, data: undefined }));
+  }
+  localStorage.removeItem('zerokit.params');
+  paramStore = {};
+  savePrefs();
+  renderRunHistory(detail?.plugin, detail?.action);
+  el.count.textContent = '已清除：当前结果 + 运行历史数据 + 参数记忆';
 }
 
 // ---------------------------------------------------------------- 结果渲染
@@ -2223,6 +2328,7 @@ function downloadCsv(data) {
 
 function renderResult(res) {
   currentResult = res;
+  if (res && (res.data !== undefined || res.stdout !== undefined || res.error)) lastResult = res;   // 第十九轮④：脱敏切换重画用
   lastExport = null;  // 第十七轮④⑥：每次新结果清掉旧导出记录
   const box = $('result');
   if (!box) return;
@@ -2243,8 +2349,10 @@ function renderResult(res) {
   })();
 
   let body = '';
+  // 第十九轮④：文本输出默认脱敏（token/Bearer/长 hex 打码；开关在 actions 区 🕶）
+  const masked = (t) => (maskState() ? maskSecrets(t) : String(t ?? ''));
   if (res.error) {
-    body += `<pre class="out" style="color:var(--bad)">${esc(res.error)}</pre>`;
+    body += `<pre class="out" style="color:var(--bad)">${esc(masked(res.error))}</pre>`;
   }
   if (res.render === 'web' && detail) {
     // 插件自己的页面渲染结果：沙箱 iframe，无 allow-same-origin——
@@ -2263,12 +2371,12 @@ function renderResult(res) {
       const shown = lines.slice(0, 60).join('\n');
       const rest = lines.slice(60).join('\n');
       const id = `fold${++resultSeq}`;
-      body += `<pre class="out">${esc(shown)}`
+      body += `<pre class="out">${esc(masked(shown))}`
         + `<span class="fold-hint">… 还有 ${lines.length - 60} 行</span>`
         + `<button class="fold-btn" data-fold="${id}">展开全部</button>`
-        + `<span class="fold-rest hidden" id="${id}">${esc(rest)}</span></pre>`;
+        + `<span class="fold-rest hidden" id="${id}">${esc(masked(rest))}</span></pre>`;
     } else {
-      body += `<pre class="out">${esc(res.stdout)}</pre>`;
+      body += `<pre class="out">${esc(masked(res.stdout))}</pre>`;
     }
   }
   if (res.truncated && res.artifactPath) {
@@ -2863,10 +2971,10 @@ function renderData(data, render, tableId = '') {
         const id = `jt${++resultSeq}`;
         return `<div class="json-tree" id="${id}">${lines.map((l, i) => `
           <div class="jt-row${l.isLeaf ? ' leaf' : ' branch'}" data-jt="${i}" style="padding-left:${l.depth * 14}px">
-            ${l.isLeaf ? '' : '<i class="jt-dot">▾</i>'}${l.key !== '' ? `<b>${esc(l.key)}</b>: ` : ''}<span>${esc(l.preview)}</span>
+            ${l.isLeaf ? '' : '<i class="jt-dot">▾</i>'}${l.key !== '' ? `<b>${esc(l.key)}</b>: ` : ''}<span>${esc(maskState() ? maskSecrets(l.preview) : l.preview)}</span>
           </div>`).join('')}</div>`;
       }
-      return `<pre class="out">${esc(JSON.stringify(data, null, 2))}</pre>`;
+      return `<pre class="out">${esc(maskState() ? maskSecrets(JSON.stringify(data, null, 2)) : JSON.stringify(data, null, 2))}</pre>`;
     }
     return renderKV(data);
   }
@@ -2875,7 +2983,9 @@ function renderData(data, render, tableId = '') {
 
 function renderKV(obj) {
   const rows = Object.entries(obj).map(([k, v]) => {
-    const val = (v && typeof v === 'object') ? JSON.stringify(v) : String(v);
+    // 第十九轮④：字符串值默认脱敏（长 hex / token 形态打码；结构化对象先 JSON 化）
+    const raw = (v && typeof v === 'object') ? JSON.stringify(v) : String(v);
+    const val = (maskState() && typeof v === 'string') ? maskSecrets(raw) : raw;
     const num = typeof v === 'number' || /^[\d.,\s%]+$/.test(val) ? ' class="num"' : '';
     // 第十八轮③④：键级锚点（监控 diff 高亮 / sparkline 挂载用）
     return `<tr><td>${esc(k)}</td><td${num} data-dkv="${esc(k)}">${esc(val)}</td></tr>`;
@@ -3158,9 +3268,11 @@ function exitLogs() {
 }
 
 function logDetailHtml(e, i) {
+  // 第十九轮④：命令与错误信息默认脱敏（密钥可能随命令行/报错回显）
+  const mtext = (t) => (maskState() ? maskSecrets(t) : String(t ?? ''));
   return `<div class="log-detail hidden" id="logDetail${i}">
-    <pre>${esc(String(e['command'] ?? '（无命令）'))}</pre>
-    ${e['error'] ? `<p class="log-error">${esc(String(e['error']))}</p>` : ''}
+    <pre>${esc(mtext(e['command'] ?? '（无命令）'))}</pre>
+    ${e['error'] ? `<p class="log-error">${esc(mtext(e['error']))}</p>` : ''}
     <div class="log-extra">决策 ${esc(String(e['decision'] ?? '-'))} · 退出码 ${esc(String(e['exitCode'] ?? '-'))} · 输出 ${esc(String(e['outBytes'] ?? 0))} 字节${e['truncated'] ? ' · 已截断' : ''}</div>
   </div>`;
 }
@@ -3180,11 +3292,15 @@ function logRowHtml(e, i) {
 async function renderLogs() {
   const chips = [['', '全部'], ['allow', '允许'], ['deny', '被拒'], ['error', '失败']]
     .map(([id, label]) => `<button class="chip${logsDecision === id ? ' on' : ''}" data-log-decision="${id}">${label}</button>`).join('');
+  // 第十九轮⑤：自动清理提示——启动时算过一遍超期条目数（trimAuditLog），页头亮出来
+  const trimInfo = window.__zkAuditTrim
+    ? `<div class="trim-note">🧹 已自动清理 ${window.__zkAuditTrim} 条超期日志（>90 天；config.toml 可关）</div>` : '';
   el.logsView.innerHTML = `
     <div class="ps-head">
       <h2>审计日志 <span class="aid">${logsFile === 'audit' ? 'audit.log' : 'denied.log'}</span></h2>
       <span class="sub">每次执行、被拒、失败都在这里；只在本机 ~/.zerokit/logs/</span>
     </div>
+    ${trimInfo}
     <div class="log-tools">
       <div class="chips">${chips}</div>
       <input id="logQuery" class="log-query" placeholder="过滤：插件 / 动作 / 错误" value="${esc(logsQuery)}">
@@ -5565,6 +5681,27 @@ $('logsBtn')?.addEventListener('click', showLogs);
 $('savedBtn')?.addEventListener('click', () => { if (mode === 'saved') exitSaved(); else showSaved(); });
 $('doctorBtn')?.addEventListener('click', showDoctor);
 $('helpBtn')?.addEventListener('click', showShortcuts);
+
+// 第十九轮⑤：启动时算一遍审计日志超期条目（只统计并亮提示；物理清理由内核侧做）
+(async () => {
+  try {
+    const data = await api('/api/logs?file=audit&limit=500');
+    const entries = (data.entries ?? []).map((e) => ({ ts: e.ts ? new Date(String(e.ts)).getTime() : NaN }))
+      .filter((e) => Number.isFinite(e.ts));
+    const { dropped } = trimAuditLog(entries, 90);
+    if (dropped.length) window.__zkAuditTrim = dropped.length;
+  } catch { /* 日志不可用就静默 */ }
+})();
+
+// 第十九轮⑦：有监控在跑时，Ctrl+W / 关标签页前给一次挽留（beforeunload 需要 returnValue）
+window.addEventListener('beforeunload', (e) => {
+  const watching = Object.keys(watchRegistry()).length;
+  const running = submitInFlight;
+  if (watching > 0 || running > 0) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
 
 load();
 setupVirtualScroll();

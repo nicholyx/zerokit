@@ -1058,3 +1058,78 @@ export function watchCsv(runs, valuesFrom = (r) => JSON.stringify(r.data ?? ''))
   });
   return [head, ...rows].join('\n') + '\n';
 }
+
+// ================================================================ 第十九轮：安全与危险操作防护
+
+/**
+ * ① 危险参数值检测：值里包含已知「危险模式」时给黄条警示（可继续，不硬拦）。
+ *   覆盖：递归删除、系统目录、格式化、Windows 强删、fork 炸弹、dd 直写磁盘。
+ */
+const DANGEROUS_PATTERNS = [
+  { re: /\brm\s+(-[a-z]*[rf][a-z]*\s+)+/i, why: '递归/强制删除（rm -rf）' },
+  { re: /(?:^|[\s"'=])(?:\/etc|\/boot|\/usr\/lib|\/windows\/system32|c:\\windows)/i, why: '指向系统目录' },
+  { re: /\b(?:mkfs|format\s+[a-z]:|diskutil\s+erase)/i, why: '格式化磁盘' },
+  { re: /\bdel\s+\/[fs]/i, why: 'Windows 强制删除' },
+  { re: /:\(\)\s*\{\s*:\|\:\s*&\s*\}\s*;:/, why: 'fork 炸弹' },
+  { re: /\bdd\s+[^|]*of=\/dev\/(?:disk|sd|nvme|mmc)/i, why: 'dd 直写物理磁盘' },
+];
+export function dangerousPattern(value) {
+  const s = String(value ?? '');
+  for (const p of DANGEROUS_PATTERNS) if (p.re.test(s)) return p.why;
+  return null;
+}
+
+/**
+ * ④ 敏感信息脱敏：token / Bearer / 长 hex / 长 base64 形态的串打码，保留首尾各 4 字符。
+ *   返回打码后的文本（无可打码内容时原样返回）。
+ */
+export function maskSecrets(text, { reveal = false } = {}) {
+  const s = String(text ?? '');
+  if (reveal || !s) return s;
+  const mask = (m) => (m.length <= 8 ? '*'.repeat(m.length) : `${m.slice(0, 4)}${'*'.repeat(Math.min(10, m.length - 8))}${m.slice(-4)}`);
+  return s
+    .replace(/(?:sk|pk|api)?[-_]?[A-Za-z0-9]{32,}/g, (m) => (/^sk-|^Bearer |^[A-Fa-f0-9]{32,}$/.test(m) || m.length >= 40 ? mask(m) : m))
+    .replace(/Bearer\s+[A-Za-z0-9._\-]{12,}/g, (m) => `Bearer ${'*'.repeat(8)}`)
+    .replace(/\b[A-Fa-f0-9]{24,}\b/g, mask);
+}
+
+/**
+ * ③ 限速判定：同一动作 windowMs 内第 max+1 次起算「过于频繁」。
+ *   times 是历史执行时间戳数组（升序），now 是本次时间。返回 true 表示需要拦下确认。
+ */
+export function rateLimitHits(times, now, windowMs = 3000, max = 2) {
+  if (!Array.isArray(times)) return false;
+  const inWindow = times.filter((t) => typeof t === 'number' && now - t < windowMs && t <= now);
+  return inWindow.length >= max;
+}
+
+/**
+ * ⑤ 审计日志自动清理：超过 keepDays 的条目剔除。返回 { kept, dropped }。
+ *   entries 每条带 ts（毫秒）。边界：keepDays<=0 不清；空数组不清。
+ */
+export function trimAuditLog(entries, keepDays = 90, now = Date.now()) {
+  const list = Array.isArray(entries) ? entries.filter((e) => e && typeof e.ts === 'number') : [];
+  if (keepDays <= 0 || !list.length) return { kept: list, dropped: [] };
+  const cutoff = now - keepDays * 864e5;
+  const kept = list.filter((e) => e.ts >= cutoff);
+  const dropped = list.filter((e) => e.ts < cutoff);
+  return { kept, dropped };
+}
+
+/**
+ * ⑥ 动作危险度提示卡：历史失败率 + 风险等级。返回 { level, failRate, avgMs, runs }。
+ *   runs 是该动作的历史执行记录（ok/ts/ms）。
+ */
+export function actionRiskCard(runs, risk) {
+  const list = Array.isArray(runs) ? runs.filter((r) => r && typeof r.ok === 'boolean') : [];
+  const failed = list.filter((r) => r.ok === false).length;
+  const durations = list.map((r) => Number(r.ms)).filter((v) => Number.isFinite(v) && v >= 0);
+  const avgMs = durations.length ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 0;
+  const failRate = list.length ? failed / list.length : 0;
+  return {
+    runs: list.length,
+    failRate,
+    avgMs,
+    level: risk === 'destructive' ? 'destruct' : risk === 'mutate' ? (failRate >= 0.5 && list.length >= 2 ? 'risky' : 'mutate') : 'read',
+  };
+}

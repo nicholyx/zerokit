@@ -546,10 +546,60 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
   })());
 }
 
+
+
+
+
+// ------------------------------------------------ 第十九轮：安全与危险操作防护
+{
+  const { dangerousPattern, maskSecrets, rateLimitHits, trimAuditLog, actionRiskCard } = await import('../web/extras.js');
+  check('dangerousPattern: rm -rf 命中', dangerousPattern('rm -rf /tmp/x') !== null);
+  check('dangerousPattern: 系统目录命中', dangerousPattern('cp a /etc/hosts') !== null);
+  check('dangerousPattern: 格式化命中', dangerousPattern('mkfs.ext4 /dev/sda1') !== null);
+  check('dangerousPattern: dd 直写命中', dangerousPattern('dd if=a of=/dev/disk2') !== null);
+  check('dangerousPattern: 正常路径不命中', dangerousPattern('/Users/tom/work/src/index.ts') === null);
+  check('dangerousPattern: 空值安全', dangerousPattern(undefined) === null && dangerousPattern('') === null);
+  check('maskSecrets: sk- token 打码', (() => {
+    const out = maskSecrets('key sk-abcdefghijklmnopqrstuvwxyz123456 done');
+    return out.includes('sk-a') && out.includes('****') && !out.includes('abcdefghijklmnopqrstuvwxyz123456');
+  })());
+  check('maskSecrets: Bearer 打码', (() => {
+    const out = maskSecrets('Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9');
+    return !out.includes('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9') && out.includes('Bearer');
+  })());
+  check('maskSecrets: 长 hex 打码', (() => {
+    const hex = 'a1b2c3d4e5f60718293a4b5c6d7e8f9011223344';
+    const out = maskSecrets(`hash ${hex}`);
+    return out.length < `hash ${hex}`.length;
+  })());
+  check('maskSecrets: 普通文本原样', maskSecrets('hello world 123') === 'hello world 123');
+  check('maskSecrets: reveal 显示明文', (() => {
+    const t = 'sk-abcdefghijklmnopqrstuvwxyz123456';
+    return maskSecrets(t, { reveal: true }) === t;
+  })());
+  check('rateLimitHits: 3 秒内第 3 次拦', rateLimitHits([9998, 9999], 10000, 3000, 2) === true);
+  check('rateLimitHits: 前两次不拦', rateLimitHits([9999], 10000, 3000, 2) === false);
+  check('rateLimitHits: 窗口外不拦', rateLimitHits([1000, 2000], 10000, 3000, 2) === false);
+  check('rateLimitHits: 非数组安全', rateLimitHits(null, 10000) === false);
+  check('trimAuditLog: 超 90 天剔除', (() => {
+    const now = Date.now();
+    const { kept, dropped } = trimAuditLog([{ ts: now }, { ts: now - 91 * 864e5 }], 90, now);
+    return kept.length === 1 && dropped.length === 1;
+  })());
+  check('trimAuditLog: keepDays<=0 不清', (() => {
+    const now = Date.now();
+    const { dropped } = trimAuditLog([{ ts: now - 400 * 864e5 }], 0, now);
+    return dropped.length === 0;
+  })());
+  check('actionRiskCard: destruct 等级', actionRiskCard([{ ok: true, ms: 10 }], 'destructive').level === 'destruct');
+  check('actionRiskCard: write 高失败升级 risky', actionRiskCard([{ ok: true, ms: 10 }, { ok: false, ms: 10 }, { ok: false, ms: 10 }], 'mutate').level === 'risky');
+  check('actionRiskCard: 失败率与均值', (() => {
+    const c = actionRiskCard([{ ok: true, ms: 10 }, { ok: false, ms: 30 }], 'read');
+    return c.runs === 2 && c.failRate === 0.5 && c.avgMs === 20;
+  })());
+}
+
 const failed = results.filter(([, ok]) => !ok);
 console.log('\n' + '='.repeat(60));
 console.log(`通过 ${results.length - failed.length} / ${results.length}`);
 if (failed.length) process.exitCode = 1;
-
-
-
