@@ -2,7 +2,7 @@
 //
 // 这些函数都在 web/extras.js 里，不碰 DOM / localStorage / fetch，
 // 所以可以直接在 Node 里跑。界面接线另由 webui-smoke 断言。
-import { THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords } from '../web/extras.js';
+import { THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref } from '../web/extras.js';
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -964,6 +964,38 @@ check('stripStopwords: 虚词剥离/粘连剥离/实词保留', (() => {
 })());
 check('SYNONYMS 表结构：值全是字符串数组', (() => {
   return Object.values(SYNONYMS).every((v) => Array.isArray(v) && v.every((x) => typeof x === 'string'));
+})());
+
+
+// ---------------- 第二十八轮：国际化与文案体检 ----------------
+check('i18n: zh/en 键完全一致', (() => {
+  const zk = Object.keys(I18N.zh), ek = Object.keys(I18N.en);
+  return zk.length === ek.length && zk.every((k) => k in I18N.en) && ek.every((k) => k in I18N.zh);
+})());
+check('i18n: 无空文案', (() => {
+  const bad = Object.keys(I18N.zh).filter((k) => !String(I18N.zh[k]).trim() || !String(I18N.en[k]).trim());
+  return bad.length === 0;
+})());
+check('pickLang: 三档解析', (() => {
+  return pickLang('en') === 'en'
+    && pickLang('zh') === 'zh'
+    && pickLang('system', 'zh-CN') === 'zh'
+    && pickLang('system', 'en-US') === 'en'
+    && pickLang('system', '') === 'zh'      // 无导航信息兜底中文
+    && pickLang(null) === 'zh'
+    && pickLang('garbage') === 'zh';         // 非法值兜底
+})());
+check('validLangPref: 只认三档', (() => {
+  return validLangPref('system') && validLangPref('zh') && validLangPref('en')
+    && !validLangPref('fr') && !validLangPref('') && !validLangPref(null);
+})());
+check('resultTabTitle: 英文档', (() => {
+  const now = Date.now();
+  return resultTabTitle('IP', now - 5 * 1000, now, 'en') === 'IP · just now'
+    && resultTabTitle('IP', now - 3 * 60 * 1000, now, 'en') === 'IP · 3m ago'
+    && resultTabTitle('IP', now - 2 * 3600 * 1000, now, 'en') === 'IP · 2h ago'
+    && resultTabTitle('', 123, now, 'en') === 'Result'
+    && resultTabTitle('查IP', now - 3 * 60 * 1000, now) === '查IP · 3 分钟前';
 })());
 
 console.log('\n' + '='.repeat(60));

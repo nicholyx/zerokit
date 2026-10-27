@@ -5,7 +5,7 @@
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { pickLang, makeT } from './extras.js';
+import { pickLang, validLangPref, makeT } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -82,6 +82,7 @@ let aliases = {};
 let nicknames = {};
 let actionTags = {};
 let lang = 'zh';
+let langPref = 'system'; // 'system' | 'zh' | 'en'（第二十八轮：三档，实际 lang 由 pickLang 解析）
 let t = makeT(lang);
 
 function readJson(key, fallback) {
@@ -157,7 +158,8 @@ function loadPrefs() {
   aliases = readJson(PREF.aliases) ?? {};
   nicknames = readJson(PREF.nicknames) ?? {};
   actionTags = readJson(PREF.actionTags) ?? {};
-  lang = pickLang(localStorage.getItem('zerokit.lang'));
+  langPref = validLangPref(localStorage.getItem('zerokit.lang')) ? localStorage.getItem('zerokit.lang') : 'system';
+  lang = pickLang(langPref, navigator.language);
   t = makeT(lang);
   if (typeof actionTags !== 'object' || Array.isArray(actionTags)) actionTags = {};
   if (typeof nicknames !== 'object' || Array.isArray(nicknames)) nicknames = {};
@@ -220,6 +222,11 @@ function openThemePop() {
       ${[['s', '小'], ['m', '中'], ['l', '大']].map(([id, label]) => `
         <button data-font="${id}" class="${(localStorage.getItem('zerokit.font-scale') || 'm') === id ? 'on' : ''}">${label}</button>`).join('')}
     </div>
+    <div class="tp-head">语言 Language</div>
+    <div class="tp-row">
+      ${[['system', t('langSystem')], ['zh', t('langZh')], ['en', t('langEn')]].map(([id, label]) => `
+        <button data-lang-choice="${id}" class="${langPref === id ? 'on' : ''}">${label}</button>`).join('')}
+    </div>
     <div class="tp-head">数据</div>
     <div class="tp-row tp-backup">
       <button data-backup="export" title="把所有个性化数据（收藏、历史、参数记忆、外观设置）打包成 JSON 下载">⬇ 导出数据</button>
@@ -246,6 +253,18 @@ function openThemePop() {
       localStorage.setItem('zerokit.font-scale', b.dataset.font);
       applyFontScale();
       pop.querySelectorAll('[data-font]').forEach((x) => x.classList.toggle('on', x === b));
+    });
+  });
+  // 语言三档：点选即存偏好并全界面生效。openThemePop 重开刷新面板自身文案——
+  // 此时已不在被点按钮的事件链内（click 已返回），重建安全。
+  pop.querySelectorAll('[data-lang-choice]').forEach((b) => {
+    b.addEventListener('click', () => {
+      langPref = validLangPref(b.dataset.langChoice) ? b.dataset.langChoice : 'system';
+      try { localStorage.setItem('zerokit.lang', langPref); } catch { /* 隐私模式 */ }
+      lang = pickLang(langPref, navigator.language);
+      t = makeT(lang);
+      applyLang(true);
+      openThemePop();
     });
   });
   pop.querySelectorAll('[data-theme-choice]').forEach((b) => {
@@ -409,7 +428,12 @@ function cycleTheme() {
   applyTheme();
 }
 
-const RISK_TEXT = { read: '只读', mutate: '会改动', destructive: '高风险' };
+const RISK_TEXT = { read: 'riskRead', mutate: 'riskWrite', destructive: 'riskHigh' };
+function riskText(risk) {
+  // RISK_TEXT 值已改为 i18n 键（第二十八轮）；老值直接透出
+  const k = RISK_TEXT[risk];
+  return k ? t(k) : risk;
+}
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => (
@@ -655,7 +679,7 @@ function itemHtml(entry, i, showPlugin, query = '') {
     ${smart ? `<span class="badge smart-badge">智能匹配</span>` : ''}
     ${!smart && entry.lastWhy?.length ? `<span class="badge why-badge" title="${esc(whyLabel(entry.lastWhy))}">${esc(whyLabel(entry.lastWhy))}</span>` : ''}
     ${dep}
-    <span class="badge ${esc(a.risk)}">${esc(RISK_TEXT[a.risk] || a.risk)}</span>
+    <span class="badge ${esc(a.risk)}">${esc(riskText(a.risk))}</span>
   </li>`;
 }
 
@@ -888,7 +912,7 @@ function renderList() {
 
   const q = el.q.value;
   mode = 'command';
-  el.modeLabel.textContent = '命令';
+  el.modeLabel.textContent = t('modeCommand');
   el.modeDot.classList.remove('workbench');
   el.workbench.classList.add('hidden');
   el.plugView.classList.add('hidden');
@@ -938,7 +962,7 @@ function renderList() {
            ? '可能是词太具体，也可能这个能力还没装进来。'
            : '装上第一个插件，启动器就会开始认识你的电脑。'}</div>
          <div class="empty-sugs">${suggestions.join('')}</div>`
-      : '没有匹配的插件动作';
+      : t('noResult');
     el.empty.classList.remove('hidden');
     el.empty.querySelectorAll('[data-sug]').forEach((b) => b.addEventListener('click', () => {
       const act2 = b.dataset.sug;
@@ -1315,13 +1339,13 @@ function openDetail(plugin, action, prefill) {
       <h2>${esc(action.title)}<button class="star big${fav ? ' on' : ''}" id="favBtn"
         title="${fav ? '取消收藏' : '收藏这个动作'}" aria-label="${fav ? '取消收藏' : '收藏这个动作'}">${fav ? '★' : '☆'}</button></h2>
       <div class="meta">${esc(plugin.name)} · ${esc(action.id)} ·
-        <span class="badge ${esc(action.risk)}">${esc(RISK_TEXT[action.risk] || action.risk)}</span>
+        <span class="badge ${esc(action.risk)}">${esc(riskText(action.risk))}</span>
         ${steps.length ? `<span class="badge">组合 ${steps.length} 步</span>` : ''}
         <span class="badge">${esc(action.tool)}</span>
         ${sparkline}
       </div>
       <div class="desc">${esc(action.description || '（这个动作没写说明）')}</div>
-      ${action.risk !== 'read' ? `<div class="risk-explain callout">⚠ 风险等级「${esc(RISK_TEXT[action.risk] || action.risk)}」是什么意思：只读=只是看、不改任何东西；会改动=会修改文件/配置/服务，执行前想清楚；高风险=可能删除数据或不可逆，确认明白了再执行。</div>` : ''}
+      ${action.risk !== 'read' ? `<div class="risk-explain callout">⚠ 风险等级「${esc(riskText(action.risk))}」是什么意思：只读=只是看、不改任何东西；会改动=会修改文件/配置/服务，执行前想清楚；高风险=可能删除数据或不可逆，确认明白了再执行。</div>` : ''}
       ${note ? `<div class="detail-note">📌 ${esc(note)}</div>` : ''}
       <div class="detail-hotkey">
         <button class="ghost" id="hkBtn" title="把 F1–F12 里某个键绑给这个动作，全局按一下就打开">⚡ 绑定快捷键</button>
@@ -1883,7 +1907,7 @@ function showDangerNote(field, why, value) {
     <div class="danger-title">⚠ 参数值命中危险模式：${esc(why)}</div>
     <div class="danger-field">字段 <code>${esc(field.name)}</code> 的值：</div>
     <div class="danger-val">${esc(String(value ?? '').slice(0, 200))}</div>
-    <div class="help">递归删除、系统目录、格式化磁盘这类操作不可逆。确认命令与预期一致再继续。</div>
+    <div class="help">递归删除、系统目录、格式化磁盘这类操作不可逆。确认动作与预期一致再继续。</div>
     <div class="actions">
       <button class="ghost" id="dangerBack">回去改</button>
       <button class="warn-btn" id="dangerGo">仍要执行</button>
@@ -1931,7 +1955,7 @@ async function checkPluginUpdate(p) {
 function showBrief() {
   hidePanels();
   mode = 'brief';
-  el.modeLabel.textContent = '简报';
+  el.modeLabel.textContent = t('modeBrief');
   el.listView.classList.add('hidden');
   el.detailView.classList.add('hidden');
   if (location.hash !== '#/brief') history.replaceState(null, '', '#/brief');
@@ -2156,7 +2180,7 @@ function renderWatchBar() {
 function showWatchPanel() {
   hidePanels();
   mode = 'watch';
-  el.modeLabel.textContent = '监控';
+  el.modeLabel.textContent = t('modeWatch');
   el.listView.classList.add('hidden');
   el.detailView.classList.add('hidden');
   if (location.hash !== '#/watch') history.replaceState(null, '', '#/watch');
@@ -2203,7 +2227,7 @@ function showWatchPanel() {
 function showHelpPanel() {
   hidePanels();
   mode = 'help';
-  el.modeLabel.textContent = '帮助';
+  el.modeLabel.textContent = t('modeHelp');
   el.listView.classList.add('hidden');
   el.detailView.classList.add('hidden');
   if (location.hash !== '#/help') history.replaceState(null, '', '#/help');
@@ -2235,7 +2259,7 @@ function showHelpPanel() {
 function showTimers() {
   hidePanels();
   mode = 'timers';
-  el.modeLabel.textContent = '定时';
+  el.modeLabel.textContent = t('modeTimers');
   el.listView.classList.add('hidden');
   el.detailView.classList.add('hidden');
   if (location.hash !== '#/timers') history.replaceState(null, '', '#/timers');
@@ -2390,10 +2414,10 @@ function askConfirm(plugin, action, res) {
         <h3>确认执行</h3>
         <div class="risk-note">
           ${esc(plugin.name)} · ${esc(action.title)} ·
-          <span class="badge ${esc(action.risk)}">${esc(RISK_TEXT[action.risk] || action.risk)}</span>
+          <span class="badge ${esc(action.risk)}">${esc(riskText(action.risk))}</span>
         </div>
         <div class="confirm-explain">${riskExplain}</div>
-        <div class="cmd-line">${esc(res.command || '(无命令)')}</div>
+        <div class="cmd-line">${esc(res.command || '(无动作)')}</div>
         ${rememberable ? `<div class="remember">
           <input type="checkbox" id="rememberBox" checked>
           <label for="rememberBox">记住这个动作，以后不再询问</label>
@@ -2439,7 +2463,7 @@ function renderRiskCard(plugin, action) {
   box.innerHTML = `
     <div class="risk-bar"><span class="risk-fill" style="width:${action.risk === 'destructive' ? 100 : action.risk === 'mutate' ? 55 : 12}%;background:${barColor}"></span></div>
     <div class="risk-line">
-      <span class="badge ${esc(action.risk)}">${esc(RISK_TEXT[action.risk] || action.risk)}</span>
+      <span class="badge ${esc(action.risk)}">${esc(riskText(action.risk))}</span>
       <span class="sub">${esc(why)}</span>
     </div>
     ${card.runs ? `<div class="risk-stats">历史 ${card.runs} 次 · 失败率 ${pct}%${pct >= 40 ? ' ⚠' : ''} · 平均 ${esc(formatMs(card.avgMs))}</div>` : '<div class="risk-stats sub">还没有执行记录——首次执行没有历史可参考。</div>'}`;
@@ -2831,7 +2855,7 @@ function renderTabBar() {
   bar.innerHTML = resultTabs.map((t) => `
     <button class="rtab${t.id === activeTab ? ' active' : ''}" data-rtab="${esc(t.id)}"
       title="${esc(t.note ? `备注：${t.note}` : '点击切换 · 双击写备注 · 右键固定/取消固定')}${t.pinned ? '（已固定）' : ''}">
-      ${t.pinned ? '📌 ' : ''}${esc(resultTabTitle(t.name, t.ts))}
+      ${t.pinned ? '📌 ' : ''}${esc(resultTabTitle(t.name, t.ts, Date.now(), lang))}
       <span class="rtab-x" data-rx="${esc(t.id)}" title="关闭">✕</span>
     </button>`).join('')
     + (resultTabs.length >= 2 ? '<button class="rtab rtab-cmp ghost" data-rcmp title="选两个页签并排对比">⇄ 对比</button>' : '');
@@ -3878,7 +3902,7 @@ function bindTableSorts(scope) {
 async function showMarket() {
   hidePanels();
   mode = 'market';
-  el.modeLabel.textContent = '集市';
+  el.modeLabel.textContent = t('modeMarket');
   el.searchRow.classList.add('hidden');
   el.listView.classList.add('hidden');
   el.detailView.classList.add('hidden');
@@ -3896,7 +3920,7 @@ function exitMarket() {
   el.marketView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
   el.listView.classList.remove('hidden');
-  el.modeLabel.textContent = '命令';
+  el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
   renderList();
   el.q.focus();
@@ -3911,7 +3935,7 @@ let logsQuery = '';
 
 async function showLogs() {
   mode = 'logs';
-  el.modeLabel.textContent = '日志';
+  el.modeLabel.textContent = t('modeLogs');
   el.searchRow.classList.add('hidden');
   hidePanels();
   el.logsView.classList.remove('hidden');
@@ -3924,7 +3948,7 @@ function exitLogs() {
   el.logsView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
   el.listView.classList.remove('hidden');
-  el.modeLabel.textContent = '命令';
+  el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
   renderList();
   el.q.focus();
@@ -3934,7 +3958,7 @@ function logDetailHtml(e, i) {
   // 第十九轮④：命令与错误信息默认脱敏（密钥可能随命令行/报错回显）
   const mtext = (t) => (maskState() ? maskSecrets(t) : String(t ?? ''));
   return `<div class="log-detail hidden" id="logDetail${i}">
-    <pre>${esc(mtext(e['command'] ?? '（无命令）'))}</pre>
+    <pre>${esc(mtext(e['command'] ?? '（无动作）'))}</pre>
     ${e['error'] ? `<p class="log-error">${esc(mtext(e['error']))}</p>` : ''}
     <div class="log-extra">决策 ${esc(String(e['decision'] ?? '-'))} · 退出码 ${esc(String(e['exitCode'] ?? '-'))} · 输出 ${esc(String(e['outBytes'] ?? 0))} 字节${e['truncated'] ? ' · 已截断' : ''}</div>
   </div>`;
@@ -4022,7 +4046,7 @@ async function renderLogs() {
 // ---------------------------------------------------------------- 环境自检
 async function showDoctor() {
   mode = 'doctor';
-  el.modeLabel.textContent = '自检';
+  el.modeLabel.textContent = t('modeDoctor');
   el.searchRow.classList.add('hidden');
   hidePanels();
   el.doctorView.classList.remove('hidden');
@@ -4035,7 +4059,7 @@ function exitDoctor() {
   el.doctorView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
   el.listView.classList.remove('hidden');
-  el.modeLabel.textContent = '命令';
+  el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
   renderList();
   el.q.focus();
@@ -4342,7 +4366,7 @@ function exitPlugins() {
   el.plugView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
   el.listView.classList.remove('hidden');
-  el.modeLabel.textContent = '命令';
+  el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
   renderList();
   el.q.focus();
@@ -4351,7 +4375,7 @@ function exitPlugins() {
 async function showPlugins() {
   hidePanels();
   mode = 'plugins';
-  el.modeLabel.textContent = '插件';
+  el.modeLabel.textContent = t('modePlugins');
   el.searchRow.classList.add('hidden');
   el.listView.classList.add('hidden');
   el.detailView.classList.add('hidden');
@@ -4366,7 +4390,7 @@ async function showPlugins() {
 async function showPluginHome(id) {
   hidePanels();
   mode = 'plugins';
-  el.modeLabel.textContent = '插件';
+  el.modeLabel.textContent = t('modePlugins');
   el.searchRow.classList.add('hidden');
   el.listView.classList.add('hidden');
   el.detailView.classList.add('hidden');
@@ -4452,7 +4476,7 @@ async function showPluginHome(id) {
       ${p.actions.map((a) => `
         <button class="plug-action" data-action="${esc(a.id)}">
           <span class="pa-title">${esc(a.title)}</span>
-          <span class="badge ${esc(a.risk)}">${esc(RISK_TEXT[a.risk] || a.risk)}</span>
+          <span class="badge ${esc(a.risk)}">${esc(riskText(a.risk))}</span>
           ${a.steps?.length ? `<span class="badge">组合 ${a.steps.length} 步</span>` : ''}
         </button>`).join('')}
     </div>
@@ -4894,7 +4918,7 @@ async function doInstall() {
           <tbody>${p.actions.map((a) => `
             <tr>
               <td>${esc(a.id)} · ${esc(a.title)}</td>
-              <td><span class="badge ${esc(a.risk)}">${esc(RISK_TEXT[a.risk] || a.risk)}</span></td>
+              <td><span class="badge ${esc(a.risk)}">${esc(riskText(a.risk))}</span></td>
               <td class="cmd-inline">${esc(a.command)}</td>
             </tr>`).join('')}</tbody>
         </table>
@@ -5072,7 +5096,7 @@ async function refreshPsCount() {
 async function showPs() {
   hidePanels();
   mode = 'ps';
-  el.modeLabel.textContent = '运行中';
+  el.modeLabel.textContent = t('modePs');
   el.searchRow.classList.add('hidden');
   el.listView.classList.add('hidden');
   el.detailView.classList.add('hidden');
@@ -5094,7 +5118,7 @@ function exitPs() {
   el.psView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
   el.listView.classList.remove('hidden');
-  el.modeLabel.textContent = '命令';
+  el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
   renderList();
   el.q.focus();
@@ -5205,7 +5229,7 @@ const wb = {
 function exitWorkbench() {
   mode = 'command';
   el.workbench.classList.add('hidden');
-  el.modeLabel.textContent = '命令';
+  el.modeLabel.textContent = t('modeCommand');
   el.modeDot.classList.remove('workbench');
   el.searchRow.classList.remove('hidden');
   el.listView.classList.remove('hidden');
@@ -5237,7 +5261,7 @@ async function restoreWb() {
 function showWorkbench(question) {
   hidePanels();
   mode = 'workbench';
-  el.modeLabel.textContent = '工作台';
+  el.modeLabel.textContent = t('modeWorkbench');
   el.modeDot.classList.add('workbench');
   el.listView.classList.add('hidden');
   el.detailView.classList.add('hidden');
@@ -5339,7 +5363,7 @@ function wbToolCard(call, approvable) {
       <span class="wb-tool-src">${esc(call.pluginName)} · ${esc(call.tool)}</span>
       <span class="wb-tool-state" data-state>${approvable ? '等待确认' : '准备执行'}</span>
     </div>
-    <div class="cmd-line">${esc(call.command || '(无命令)')}</div>
+    <div class="cmd-line">${esc(call.command || '(无动作)')}</div>
     ${approvable ? `<div class="wb-tool-actions">
       <button class="primary" data-allow>允许执行</button>
       <button class="ghost" data-deny>拒绝</button>
@@ -5483,7 +5507,7 @@ async function wbSend() {
 /** 全局统计：总执行数 / 成功率 / 最活跃插件 / 近 7 天趋势。数据全部来自本机 runStore。 */
 function showStats() {
   mode = 'stats';
-  el.modeLabel.textContent = '统计';
+  el.modeLabel.textContent = t('modeStats');
   el.searchRow.classList.add('hidden');
   hidePanels();
   el.allowView.classList.remove('hidden');
@@ -5702,6 +5726,7 @@ $('timersBtn')?.addEventListener('click', showTimers);
 $('briefBtn')?.addEventListener('click', showBrief);
 
 loadPrefs();
+applyLang();
 applyFontScale(); applyTheme(); applyAccent();
     } catch (e) { msg.textContent = `导入失败：${e.message}`; }
   });
@@ -5712,7 +5737,7 @@ function exitStats() {
   el.allowView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
   el.listView.classList.remove('hidden');
-  el.modeLabel.textContent = '命令';
+  el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
   renderList();
   el.q.focus();
@@ -5724,7 +5749,7 @@ function exitStats() {
 /** 收藏的结果：钉住某次执行的关键输出，重启后还在（本机 localStorage）。 */
 async function showSaved() {
   mode = 'saved';
-  el.modeLabel.textContent = '收藏';
+  el.modeLabel.textContent = t('modeSaved');
   el.searchRow.classList.add('hidden');
   hidePanels();
   const view = el.allowView;
@@ -5783,7 +5808,7 @@ function exitSaved() {
   el.allowView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
   el.listView.classList.remove('hidden');
-  el.modeLabel.textContent = '命令';
+  el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
   renderList();
   el.q.focus();
@@ -5794,7 +5819,7 @@ function exitSaved() {
 /** MCP 授权：哪些「有副作用」的动作允许 AI 直接调。只读动作默认放行，不在这里。 */
 async function showMcpAllow() {
   mode = 'mcp';
-  el.modeLabel.textContent = 'MCP 授权';
+  el.modeLabel.textContent = t('modeMcp');
   el.searchRow.classList.add('hidden');
   hidePanels();
   el.allowView.classList.remove('hidden');
@@ -5851,7 +5876,7 @@ function exitMcpAllow() {
   el.allowView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
   el.listView.classList.remove('hidden');
-  el.modeLabel.textContent = '命令';
+  el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
   renderList();
   el.q.focus();
@@ -6549,7 +6574,7 @@ window.addEventListener('hashchange', () => {
   if (detail && /#\/[\w.-]+\/[\w.-]+/.test(location.hash || '') && el.detailView.classList.contains('hidden')) {
     hidePanels();
     mode = 'detail';
-    el.modeLabel.textContent = '详情';
+    el.modeLabel.textContent = t('modeDetail');
     el.listView.classList.add('hidden');
     el.detailView.classList.remove('hidden');
     return;
@@ -6626,15 +6651,70 @@ function toggleLightDark() {
   if (b) b.textContent = next === 'light' ? '🌙' : '☀';
 }
 $('langBtn')?.addEventListener('click', () => {
-  lang = pickLang(lang === 'zh' ? 'en' : 'zh');
-  localStorage.setItem('zerokit.lang', lang);
+  // 三档循环：跟随系统 → 中文 → 英文 → 跟随系统
+  langPref = langPref === 'system' ? 'zh' : (langPref === 'zh' ? 'en' : 'system');
+  try { localStorage.setItem('zerokit.lang', langPref); } catch { /* 隐私模式 */ }
+  lang = pickLang(langPref, navigator.language);
   t = makeT(lang);
-  applyLang();
+  applyLang(true);
 });
-function applyLang() {
+/**
+ * 应用语言：静态 DOM（data-i18n）+ 当前面板重渲。首次启动 mode 尚未建立时
+ * 只处理静态点；切换时按 mode 重渲对应面板。标题徽标（tabTitle）不属语言文案。
+ */
+function applyLang(rerender = false) {
+  document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
   el.q.placeholder = t('searchPlaceholder');
+  const lb = $('langBtn');
+  if (lb) { lb.textContent = t('langLabel'); lb.title = t('langTitle'); }
+  // 静态节点统一走 data-i18n（index.html 标注）
+  document.querySelectorAll('[data-i18n]').forEach((n) => {
+    const k = n.getAttribute('data-i18n');
+    const v = I18N_TEXT(k);
+    if (v != null) {
+      if (n.tagName === 'INPUT' && n.type !== 'button') n.placeholder = v; else n.textContent = v;
+    }
+  });
   const run = $('runBtn');
   if (run) run.textContent = t('run');
+  refreshModeLabel();
+  if (!rerender) return;
+  // 按当前 mode 重渲（第二十八轮清单；面板函数都是幂等重渲）
+  switch (mode) {
+    case 'command': renderList(); renderTabBar(); break;
+    case 'detail': if (detail) openDetail(detail.plugin, detail.action); renderTabBar(); break;
+    case 'market': showMarket(); break;
+    case 'logs': showLogs(); break;
+    case 'doctor': showDoctor(); break;
+    case 'plugins': showPlugins(); break;
+    case 'stats': showStats(); break;
+    case 'saved': showSaved(); break;
+    case 'ps': showPs(); break;
+    case 'workbench': showWorkbench(); break;
+    case 'watch': showWatchPanel(); break;
+    case 'help': showHelpPanel(); break;
+    case 'brief': showBrief(); break;
+    case 'timers': showTimers(); break;
+    default: renderList();
+  }
+  // 结果区与页脚等常驻元素
+  if (currentResult) renderResult(currentResult);
+}
+/** data-i18n 键 → 文案（静态点专用小表，避免 index.html 与 extras 大表耦合） */
+function I18N_TEXT(k) {
+  const map = {
+    reload: t('reload'),
+    footerSaved: t('modeSaved'), footerTimers: t('modeTimers'), footerBrief: t('modeBrief'),
+    footerLogs: t('modeLogs'), footerDoctor: t('modeDoctor'), footerShortcuts: t('shortcuts'),
+    footerGuide: t('modeHelp'),
+  };
+  return map[k] ?? null;
+}
+/** 顶栏模式标签随语言刷新（mode → t('mode'+Mode)） */
+function refreshModeLabel() {
+  const key = 'mode' + mode.charAt(0).toUpperCase() + mode.slice(1);
+  const v = t(key);
+  if (v !== key) el.modeLabel.textContent = v;
 }
 $('themeFast')?.addEventListener('click', toggleLightDark);
 document.addEventListener('keydown', (e) => {
@@ -6645,6 +6725,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 loadPrefs();
+applyLang();
 applyTheme();
 applyAccent();
 window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
