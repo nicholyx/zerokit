@@ -954,3 +954,107 @@ export function toMarkdownProps(data, indent = '') {
   }
   return lines.join('\n');
 }
+
+/* ===================== 第十八轮：监控与自动化 ===================== */
+
+/**
+ * ① 间隔选项标签：秒数 ↔ 人话标签。输入秒数返回标签；输 null 返回默认档位表。
+ *   档位是写死的（关/5/10/30/60/300）——自由输入秒数看似灵活，实际没人填 47 秒。
+ */
+export const WATCH_INTERVALS = [
+  { sec: 0, label: '关' },
+  { sec: 5, label: '5 秒' },
+  { sec: 10, label: '10 秒' },
+  { sec: 30, label: '30 秒' },
+  { sec: 60, label: '1 分钟' },
+  { sec: 300, label: '5 分钟' },
+];
+
+export function intervalLabel(sec) {
+  const hit = WATCH_INTERVALS.find((i) => i.sec === sec);
+  if (hit) return hit.label;
+  if (!Number.isFinite(sec) || sec <= 0) return '关';
+  if (sec % 60 === 0 && sec < 3600) return `${sec / 60} 分钟`;
+  return `${sec} 秒`;
+}
+
+/**
+ * ③ 单元格 diff：新旧两个值，返回变更描述（相等返回 null）。
+ *   数字变化附带方向（↑/↓）与百分比——监控磁盘占用时一眼看出涨了还是降了。
+ */
+export function cellDiff(prev, next) {
+  if (prev === next) return null;
+  const ps = prev === null || prev === undefined ? '' : String(prev);
+  const ns = next === null || next === undefined ? '' : String(next);
+  if (ps === ns) return null;
+  const pn = Number(ps); const nn = Number(ns);
+  if (ps !== '' && ns !== '' && Number.isFinite(pn) && Number.isFinite(nn)) {
+    const dir = nn > pn ? '↑' : '↓';
+    const pct = pn === 0 ? '' : `（${((nn - pn) / Math.abs(pn) * 100).toFixed(1)}%）`;
+    return `${dir} ${ns}${pct}（原 ${ps}）`;
+  }
+  return `${ns}（原 ${ps}）`;
+}
+
+/**
+ * ④ 数值采样序列 → sparkline 点位（0–100 归一化，保序）。
+ *   全相同值返回中位线（画出来是平线，而不是 NaN 崩掉）；空/单点返回 null。
+ */
+export function sparkSeries(values, width = 60) {
+  if (!Array.isArray(values) || values.length < 2) return null;
+  const nums = values.map(Number).filter((n) => Number.isFinite(n));
+  if (nums.length < 2) return null;
+  const min = Math.min(...nums); const max = Math.max(...nums);
+  const span = max - min;
+  return nums.map((n) => {
+    const t = span === 0 ? 50 : ((n - min) / span) * 100;
+    return Math.round(t * width) / width;
+  });
+}
+
+/**
+ * ⑤ 停止条件判定：给定最近 N 次结果，返回 'stop-fail' | 'stop-match' | null（继续）。
+ *   failStreak 是连续失败次数阈值；matchStr 是结果包含即停的串（空 = 不启用）。
+ */
+export function watchStopCondition(runs, { failStreak = 0, matchStr = '' } = {}) {
+  if (!Array.isArray(runs) || !runs.length) return null;
+  if (failStreak > 0) {
+    let streak = 0;
+    for (let i = runs.length - 1; i >= 0; i--) {
+      if (runs[i].ok === false) streak++;
+      else break;
+    }
+    if (streak >= failStreak) return 'stop-fail';
+  }
+  if (matchStr) {
+    const last = runs.at(-1);
+    const blob = JSON.stringify(last?.data ?? '') + String(last?.stdout ?? '');
+    if (blob.includes(matchStr)) return 'stop-match';
+  }
+  return null;
+}
+
+/**
+ * ⑦ 标签页标题：运行中的监控数（与原有运行中进程数合并显示）。
+ */
+export function tabTitle(watchCount, runningCount = 0) {
+  const parts = [];
+  if (watchCount > 0) parts.push(`⏱${watchCount}`);
+  if (runningCount > 0) parts.push(String(runningCount));
+  return parts.length ? `(${parts.join(' ')}) zerokit` : 'zerokit';
+}
+
+/**
+ * ⑨ 监控采样导出 CSV：runs → 时间戳,ok,值 列表。valuesFrom 从一次 run 里取要跟踪的值
+ *   （调用方决定取哪个字段；默认整个 data JSON 化）。
+ */
+export function watchCsv(runs, valuesFrom = (r) => JSON.stringify(r.data ?? '')) {
+  if (!Array.isArray(runs) || !runs.length) return '';
+  const head = 'time,ok,value';
+  const rows = runs.map((r) => {
+    const t = new Date(r.ts ?? 0).toISOString();
+    const v = String(valuesFrom(r) ?? '').replace(/"/g, '""');
+    return `${t},${r.ok === false ? 'fail' : 'ok'},"${v}"`;
+  });
+  return [head, ...rows].join('\n') + '\n';
+}

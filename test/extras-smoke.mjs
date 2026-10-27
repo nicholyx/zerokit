@@ -496,6 +496,50 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
     return md.includes('- **ip**: 1.2.3.4') && md.includes('- **who**: me')
       && !md.includes('| 字段 | 值 |');
   })());
+
+  // ---------------- 第十八轮：监控与自动化 ----------------
+  const { WATCH_INTERVALS, intervalLabel, cellDiff, sparkSeries, watchStopCondition, tabTitle, watchCsv } = await import('../web/extras.js');
+  check('intervalLabel: 档位标签、分钟归一、非法值兜底', (() => {
+    return intervalLabel(0) === '关' && intervalLabel(5) === '5 秒' && intervalLabel(300) === '5 分钟'
+      && intervalLabel(120) === '2 分钟' && intervalLabel(47) === '47 秒'
+      && intervalLabel(-1) === '关' && intervalLabel(NaN) === '关'
+      && WATCH_INTERVALS.length === 6 && WATCH_INTERVALS[0].sec === 0;
+  })());
+  check('cellDiff: 数值带方向与百分比、文本带原值、相等返回 null', (() => {
+    return cellDiff(100, 150) === '↑ 150（50.0%）（原 100）'
+      && cellDiff(150, 100) === '↓ 100（-33.3%）（原 150）'
+      && cellDiff('a', 'b') === 'b（原 a）'
+      && cellDiff(5, 5) === null && cellDiff(null, null) === null
+      && cellDiff(0, 10) === '↑ 10（原 0）';
+  })());
+  check('sparkSeries: 归一化保序、平线中位、不足两点 null', (() => {
+    const s = sparkSeries([0, 50, 100]);
+    return s[0] === 0 && s[2] === 100 && s[1] === 50
+      && sparkSeries([7, 7, 7]).every((v) => v === 50)
+      && sparkSeries([1]) === null && sparkSeries([]) === null && sparkSeries('x') === null
+      && JSON.stringify(sparkSeries([1, 2], 10)) === '[0,100]';
+  })());
+  check('watchStopCondition: 连续失败停、命中串停、正常继续', (() => {
+    const runs = [{ ok: true }, { ok: false }, { ok: false }];
+    return watchStopCondition(runs, { failStreak: 2 }) === 'stop-fail'
+      && watchStopCondition(runs, { failStreak: 3 }) === null
+      && watchStopCondition([{ ok: true, data: { msg: 'disk 95% full' } }], { matchStr: '95%' }) === 'stop-match'
+      && watchStopCondition([{ ok: true, data: {} }], { matchStr: 'nope' }) === null
+      && watchStopCondition([], { failStreak: 1 }) === null;
+  })());
+  check('tabTitle: 监控数与运行数合并、空态还原', (() => {
+    return tabTitle(2, 0) === '(⏱2) zerokit'
+      && tabTitle(1, 3) === '(⏱1 3) zerokit'
+      && tabTitle(0, 4) === '(4) zerokit'
+      && tabTitle(0, 0) === 'zerokit';
+  })());
+  check('watchCsv: 表头+行、引号转义、ISO 时间戳', (() => {
+    const csv = watchCsv([{ ts: 1770000000000, ok: true, data: { v: 'a"b' } }]);
+    return csv.startsWith('time,ok,value\n')
+      && csv.includes(',ok,"') && csv.includes('2026-02-02')
+      && watchCsv([{ ts: 1, ok: true, data: null }], () => 'x"y').includes('"x""y"')
+      && watchCsv([]) === '';
+  })());
 }
 
 const failed = results.filter(([, ok]) => !ok);
