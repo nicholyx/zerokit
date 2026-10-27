@@ -20,6 +20,7 @@ import { profileList, validProfileName, upsertProfile, deleteProfile, renameProf
 import { resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader } from './extras.js';
 import { COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory } from './extras.js';
 import { chainFill, batchDedup, chunkWindows, parseBatchList } from './extras.js';
+import { pluginCompare as plugCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags as pluginTagChips, pluginStatCards, installedList, installCommand } from './extras.js';
 import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport, virtualWindow, pageSlice, breadcrumb, listStateQuery, parseListState, digitPick } from './extras.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
@@ -1880,7 +1881,12 @@ async function checkPluginUpdate(p) {
     if (!remote) { btn.textContent = '集市里没有这个插件'; return; }
     if (String(remote) === String(p.version)) { btn.textContent = '已是最新 ' + remote; return; }
     btn.textContent = `集市有新版 ${remote}（当前 ${p.version}）——去集市面板安装`;
+    btn.classList.add('warn');
     btn.onclick = () => { location.hash = '#/market'; };
+    // 第二十六轮②：主页头部同步一枚「有更新」徽标（versionDiff 口径统一）
+    const badge = document.getElementById('plugUpdateBadge');
+    const diff = versionDiff(String(p.version), String(remote));
+    if (badge && diff) { badge.textContent = `⬆ 可更新：v${diff.installed} → v${diff.latest}`; badge.classList.remove('hidden'); badge.style.display = ''; }
   } catch {
     btn.textContent = '检查失败（稍后再试）';
   }
@@ -4383,6 +4389,7 @@ async function showPluginHome(id) {
       <span class="sub">${esc(p.sourceText)}</span>
     </div>
     <div class="plug-home-desc">${esc(p.description || p.summary || '')}</div>
+    <span id="plugUpdateBadge" class="badge upd-badge hidden" style="display:none"></span>
     <div class="plug-home-history">📥 装于 ${esc(p.installedAt ? new Date(p.installedAt).toLocaleString() : '未知时间')} · ${esc(p.sourceText)}${p.installedVersion && p.installedVersion !== p.version ? `（记录自 v${esc(p.installedVersion)}）` : ''}</div>
     <div class="plug-home-meta">
       <span class="badge">${p.actions.length} 个动作</span>
@@ -4390,8 +4397,23 @@ async function showPluginHome(id) {
       ${settings.length ? `<span class="badge warn">${settings.filter((x) => x.missing).length} 项未填</span>` : ''}
       ${p.requiresOk ? '' : '<span class="badge destructive">缺命令依赖</span>'}
     </div>
-    <h3 class="plug-home-h">动作</h3>
-    <div class="plug-home-actions">
+    ${(() => {
+      // 第二十六轮⑧：统计卡三格（动作/最近使用/健康）
+      const st = pluginStatCards(p, runStore);
+      if (!st) return '';
+      return `<div class="stat-row plug-stats">
+        <div class="stat-card"><b>${st.actions}</b><span>动作（组合 ${st.chains}）</span></div>
+        <div class="stat-card"><b>${st.runs}</b><span>累计执行${st.lastUsed !== null ? ` · 最近 ${st.lastUsed} 分钟前` : ''}</span></div>
+        <div class="stat-card${st.health === 'warn' ? ' warn' : ''}"><b>${st.health === 'ok' ? '健康' : '注意'}</b><span>${st.health === 'ok' ? '依赖齐全' : '缺命令依赖'}</span></div>
+      </div>`;
+    })()}
+    ${(() => {
+      // 第二十六轮⑦：标签 chips
+      const tags = pluginTagChips(p);
+      return tags.length ? `<div class="plug-tags">${tags.map((t) => `<span class="chip">${esc(t)}</span>`).join('')}</div>` : '';
+    })()}
+    <h3 class="plug-home-h">动作 <input id="plugActFilter" class="plug-act-filter" placeholder="在 ${p.actions.length} 个动作里搜索…" /></h3>
+    <div class="plug-home-actions" id="plugActList">
       ${p.actions.map((a) => `
         <button class="plug-action" data-action="${esc(a.id)}">
           <span class="pa-title">${esc(a.title)}</span>
@@ -4407,8 +4429,11 @@ async function showPluginHome(id) {
           ${s.missing ? '<span class="badge destructive">缺</span>' : ''}
         </div>`).join('')}
       </div>` : ''}
+    ${deps.length ? `<h3 class="plug-home-h">依赖树</h3><pre class="dep-tree">${esc(depTreeLines(p.id, deps).join('\n'))}</pre>` : ''}
     <div class="actions">
       <button class="ghost" id="homeExport" title="导出这个插件的能力清单（Markdown）">导出能力清单</button>
+      <button class="ghost" id="homeCopyInstall" title="复制安装命令（命令行里一键装）">复制安装命令</button>
+      <button class="ghost" id="homeCompare" title="与另一个插件对比动作与风险">对比…</button>
       ${p.source?.type === 'market' ? '<button class="ghost" id="plugUpdateBtn">检查更新</button>' : ''}
       <button class="ghost" id="homeBackList">返回插件列表</button>
       <button class="primary" id="homeBack">返回</button>
@@ -4418,8 +4443,66 @@ async function showPluginHome(id) {
     const a = p.actions.find((x) => x.id === btn.dataset.action);
     btn.addEventListener('click', () => openDetail(p, a));
   });
+  // 第二十六轮⑤：主页内动作搜索（与全局搜索独立，只过滤本插件动作卡）
+  const filt = $('plugActFilter');
+  filt?.addEventListener('input', () => {
+    const shown = filterPluginActions(p.actions, filt.value);
+    el.plugView.querySelectorAll('[data-action]').forEach((btn) => {
+      btn.style.display = shown.some((a) => a.id === btn.dataset.action) ? '' : 'none';
+    });
+  });
+  // 第二十六轮⑥：复制安装命令
+  $('homeCopyInstall')?.addEventListener('click', async () => {
+    const cmd = installCommand(p);
+    try { await navigator.clipboard.writeText(cmd); el.count.textContent = `已复制：${cmd}`; }
+    catch { el.count.textContent = cmd; }
+  });
+  // 第二十六轮①：与另一个插件对比（模态选择 + 对比表）
+  $('homeCompare')?.addEventListener('click', () => {
+    const others = plugins.filter((x) => x.id !== p.id);
+    if (!others.length) { el.count.textContent = '没有其它插件可对比'; return; }
+    const ov = document.createElement('div');
+    ov.className = 'overlay';
+    ov.innerHTML = `<div class="modal">
+      <h3>与哪个插件对比？</h3>
+      <div class="chain-cands">${others.map((o, i) => `<button data-cmp="${i}">${esc(o.name)} <span class="sub">${esc(o.id)} · ${o.actions.length} 动作</span></button>`).join('')}</div>
+      <div class="actions"><button class="ghost" data-cmp-close>取消</button></div>
+    </div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('[data-cmp-close]').addEventListener('click', () => ov.remove());
+    ov.addEventListener('click', (e) => { if (e.target === ov) ov.remove(); });
+    ov.querySelectorAll('[data-cmp]').forEach((b) => b.addEventListener('click', () => {
+      const o = others[Number(b.dataset.cmp)];
+      const cmp = plugCompare(p, o);
+      if (!cmp) { el.count.textContent = '对比失败：插件数据不完整'; ov.remove(); return; }
+      ov.querySelector('.modal').innerHTML = `
+        <h3>对比：${esc(cmp.a.name)} vs ${esc(cmp.b.name)}</h3>
+        <table class="cmp-table"><thead><tr><th>维度</th><th>${esc(cmp.a.name)}</th><th>${esc(cmp.b.name)}</th></tr></thead>
+        <tbody>
+          <tr><td>动作数</td><td>${cmp.a.actions}</td><td>${cmp.b.actions}</td></tr>
+          ${cmp.risks.map((r) => `<tr class="${r.a !== r.b ? 'cmp-diff' : ''}"><td>风险 ${esc(r.risk)}</td><td>${r.a}</td><td>${r.b}</td></tr>`).join('')}
+          <tr><td>插件依赖</td><td>${cmp.deps.a.length ? esc(cmp.deps.a.join('、')) : '无'}</td><td>${cmp.deps.b.length ? esc(cmp.deps.b.join('、')) : '无'}</td></tr>
+        </tbody></table>
+        <div class="actions"><button class="primary" data-cmp-close>关闭</button></div>`;
+      ov.querySelector('[data-cmp-close]').addEventListener('click', () => ov.remove());
+    }));
+  });
   $('homeBackList').addEventListener('click', showPlugins);
   $('homeBack').addEventListener('click', exitPlugins);
+}
+
+/** 第二十六轮⑨：已装插件清单导出（可分享 JSON：id/版本/来源/动作数）。 */
+function exportInstalledList() {
+  api('/api/plugins').then(({ plugins: ps }) => {
+    const data = installedList(ps);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `zerokit-plugins-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    el.count.textContent = `已导出 ${data.plugins.length} 个插件的清单`;
+  }).catch((e) => { el.count.textContent = `导出失败：${e.message}`; });
 }
 
 async function renderPlugins() {
@@ -4465,6 +4548,11 @@ async function renderPlugins() {
     </div>
     ${health.healthy ? '<div class="health-note ok">全部插件都齐了，没有缺依赖或未填的配置。</div>'
       : '<div class="health-note">带 ⚠ 的数字点得进去——上面列的就是要补的东西。</div>'}
+    ${plugins.filter((x) => x.requiresOk === false).map((x) =>
+      `<div class="health-note bad-plugin" role="status">⚠ 插件「${esc(x.name)}」缺命令依赖（${esc((x.missingBinaries || []).join('、') || '未知命令')}）——对应动作会执行失败。装好命令或 <code>zkit plugin remove ${esc(x.id)}</code> 卸载。</div>`).join('')}
+    <div class="actions plug-list-actions">
+      <button class="ghost" id="plugExportList" title="把已装插件清单导出为可分享的 JSON">导出已装清单</button>
+    </div>
     ${(() => {
       const top = topActions(runStore, 5);
       if (!top.length) return '<div class="usage-empty">还没有执行记录——用几次之后，这里会出现你的「最常用动作」。</div>';
@@ -4546,6 +4634,7 @@ async function renderPlugins() {
     writeJson('zerokit.plugin-sort', e.target.value);
     renderPlugins();
   });
+  $('plugExportList')?.addEventListener('click', exportInstalledList);
 
   // 新建插件：三个问题（id / 名字 / 语言）→ 生成骨架 → 开发模式装好
   $('newPluginBtn')?.addEventListener('click', () => {

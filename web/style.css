@@ -1306,3 +1306,12 @@ kbd {
 .chain-next .chain-row { display: flex; gap: 6px; margin-top: 6px; }
 .chain-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 6px 0; padding: 4px 8px; border-radius: 8px; background: var(--bg-soft); font-size: 12px; }
 .chain-bar .chain-step.on { background: var(--accent); color: #fff; }
+
+/* ================================================================ 第二十六轮：插件生态体验 */
+.plug-stats { margin: 8px 0; }
+.plug-tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.plug-tags .chip { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: var(--bg-soft); color: var(--sub); }
+.plug-act-filter { margin-left: 10px; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font-size: 12px; }
+.dep-tree { background: var(--bg-soft); border-radius: 8px; padding: 10px 14px; font-size: 12px; overflow-x: auto; }
+.bad-plugin { outline: 1px solid var(--danger); color: var(--fg); }
+.plug-list-actions { margin: 6px 0; }

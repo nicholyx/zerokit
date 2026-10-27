@@ -1555,3 +1555,95 @@ export function parseBatchList(text) {
   if (bad !== undefined) return { ok: false, error: '存在缺少 plugin/action 的条目' };
   return { ok: true, items: j };
 }
+
+// ---------------------------------------------------------------- 第二十六轮：插件生态体验
+
+/** ①插件对比：两个插件的结构化差异（动作数/风险构成/依赖/标签口径统一后取并集）。 */
+export function pluginCompare(a, b) {
+  if (!a || !b || !Array.isArray(a.actions) || !Array.isArray(b.actions)) return null;
+  const riskOf = (p) => {
+    const m = {};
+    for (const act of p.actions) m[act.risk] = (m[act.risk] || 0) + 1;
+    return m;
+  };
+  const ra = riskOf(a); const rb = riskOf(b);
+  const risks = [...new Set([...Object.keys(ra), ...Object.keys(rb)])].sort();
+  const depsOf = (p) => (Array.isArray(p.pluginDeps) ? p.pluginDeps.map((d) => d.id) : []);
+  return {
+    a: { id: a.id, name: a.name, version: a.version, actions: a.actions.length },
+    b: { id: b.id, name: b.name, version: b.version, actions: b.actions.length },
+    risks: risks.map((r) => ({ risk: r, a: ra[r] || 0, b: rb[r] || 0 })),
+    deps: { a: depsOf(a), b: depsOf(b) },
+  };
+}
+
+/** ②版本对比：已装 vs 集市最新，返回可渲染的差异提示（null=无差异/无集市信息）。 */
+export function versionDiff(installed, latest) {
+  if (!latest) return null;
+  if (installed === latest) return null;
+  return { installed: installed || '未装', latest, hasUpdate: true };
+}
+
+/** ③依赖树：插件依赖列表 → 缩进层级树（根=自身，子=依赖，installed 标注）。 */
+export function depTreeLines(id, deps, depth = 0) {
+  const pad = '  '.repeat(depth);
+  if (!Array.isArray(deps) || !deps.length) return [`${pad}${id}`];
+  const out = [`${pad}${id}`];
+  for (const d of deps) {
+    out.push(`${pad}  └ ${d.id}${d.installed ? '' : '（未装）'}`);
+  }
+  return out;
+}
+
+/** ⑤主页动作过滤：按词 AND 匹配标题/id/描述/风险。 */
+export function filterPluginActions(actions, q) {
+  if (!Array.isArray(actions)) return [];
+  const terms = String(q || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!terms.length) return actions;
+  return actions.filter((a) => {
+    const hay = `${a.title || ''}\n${a.id || ''}\n${a.description || ''}\n${a.risk || ''}`.toLowerCase();
+    return terms.every((t) => hay.includes(t));
+  });
+}
+
+/** ⑦插件标签：从 keywords/summary 提取标签集（去重排序）。 */
+export function pluginTags(p) {
+  if (!p) return [];
+  const ks = [...(Array.isArray(p.keywords) ? p.keywords : []),
+    ...(Array.isArray(p.actions) ? p.actions.flatMap((a) => a.keywords || []) : [])];
+  return [...new Set(ks.filter((k) => typeof k === 'string' && k.trim()))].sort();
+}
+
+/** ⑧插件统计卡：动作数/组合数/最近使用/健康四格。 */
+export function pluginStatCards(p, runStore, now = Date.now()) {
+  if (!p) return null;
+  const acts = Array.isArray(p.actions) ? p.actions : [];
+  const chains = acts.filter((a) => Array.isArray(a.steps) && a.steps.length).length;
+  let last = null; let runs = 0;
+  for (const [k, list] of Object.entries(runStore || {})) {
+    if (!k.startsWith(p.id + '.')) continue;
+    for (const r of list || []) { runs++; if (!last || r.ts > last) last = r.ts; }
+  }
+  const health = p.requiresOk === false ? 'warn' : 'ok';
+  return {
+    actions: acts.length, chains, runs,
+    lastUsed: last ? Math.round((now - last) / 60000) : null,
+    health,
+  };
+}
+
+/** ⑨已装插件清单：导出可分享 JSON（id/版本/来源/动作数）。 */
+export function installedList(plugins) {
+  if (!Array.isArray(plugins)) return { app: 'zerokit', kind: 'plugin-list', plugins: [] };
+  return {
+    app: 'zerokit', kind: 'plugin-list', exportedAt: new Date().toISOString(),
+    plugins: plugins.map((p) => ({ id: p.id, version: p.version, source: p.source?.type || 'bundled', actions: (p.actions || []).length })),
+  };
+}
+
+/** ⑥安装命令行文本（给「复制安装命令」用）。 */
+export function installCommand(p) {
+  if (!p) return '';
+  if (p.source?.type === 'market') return `zkit plugin install ${p.id} --market ${p.source.market || 'default'}`;
+  return `zkit plugin bundled`;
+}
