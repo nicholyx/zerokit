@@ -1501,7 +1501,7 @@ dependencies = [
 
 [[package]]
 name = "infer"
-version = "0.22.0"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f4200d433cbd5178df7797c9c2e75b348b728e39631cf14520d1e2fc424201f4"
 dependencies = [
@@ -4449,7 +4449,7 @@ dependencies = [
 
 [[package]]
 name = "zerokit-desktop"
-version = "0.22.0"
+version = "0.23.0"
 dependencies = [
  "serde_json",
  "tauri",
