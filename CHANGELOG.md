@@ -1,5 +1,19 @@
 ## [Unreleased]
 
+### Added
+
+- 插件第三十四轮十项——市场与分发（#143）
+  - `zkit plugin pack <id>`：插件打包 zip（无新依赖——内置 zlib 手写 zip 读写）
+  - `zkit plugin unpack <zip> [--replace]`：从 zip 装回；路径穿越防线（`..` 条目拒绝）
+  - `pack --list-only`：只看进包文件清单不落盘
+  - `zkit plugin publish-ready <id>`：上架检查（版本号/动作描述/risk 声明；装不上的清单走静态检查）
+  - `zkit market lint [--file]`：market.json 登记表校验（id 查重/source 格式/path 死链）
+  - `zkit plugin info <id>`：一页看全（版本/动作数/风险构成/设置项/最近使用）
+  - `zkit plugin recommend <id>`：可粘贴的推荐语
+  - `zkit market add` 健康检查：登记表有硬伤的集市源直接拒绝添加
+  - （核实既有）升级 diff 预览：`plugin update` 已列新增/移除动作
+  - distro-smoke 14 项断言（含系统 unzip 交叉校验、穿越攻击、坏表拒绝）
+
 ## [0.38.0] - 2026-10-28
 
 ### Added
