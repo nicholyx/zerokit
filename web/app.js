@@ -14,6 +14,7 @@ import { filterRows, colStats, unitOf, isUnitColumn, convertUnitColumn, mergeTab
 import { renderCopyTemplate, toJsonl, exportFilename, toMarkdownProps } from './extras.js';
 import { WATCH_INTERVALS, intervalLabel, cellDiff, sparkSeries, watchStopCondition, tabTitle, watchCsv } from './extras.js';
 import { dangerousPattern, maskSecrets, rateLimitHits, trimAuditLog, actionRiskCard } from './extras.js';
+import { BACKUP_GROUPS, classifyKey, collectBackup, parseBackup, mergeBackup, backupFilename } from './extras.js';
 import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport, virtualWindow, pageSlice, breadcrumb, listStateQuery, parseListState, digitPick } from './extras.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
@@ -205,6 +206,12 @@ function openThemePop() {
     <div class="tp-row">
       ${[['s', '小'], ['m', '中'], ['l', '大']].map(([id, label]) => `
         <button data-font="${id}" class="${(localStorage.getItem('zerokit.font-scale') || 'm') === id ? 'on' : ''}">${label}</button>`).join('')}
+    </div>
+    <div class="tp-head">数据</div>
+    <div class="tp-row tp-backup">
+      <button data-backup="export" title="把所有个性化数据（收藏、历史、参数记忆、外观设置）打包成 JSON 下载">⬇ 导出数据</button>
+      <button data-backup="import" title="从备份 JSON 恢复：可预览、可选择类别、合并不覆盖">⬆ 导入数据</button>
+      <button data-backup="purge" title="清除本地结果与运行历史（含参数记忆），审计日志不动">🧹 清除痕迹</button>
     </div>`;
   pop.classList.remove('hidden');
   // 选中后就地更新高亮，不重建 DOM、也不收起面板：重建会让本次点击的目标
@@ -238,6 +245,18 @@ function openThemePop() {
       try { localStorage.setItem(PREF.accent, accent); } catch { /* 隐私模式 */ }
       applyAccent();
       paint();
+    });
+  });
+  // ---- 第二十轮：数据分组（导出 / 导入 / 清除痕迹收进外观面板底部） ----
+  // 以前「清除痕迹」只在详情页，导入导出不存在——换机器/清缓存会把收藏、
+  // 历史、参数记忆全带走。外观面板就是既有的设置面板，数据操作收进底部一组。
+  pop.querySelectorAll('[data-backup]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const act = b.dataset.backup;
+      pop.classList.add('hidden');
+      if (act === 'export') exportBackup();
+      else if (act === 'import') openImportDialog();
+      else if (act === 'purge') purgeSensitive();
     });
   });
 }
@@ -2128,6 +2147,92 @@ function purgeSensitive() {
   savePrefs();
   renderRunHistory(detail?.plugin, detail?.action);
   el.count.textContent = '已清除：当前结果 + 运行历史数据 + 参数记忆';
+}
+
+// ---------------------------------------------------------------- 第二十轮：数据备份与迁移
+//
+// 个性化数据全在 localStorage（zerokit.* 键），换机器/清缓存就全丢。
+// 导出 = 全量键值打包成信封 JSON；导入 = 校验 → 预览分组 → 勾选 → 合并（新优先）。
+
+function exportBackup() {
+  const entries = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    entries.push([k, localStorage.getItem(k)]);
+  }
+  const backup = collectBackup(entries);
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = backupFilename();
+  a.click();
+  URL.revokeObjectURL(url);
+  el.count.textContent = `已导出 ${backup.meta.keyCount} 个键（${backup.meta.bytes} 字符）→ ${backupFilename()}`;
+}
+
+/** 导入三步：选文件 → parseBackup 校验 → 分组预览+勾选 → mergeBackup 合并写回并重载 */
+function openImportDialog() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'application/json,.json';
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const parsed = parseBackup(text);
+    if (!parsed.ok) {
+      el.count.textContent = `导入失败：${parsed.error}`;
+      return;
+    }
+    const backup = parsed.backup;
+    // 分组统计：每组多少键，预览时全选上（用户去掉不想导入的组）
+    const groups = new Map();
+    for (const k of Object.keys(backup.keys)) {
+      const g = classifyKey(k) ?? '(跳过)';
+      groups.set(g, (groups.get(g) ?? 0) + 1);
+    }
+    const overlay = document.createElement('div');
+    overlay.className = 'overlay';
+    overlay.innerHTML = `
+      <div class="modal">
+        <h3>导入备份</h3>
+        <div class="risk-note">来自 ${esc(backup.exportedAt || '未知时间')} · v${esc(backup.version || '?')} · 共 ${Object.keys(backup.keys).length} 个键</div>
+        <div class="import-groups">
+          ${[...groups.entries()].map(([g, n]) => `
+            <label class="import-group">
+              <input type="checkbox" data-group="${esc(g)}" ${g !== '(跳过)' ? 'checked' : ''} ${g === '(跳过)' ? 'disabled' : ''}>
+              <span>${esc(g)} <small>(${n} 键)</small></span>
+            </label>`).join('')}
+        </div>
+        <div class="confirm-explain">合并策略：同名数据以备份为准（新优先），本地独有条目保留。</div>
+        <div class="actions">
+          <button class="ghost" id="impCancel">取消</button>
+          <button class="primary" id="impOk">导入</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#impCancel').addEventListener('click', () => overlay.remove());
+    overlay.querySelector('#impOk').addEventListener('click', () => {
+      const selected = new Set(
+        [...overlay.querySelectorAll('input[data-group]:checked')].map((c) => c.dataset.group)
+      );
+      // 当前 localStorage 快照成键值表
+      const current = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        current[k] = localStorage.getItem(k);
+      }
+      const { out, applied, skipped } = mergeBackup(current, backup.keys, selected);
+      for (const [k, v] of Object.entries(out)) {
+        try { localStorage.setItem(k, v); } catch { /* 私密模式尽力而为 */ }
+      }
+      overlay.remove();
+      el.count.textContent = `导入完成：应用 ${applied} 项、跳过 ${skipped} 项，即将刷新…`;
+      setTimeout(() => location.reload(), 900);
+    });
+  };
+  input.click();
 }
 
 // ---------------------------------------------------------------- 结果渲染
@@ -5632,6 +5737,7 @@ window.__zerokit = {
   cycleTheme, showShortcuts, showPluginHome, renderPrompts, showLogs, showDoctor,
   openDetail, submit, backToList, renderResult,
   showPalette, runBatch, showMarket, showPlugins,
+  collectBackup, parseBackup, mergeBackup, classifyKey, backupFilename, exportBackup, openImportDialog,
   get batch() { return batch; },
   get logsPage() { return logsPage; },
 };

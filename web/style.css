@@ -1236,3 +1236,11 @@ td.tstat .sub { font-size: 11px; opacity: .75; display: block; line-height: 1.35
   font-size: 12px;
   margin: 6px 0;
 }
+
+/* ============ 第二十轮：数据备份与迁移 ============ */
+.tp-backup { display: flex; flex-direction: column; gap: 6px; }
+.tp-backup button { text-align: left; padding: 6px 10px; }
+.import-groups { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.import-group { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+.import-group small { color: var(--fg-dim); }
+.import-group input[data-group]:disabled + span { color: var(--fg-dim); }
