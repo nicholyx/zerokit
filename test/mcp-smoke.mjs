@@ -120,6 +120,88 @@ try {
   if (readAnn?.readOnlyHint === true) pass('只读动作标注 readOnlyHint=true');
   else fail('只读动作 annotations 不对：' + JSON.stringify(readAnn));
 
+  // ---- 第三十一轮：MCP 与 AI 协作面 ------------------------------------
+  // ①描述模板化：描述里要出现参数说明与风险提示
+  const descTop = sample?.description ?? '';
+  if (descTop.includes('参数：') && descTop.includes('[插件')) {
+    pass('①工具描述模板化（含参数说明与插件标注）');
+    console.log('      desc: ' + descTop.slice(0, 140));
+  } else {
+    fail('①工具描述没有参数说明：' + descTop.slice(0, 140));
+  }
+  const descMut = tools.find((t) => t.name === 'proxy__auth')?.description ?? '';
+  if (descMut.includes('高风险')) pass('①destructive 描述带高风险提示');
+  else fail('①destructive 描述缺高风险提示：' + descMut.slice(0, 100));
+
+  // ⑤_meta 透传：成功调用的 structuredContent 里有 risk/ms/plugin
+  const callMeta = await request('tools/call', { name: 'sysinfo__overview', arguments: {} });
+  const meta = callMeta.result?.structuredContent?._meta;
+  if (meta?.risk === 'read' && typeof meta?.ms === 'number' && String(meta?.plugin ?? '').startsWith('sysinfo@')) {
+    pass(`⑤_meta 透传（risk=${meta.risk}, ms=${meta.ms}, plugin=${meta.plugin}）`);
+  } else {
+    fail('⑤_meta 缺失：' + JSON.stringify(meta));
+  }
+
+  // ④补救提示：给坏参数的失败响应要带「建议：」
+  const badCall = await request('tools/call', {
+    name: 'sysinfo__top', arguments: { nope: 1 },
+  });
+  const badText = (badCall.result?.content ?? []).map((b) => b.text ?? '').join('\n');
+  if (badCall.result?.isError === true && /建议：/.test(badText)) {
+    pass('④失败响应附补救提示');
+  } else {
+    fail('④失败响应没有补救提示：' + badText.slice(0, 150));
+  }
+
+  // ⑥⑦CLI 侧：mcp tools 与 --json、allow --list（spawnSync，不走 server）
+  const toolsCli = spawnSync(process.execPath, ['src/cli.ts', 'mcp', 'tools'], {
+    cwd: ROOT, encoding: 'utf8', timeout: 60000, windowsHide: true,
+    env: { ...process.env, ZEROKIT_HOME: TMP_HOME },
+  });
+  if (toolsCli.status === 0 && /个 MCP 工具/.test(toolsCli.stdout) && toolsCli.stdout.includes('⚠destructive')) {
+    pass('⑥zkit mcp tools 人读格式（含风险标记）');
+  } else {
+    fail('⑥mcp tools 输出不对：' + toolsCli.stdout.slice(0, 150));
+  }
+  const toolsJson = spawnSync(process.execPath, ['src/cli.ts', 'mcp', 'tools', '--json'], {
+    cwd: ROOT, encoding: 'utf8', timeout: 60000, windowsHide: true,
+    env: { ...process.env, ZEROKIT_HOME: TMP_HOME },
+  });
+  let tj = null;
+  try { tj = JSON.parse(toolsJson.stdout); } catch { /* 下面断言 */ }
+  if (tj && tj.count === tools.length && Array.isArray(tj.tools) && tj.tools[0]?.inputSchema) {
+    pass(`⑦mcp tools --json 机读格式（count=${tj.count} 与 server 一致）`);
+  } else {
+    fail('⑦mcp tools --json 解析失败或条数不一致');
+  }
+
+  // ⑧allow --list 带授权时间：先授权一个再查
+  spawnSync(process.execPath, ['src/cli.ts', 'mcp', 'allow', 'clipboard.copy'], {
+    cwd: ROOT, encoding: 'utf8', timeout: 60000, windowsHide: true,
+    env: { ...process.env, ZEROKIT_HOME: TMP_HOME },
+  });
+  const allowList = spawnSync(process.execPath, ['src/cli.ts', 'mcp', 'allow', '--list'], {
+    cwd: ROOT, encoding: 'utf8', timeout: 60000, windowsHide: true,
+    env: { ...process.env, ZEROKIT_HOME: TMP_HOME },
+  });
+  if (allowList.status === 0 && allowList.stdout.includes('clipboard.copy')
+      && /\d{4}-\d{2}-\d{2}T/.test(allowList.stdout)) {
+    pass('⑧allow --list 显示动作与授权时间');
+  } else {
+    fail('⑧allow --list 输出不对：' + allowList.stdout.slice(0, 150));
+  }
+
+  // ⑨连击冷却：连续失败 3 次后要出现「连续失败」提示（用一个必失败的动作：
+  // bad params ×3 触发同一条失败链路）
+  let streakSeen = false;
+  for (let i = 0; i < 3; i++) {
+    const r = await request('tools/call', { name: 'sysinfo__top', arguments: { nope: i } });
+    const t = (r.result?.content ?? []).map((b) => b.text ?? '').join('\n');
+    if (/连续失败/.test(t)) streakSeen = true;
+  }
+  if (streakSeen) pass('⑨连续失败后响应附冷却建议');
+  else fail('⑨连击 3 次没出现冷却提示');
+
   // 只读动作应当直接执行
   const call = await request('tools/call', { name: 'sysinfo__overview', arguments: {} });
   const text = call.result?.content?.[0]?.text ?? '';
