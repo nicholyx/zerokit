@@ -854,6 +854,53 @@ async function cmdPlugin(args: string[]): Promise<number> {
   return 2;
 }
 
+/**
+ * 第三十二轮⑨：zkit desktop —— 桌面壳体检。
+ * 壳是可选组件（Tauri 原生应用），没装不算错，只说明用不了桌面体验。
+ */
+function cmdDesktop(args: string[]): number {
+  const asJson = args.includes('--json');
+  const os = process.platform;
+  // 壳的可执行文件名按平台约定
+  const exeName = os === 'win32' ? 'zerokit-desktop.exe' : 'zerokit-desktop';
+  // 可能的安装位置：仓库本地构建（target/release）与 ~/.zerokit/bin
+  const candidates: string[] = [];
+  const repoTarget = path.join(import.meta.dirname ?? '.', '..', 'apps', 'desktop', 'src-tauri', 'target', 'release', exeName);
+  candidates.push(path.resolve(repoTarget));
+  const home = process.env['ZEROKIT_HOME']
+    ? path.resolve(process.env['ZEROKIT_HOME'])
+    : path.join(os === 'win32' ? (process.env['USERPROFILE'] ?? '') : (process.env['HOME'] ?? ''), '.zerokit');
+  candidates.push(path.join(home, 'bin', exeName));
+
+  const found = candidates.find((p) => { try { return fs.statSync(p).isFile(); } catch { return false; } });
+  // 桌面配置（壳写的 ~/.zerokit/desktop.json）顺带读出来
+  let desktopConfig: unknown = null;
+  try { desktopConfig = JSON.parse(fs.readFileSync(path.join(home, 'desktop.json'), 'utf8')); } catch { /* 没配过 */ }
+
+  if (asJson) {
+    process.stdout.write(JSON.stringify({
+      installed: !!found, path: found ?? null, platform: os,
+      config: desktopConfig,
+      hint: found ? null : '未安装桌面壳不影响 CLI/Web/MCP；想要全局热键与托盘体验时再装（apps/desktop 下 cargo build --release）。',
+    }, null, 2) + '\n');
+    return 0;
+  }
+  if (found) {
+    process.stdout.write(c.green('✓') + ` 桌面壳已安装\n  ${c.dim(found)}\n`);
+  } else {
+    process.stdout.write(c.yellow('!') + ' 桌面壳未安装（不影响 CLI / Web / MCP）\n'
+      + c.dim('  想要全局热键、托盘、失焦隐藏体验时：cd apps/desktop/src-tauri && cargo build --release\n'));
+  }
+  if (desktopConfig && typeof desktopConfig === 'object') {
+    const cfg = desktopConfig as { hotkey?: string; window?: { width: number; height: number } };
+    const bits: string[] = [];
+    if (cfg.hotkey) bits.push(`热键 ${cfg.hotkey}`);
+    if (cfg.window) bits.push(`窗口 ${cfg.window.width}x${cfg.window.height}`);
+    if (bits.length) process.stdout.write(`  ${c.dim(bits.join(' · '))}\n`);
+  }
+  return 0;
+}
+
 function cmdDoctor(): number {
   const report = buildDoctorReport();
   // 第二十九轮⑥：--json 机读输出——CI/脚本消费诊断结果；退出码语义不变
@@ -863,6 +910,7 @@ function cmdDoctor(): number {
       summary: report.summary,
       tools: report.tools.map((t) => ({ name: t.name, ok: t.ok, version: t.version ?? null, path: t.path ?? null })),
       dirs: report.dirs,
+      desktop: report.desktop,
       plugins: report.plugins.map((pl) => ({
         id: pl.id ?? null, name: pl.name ?? null, ok: !pl.problems.some((x) => x.level === 'error'),
         problems: pl.problems.map((x) => ({ level: x.level, text: x.text, hint: x.hint ?? null })),
@@ -871,6 +919,10 @@ function cmdDoctor(): number {
     return report.summary.errors === 0 ? 0 : 1;
   }
   process.stdout.write(c.bold('环境自检\n'));
+  // 第三十二轮⑩：桌面壳是可选组件，单独一行说清状态
+  process.stdout.write(report.desktop.installed
+    ? `  ${c.green('✓')} 桌面壳已安装${report.desktop.hotkey ? c.dim(`（热键 ${report.desktop.hotkey}）`) : ''}\n`
+    : `  ${c.yellow('!')} 桌面壳未安装（可选，不影响 CLI / Web / MCP）\n`);
   for (const tool of report.tools) {
     process.stdout.write(tool.ok
       ? `  ${c.green('✓')} ${tool.name} ${c.dim(tool.version ?? '')}  ${c.dim(tool.path ?? '')}\n`
@@ -1286,6 +1338,8 @@ async function main(): Promise<number> {
       return cmdKill(rest);
     case 'doctor':
       return cmdDoctor();
+    case 'desktop':
+      return cmdDesktop(rest);
     case 'path':
       return cmdPath();
     case 'logs':

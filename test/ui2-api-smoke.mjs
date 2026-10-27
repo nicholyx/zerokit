@@ -119,6 +119,11 @@ try {
       Boolean(p) && Array.isArray(p.problems) && (p.problems.length === 0
         || p.problems.every((x) => (x.level === 'error' || x.level === 'warning') && x.text)),
       JSON.stringify(p));
+    // 第三十二轮⑩：doctor 报告带桌面壳状态（可选组件；未装 installed=false 不算错）
+    check('GET /api/doctor：带桌面壳安装状态',
+      typeof body.desktop === 'object' && body.desktop !== null
+      && typeof body.desktop.installed === 'boolean',
+      JSON.stringify(body?.desktop));
   }
 
   // ---- 审计日志
