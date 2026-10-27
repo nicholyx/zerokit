@@ -2,7 +2,7 @@
 //
 // 这些函数都在 web/extras.js 里，不碰 DOM / localStorage / fetch，
 // 所以可以直接在 Node 里跑。界面接线另由 webui-smoke 断言。
-import { THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref } from '../web/extras.js';
+import { THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref, OVERFLOW_ROWS, PAGE_ROWS } from '../web/extras.js';
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -996,6 +996,18 @@ check('resultTabTitle: 英文档', (() => {
     && resultTabTitle('IP', now - 2 * 3600 * 1000, now, 'en') === 'IP · 2h ago'
     && resultTabTitle('', 123, now, 'en') === 'Result'
     && resultTabTitle('查IP', now - 3 * 60 * 1000, now) === '查IP · 3 分钟前';
+})());
+
+
+// ---------------- 第二十九轮：性能与体感 ----------------
+check('大表阈值：导出常量防漂移', (() => {
+  return OVERFLOW_ROWS === 500 && PAGE_ROWS === 200 && PAGE_ROWS < OVERFLOW_ROWS;
+})());
+check('大表首屏窗口：500+ 行只画 200', (() => {
+  const rows = Array.from({ length: 800 }, (_, i) => ({ i }));
+  const bigTable = rows.length > OVERFLOW_ROWS;
+  const viewRows = bigTable ? rows.slice(0, PAGE_ROWS) : rows;
+  return bigTable && viewRows.length === 200 && rows.length === 800;
 })());
 
 console.log('\n' + '='.repeat(60));

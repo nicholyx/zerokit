@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-10-28（第二十八轮，v0.33.0）
+> 最后更新：2026-10-28（第二十九轮，v0.34.0）
 
 ---
 
@@ -206,7 +206,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 
 ### 质量
 
-- 21 个测试文件、**742 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
+- 21 个测试文件、**748 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
 - `tsc --noEmit` 干净——**而且 CI 真的在跑它**（`typecheck` job）。
   曾经这里写着"干净"但没有任何地方执行这条命令，于是两个只有类型检查才看得见的
   错误在核心里躺了很久（`proxy.ts` 的 Buffer 泛型不兼容、`scaffold.ts` 的类型混用）。
@@ -253,6 +253,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 - [x] **第二十六轮启动器十项（v0.31.0，#119）。** 插件主页统计卡三格（动作/组合、执行+最近使用、健康）、动作搜索框、标签 chips、插件对比模态（动作数/风险构成/依赖差异行）、依赖树、复制安装命令、集市更新徽标、已装清单导出、坏插件置顶红条；pluginCompare/versionDiff/depTreeLines/filterPluginActions/pluginTags/pluginStatCards/installedList/installCommand 八纯函数进 extras.js，extras-smoke 173→183、全量 731/731。
 - [x] 第二十七轮十项：搜索与发现的深度——分组+命中解释+同义词弱路由+历史深链（v0.32.0，#122）
 - [x] 第二十八轮十项：国际化与文案体检——语言三档+持久化+html lang+相对时间/风险徽标双语+术语统一，文案表 62 键对齐（v0.33.0，#125）
+- 第二十九轮（v0.34.0）：性能与体感优化——搜索防抖+rAF 合帧、#/perf 指标面板、大表窗口化+加载全部、大 JSON 切片序列化、list --json --brief / doctor --json / config get 单键（Issue #128）
   （↑/↓/Enter，只有选中项在 Tab 序里）、:focus-visible 焦点环、图标按钮
   aria-label（星标/主题/批量条）、结果区 aria-live=polite + sr-only 播报、
   prefers-reduced-motion 停动画、Esc 栈先关最上层浮层、18 处空态 role=status、

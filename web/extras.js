@@ -1708,6 +1708,11 @@ export function whyLabel(why) {
 /** ⑥同义词弱路由：描述型 query 映射到可能的关键词。
  * 表是手工精选的高频意图（内存/磁盘/网络/时间/剪贴板/搜索），
  * 命中同义词的 query 在打分时把同义词也当一个 token 参与匹配。 */
+// 第二十九轮⑦：大表渲染阈值——超过 OVERFLOW_ROWS 只画 PAGE_ROWS 行 + 「加载全部」。
+// 导出成常量而不是散在 app.js 里：测试与 UI 引用同一份数字，改阈值不会漂移。
+export const OVERFLOW_ROWS = 500;
+export const PAGE_ROWS = 200;
+
 export const SYNONYMS = {
   '内存': ['内存', 'memory', 'mem'],
   '磁盘': ['磁盘', '硬盘', 'disk', '存储'],
