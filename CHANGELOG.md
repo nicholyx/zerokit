@@ -1,5 +1,24 @@
 ## [Unreleased]
 
+### Added
+
+- 启动器第三十三轮十项——内核可观测性与运维面（#140）
+  - `zkit stats` 动作级耗时统计（次数/失败/P50/P95/最慢，来自审计日志）+ `--json`
+  - `zkit logs --follow` 跟读审计日志（轮询 500ms，Ctrl+C 退出）
+  - `zkit health` 一条命令概况（插件/最近错误/server 端口），异常退出码 1 供脚本用
+  - `zkit audit --last N` 最近审计记录表格输出 + `--json`
+  - server 新增无鉴权 `/api/health` 探活端点（app/version/uptime/pid）
+  - 慢动作水位线：执行超 3s 的动作审计记录带 `slow: true`，stats 标 ⚠、audit 标 ⏱
+  - `zkit gc` 清理 30 天前审计数据（默认预览，`--apply` 执行，`--days` 自定义）
+  - doctor 汇总最近 24h 执行失败计数（人读行 + `--json.recentErrors`）
+  - ops-smoke 10 项断言（临时目录自包含，覆盖全部新命令与端点）
+
+### Fixed
+
+- 审计写入丢行：CLI 路径 `audit()` 用 WriteStream 后主进程立刻 `process.exit`，
+  数据还没落盘就被带走——实测 CLI 执行从来没进过审计日志（UI/MCP 因进程常驻
+  而幸免）。改为 `appendFileSync` 同步追加，审计是低频单行写、代价可忽略。
+
 ## [0.37.0] - 2026-10-28
 
 ### Added

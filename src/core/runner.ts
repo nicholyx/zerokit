@@ -6,6 +6,7 @@ import { Worker } from 'node:worker_threads';
 import type { Action, ChainStep, Plugin, RiskLevel } from './manifest.ts';
 import { BUILTIN_VARS, toolName } from './manifest.ts';
 import { DATA_DIR, HOME, LOG_DIR, ensureDirs, pluginDataDir } from './paths.ts';
+import { isSlow } from './ops.ts';
 import { proxyFetch, proxyFor } from './proxy.ts';
 import { findPlugin } from './registry.ts';
 import { resolveTool } from './resolve.ts';
@@ -262,19 +263,6 @@ export function chainDisplay(action: Action): string {
   return '组合：' + action.steps.map((s) => s.use).join(' → ');
 }
 
-function openAuditLog(file: string): fs.WriteStream | undefined {
-  try {
-    ensureDirs();
-    const stream = fs.createWriteStream(path.join(LOG_DIR, file), { flags: 'a' });
-    // 写审计失败不能把主进程带走：用户可能在运行期间重置 ~/.zerokit，
-    // 也可能把数据目录放在一个已经卸载的卷上。审计是旁路，不是主流程。
-    stream.on('error', () => {});
-    return stream;
-  } catch {
-    return undefined;
-  }
-}
-
 export interface AuditRecord {
   ts: string;
   plugin: string;
@@ -292,14 +280,22 @@ export interface AuditRecord {
   error?: string;
 }
 
-/** 审计：全部调用进 audit.log，被拒/失败的额外进 denied.log（便于快速排查） */
+/** 审计：全部调用进 audit.log，被拒/失败的额外进 denied.log（便于快速排查）。
+ *
+ * 用同步追加而不是 WriteStream：CLI 路径 audit 后立刻 process.exit，
+ * 流式写入还没落盘就被带走——实测 CLI 执行从来没进过审计（第三十三轮
+ * 做 stats 时发现）。审计是低频单行写，同步的代价可以忽略。
+ */
 export function audit(record: AuditRecord): void {
   const line = JSON.stringify(record, null, 0) + '\n';
-  for (const file of record.decision === 'deny' ? ['audit.log', 'denied.log'] : ['audit.log']) {
-    const stream = openAuditLog(file);
-    if (stream) {
-      stream.write(line);
-      stream.end();
+  const files = record.decision === 'deny' ? ['audit.log', 'denied.log'] : ['audit.log'];
+  for (const file of files) {
+    try {
+      ensureDirs();
+      fs.appendFileSync(path.join(LOG_DIR, file), line);
+    } catch {
+      // 写审计失败不能把主进程带走：用户可能在运行期间重置 ~/.zerokit。
+      // 审计是旁路，不是主流程。
     }
   }
 }
@@ -839,6 +835,8 @@ export async function runAction(
     ms,
     outBytes: outcome.stdout.length,
     truncated: outcome.truncated,
+    // ⑦慢动作水位线：超 3s 打标，stats/audit 输出靠它快速定位拖后腿的动作
+    ...(isSlow(ms) ? { slow: true } : {}),
     ...(error ? { error, reason: outcome.timedOut ? 'timeout' : 'nonzero-exit' } : {}),
   });
 
