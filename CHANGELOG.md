@@ -1,11 +1,25 @@
+## [Unreleased]
+
+### Added
+
+- 启动器/内核第三十一轮十项——MCP 与 AI 协作面（#134）
+  - MCP 工具描述模板化：参数说明（必填/默认值/敏感标注）与输出形状进描述
+  - 大 JSON 结果摘要：超过 4KB 截为首段 + 字段统计，tokens 友好
+  - 结果敏感字段自动脱敏：token/password/secret/api_key 等命名字段出口打码
+  - 失败响应附补救提示：从错误文本推断可能原因与建议动作
+  - 调用元数据透传：risk/耗时/插件版本进 structuredContent 的 `_meta`
+  - `zkit mcp tools`：不启动 server 列全部工具与风险标记
+  - `zkit mcp tools --json`：机读清单（供 AI 客户端文档生成）
+  - `zkit mcp allow --list`：授权动作与授权时间可视化
+  - MCP 会话内连续失败 3 次后响应附冷却建议（防 AI 疯狂重试）
+  - 授权文件升级为 `{entries:[{key,at}]}` 带时间记录（旧纯数组格式自动迁移）
+
 # 更新日志
 
 本文件记录 zerokit 对使用者可见的变更。格式遵循
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-
-## [Unreleased]
 
 ## [0.35.0] - 2026-10-28
 

@@ -33,19 +33,41 @@ function allowPath(): string {
   return path.join(HOME, 'mcp-allow.json');
 }
 
-/** 读取 MCP 授权名单。启动器面板与 CLI 共用同一份，避免两处各管各的。 */
-export function loadAllow(): Set<string> {
+/** ⑧授权记录带时间：{key, at} 表（读旧格式——纯数组——自动迁移为带时间记录） */
+export function loadAllowEntries(): Array<{ key: string; at?: string }> {
   try {
-    const raw = JSON.parse(fs.readFileSync(allowPath(), 'utf8'));
-    return new Set(Array.isArray(raw) ? raw : []);
+    const raw: unknown = JSON.parse(fs.readFileSync(allowPath(), 'utf8'));
+    if (Array.isArray(raw)) {
+      // 旧格式纯字符串数组：迁移成对象表并落盘
+      const entries = raw.filter((x): x is string => typeof x === 'string')
+        .map((key) => ({ key, at: undefined as string | undefined }));
+      if (entries.length > 0) saveAllowEntries(entries);
+      return entries;
+    }
+    if (raw && typeof raw === 'object' && Array.isArray((raw as { entries?: unknown }).entries)) {
+      return (raw as { entries: Array<{ key: string; at?: string }> }).entries;
+    }
+    return [];
   } catch {
-    return new Set();
+    return [];
   }
 }
 
-export function saveAllow(set: Set<string>): void {
+function saveAllowEntries(entries: Array<{ key: string; at?: string }>): void {
   fs.mkdirSync(HOME, { recursive: true });
-  fs.writeFileSync(allowPath(), JSON.stringify([...set].sort(), null, 2));
+  fs.writeFileSync(allowPath(), JSON.stringify({ entries }, null, 2));
+}
+
+/** 读取 MCP 授权名单。启动器面板与 CLI 共用同一份，避免两处各管各的。 */
+export function loadAllow(): Set<string> {
+  const entries = loadAllowEntries();
+  return new Set(entries.map((e) => e.key));
+}
+
+export function saveAllow(set: Set<string>): void {
+  const old = new Map(loadAllowEntries().map((e) => [e.key, e.at]));
+  const entries = [...set].sort().map((key) => ({ key, at: old.get(key) ?? new Date().toISOString() }));
+  saveAllowEntries(entries);
 }
 
 function isAllowed(plugin: Plugin, action: Action, allow: Set<string>): boolean {
@@ -69,8 +91,136 @@ function toolDescription(plugin: Plugin, action: Action): string {
       ? '（高风险动作，会改动系统状态）'
       : '（有副作用的动作）');
   }
+  // ①参数说明：模型不用回头猜 schema 语义——必填项与类型直接写进描述
+  if (action.params.length > 0) {
+    const segs = action.params.map((p) => {
+      const req = p.required ? '必填' : '可选';
+      const def = p.default !== undefined ? `，默认 ${JSON.stringify(p.default)}` : '';
+      const secret = p.secret ? '（敏感，不会被回显）' : '';
+      return `${p.name}:${p.type}${p.required ? '' : '?'}（${req}${def}）${secret}`;
+    });
+    parts.push(`参数：${segs.join('；')}`);
+  }
+  // ①示例输出格式：表格类动作给列名，键值类给键名，模型能提前组织回答
+  const sample = exampleShape(action);
+  if (sample) parts.push(`输出：${sample}`);
   return parts.join(' ');
 }
+
+/** ①从动作声明推断输出的形状描述（不执行，纯静态） */
+function exampleShape(action: Action): string | null {
+  const hints: string[] = [];
+  if (action.params.some((p) => p.type === 'number')) hints.push('含数值字段');
+  const kw = `${action.id} ${action.title}`;
+  if (/list|列表|所有|all/i.test(kw)) hints.push('数组（每行一项）');
+  else if (/info|概况|状态|overview|status/i.test(kw)) hints.push('键值对对象');
+  return hints.length ? hints.join('，') : null;
+}
+
+// ------------------------------------------------ ②结果摘要 / ③脱敏 / ④补救提示
+
+export interface SummarizeOpts {
+  maxBytes?: number;
+}
+
+/** ③敏感字段命中判据：键名命中这些模式就打码（值长度保头尾各 2 字符） */
+const SENSITIVE_KEY_RE = /(token|password|passwd|secret|api[-_]?key|private[-_]?key|authorization|credential)/i;
+
+/** ③递归脱敏：对象/数组逐层走，命中键名的字符串/数字值替换为「abc…xyz(已脱敏)」。 */
+export function maskSensitive(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(maskSensitive);
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = SENSITIVE_KEY_RE.test(k) ? maskValue(v) : maskSensitive(v);
+    }
+    return out;
+  }
+  return value;
+}
+
+function maskValue(v: unknown): string {
+  const s = typeof v === 'string' ? v : JSON.stringify(v) ?? String(v);
+  if (s.length <= 4) return '****(已脱敏)';
+  return `${s.slice(0, 2)}…${s.slice(-2)}(已脱敏)`;
+}
+
+export interface SummaryResult {
+  text: string;
+  truncatedSummary: boolean;
+  fieldStats?: Record<string, string>;
+}
+
+/** ②大 JSON 截断为摘要：超过 maxBytes 时给首段 + 字段统计，注明省略量 */
+export function summarizeJson(value: unknown, opts: SummarizeOpts = {}): SummaryResult {
+  const maxBytes = opts.maxBytes ?? 4000;
+  const full = JSON.stringify(value, null, 2);
+  if (full.length <= maxBytes) return { text: full, truncatedSummary: false };
+  const stats = fieldStatsOf(value);
+  const head = full.slice(0, maxBytes);
+  const cut = head.lastIndexOf('\n');
+  const shown = cut > maxBytes / 2 ? head.slice(0, cut) : head;
+  const omitted = full.length - shown.length;
+  const statsLine = Object.entries(stats)
+    .slice(0, 12)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join('；');
+  const note = `\n…（结果过大已摘要，省略约 ${omitted} 字符。字段概览：${statsLine || '无'}）`;
+  return { text: shown + note, truncatedSummary: true, fieldStats: stats };
+}
+
+function fieldStatsOf(value: unknown): Record<string, string> {
+  const rows = Array.isArray(value) ? value : [value];
+  const first = rows.find((r) => r && typeof r === 'object');
+  if (!first) return {};
+  const stats: Record<string, string> = {};
+  const n = Array.isArray(value) ? value.length : 1;
+  for (const k of Object.keys(first as Record<string, unknown>)) {
+    stats[k] = n > 1 ? `${n} 项均有` : '1 项';
+  }
+  return stats;
+}
+
+/** ④失败补救提示：从错误文本推断可能原因与建议动作（纯函数，可测） */
+export function remediationHints(error: string, stderr: string): string[] {
+  const hints: string[] = [];
+  const both = `${error}\n${stderr}`.toLowerCase();
+  if (/enoent|not found|找不到|command not found/.test(both)) {
+    hints.push('依赖的命令不存在：先跑 zkit doctor 检查环境，缺什么装什么');
+  }
+  if (/econn|timeout|etimedout|network|超时/.test(both)) {
+    hints.push('网络类失败：确认代理设置（http_proxy/https_proxy），或稍后重试');
+  }
+  if (/permission|eacces|权限/.test(both)) {
+    hints.push('权限不足：检查目标路径/端口的访问权限，必要时换目录或提权');
+  }
+  if (/exit code|non-zero|失败/.test(both)) {
+    hints.push('子进程非零退出：看 stderr 原文定位参数是否传错');
+  }
+  if (/参数|param|invalid|expected/.test(both)) {
+    hints.push('参数问题：对照工具描述里的参数说明重传');
+  }
+  if (hints.length === 0) hints.push('未识别的失败类型：把 error 与 stderr 原文带给维护者排查');
+  return hints;
+}
+
+// ------------------------------------------------ ⑨会话内失败连击冷却提示
+
+const failStreak: { count: number; lastTs: number } = { count: 0, lastTs: 0 };
+const FAIL_STREAK_THRESHOLD = 3;
+
+function noteFailureStreak(): string | null {
+  failStreak.count += 1;
+  failStreak.lastTs = Date.now();
+  if (failStreak.count < FAIL_STREAK_THRESHOLD) return null;
+  return `已连续失败 ${failStreak.count} 次：建议停下重试循环，先按补救提示排查根因，`
+    + `或换一个只读动作收集信息后再回来。`;
+}
+
+function noteSuccess(): void {
+  failStreak.count = 0;
+}
+
 
 /**
  * 这条动作会不会访问外部世界（决定 MCP 的 openWorldHint）。
@@ -182,21 +332,43 @@ export async function serve(): Promise<number> {
     const withDefaults = applyDefaults(action, values);
     errors.push(...withDefaults.errors);
     if (errors.length > 0) {
+      // ④参数失败也附补救提示（最常见的 AI 失败模式就是传错参数）
+      const hints = remediationHints(errors.join('; '), '');
+      const streak = noteFailureStreak();
+      const tail = [`建议：`, ...hints.map((h) => `- ${h}`)];
+      if (streak) tail.push(streak);
       return {
-        content: [{ type: 'text', text: `参数有问题：\n- ${errors.join('\n- ')}` }],
+        content: [{
+          type: 'text',
+          text: `参数有问题：\n- ${errors.join('\n- ')}\n${tail.join('\n')}`,
+        }],
         isError: true,
       };
     }
 
     const result = await runAction(plugin, action, { caller: 'mcp', values: withDefaults.values });
 
+    // ③出口统一脱敏：不管成功失败，出的门的数据不能带敏感值
+    const safeData = maskSensitive(result.data);
     const blocks: Array<Record<string, unknown>> = [];
-    if (result.data !== undefined) {
-      blocks.push({ type: 'text', text: JSON.stringify(result.data, null, 2) });
+    if (safeData !== undefined) {
+      // ②大结果摘要（>4KB 给首段+字段统计，tokens 友好）
+      const sum = summarizeJson(safeData);
+      blocks.push({ type: 'text', text: sum.text });
     } else if (result.stdout) {
       blocks.push({ type: 'text', text: result.stdout });
     }
-    if (result.error) blocks.push({ type: 'text', text: `错误：${result.error}` });
+    if (result.error) {
+      blocks.push({ type: 'text', text: `错误：${result.error}` });
+      // ④补救提示：AI 拿到结构化建议而不是裸错误
+      const hints = remediationHints(result.error, result.stderr);
+      blocks.push({ type: 'text', text: `建议：\n- ${hints.join('\n- ')}` });
+      // ⑨连击冷却提示
+      const streak = noteFailureStreak();
+      if (streak) blocks.push({ type: 'text', text: streak });
+    } else {
+      noteSuccess();
+    }
     if (result.stderr.trim() && !result.ok) {
       blocks.push({ type: 'text', text: `stderr：${result.stderr.trim().slice(0, 4000)}` });
     }
@@ -211,8 +383,15 @@ export async function serve(): Promise<number> {
     }
 
     const response: Record<string, unknown> = { content: blocks };
-    if (result.data !== undefined && typeof result.data === 'object') {
-      response['structuredContent'] = result.data;
+    if (safeData !== undefined && typeof safeData === 'object' && !Array.isArray(safeData)) {
+      // ⑤元数据透传：risk/耗时/插件版本进 _meta（structuredContent 里与数据并列）
+      const structured = safeData as Record<string, unknown>;
+      structured['_meta' as string] = {
+        risk: action.risk,
+        ms: result.ms,
+        plugin: `${plugin.id}@${plugin.version ?? '?'}`,
+      };
+      response['structuredContent'] = structured;
     }
     if (!result.ok) response['isError'] = true;
     return response;
@@ -339,13 +518,49 @@ function cmdConfig(args: string[]): number {
   return 0;
 }
 
+/** ⑥⑦静态工具清单：不启动 server 就能查全部工具（--json 供文档生成） */
+function cmdTools(args: string[]): number {
+  const asJson = args.includes('--json');
+  const tools = collectTools().map(({ plugin, action }) => ({
+    name: toolName(plugin.id, action.id),
+    title: `${plugin.name} · ${action.title}`,
+    description: toolDescription(plugin, action),
+    risk: action.risk,
+    params: action.params.map((p) => ({
+      name: p.name, type: p.type, required: !!p.required,
+      ...(p.secret ? { secret: true } : {}),
+      ...(p.default !== undefined ? { default: p.default } : {}),
+    })),
+    inputSchema: toJsonSchema(action),
+    annotations: {
+      readOnlyHint: action.risk === 'read',
+      destructiveHint: action.risk === 'destructive',
+      openWorldHint: touchesNetwork(plugin, action),
+    },
+  }));
+  if (asJson) {
+    process.stdout.write(JSON.stringify({ count: tools.length, tools }, null, 2) + '\n');
+    return 0;
+  }
+  process.stdout.write(`共 ${tools.length} 个 MCP 工具（加 --json 看机读格式）：\n`);
+  for (const t of tools) {
+    const riskMark = t.risk === 'read' ? '' : t.risk === 'destructive' ? '  ⚠destructive' : '  ●有副作用';
+    process.stdout.write(`  ${t.name}${riskMark}\n    ${t.title}\n`);
+  }
+  return 0;
+}
+
 function cmdAllow(args: string[]): number {
   const target = args[0];
   const set = loadAllow();
-  if (!target) {
-    process.stdout.write(`已授权给 AI 调用的有副作用动作（${set.size}）：\n`);
-    for (const k of [...set].sort()) process.stdout.write(`  ${k}\n`);
-    if (set.size === 0) process.stdout.write('  （空。只读动作不需要授权，默认放行）\n');
+  // ⑧授权列表可视化：--list 显示动作与授权时间（allow 文件是 {key, at} 记录表）
+  if (!target || target === '--list') {
+    const rows = loadAllowEntries();
+    process.stdout.write(`已授权给 AI 调用的有副作用动作（${rows.length}）：\n`);
+    for (const r of rows) {
+      process.stdout.write(`  ${r.key.padEnd(34)} ${r.at ?? '（时间未记录）'}\n`);
+    }
+    if (rows.length === 0) process.stdout.write('  （空。只读动作不需要授权，默认放行）\n');
     return 0;
   }
   if (args.includes('--remove')) {
@@ -376,12 +591,14 @@ export async function cli(args: string[]): Promise<number> {
   const sub = args[0];
   if (sub === 'serve') return serve();
   if (sub === 'config') return cmdConfig(args.slice(1));
+  if (sub === 'tools') return cmdTools(args.slice(1));
   if (sub === 'allow') return cmdAllow(args.slice(1));
   process.stdout.write(`用法：
   zkit mcp serve            以 MCP server 方式运行（stdio，给 AI 客户端拉起）
   zkit mcp config [客户端]  打印接入配置；加 --write 直接写入（会备份原文件）
                             客户端：${clientSpecs().map((s) => s.key).join(' / ')}
-  zkit mcp allow [动作]     授权有副作用的动作给 AI 调用（不加参数则列出已授权）
+  zkit mcp tools [--json]   列出全部 MCP 工具与描述（--json 为机读格式）
+  zkit mcp allow [动作]     授权有副作用的动作给 AI 调用（--list 显示授权与时间）
                             只读动作默认放行，不需要授权
 `);
   return 0;
