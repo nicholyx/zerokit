@@ -66,29 +66,21 @@ run(['plugin', 'bundled']);
   else fail('②装回后跑不动：' + rr.stderr.slice(0, 120));
 }
 
-// ---- 穿越攻击：手工构造 zip（走 distro 纯函数）
+// ---- 穿越攻击：手工构造 zip（直接 import 纯函数——不走子进程脚本，
+// 避免路径插值在 Windows 反斜杠下被打穿）
 {
-  const probe = path.join(TMP, 'probe.mjs');
-  fs.writeFileSync(probe, `
-    import { zipFiles, unpackPlugin } from '${path.join(ROOT, 'src/core/distro.ts')}';
-    import fs from 'node:fs';
-    const evil = zipFiles([
-      { name: 'plugin.toml', data: Buffer.from('[plugin]\\nid = "evil"\\nversion = "1.0.0"') },
-      { name: '../evil-payload.txt', data: Buffer.from('pwned') },
-    ]);
-    fs.writeFileSync('${path.join(TMP, 'evil.zip').replace(/'/g, "'\\''")}', evil);
-    const u = unpackPlugin('${path.join(TMP, 'evil.zip').replace(/'/g, "'\\''")}');
-    console.log(JSON.stringify({ ok: u.ok, refused: /可疑路径/.test(u.message ?? '') }));
-  `);
-  const r = spawnSync(process.execPath, ['--input-type=module', '-e', fs.readFileSync(probe, 'utf8')], {
-    encoding: 'utf8', timeout: 30000, env: { ...process.env, ZEROKIT_HOME: TMP },
-  });
-  let j = null;
-  try { j = JSON.parse(r.stdout.trim().split('\n').pop() ?? ''); } catch { /* 下行 */ }
-  if (j?.ok === false && j?.refused === true && !fs.existsSync(path.join(TMP, 'plugins', '..', 'evil-payload.txt'))) {
+  const { zipFiles, unpackPlugin } = await import(path.join(ROOT, 'src/core/distro.ts'));
+  const evil = zipFiles([
+    { name: 'plugin.toml', data: Buffer.from('[plugin]\nid = "evil"\nversion = "1.0.0"') },
+    { name: '../evil-payload.txt', data: Buffer.from('pwned') },
+  ]);
+  const evilZip = path.join(TMP, 'evil.zip');
+  fs.writeFileSync(evilZip, evil);
+  const u = unpackPlugin(evilZip);
+  if (u.ok === false && /可疑路径/.test(u.message ?? '') && !fs.existsSync(path.join(TMP, 'plugins', '..', 'evil-payload.txt'))) {
     pass('②路径穿越包被拒绝（.. 逃逸）');
   } else {
-    fail('②穿越防线失效：' + r.stdout.slice(0, 120));
+    fail('②穿越防线失效：' + JSON.stringify(u).slice(0, 150));
   }
 }
 
