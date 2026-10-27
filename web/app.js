@@ -12,6 +12,7 @@ import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
 import { barsScale, sparkPoints, formatMs, paletteScore, p95Ms } from './extras.js';
 import { filterRows, colStats, unitOf, isUnitColumn, convertUnitColumn, mergeTables, columnValues, toHtmlTable } from './extras.js';
 import { renderCopyTemplate, toJsonl, exportFilename, toMarkdownProps } from './extras.js';
+import { WATCH_INTERVALS, intervalLabel, cellDiff, sparkSeries, watchStopCondition, tabTitle, watchCsv } from './extras.js';
 import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport, virtualWindow, pageSlice, breadcrumb, listStateQuery, parseListState, digitPick } from './extras.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
@@ -864,6 +865,10 @@ function openActive() {
 
 function openDetail(plugin, action, prefill) {
   detail = { plugin, action };
+  // 第十八轮①：切到别的动作，旧监控自动停（一次只盯一个）
+  for (const k of Object.keys(watchRegistry())) {
+    if (k !== actionKey(plugin.id, action.id)) stopWatch(k);
+  }
   // 深链：CLI / MCP / 别人的消息里可以直接给 #/插件/动作 让界面跳到这一条
   const wantedHash = `#/${plugin.id}/${action.id}`;
   if (location.hash !== wantedHash) history.pushState(null, '', wantedHash);
@@ -1040,12 +1045,14 @@ function openDetail(plugin, action, prefill) {
       <button class="ghost" id="qrBtn" title="生成深链二维码，手机扫码直达这个动作">二维码</button>
       <button class="ghost" id="shareBtn" title="复制带当前参数的完整深链">分享</button>
       <button class="ghost" id="timerBtn" title="只读动作按间隔自动执行（界面开着才跑）">定时</button>
+      <button class="ghost" id="watchBtn" title="监控模式：自动重跑+变更追踪+倒计时环（#/watch 聚合面板）">监控</button>
       <button class="ghost" id="shareCardBtn" title="把这次结果生成一张摘要卡（复制到剪贴板）">分享卡</button>
       <button class="ghost" id="copyJsonBtn" title="复制动作定义 JSON（写文档 / 分享给他人用）">复制 JSON</button>
       <button class="ghost" id="resetBtn" title="把所有参数清回清单默认值">恢复默认</button>
       <button class="ghost" id="backBtn">返回</button>
     </div>
     <div id="queueState" class="queue-note hidden"></div>
+    <div id="watchBar" class="watch-bar hidden"></div>
     <div id="previewBox"></div>
     <div id="invokeBox"></div>
     <div id="detailCfg" class="cmd-box hidden"></div>
@@ -1271,6 +1278,20 @@ function openDetail(plugin, action, prefill) {
     el.count.textContent = `已开启定时执行：每 ${sec} 秒一次（#/timers 可管理）`;
   });
 
+  // 第十八轮①–⑨：监控模式——自动重跑 + 变更追踪 + 停止条件 + 聚合面板。
+  // 与「定时」的区别：定时只是重复跑；监控记录采样、diff 高亮、趋势线、可设停止条件。
+  $('watchBtn')?.addEventListener('click', () => {
+    if (action.risk !== 'read') {
+      el.count.textContent = '只有只读动作能监控（有副作用的自动跑风险太大）';
+      return;
+    }
+    const reg = watchRegistry();
+    const key = actionKey(plugin.id, action.id);
+    if (reg[key]) { stopWatch(key); renderWatchBar(); return; }
+    openWatchDialog(plugin, action, key);
+  });
+  renderWatchBar();
+
   // 二维码：深链 → SVG，模态展示（离线生成，不联网）
   $('qrBtn')?.addEventListener('click', () => {
     const deepLink = `${location.origin}${location.pathname}#/${plugin.id}/${action.id}`;
@@ -1471,6 +1492,9 @@ function openDetail(plugin, action, prefill) {
 
 function backToList() {
   detail = null;
+  // 第十八轮①：离开详情页 = 离开监控对象，翻页自动停（监控只盯着当前动作）
+  for (const k of Object.keys(watchRegistry())) stopWatch(k);
+  renderWatchBar();
   // 浏览器后退语义：详情是用 pushState 压栈的，返回列表用 back 弹栈，
   // 这样浏览器/鼠标的后退键也能一步步走回来（而不是直接跳出到应用外）。
   if (/#\/[\w.-]+\/[\w.-]+/.test(location.hash || '')) {
@@ -1618,6 +1642,224 @@ function timerRegistry() {
   if (!window.__zkTimers) window.__zkTimers = {};
   return window.__zkTimers;
 }
+
+/* ===================== 第十八轮：监控与自动化 ===================== */
+
+/** 监控注册表：key = actionKey，value = { interval, failStreak, matchStr, samples[], title, deadline } */
+function watchRegistry() {
+  if (!window.__zkWatch) window.__zkWatch = {};
+  return window.__zkWatch;
+}
+
+function stopWatch(key) {
+  const reg = watchRegistry();
+  const w = reg[key];
+  if (!w) return;
+  clearTimeout(w.timerId);
+  clearInterval(w.timerId);
+  delete reg[key];
+  updateWatchTitle();
+}
+
+function updateWatchTitle() {
+  // ⑦ 标签页标题带上监控数（与运行中进程数合并；fetchPs 也会写 title，两边都调这个）
+  const n = Object.keys(watchRegistry()).length;
+  const running = Number((document.title.match(/^\((\d+)\)/) ?? [])[1] ?? 0);
+  document.title = tabTitle(n, running);
+}
+
+/** ①⑤ 监控设置弹窗：间隔档位 + 停止条件（连续失败 N 次 / 结果包含某串） */
+function openWatchDialog(plugin, action, key) {
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  const intervalOpts = WATCH_INTERVALS.map((o) =>
+    `<option value="${o.sec}" ${o.sec === 30 ? 'selected' : ''}>${o.label}</option>`).join('');
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>监控「${esc(action.title)}」</h3>
+      <div class="help">界面开着才会跑。每次采样记录结果，变化会高亮，可在 #/watch 面板聚合查看。</div>
+      <label class="field">重跑间隔
+        <select id="wInterval">${intervalOpts}</select>
+      </label>
+      <label class="field">连续失败几次自动停（0 = 不停）
+        <input id="wFail" type="number" min="0" max="10" value="3">
+      </label>
+      <label class="field">结果包含此串自动停（留空 = 不启用）
+        <input id="wMatch" type="text" placeholder="如 error / 90%">
+      </label>
+      <div class="actions">
+        <button class="primary" id="wStart">开始监控</button>
+        <button class="ghost" id="wCancel">取消</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('#wCancel').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  overlay.querySelector('#wStart').addEventListener('click', () => {
+    const sec = Number(overlay.querySelector('#wInterval').value);
+    const failStreak = Math.max(0, Number(overlay.querySelector('#wFail').value) || 0);
+    const matchStr = overlay.querySelector('#wMatch').value.trim();
+    overlay.remove();
+    if (!sec) return;
+    const reg = watchRegistry();
+    reg[key] = {
+      interval: sec,
+      failStreak,
+      matchStr,
+      samples: [],
+      title: `${plugin.name} · ${action.title}`,
+      pluginId: plugin.id,
+      actionId: action.id,
+      deadline: Date.now() + sec * 1000,
+      runs: 0,
+      changes: 0,
+    };
+    scheduleWatch(key, sec);
+    updateWatchTitle();
+    renderWatchBar();
+    el.count.textContent = `监控已开启：每 ${intervalLabel(sec)} 重跑一次（#/watch 面板聚合查看）`;
+    // 立即采第一次样（不等第一个间隔），结果同样入序列——diff 要有基线
+    submit(false).then(() => {
+      const w2 = watchRegistry()[key];
+      if (w2 && lastResult) {
+        w2.samples.push({ ts: Date.now(), ok: lastResult.ok === true, data: lastResult.data });
+        if (w2.samples.length > 30) w2.samples.shift();
+      }
+    }).catch(() => {});
+  });
+}
+
+/** 间隔调度：用 setTimeout 链而不是 setInterval——执行耗时不会让两次采样叠在一起 */
+function scheduleWatch(key, sec) {
+  const reg = watchRegistry();
+  const w = reg[key];
+  if (!w) return;
+  w.timerId = setTimeout(async () => {
+    const cur = detail && actionKey(detail.plugin.id, detail.action.id) === key;
+    const onPanel = mode === 'watch'; // 监控面板盯着它跑：不算「翻页」
+    if (!cur && !onPanel) { // 真翻页了（别的动作/列表）：停掉（① 翻页自动停）
+      stopWatch(key);
+      renderWatchBar();
+      return;
+    }
+    const prev = lastResult;
+    await submit(false).catch(() => {});
+    const now = lastResult;
+    w.runs += 1;
+    if (w.runs > 1 && prev && now && JSON.stringify(prev.data) !== JSON.stringify(now.data)) {
+      w.changes += 1;
+      notifyWatchChange(w, prev, now);
+    }
+    w.samples.push({ ts: Date.now(), ok: now?.ok === true, data: now?.data });
+    if (w.samples.length > 30) w.samples.shift();
+    // ⑤ 停止条件
+    const stop = watchStopCondition(
+      w.samples.map((s) => ({ ok: s.ok, data: s.data })),
+      { failStreak: w.failStreak, matchStr: w.matchStr },
+    );
+    if (stop) {
+      stopWatch(key);
+      renderWatchBar();
+      el.count.textContent = stop === 'stop-fail'
+        ? `监控已自动停：连续 ${w.failStreak} 次失败`
+        : '监控已自动停：结果命中了停止串';
+      return;
+    }
+    w.deadline = Date.now() + sec * 1000;
+    renderWatchBar();
+    scheduleWatch(key, sec);
+  }, sec * 1000);
+}
+
+/** ⑧ 变更通知：只在结果变化时打扰（不是每次采样都通知） */
+function notifyWatchChange(w, prev, next) {
+  try {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    new Notification('zerokit 监控', {
+      body: `⇄ ${w.title} 结果有变化（第 ${w.changes} 次）`,
+      tag: `zk-watch-${w.title}`,
+    });
+  } catch { /* 通知失败不影响监控 */ }
+}
+
+/** ② 详情页监控条：间隔 + 倒计时环 + 已采样次数/变更次数 + 停止按钮 */
+function renderWatchBar() {
+  const bar = $('watchBar');
+  if (!bar) return;
+  const key = detail ? actionKey(detail.plugin.id, detail.action.id) : '';
+  const w = key ? watchRegistry()[key] : null;
+  if (!w) { bar.classList.add('hidden'); bar.innerHTML = ''; return; }
+  bar.classList.remove('hidden');
+  const remain = Math.max(0, (w.deadline ?? Date.now()) - Date.now());
+  const pct = Math.round((remain / (w.interval * 1000)) * 100);
+  bar.innerHTML = `
+    <span class="badge">⏱ 监控中</span>
+    <span>每 ${esc(intervalLabel(w.interval))} · 已采样 ${w.runs} 次 · 变更 ${w.changes} 次</span>
+    <svg class="watch-ring" viewBox="0 0 36 36" width="22" height="22" aria-hidden="true">
+      <circle class="ring-bg" cx="18" cy="18" r="15.9"></circle>
+      <circle class="ring-fg" cx="18" cy="18" r="15.9" style="stroke-dasharray:${pct} 100" title="下次执行倒计时"></circle>
+    </svg>
+    <span class="sub">${Math.ceil(remain / 1000)}s</span>
+    <button class="ghost mini" id="watchStopBtn">停止</button>`;
+  bar.querySelector('#watchStopBtn')?.addEventListener('click', () => {
+    stopWatch(key);
+    renderWatchBar();
+    el.count.textContent = '监控已停止';
+  });
+  // 倒计时每秒刷一次环（只重画 bar，不重跑动作）
+  clearTimeout(renderWatchBar._tick);
+  if (watchRegistry()[key]) {
+    renderWatchBar._tick = setTimeout(renderWatchBar, 1000);
+  }
+}
+
+/** ⑥⑨ 监控聚合面板 #/watch：所有在跑的监控 + 采样 CSV 导出 */
+function showWatchPanel() {
+  hidePanels();
+  mode = 'watch';
+  el.modeLabel.textContent = '监控';
+  el.listView.classList.add('hidden');
+  el.detailView.classList.add('hidden');
+  if (location.hash !== '#/watch') history.replaceState(null, '', '#/watch');
+  const reg = watchRegistry();
+  const rows = Object.entries(reg).map(([k, w]) => {
+    const lastOk = w.samples.at(-1)?.ok !== false;
+    const summary = w.samples.length
+      ? `最近：${JSON.stringify(w.samples.at(-1)?.data ?? '').slice(0, 80)}`
+      : '等待第一次采样…';
+    return `
+    <div class="run-row watch-row">
+      <span class="badge ${lastOk ? 'read' : 'bad'}">⏱</span>
+      <span class="run-when">${esc(w.title)}（每 ${esc(intervalLabel(w.interval))}）</span>
+      <span class="sub">${w.runs} 次采样 · ${w.changes} 次变更</span>
+      <span class="watch-summary">${esc(summary)}</span>
+      <button class="ghost mini" data-wstop="${esc(k)}">停止</button>
+      <button class="ghost mini" data-wcsv="${esc(k)}">导出 CSV</button>
+    </div>`;
+  }).join('');
+  el.allowView.innerHTML = `
+    <h2 class="ps-title">监控面板</h2>
+    <div class="help">界面开着才会跑；翻到别的动作自动停。在只读动作详情页点「监控」添加。</div>
+    ${rows || '<div class="ps-empty" role="status">没有在跑的监控。</div>'}`;
+  el.allowView.classList.remove('hidden');
+  el.allowView.querySelectorAll('[data-wstop]').forEach((b) => b.addEventListener('click', () => {
+    stopWatch(b.dataset.wstop);
+    showWatchPanel();
+  }));
+  el.allowView.querySelectorAll('[data-wcsv]').forEach((b) => b.addEventListener('click', () => {
+    const w = watchRegistry()[b.dataset.wcsv];
+    if (!w || !w.samples.length) { el.count.textContent = '还没有采样，导出啥呀'; return; }
+    const csv = watchCsv(w.samples);
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `watch-${w.pluginId}-${w.actionId}-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    el.count.textContent = `已导出 ${w.samples.length} 次采样 CSV`;
+  }));
+}
+
 function showTimers() {
   hidePanels();
   mode = 'timers';
@@ -2039,6 +2281,100 @@ function renderResult(res) {
   // 第十六轮⑤：合并视图等场景的来源说明（顶在结果卡里，让人知道这张表从哪来）
   const srcNote = res.note ? `<div class="detail-note">📌 ${esc(res.note)}</div>` : '';
 
+  // 第十八轮③④：监控模式下的变更 diff 高亮 + 数值 sparkline。
+  // 与前次采样对比：表格逐格（data-key 定位）、键值逐项（data-k 定位）。
+  let watchNote = '';
+  const wkey = detail ? actionKey(detail.plugin.id, detail.action.id) : '';
+  const watch = wkey ? watchRegistry()[wkey] : null;
+  if (watch && watch.samples.length >= 1 && res.ok === true) {
+    // 注意：此刻新结果尚未 push 进 samples（push 在调度回调里做），上一采样就是最后一个（.at(-1)）
+    const prevSample = watch.samples.at(-1)?.data;
+    const diffs = [];
+    if (Array.isArray(res.data) && res.data.length && typeof res.data[0] === 'object') {
+      // 表格：按主键列（第一列）对齐逐格比
+      const prevMap = new Map((Array.isArray(prevSample) ? prevSample : []).map((r) => [String(Object.values(r)[0]), r]));
+      for (const row of res.data) {
+        const pk = String(Object.values(row)[0]);
+        const pr = prevMap.get(pk);
+        if (!pr) continue;
+        for (const [k, v] of Object.entries(row)) {
+          const d = cellDiff(pr[k], v);
+          if (d) diffs.push({ sel: `[data-dcell="${esc(pk)}|${esc(k)}"]`, txt: d, col: k, val: v });
+        }
+      }
+    } else if (res.data && typeof res.data === 'object' && !Array.isArray(res.data)) {
+      for (const [k, v] of Object.entries(res.data)) {
+        const d = cellDiff(prevSample?.[k], v);
+        if (d) diffs.push({ sel: `[data-dkv="${esc(k)}"]`, txt: d, col: k, val: v });
+      }
+    }
+    if (diffs.length) {
+      watchNote = `<div class="watch-diff-note">⇄ ${diffs.length} 处变化（黄色高亮）</div>`;
+      setTimeout(() => {
+        for (const d of diffs) {
+          const td = box.querySelector(d.sel);
+          if (!td) continue;
+          td.classList.add('cell-changed');
+          td.title = d.txt;
+          const tag = document.createElement('span');
+          tag.className = 'diff-tag';
+          tag.textContent = d.txt.slice(0, 40);
+          td.appendChild(tag);
+        }
+      }, 0);
+    }
+    // ④ 数值列 sparkline：每个数值字段一条（取最近 20 次采样）
+    setTimeout(() => {
+      const numericKeys = new Set();
+      for (const s of watch.samples.slice(-20)) {
+        if (s.data && typeof s.data === 'object' && !Array.isArray(s.data)) {
+          for (const [k, v] of Object.entries(s.data)) {
+            if (Number.isFinite(Number(v)) && String(v).trim() !== '') numericKeys.add(k);
+          }
+        }
+      }
+      for (const k of numericKeys) {
+        const host = box.querySelector(`[data-dkv="${esc(k)}"]`)?.parentElement;
+        if (!host || host.querySelector('.watch-spark')) continue;
+        const series = sparkSeries(watch.samples.slice(-20).map((s) => Number(s.data?.[k])));
+        if (!series) continue;
+        const spark = document.createElement('span');
+        spark.className = 'watch-spark';
+        spark.title = `最近 ${series.length} 次趋势`;
+        spark.innerHTML = miniSparkSvg(series);
+        host.appendChild(spark);
+      }
+      // 表格动作的数值列 spark：监控采样是表数组时，按主键行对齐逐列画（挂在表头 th 里）
+      if (Array.isArray(res.data) && res.data.length && typeof res.data[0] === 'object') {
+        const cols = Object.keys(res.data[0]);
+        const byKey = new Map(watch.samples.slice(-20).map((s) => {
+          const rows = Array.isArray(s.data) ? s.data : [];
+          return [s.ts, new Map(rows.map((r) => [String(Object.values(r)[0]), r]))];
+        }));
+        const headRow = box.querySelector('.result-table thead tr, table thead tr');
+        if (headRow) {
+          for (const col of cols) {
+            const sampleVals = watch.samples.slice(-20).map((s) => {
+              const rows = Array.isArray(s.data) ? s.data : [];
+              const first = rows[0];
+              return Number(first?.[col]);
+            });
+            if (!sampleVals.some((v) => Number.isFinite(v))) continue;
+            const series = sparkSeries(sampleVals);
+            if (!series) continue;
+            const th = headRow.querySelector(`th:nth-child(${cols.indexOf(col) + 1})`);
+            if (!th || th.querySelector('.watch-spark')) continue;
+            const spark = document.createElement('span');
+            spark.className = 'watch-spark';
+            spark.title = `首行「${col}」最近 ${series.length} 次趋势`;
+            spark.innerHTML = miniSparkSvg(series);
+            th.appendChild(spark);
+          }
+        }
+      }
+    }, 0);
+  }
+
   const copyText = res.data !== undefined ? JSON.stringify(res.data, null, 2) : (res.stdout ?? '');
   box.innerHTML = `
     <div class="card">
@@ -2063,7 +2399,7 @@ function renderResult(res) {
         <button class="ghost" id="noteRes" title="给这次执行写一句备注（本机保存）">备注</button>
         <span class="ms">${esc(ms)}</span>
       </div>
-      <div class="card-body">${srcNote}${body}</div>
+      <div class="card-body">${srcNote}${watchNote}${body}</div>
       <div class="export-path sub hidden" role="status" style="padding:2px 10px"> </div>
       <div class="export-actions hidden" style="padding:0 10px 6px"><button class="ghost mini" id="openDirRes" title="在系统文件管理器里打开导出目录">打开目录</button></div>
       <div class="card-find">
@@ -2541,9 +2877,22 @@ function renderKV(obj) {
   const rows = Object.entries(obj).map(([k, v]) => {
     const val = (v && typeof v === 'object') ? JSON.stringify(v) : String(v);
     const num = typeof v === 'number' || /^[\d.,\s%]+$/.test(val) ? ' class="num"' : '';
-    return `<tr><td>${esc(k)}</td><td${num}>${esc(val)}</td></tr>`;
+    // 第十八轮③④：键级锚点（监控 diff 高亮 / sparkline 挂载用）
+    return `<tr><td>${esc(k)}</td><td${num} data-dkv="${esc(k)}">${esc(val)}</td></tr>`;
   }).join('');
   return `<table class="kv">${rows}</table>`;
+}
+
+/** 第十八轮④：0–100 归一化序列 → 60×18 的迷你 SVG 折线（结果卡内联，不占行高） */
+function miniSparkSvg(series) {
+  const W = 60; const H = 18; const PAD = 2;
+  const n = series.length;
+  const pts = series.map((v, i) => {
+    const x = PAD + (i / (n - 1)) * (W - PAD * 2);
+    const y = H - PAD - (v / 100) * (H - PAD * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
 }
 
 /** 结果表格：点列头排序（再点反向）、数字列右对齐 + 千分位。rowKey 让 diff 取「第 N 次」
@@ -2574,7 +2923,10 @@ function renderTable(rows0, tableId = '') {
     const shown = numeric[c] && val !== '' && Number.isFinite(Number(val)) ? formatNumber(val) : val;
     // 长单元格省略 + 点击展开：长路径/长 JSON 不再撑破表格
     const clip = !numeric[c] && shown.length > 48;
-    return `<td${numeric[c] ? ' class="num"' : ''}${clip ? ` class="cell-clip" title="点击展开" data-full="${esc(val)}"` : ''}>${esc(clip ? `${shown.slice(0, 45)}…` : shown)}</td>`;
+    // 第十八轮③：主键+列名的格级锚点（监控 diff 高亮定位用）
+    const pk = String(Object.values(row)[0] ?? '');
+    const dmark = ` data-dcell="${esc(pk)}|${esc(c)}"`;
+    return `<td${numeric[c] ? ' class="num"' : ''}${clip ? ` class="cell-clip" title="点击展开" data-full="${esc(val)}"` : ''}${dmark}>${esc(clip ? `${shown.slice(0, 45)}…` : shown)}</td>`;
   }).join('')}</tr>`).join('');
   // 第十六轮⑥：统计行——数字列给 Σ/均值/最小~最大，文本列给非空计数
   const foot = visCols.map((c) => {
@@ -3841,8 +4193,9 @@ async function fetchPs() {
       + (data.services ?? []).filter((s) => s.running).length;
     el.psCount.textContent = String(running);
     el.psBtn.classList.toggle('has-items', running > 0);
-    // 徽标计数：有东西在跑时，标签页标题一眼可见（切去别的页也不会忘）
-    document.title = running > 0 ? `(${running}) zerokit` : 'zerokit';
+    // 徽标计数：有东西在跑时，标签页标题一眼可见（切去别的页也不会忘）；
+    // 第十八轮⑦：监控数也并入标题（⏱N），fetchPs 与监控启停都走 tabTitle 保持一致
+    document.title = tabTitle(Object.keys(watchRegistry()).length, running);
     return data;
   } catch {
     return null;
@@ -4663,6 +5016,7 @@ function showPalette() {
     { icon: '🔑', label: 'MCP 授权', hint: '哪些动作允许 AI 调用', act: () => showMcpAllow() },
     { icon: '📈', label: '使用统计', hint: '总执行数 / 成功率 / 趋势', act: () => showStats() },
     { icon: '⏱', label: '定时任务', hint: '管理界面内定时器', act: () => { location.hash = '#/timers'; } },
+    { icon: '👁', label: '监控面板', hint: '自动重跑的监控聚合', act: () => { location.hash = '#/watch'; } },
     { icon: '📰', label: '今日简报', hint: '跑了多少 / 成败 / 最常用', act: () => { location.hash = '#/brief'; } },
     { icon: '📌', label: '收藏结果', hint: '钉住的重要输出', act: () => { location.hash = '#/saved'; } },
     { icon: '◐', label: '深色 / 浅色', hint: '一键切换主题（Ctrl+Shift+D）', act: () => toggleLightDark() },
@@ -5013,6 +5367,8 @@ async function load(notify) {
 function applyHash() {
   // #/timers 定时任务面板
   if ((location.hash || '') === '#/timers') { showTimers(); return; }
+  // #/watch 监控聚合面板（第十八轮⑥）
+  if ((location.hash || '') === '#/watch') { showWatchPanel(); return; }
   // #/brief 每日简报
   if ((location.hash || '') === '#/brief') { showBrief(); return; }
 
@@ -5109,6 +5465,11 @@ function applyHash() {
 }
 
 window.addEventListener('hashchange', () => {
+  // 第十八轮⑥：#/watch 是面板路由——监控继续跑（面板就是聚合它们的），只切视图
+  if ((location.hash || '') === '#/watch') {
+    showWatchPanel();
+    return;
+  }
   // 从详情后退回列表：hash 已变回空/列表态，详情界面要自己收掉
   if (detail && !/#\/[\w.-]+\/[\w.-]+/.test(location.hash || '')) {
     detail = null;
@@ -5118,6 +5479,16 @@ window.addEventListener('hashchange', () => {
     const st = parseListState(location.hash);
     if (st.q) { el.q.value = st.q; }
     renderList();
+    return;
+  }
+  // 第十八轮⑥补：从面板（#/watch 等）回到当前详情的深链——
+  // detail 变量还在（面板没清它），但视图被面板藏了，这里恢复出来
+  if (detail && /#\/[\w.-]+\/[\w.-]+/.test(location.hash || '') && el.detailView.classList.contains('hidden')) {
+    hidePanels();
+    mode = 'detail';
+    el.modeLabel.textContent = '详情';
+    el.listView.classList.add('hidden');
+    el.detailView.classList.remove('hidden');
     return;
   }
   if (!detail) applyHash();

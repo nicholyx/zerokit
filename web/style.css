@@ -1065,3 +1065,110 @@ td.tstat .sub { font-size: 11px; opacity: .75; display: block; line-height: 1.35
 @media (prefers-reduced-motion: reduce) {
   .flash-card { animation: none; }
 }
+
+/* ===================== 第十八轮：监控与自动化 ===================== */
+
+/* 监控条：详情页动作区上方的一条状态行 */
+.watch-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  margin: 6px 0;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+/* 倒计时环：SVG 圆环，剩余比例 = 环长 */
+.watch-ring .ring-bg {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 3.5;
+}
+.watch-ring .ring-fg {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  transition: stroke-dasharray 0.9s linear;
+}
+
+/* 变更高亮：监控 diff 命中的单元格闪黄 */
+.cell-changed {
+  background: color-mix(in srgb, var(--warn) 22%, transparent) !important;
+  outline: 1px solid var(--warn);
+  border-radius: 3px;
+  animation: cell-flash 1.6s ease-out;
+}
+@keyframes cell-flash {
+  0% { background: color-mix(in srgb, var(--warn) 55%, transparent); }
+  100% { background: color-mix(in srgb, var(--warn) 22%, transparent); }
+}
+.diff-tag {
+  display: block;
+  font-size: 10px;
+  color: var(--warn);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+.watch-diff-note {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--warn);
+  font-weight: 600;
+}
+
+/* sparkline：KV 行内联，不撑高 */
+.watch-spark {
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 8px;
+  opacity: 0.9;
+}
+
+/* 监控面板行 */
+.watch-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.watch-summary {
+  flex: 1;
+  min-width: 200px;
+  font-size: 11px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 监控设置弹窗里的表单 */
+.modal .field {
+  display: block;
+  margin: 10px 0;
+  font-size: 13px;
+}
+.modal .field select,
+.modal .field input {
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* 动画尊重 reduced motion（第十三轮全局规则延续） */
+@media (prefers-reduced-motion: reduce) {
+  .cell-changed { animation: none; }
+  .watch-ring .ring-fg { transition: none; }
+}
