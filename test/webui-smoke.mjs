@@ -256,6 +256,21 @@ async function get(p, raw = false) {
   check('i18n：术语统一（无命令→无动作）',
     !appJs.text.includes('无命令'),
     '仍有「无命令」混用');
+
+  // 第二十九轮：性能与体感——静态断言
+  check('perf：搜索防抖 150ms + rAF 合帧',
+    appJs.text.includes('searchDebounceTimer') && appJs.text.includes('requestAnimationFrame')
+      && /150\)/.test(appJs.text),
+    '防抖/rAF 缺失');
+  check('perf：#/perf 面板三指标卡',
+    appJs.text.includes('showPerfPanel') && appJs.text.includes('perfStats.listMs') && appJs.text.includes('性能'),
+    '#/perf 面板缺失');
+  check('perf：大表只画首屏 + 加载全部按钮',
+    appJs.text.includes('OVERFLOW_ROWS') && appJs.text.includes('data-loadall') && appJs.text.includes('tableFullLoad'),
+    '大表窗口化缺失');
+  check('perf：大 JSON 序列化切片让出主线程',
+    appJs.text.includes('chunkedStringify') && appJs.text.includes('setTimeout(r, 0)'),
+    'chunkedStringify 缺失');
   check('a11y：Esc 栈先关最上层弹层（cellFullPop 优先）',
     appJs.text.includes("getElementById('cellFullPop')") && /Escape.*cellFullPop/s.test(appJs.text),
     'Esc 栈处理缺失');

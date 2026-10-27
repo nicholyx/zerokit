@@ -5,7 +5,7 @@
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { pickLang, validLangPref, makeT } from './extras.js';
+import { pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -810,6 +810,16 @@ async function runBatch(retryItems) {
 }
 
 function renderList() {
+  const t0 = performance.now();
+  try {
+    renderListInner();
+  } finally {
+    perfStats.listMs = Math.round((performance.now() - t0) * 10) / 10;
+    perfStats.lastRenderAt = Date.now();
+  }
+}
+
+function renderListInner() {
   const aliasHit = aliasEntry(el.q.value);
   if (aliasHit && el.q.value.trim()) {
     filtered = [aliasHit];
@@ -923,7 +933,9 @@ function renderList() {
   el.listView.classList.remove('hidden');
   if (detail) el.detailView.classList.remove('hidden');
 
+  const tS = performance.now();
   const results = search(q);
+  perfStats.searchMs = Math.round((performance.now() - tS) * 10) / 10;
   const baseEntries = results.map((r) => r.entry);
   const built = filterActions(baseEntries, listFilter, favorites);
   filtered = q.trim() === '' && favorites.length > 0 && listFilter === 'all'
@@ -1043,6 +1055,7 @@ function renderList() {
     }
   }
 
+  perfStats.listItems = filtered.length;
   renderListTools(baseEntries, q);
   bindListItems(q);
   el.count.textContent = q.trim()
@@ -1124,6 +1137,23 @@ function aliasEntry(word) {
 }
 
 /** 虚拟滚动列表：行高按首屏实测（兜底 64px）。滚动时节流重渲染窗口。 */
+
+/** 第二十九轮⑨：把同步大活切成小片，每片之间让出主线程一帧。
+ * 用于大结果复制/导出前的 JSON.stringify——一次序列化几 MB 会冻住 UI 几百毫秒，
+ * 用户以为死了。切片后最长冻帧 = 单片耗时（这里每片 64KB 字符）。 */
+async function chunkedStringify(value, onProgress) {
+  // 用 JSON.stringify(indent) 的行流做切片——格式与同步版完全一致，
+  // 只是拼接过程中每 512 行让出主线程一帧，界面不冻。
+  const full = JSON.stringify(value, null, 2);
+  const lines = full.split('\n');
+  let out = '';
+  for (let i = 0; i < lines.length; i += 512) {
+    out += lines.slice(i, i + 512).join('\n') + (i + 512 < lines.length ? '\n' : '');
+    if (onProgress) onProgress(Math.min(1, (i + 512) / lines.length));
+    await new Promise((r) => setTimeout(r, 0));   // 让出一帧
+  }
+  return out;
+}
 function renderVirtualList(q) {
   const ROW_H_FALLBACK = 64;
   el.list.classList.add('virtual');
@@ -2176,6 +2206,41 @@ function renderWatchBar() {
   }
 }
 
+/** 第二十九轮⑧：性能面板 #/perf——体感问题的量化入口。
+ * 列表项数 / 列表渲染耗时 / 搜索耗时三张卡，外加最近一次渲染时间。
+ * 数字来自 perfStats（renderList/search 实测写入），不猜。 */
+function showPerfPanel() {
+  hidePanels();
+  mode = 'perf';
+  el.modeLabel.textContent = '性能';
+  el.listView.classList.add('hidden');
+  el.detailView.classList.add('hidden');
+  if (location.hash !== '#/perf') history.replaceState(null, '', '#/perf');
+  const views = el.listView.parentElement;
+  let pane = document.getElementById('perfPane');
+  if (!pane) {
+    pane = document.createElement('div');
+    pane.id = 'perfPane';
+    pane.className = 'pane';
+    views.appendChild(pane);
+  }
+  pane.classList.remove('hidden');
+  pane.innerHTML = `
+    <div class="pane-head"><h2>性能</h2>
+      <button class="ghost mini" data-perf-refresh>重新测量</button></div>
+    <div class="stat-cards">
+      <div class="stat-card"><div class="stat-num">${perfStats.listItems}</div><div class="stat-label">列表项数</div></div>
+      <div class="stat-card"><div class="stat-num">${perfStats.listMs} ms</div><div class="stat-label">列表渲染耗时</div></div>
+      <div class="stat-card"><div class="stat-num">${perfStats.searchMs} ms</div><div class="stat-label">搜索打分耗时</div></div>
+    </div>
+    <p class="ps-empty" role="status">最近一次渲染：${perfStats.lastRenderAt ? new Date(perfStats.lastRenderAt).toLocaleString() : '尚未渲染'}。
+    搜索输入有 150ms 防抖 + 请求动画帧合并；超过 60 项的搜索结果走虚拟滚动。</p>`;
+  pane.querySelector('[data-perf-refresh]').addEventListener('click', () => {
+    renderList();
+    showPerfPanel();
+  });
+}
+
 /** ⑥⑨ 监控聚合面板 #/watch：所有在跑的监控 + 采样 CSV 导出 */
 function showWatchPanel() {
   hidePanels();
@@ -2989,6 +3054,7 @@ function downloadCsv(data) {
 }
 
 function renderResult(res) {
+  const isRepaint = res === currentResult;   // 先判再赋值（第二十九轮⑤：重画沿用 tableId）
   currentResult = res;
   if (res && (res.data !== undefined || res.stdout !== undefined || res.error)) lastResult = res;   // 第十九轮④：脱敏切换重画用
   lastExport = null;  // 第十七轮④⑥：每次新结果清掉旧导出记录
@@ -3025,7 +3091,10 @@ function renderResult(res) {
     // output = "html"：stdout 本身就是 HTML 片段，沙箱里直接渲染
     body += `<iframe class="web-frame html" sandbox="allow-scripts" srcdoc="${esc(res.stdout)}"></iframe>`;
   } else if (res.data !== undefined) {
-    body += renderData(res.data, res.render, `r${++resultSeq}`);
+    // 第二十九轮⑤：refreshResult（同一结果重画）沿用旧 tableId，
+    // 否则 tableFullLoad / resultQueryTerms / colvis 等按 tableId 记的状态每次重画全丢
+    if (!isRepaint) resultSeq++;
+    body += renderData(res.data, res.render, `r${resultSeq}`);
   } else if (res.stdout) {
     // 长输出折叠：超 60 行时收起后 40+ 行，一个按钮展开——翻 2000 行日志不废手
     const lines = String(res.stdout).split('\n');
@@ -3190,7 +3259,12 @@ function renderResult(res) {
       const rendered = renderCopyTemplate(detail.action.copy_template, res);
       if (rendered !== null) text = rendered;
     } else if (ev.shiftKey && res.data !== undefined) {
-      text = JSON.stringify(res.data, null, 2);
+      // 第二十九轮⑨：大结果美化序列化走切片，不阻塞 UI
+      const big = JSON.stringify(res.data).length > 262144;
+      if (big) {
+        btn.textContent = '序列化中…';
+        text = await chunkedStringify(res.data, null, 2);
+      } else text = JSON.stringify(res.data, null, 2);
     }
     // 第二十三轮⑨：Alt+点=带备注复制（有备注的页签附上备注头与时间）
     if (ev.altKey) {
@@ -3701,7 +3775,11 @@ function renderTable(rows0, tableId = '') {
   const arrow = (c) => state.col === c ? (state.dir === 1 ? ' ▲' : ' ▼') : '';
   const head = visCols.map((c) =>
     `<th class="sortable${numeric[c] ? ' num' : ''}" data-col="${esc(c)}">${esc(c)}${arrow(c)}</th>`).join('');
-  const body = view.map((row) => `<tr>${visCols.map((c) => {
+  // 第二十九轮⑦：大表只画首屏 200 行 + 「加载全部」按钮——
+  // >500 行全画 DOM 会冻 UI 数秒；200 行覆盖绝大多数真实结果，其余按需展开
+  const bigTable = view.length > OVERFLOW_ROWS && !tableFullLoad.has(tableId || 't');
+  const viewRows = bigTable ? view.slice(0, PAGE_ROWS) : view;
+  const body = viewRows.map((row) => `<tr>${visCols.map((c) => {
     const v = row[c];
     const val = (v && typeof v === 'object') ? JSON.stringify(v) : String(v ?? '');
     const shown = numeric[c] && val !== '' && Number.isFinite(Number(val)) ? formatNumber(val) : val;
@@ -3734,7 +3812,7 @@ function renderTable(rows0, tableId = '') {
   // 第二十三轮⑤⑥：查询框（与第十六轮筛选行不同：这是整表查询，支持 > < = 数字比较）
   const qbar = `<div class="rquery"><input data-rq="${esc(tableId || 't')}" placeholder="查询：词 或 size>100 …" value="${esc(resultQueryTerms[tableId] ?? '')}" autocomplete="off" spellcheck="false"><span class="sub" data-rqc="${esc(tableId || 't')}">${rq ? `${qrows.length} / ${frows.length} 行` : ''}</span></div>`;
   return `${unitBtns ? `<div class="unit-bar">${unitBtns}</div>` : ''}${gear}${qbar}<table class="grid" data-table="${esc(tableId)}"><thead><tr>${head}</tr>${fRow}</tr></thead><tbody>${body}</tbody><tfoot><tr>${foot}</tr></tfoot></table>
-  <div class="tcount sub">${view.length === rows.length ? `共 ${rows.length} 行` : `${view.length} / ${rows.length} 行（筛选中）`}</div>`;
+  ${bigTable ? `<div class="tcount"><span class="sub">${viewRows.length} / ${view.length} 行（大表只画前 ${PAGE_ROWS} 行保流畅）</span> <button class="ghost mini" data-loadall="${esc(tableId || 't')}">加载全部 ${view.length} 行</button></div>` : `<div class="tcount sub">${view.length === rows.length ? `共 ${rows.length} 行` : `${view.length} / ${rows.length} 行（筛选中）`}</div>`}`;
 }
 
 // 表格排序状态（按 tableId 记，重渲染后保留）
@@ -3745,7 +3823,16 @@ const tableFilterTerms = {};
 const tableUnitConv = {};
 // 第二十三轮⑤⑥：结果查询词（tableId → 串）——支持子串与数字比较（size>100）
 const resultQueryTerms = {};
+// 第二十九轮⑦：点了「加载全部」的表（tableId 集合），会话内不再截断
+const tableFullLoad = new Set();
 function bindTableSorts(scope) {
+  // 第二十九轮⑦：大表「加载全部」——把该表的溢出阈值记成 Infinity 后重画
+  scope.querySelectorAll('[data-loadall]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      tableFullLoad.add(btn.dataset.loadall);
+      refreshResult();
+    });
+  });
   scope.querySelectorAll('table.grid[data-table]').forEach((tbl) => {
     const id = tbl.dataset.table || 't';
     // 列宽记忆恢复
@@ -6251,6 +6338,13 @@ el.clipBtn.addEventListener('click', async () => {
   }
 });
 
+// 第二十九轮①：搜索防抖（150ms）+ rAF 合帧。
+// 每键全量重算 search()+renderList() 在大列表下会掉帧；防抖让连续击键只算最后一次，
+// rAF 保证同帧内多次触发只画一次。搜索计时进 perfStats 供 #/perf 展示。
+let searchDebounceTimer = 0;
+let searchRaf = 0;
+const perfStats = { listItems: 0, listMs: 0, searchMs: 0, lastRenderAt: 0 };
+
 el.q.addEventListener('input', () => {
   const q = el.q.value;
   // 输入 ? 即切到工作台，后面的内容当作第一个问题带过去
@@ -6259,8 +6353,15 @@ el.q.addEventListener('input', () => {
     showWorkbench(q.slice(1).trim());
     return;
   }
-  active = 0;
-  renderList();
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(() => {
+    if (searchRaf) return;
+    searchRaf = requestAnimationFrame(() => {
+      searchRaf = 0;
+      active = 0;
+      renderList();
+    });
+  }, 150);
 });
 el.reload.addEventListener('click', () => { load(true); refreshPsCount(); });
 el.psBtn.addEventListener('click', () => { if (mode === 'ps') exitPs(); else showPs(); });
@@ -6556,6 +6657,11 @@ window.addEventListener('hashchange', () => {
   // 第二十二轮⑤：#/help 帮助页——界面内说明，不跳出应用
   if ((location.hash || '') === '#/help') {
     showHelpPanel();
+    return;
+  }
+  // 第二十九轮⑧：#/perf 性能页——列表/搜索耗时三指标卡，改代码前后各看一眼
+  if ((location.hash || '') === '#/perf') {
+    showPerfPanel();
     return;
   }
   // 从详情后退回列表：hash 已变回空/列表态，详情界面要自己收掉

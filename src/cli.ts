@@ -49,10 +49,10 @@ ${c.bold('zerokit')} —— 一份清单，四个面：启动器 / CLI / MCP / W
 ${c.bold('用法')}  zkit <命令> [参数]
 
 ${c.bold('基本')}
-  list, ls                列出已安装插件与动作
+  list, ls                列出已安装插件与动作（--json --brief 精简机读输出）
   show <插件> [动作]      查看详情（含生成的 MCP 工具名与 JSON Schema）
   run <插件> <动作> [..]  执行一个动作
-  doctor                  自检：环境、依赖、插件清单是否有问题
+  doctor                  自检：环境、依赖、插件清单是否有问题（--json 机读输出）
   ps                      看正在运行的东西（托管的进程 + 插件声明的服务）
   kill <进程id|插件.服务> 结束一个；kill all 全部结束
 
@@ -185,6 +185,23 @@ function readLine(): Promise<string> {
 
 function cmdList(): number {
   const entries = listPlugins();
+  // 第二十九轮④：--brief 给脚本消费的精简 JSON——id/name/version/健康四字段，
+  // 不带颜色码、不带动作明细；缺参照常全量人类可读输出
+  const briefIdx = process.argv.indexOf('--brief');
+  const jsonIdx = process.argv.indexOf('--json');
+  if (briefIdx >= 0 || (jsonIdx >= 0 && briefIdx >= 0)) {
+    const out = entries.map((e) => e.plugin
+      ? (() => {
+          const missSet = resolveSettings(e.plugin).missing.length;
+          const missDep = missingDeps(e.plugin).length;
+          return { id: e.plugin.id, name: e.plugin.name, version: e.plugin.version,
+            health: missDep === 0 && missSet === 0 ? 'ok'
+              : [missDep ? `缺依赖 ${missDep}` : '', missSet ? `缺设置 ${missSet}` : ''].filter(Boolean).join('，') || 'ok' };
+        })()
+      : { id: path.basename(e.dir), name: '', version: '', health: '清单损坏', errors: e.errors });
+    process.stdout.write(JSON.stringify(out, null, 2) + '\n');
+    return 0;
+  }
   const ok = entries.filter((e) => e.plugin);
   if (entries.length === 0) {
     process.stdout.write('还没有装任何插件。\n');
@@ -839,6 +856,20 @@ async function cmdPlugin(args: string[]): Promise<number> {
 
 function cmdDoctor(): number {
   const report = buildDoctorReport();
+  // 第二十九轮⑥：--json 机读输出——CI/脚本消费诊断结果；退出码语义不变
+  if (process.argv.includes('--json')) {
+    process.stdout.write(JSON.stringify({
+      ok: report.summary.errors === 0,
+      summary: report.summary,
+      tools: report.tools.map((t) => ({ name: t.name, ok: t.ok, version: t.version ?? null, path: t.path ?? null })),
+      dirs: report.dirs,
+      plugins: report.plugins.map((pl) => ({
+        id: pl.id ?? null, name: pl.name ?? null, ok: !pl.problems.some((x) => x.level === 'error'),
+        problems: pl.problems.map((x) => ({ level: x.level, text: x.text, hint: x.hint ?? null })),
+      })),
+    }, null, 2) + '\n');
+    return report.summary.errors === 0 ? 0 : 1;
+  }
   process.stdout.write(c.bold('环境自检\n'));
   for (const tool of report.tools) {
     process.stdout.write(tool.ok
