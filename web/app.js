@@ -18,6 +18,7 @@ import { BACKUP_GROUPS, classifyKey, collectBackup, parseBackup, mergeBackup, ba
 import { HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions } from './extras.js';
 import { profileList, validProfileName, upsertProfile, deleteProfile, renameProfile } from './extras.js';
 import { resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader } from './extras.js';
+import { COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory } from './extras.js';
 import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport, virtualWindow, pageSlice, breadcrumb, listStateQuery, parseListState, digitPick } from './extras.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
@@ -5554,6 +5555,46 @@ function exitMcpAllow() {
 // ---------------------------------------------------------------- 全局命令面板（Ctrl+P）
 
 let paletteMode = false;
+let gotoArmedAt = 0;   // 第二十四轮⑤：g 键按下时间（600ms 内按 l/h/s/m 生效）
+
+/** 第二十四轮⑧：键盘速查浮层——分组列出全部快捷键，Esc/点遮罩关闭 */
+function showHotkeyCheat() {
+  document.getElementById('hotkeyCheat')?.remove();
+  const ov = document.createElement('div');
+  ov.className = 'overlay'; ov.id = 'hotkeyCheat';
+  ov.innerHTML = `
+    <div class="modal cheat-sheet">
+      <h3>键盘速查</h3>
+      <div class="cheat-grid">
+        <div><h4>全局</h4><ul>
+          <li><kbd>Ctrl/⌘+P</kbd> 命令面板</li>
+          <li><kbd>?</kbd> 本速查</li>
+          <li><kbd>F1–F12</kbd> 绑定的动作直达</li>
+          <li><kbd>Esc</kbd> 关最上层浮层/回列表</li>
+        </ul></div>
+        <div><h4>跳转（g 后接键）</h4><ul>
+          <li><kbd>g l</kbd> 动作列表</li>
+          <li><kbd>g h</kbd> 帮助</li>
+          <li><kbd>g s</kbd> 统计</li>
+          <li><kbd>g m</kbd> 监控面板</li>
+        </ul></div>
+        <div><h4>命令面板</h4><ul>
+          <li><kbd>&gt;</kbd> 前缀进入命令模式</li>
+          <li><kbd>;</kbd>插件.动作 快速执行</li>
+          <li><kbd>↑↓</kbd> 翻最近命令/查询</li>
+        </ul></div>
+        <div><h4>列表 / 结果</h4><ul>
+          <li><kbd>↑↓</kbd> 移动 · <kbd>1–9</kbd> 快选 · <kbd>Alt+1–9</kbd> 直开</li>
+          <li><kbd>j / k</kbd> 表格行选中</li>
+          <li><kbd>[ / ]</kbd> 切换结果页签</li>
+          <li><kbd>Ctrl/⌘+Enter</kbd> 执行当前动作</li>
+        </ul></div>
+      </div>
+      <div class="palette-foot">Esc 关闭</div>
+    </div>`;
+  ov.addEventListener('click', (ev) => { if (ev.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+}
 
 /** 命令面板：一个输入框直达任何动作 / 页面。数据全是本地，不新增接口。 */
 function showPalette() {
@@ -5599,7 +5640,34 @@ function showPalette() {
     list.querySelectorAll('.palette-item.on').forEach((n) => n.scrollIntoView({ block: 'nearest' }));
   };
   const refill = () => {
-    const needle = q.value.trim().toLowerCase();
+    const raw = q.value;
+    const needle = raw.trim().toLowerCase();
+    // 第二十四轮③：`;插件.动作` 快速执行语法——直接跳详情页，不走打分
+    const quick = quickRunKey(raw);
+    if (quick) {
+      const entry = entries.find((en) => en.plugin.id === quick.plugin && en.action.id === quick.action);
+      items = [{
+        icon: '⚡', label: `执行 ${quick.plugin}.${quick.action}`,
+        hint: entry ? entry.action.title : '（未找到该动作）',
+        act: () => { if (entry) { exitPalette(); openDetail(entry.plugin, entry.action); } else { el.count.textContent = '没有这个动作'; } },
+      }];
+      sel = 0; paint(); return;
+    }
+    // 第二十四轮①②④：`>` 前缀 = 命令模式（内置命令 + 最近命令置顶）
+    if (raw.trim().startsWith('>')) {
+      const cneedle = raw.trim().slice(1).trim().toLowerCase();
+      const recentCmds = (readJson('zerokit.cmdhist') ?? []).map((c) => ({
+        icon: '🕘', label: c, hint: '最近用过', act: () => { runCommand(c); },
+      }));
+      const cmds = COMMAND_LIST.map((c) => ({
+        icon: c.icon, label: `> ${c.name}`, hint: c.hint,
+        act: () => { runCommand(c.name); },
+      }));
+      const pool = [...recentCmds, ...cmds];
+      items = cneedle ? pool.filter((x) => x.label.toLowerCase().includes(cneedle)
+        || x.hint.toLowerCase().includes(cneedle)) : pool.slice(0, 24);
+      sel = 0; paint(); return;
+    }
     const actionItems = entries.map((e) => ({
       icon: '⚡', label: e.action.title, hint: `${e.plugin.name} · ${e.action.id}`,
       act: () => { exitPalette(); openDetail(e.plugin, e.action); },
@@ -5615,14 +5683,38 @@ function showPalette() {
     sel = 0;
     paint();
   };
+  /** ①②命令执行：解释 go 标记（hash 直跳 / UI 动作），并记入最近命令 */
+  const runCommand = (name) => {
+    const c = COMMAND_LIST.find((x) => x.name === name);
+    if (!c) return;
+    try { localStorage.setItem('zerokit.cmdhist', JSON.stringify(pushHistory(readJson('zerokit.cmdhist') ?? [], name))); } catch { /* 存不进就算了 */ }
+    exitPalette();
+    if (c.go.startsWith('#')) location.hash = c.go;
+    else if (c.go === 'batch') { if (detail) backToList(); el.count.textContent = batch.length ? `批量篮里已有 ${batch.length} 项，Alt+点击列表项继续加` : '批量模式：按住 Alt 点击列表项加入批量篮'; }
+    else if (c.go === 'theme') openThemePop?.();
+    else if (c.go === 'workbench') showWorkbench('');
+  };
   const exitPalette = () => { paletteMode = false; overlay.remove(); };
 
   q.addEventListener('input', refill);
+  // 第二十四轮⑨：面板输入历史（命令+查询一起记），↑↓ 在空选择位翻历史
+  let histIdx = -1;
+  const histList = () => [...new Set([...(readJson('zerokit.cmdhist') ?? []), ...(readJson('zerokit.searches') ?? []).map((s) => String(s))])];
   q.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { e.preventDefault(); exitPalette(); }
-    else if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel + 1, items.length - 1); paint(); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel - 1, 0); paint(); }
+    else if (e.key === 'ArrowDown') {
+      const h = histList();
+      if (sel < items.length - 1) { e.preventDefault(); sel = Math.min(sel + 1, items.length - 1); paint(); }
+      else if (histIdx > -1) { e.preventDefault(); histIdx -= 1; q.value = histIdx === -1 ? '' : (h[histIdx] ?? ''); refill(); }
+    }
+    else if (e.key === 'ArrowUp') {
+      const h = histList();
+      if (sel > 0) { e.preventDefault(); sel -= 1; paint(); }
+      else if (histIdx + 1 < h.length) { e.preventDefault(); histIdx += 1; q.value = h[histIdx] ?? ''; refill(); }
+      else if (histIdx + 1 === h.length) { e.preventDefault(); histIdx = h.length; q.value = ''; refill(); }
+    }
     else if (e.key === 'Enter') { e.preventDefault(); items[sel]?.act(); }
+    else { histIdx = -1; }
   });
   list.addEventListener('click', (e) => {
     const li = e.target.closest('.palette-item[data-i]');
@@ -5685,6 +5777,55 @@ document.addEventListener('keydown', (e) => {
       if (q && q.value) q.value = '';
       else exitWorkbench();
     }
+    return;
+  }
+  // 第二十四轮⑤：两段式 goto——g 后 600ms 内按 l/h/s/m 跳列表/帮助/统计/监控。
+  // g 是纯字母键，只在「焦点不在输入框」时生效，避免打字误触；详情页里也允许（g l 回列表）。
+  const typing = document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
+  if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (e.key === 'g') { gotoArmedAt = Date.now(); return; }
+    if (gotoArmedAt) {
+      const t = gotoTarget(e.key, Date.now(), gotoArmedAt);
+      gotoArmedAt = 0;
+      if (t) {
+        e.preventDefault();
+        // goto 目标是 hash 路由：先清掉详情态（同步置空 detail，别走 backToList 的
+        // history.back 弹栈——那是异步的，会跟下一行 location.hash 赋值竞速，导致
+        // 最终落在上一个详情深链而不是目标面板）。
+        if (detail) { detail = null; el.detailView.classList.add('hidden'); el.listView.classList.remove('hidden'); }
+        location.hash = t;
+        return;
+      }
+    }
+  }
+  // 第二十四轮⑥：结果表格 j/k 上下移选中行（配合排序/筛选看数据）
+  if (detail && !typing && (e.key === 'j' || e.key === 'k')) {
+    const tbl = document.querySelector('#result table tbody');
+    if (tbl) {
+      e.preventDefault();
+      const trs = [...tbl.querySelectorAll('tr')];
+      if (!trs.length) return;
+      let cur = trs.findIndex((tr) => tr.classList.contains('row-sel'));
+      cur = cur < 0 ? -1 : cur;
+      const next = Math.max(0, Math.min(trs.length - 1, cur + (e.key === 'j' ? 1 : -1)));
+      trs.forEach((tr) => tr.classList.remove('row-sel'));
+      trs[next].classList.add('row-sel');
+      trs[next].scrollIntoView({ block: 'nearest' });
+      return;
+    }
+  }
+  // 第二十四轮⑦：[ ] 切换结果页签（环形）
+  if (detail && !typing && (e.key === '[' || e.key === ']') && resultTabs.length) {
+    e.preventDefault();
+    const cur = resultTabs.findIndex((t) => t.id === activeTab);
+    const nxt = resultTabs[cycleTabIndex(cur < 0 ? 0 : cur, resultTabs.length, e.key === ']' ? 1 : -1)];
+    if (nxt) { activeTab = nxt.id; renderResult(nxt.res); renderTabBar(); }
+    return;
+  }
+  // 第二十四轮⑧：? 键盘速查浮层
+  if (!typing && e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    showHotkeyCheat();
     return;
   }
   if (detail) {
@@ -6117,6 +6258,11 @@ window.__zerokit = {
   __zerokitRenderTabBar: renderTabBar,
   __zerokitResultQueryTerms: resultQueryTerms,
   __zerokitShowFirstRun: showFirstRunGuide,
+  // 第二十四轮：命令与快捷键
+  __zerokitShowPalette: showPalette,
+  __zerokitShowHotkeyCheat: showHotkeyCheat,
+  __zerokitCommandList: COMMAND_LIST,
+  __zerokitGotoArmedAt: () => gotoArmedAt,
   __zerokitRenameProfile(from, to) {
     const r = renameProfile(loadProfiles(), from, to);
     if (r.error) return r;

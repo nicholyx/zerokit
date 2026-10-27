@@ -1450,3 +1450,56 @@ export function withNoteHeader(text, note, ts) {
   const when = ts ? new Date(ts).toLocaleString() : new Date().toLocaleString();
   return `// ${String(note).trim()}（${when}）\n${body}`;
 }
+
+// ================================================================ 第二十四轮：命令与快捷键进阶
+
+/**
+ * ①内置命令表：`>` 命令模式列出的页面/工具直达命令。
+ * name 是用户输入的匹配词（paletteScore 打分），go 是目标 hash（页面类）
+ * 或 'batch'/'theme' 这类 UI 动作标记（由 app.js 侧解释）。
+ */
+export const COMMAND_LIST = [
+  { icon: '⏱', name: '监控', hint: '监控面板 #/watch', go: '#/watch' },
+  { icon: '?', name: '帮助', hint: '使用指南 #/help', go: '#/help' },
+  { icon: '📈', name: '统计', hint: '使用统计 #/stats', go: '#/stats' },
+  { icon: '▤', name: '日志', hint: '审计日志 #/logs', go: '#/logs' },
+  { icon: '🛍', name: '集市', hint: '插件集市 #/market', go: '#/market' },
+  { icon: '✓', name: '自检', hint: '环境自检 #/doctor', go: '#/doctor' },
+  { icon: '🗂', name: '配置档', hint: '切换配置档（打开外观面板）', go: 'theme' },
+  { icon: '💾', name: '备份', hint: '导出/导入个性化数据（打开外观面板）', go: 'theme' },
+  { icon: '⧉', name: '批量', hint: '批量执行模式', go: 'batch' },
+  { icon: '◐', name: '外观', hint: '主题与外观设置（打开外观面板）', go: 'theme' },
+  { icon: '📰', name: '简报', hint: '今日简报 #/brief', go: '#/brief' },
+  { icon: '⌘', name: '工作台', hint: 'AI 工作台', go: 'workbench' },
+];
+
+/** ③快速执行语法：`;插件.动作` → {plugin, action}；不匹配返回 null */
+export function quickRunKey(text) {
+  const s = String(text ?? '').trim();
+  if (!s.startsWith(';')) return null;
+  const body = s.slice(1);
+  const dot = body.indexOf('.');
+  if (dot <= 0 || dot === body.length - 1) return null;
+  return { plugin: body.slice(0, dot), action: body.slice(dot + 1) };
+}
+
+/** ⑤两段式 goto：g 后 600ms 内按目标键。返回目标 hash 或 null（超时/未知键） */
+export function gotoTarget(seqKey, now, armedAt, ttl = 600) {
+  if (!armedAt) return null;
+  if (now - armedAt > ttl) return null;
+  const map = { l: '#/', h: '#/help', s: '#/stats', m: '#/watch' };
+  return map[seqKey] ?? null;
+}
+
+/** ⑦页签序号切换：dir=+1/-1，环形（越过两端回绕）。返回新索引 */
+export function cycleTabIndex(cur, count, dir) {
+  if (!Number.isInteger(count) || count <= 0) return 0;
+  const c = ((cur + dir) % count + count) % count;
+  return c;
+}
+
+/** ⑨面板历史去重入栈：新条目置顶，重复的挪到顶，超限挤尾。返回新数组 */
+export function pushHistory(list, entry, limit = 10) {
+  const rest = (Array.isArray(list) ? list : []).filter((x) => x !== entry);
+  return [entry, ...rest].slice(0, limit);
+}
