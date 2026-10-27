@@ -1244,3 +1244,9 @@ td.tstat .sub { font-size: 11px; opacity: .75; display: block; line-height: 1.35
 .import-group { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
 .import-group small { color: var(--fg-dim); }
 .import-group input[data-group]:disabled + span { color: var(--fg-dim); }
+
+/* ---- 第二十一轮：配置档分组 ---- */
+.tp-profile-cur { color: var(--fg-dim); font-weight: normal; margin-left: 4px; }
+.tp-profiles { flex-wrap: wrap; }
+.tp-profiles [data-profile] { text-transform: none; }
+.tp-profiles-actions button { font-size: 11px; padding: 3px 8px; }
