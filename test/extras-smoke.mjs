@@ -9,7 +9,8 @@ import {
   ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch,
   topActions, recentRuns, invocationText, resultMarkdown,
   classifyKey,
-  profileList, validProfileName, upsertProfile, deleteProfile, renameProfile } from '../web/extras.js';
+  profileList, validProfileName, upsertProfile, deleteProfile, renameProfile,
+  HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions } from '../web/extras.js';
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -686,6 +687,40 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
     return r.error === '已有同名配置档';
   })());
   check('classifyKey: 配置档键归「配置档」组', classifyKey('zerokit.profile.工作') === '配置档' && classifyKey('zerokit.profile.cur') === '配置档');
+
+  check('HELP_TOPICS: 六大主题齐全且带去试用链接', (() => {
+    const ids = HELP_TOPICS.map((t) => t.id).join(',');
+    return HELP_TOPICS.length === 6
+      && ids.includes('search') && ids.includes('watch') && ids.includes('profiles')
+      && ids.includes('backup') && ids.includes('safety')
+      && HELP_TOPICS.every((t) => t.title && t.body && t.tryHash && t.tryHash.startsWith('#/'));
+  })());
+  check('firstRunSeen: 无标记即首次', firstRunSeen((k) => null) === false);
+  check('firstRunSeen: done 标记后不再首访', (() => {
+    const store = { 'zerokit.firstrun': 'done' };
+    return firstRunSeen((k) => store[k]) === true;
+  })());
+  check('markFirstRunDone: 写入 done 标记', (() => {
+    const store = {};
+    markFirstRunDone((k, v) => { store[k] = v; });
+    return store['zerokit.firstrun'] === 'done';
+  })());
+  check('emptySearchSuggestions: 只挑只读带描述的', (() => {
+    const entries = [
+      { plugin: { id: 'a', name: 'A' }, action: { id: 'x', title: '只读带描述', risk: 'read', description: 'd' } },
+      { plugin: { id: 'b', name: 'B' }, action: { id: 'y', title: '会改动的排除', risk: 'mutate', description: 'd' } },
+      { plugin: { id: 'c', name: 'C' }, action: { id: 'z', title: '无描述排除', risk: 'read' } },
+    ];
+    const out = emptySearchSuggestions(entries, 5);
+    return out.length === 1 && out[0].key === 'a.x' && out[0].title === '只读带描述';
+  })());
+  check('emptySearchSuggestions: limit 生效', (() => {
+    const entries = Array.from({ length: 8 }, (_, i) => ({
+      plugin: { id: `p${i}`, name: `P${i}` }, action: { id: `a${i}`, title: `t${i}`, risk: 'read', description: 'd' },
+    }));
+    return emptySearchSuggestions(entries, 3).length === 3;
+  })());
+  check('emptySearchSuggestions: 非数组兜底空表', emptySearchSuggestions(null).length === 0);
 
 const failed = results.filter(([, ok]) => !ok);
 console.log('\n' + '='.repeat(60));

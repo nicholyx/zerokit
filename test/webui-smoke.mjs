@@ -213,6 +213,26 @@ async function get(p, raw = false) {
     (appJs.text.match(/class="ps-empty" role="status"/g) || []).length >= 15
       && indexHtml.includes('id="empty" class="empty" role="status"'),
     'ps-empty/主空态未标 role=status');
+
+  // 第二十二轮：帮助与上手——静态断言
+  check('帮助：#/help 路由 + HELP_TOPICS 渲染',
+    appJs.text.includes('#/help') && appJs.text.includes('HELP_TOPICS.map'),
+    '#/help 面板缺失');
+  check('帮助：首访引导三步 + done 标记',
+    appJs.text.includes('showFirstRunGuide') && appJs.text.includes('markFirstRunDone'),
+    '首访引导缺失');
+  check('帮助：页脚使用指南入口',
+    indexHtml.includes('id="guideBtn"'),
+    'guideBtn 缺失');
+  check('帮助：空搜索建议（试试这些）',
+    appJs.text.includes('emptySearchSuggestions') && appJs.text.includes('试试这些'),
+    '空搜索建议缺失');
+  check('帮助：风险说明条（risk !== read 时）',
+    appJs.text.includes('risk-explain') && appJs.text.includes('是什么意思'),
+    '风险说明条缺失');
+  check('帮助：分组头悬停提示（动作数与风险构成）',
+    appJs.text.includes('riskTally') && appJs.text.includes('只读 ${riskTally.read || 0}'),
+    '分组头 title 缺失');
   check('a11y：Esc 栈先关最上层弹层（cellFullPop 优先）',
     appJs.text.includes("getElementById('cellFullPop')") && /Escape.*cellFullPop/s.test(appJs.text),
     'Esc 栈处理缺失');
