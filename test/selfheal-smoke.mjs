@@ -90,7 +90,7 @@ run(['plugin', 'bundled']);
       && r7.stdout.includes('数据目录结构已确保齐全')) pass('⑦--fix 清理孤儿 + 确保目录');
   else fail('⑦--fix 不对');
   // ⑨异平台路径警告
-  const r8 = run(['run', 'quick', 'b64', '--text', 'C:\\Users\\a.txt', '--yes']);
+  const r8 = run(['run', 'quick', 'b64', '--text', 'C:/Users/a.txt', '--yes']);
   if (r8.stderr.includes('另一个平台的路径')) pass('⑨异平台路径提前点破');
   else fail('⑨foreignPath 警告没出');
 }
