@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { type Plugin, type RiskLevel, toolName } from './core/manifest.ts';
 import { HOME, LOG_DIR, PLUGINS_DIR } from './core/paths.ts';
 import { actionStats, gcAudit, readAudit, readAuditDetailed, recentErrors, SLOW_MS } from './core/ops.ts';
+import { packPlugin, publishReady, unpackPlugin } from './core/distro.ts';
+import * as distroNs from './core/distro.ts';
 import { needsConfirm, rememberApproval } from './core/approvals.ts';
 import type { ConfirmPolicy } from './core/runner.ts';
 import {
@@ -851,9 +854,134 @@ async function cmdPlugin(args: string[]): Promise<number> {
     process.stdout.write(result.ok ? c.green(`✓ ${result.message}\n`) : c.red(`✗ ${result.message}\n`));
     return result.ok ? 0 : 1;
   }
-  process.stderr.write('用法：zkit plugin <new|dev|validate|install|add|update|remove|bundled|export|import>\n');
+  // ---- 第三十四轮：分发与市场工具 ----
+  if (sub === 'pack') return cmdPluginPack(args.slice(1));
+  if (sub === 'unpack') return cmdPluginUnpack(args.slice(1));
+  if (sub === 'info') return cmdPluginInfo(args.slice(1));
+  if (sub === 'recommend') return cmdPluginRecommend(args.slice(1));
+  if (sub === 'publish-ready') return cmdPublishReady(args.slice(1));
+  process.stderr.write('用法：zkit plugin <new|dev|validate|install|add|update|remove|bundled|export|import|pack|unpack|info|recommend|publish-ready>\n');
   return 2;
 }
+
+/** ①③zkit plugin pack <id> [--out 目录] [--list-only]：打包/清单。 */
+function cmdPluginPack(args: string[]): number {
+  const id = args.find((a) => !a.startsWith('-'));
+  if (!id) {
+    process.stderr.write('用法：zkit plugin pack <id> [--out 目录] [--list-only 只看清单不落盘]\n');
+    return 2;
+  }
+  const outIdx = args.indexOf('--out');
+  if (args.includes('--list-only')) {
+    // 只列文件不打包：先 pack 到临时目录再删——简单直接，pack 本身很快
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'zkit-pack-'));
+    const r = packPlugin(id, tmp);
+    fs.rmSync(tmp, { recursive: true, force: true });
+    if (!r.ok) { process.stderr.write(c.red(`✗ ${r.message}\n`)); return 1; }
+    process.stdout.write(`${id} 将打包 ${r.files?.length} 个文件（约 ${r.bytes} 字节）：\n`);
+    for (const f of r.files ?? []) process.stdout.write(c.dim(`  ${f}\n`));
+    return 0;
+  }
+  const r = packPlugin(id, outIdx >= 0 ? args[outIdx + 1] : undefined);
+  if (!r.ok) { process.stderr.write(c.red(`✗ ${r.message}\n`)); return 1; }
+  process.stdout.write(c.green(`✓ ${r.file}（${r.files?.length} 个文件，${r.bytes} 字节）\n`));
+  for (const f of r.files ?? []) process.stdout.write(c.dim(`  ${f}\n`));
+  process.stdout.write(c.dim('  包里不含用户设置值（settings 只带 .example 模板）\n'));
+  return 0;
+}
+
+/** ②zkit plugin unpack <zip> [--replace] */
+function cmdPluginUnpack(args: string[]): number {
+  const file = args.find((a) => !a.startsWith('-'));
+  if (!file) {
+    process.stderr.write('用法：zkit plugin unpack <zip 文件> [--replace 覆盖已装版本]\n');
+    return 2;
+  }
+  const r = unpackPlugin(file, { replace: args.includes('--replace') });
+  if (!r.ok) { process.stderr.write(c.red(`✗ ${r.message}\n`)); return 1; }
+  process.stdout.write(c.green(`✓ ${r.message}\n`));
+  return 0;
+}
+
+/** ④zkit plugin publish-ready <id>：上架检查。 */
+function cmdPublishReady(args: string[]): number {
+  const id = args.find((a) => !a.startsWith('-'));
+  if (!id) { process.stderr.write('用法：zkit plugin publish-ready <id>\n'); return 2; }
+  let plugin: Plugin | null = null;
+  try { plugin = requirePlugin(id); } catch { /* 清单可能本身有硬伤——走静态检查 */ }
+  if (!plugin) {
+    const tomlFile = path.join(PLUGINS_DIR, id, 'plugin.toml');
+    if (!fs.existsSync(tomlFile)) {
+      process.stderr.write(c.red(`✗ 没有找到插件 "${id}"（目录与清单都不存在）\n`));
+      return 1;
+    }
+    const text = fs.readFileSync(tomlFile, 'utf8');
+    const problems: Array<{ level: 'error' | 'warning'; text: string; hint?: string }> = [];
+    if (!/^risk\s*=/m.test(text)) problems.push({ level: 'error', text: '有动作没声明 risk——清单加载直接失败', hint: 'read / mutate / destructive 三选一' });
+    const vm = text.match(/^version\s*=\s*"([^"]+)"/m);
+    if (!vm || !/^\d+\.\d+\.\d+/.test(vm[1] ?? '')) problems.push({ level: 'error', text: `版本号 "${vm?.[1] ?? '缺失'}" 不是语义化格式` });
+    for (const p2 of problems) process.stdout.write(c.red(`✗ ${p2.text}${p2.hint ? c.dim(`（${p2.hint}）`) : ''}\n`));
+    process.stdout.write(c.red('✗ 清单无法加载，先修以上硬伤（zkit plugin validate 可看完整诊断）\n'));
+    return 1;
+  }
+  const plug: Plugin = plugin;
+  const r = publishReady(id, plug);
+  for (const p of r.problems) {
+    const mark = p.level === 'error' ? c.red('✗') : c.yellow('!');
+    process.stdout.write(`${mark} ${p.text}${p.hint ? c.dim(`（${p.hint}）`) : ''}\n`);
+  }
+  if (r.ok && r.problems.length === 0) process.stdout.write(c.green(`✓ ${plug.name} 达到上架标准\n`));
+  else if (r.ok) process.stdout.write(c.yellow(`! 可以上架，但有 ${r.problems.length} 条建议先处理\n`));
+  else process.stdout.write(c.red(`✗ ${r.problems.filter((x) => x.level === 'error').length} 个硬伤，先修再上架\n`));
+  return r.ok ? 0 : 1;
+}
+
+/** ⑦zkit plugin info <id>：一页看全。 */
+function cmdPluginInfo(args: string[]): number {
+  const id = args.find((a) => !a.startsWith('-'));
+  if (!id) { process.stderr.write('用法：zkit plugin info <id>\n'); return 2; }
+  let plugin: Plugin;
+  try { plugin = requirePlugin(id); } catch (e) {
+    process.stderr.write(c.red(`✗ ${(e as Error).message}\n`)); return 1;
+  }
+  const risk: Record<string, number> = {};
+  for (const a of plugin.actions) risk[a.risk] = (risk[a.risk] ?? 0) + 1;
+  const stats = actionStats(readAudit()).find((s) => s.key === `${id}.*` || s.plugin === id);
+  process.stdout.write(c.bold(`${plugin.name} ${c.dim(`v${plugin.version} · ${plugin.id}`)}\n`));
+  process.stdout.write(`  ${plugin.summary ?? ''}\n`);
+  process.stdout.write(`  动作 ${plugin.actions.length} 个（${Object.entries(risk).map(([k, v]) => `${k} ${v}`).join(' / ') || '无'}）\n`);
+  if (stats) {
+    process.stdout.write(`  最近使用 ${stats.count} 次，P50 ${stats.p50Ms ?? '—'}ms\n`);
+  } else {
+    process.stdout.write(c.dim('  还没有执行记录\n'));
+  }
+  if (plugin.settings && plugin.settings.length > 0) {
+    process.stdout.write(`  设置项 ${plugin.settings.length} 个：${plugin.settings!.map((x: { name: string }) => x.name).join(', ')}\n`);
+  }
+  process.stdout.write(c.dim('  分享：zkit plugin pack ' + id + '  /  检查：zkit plugin publish-ready ' + id + '\n'));
+  return 0;
+}
+
+/** ⑧zkit plugin recommend <id>：可粘贴的推荐语。 */
+function cmdPluginRecommend(args: string[]): number {
+  const id = args.find((a) => !a.startsWith('-'));
+  if (!id) { process.stderr.write('用法：zkit plugin recommend <id>\n'); return 2; }
+  let plugin: Plugin;
+  try { plugin = requirePlugin(id); } catch (e) {
+    process.stderr.write(c.red(`✗ ${(e as Error).message}\n`)); return 1;
+  }
+  const reads = plugin.actions.filter((a) => a.risk === 'read').length;
+  const lines = [
+    `【zerokit 插件推荐】${plugin.name}（${plugin.id}）`,
+    plugin.summary ?? '',
+    `一共 ${plugin.actions.length} 个动作，其中 ${reads} 个只读即用；关键词：${plugin.keywords.slice(0, 5).join('、') || plugin.id}。`,
+    `安装：zkit plugin install ${id}（或从集市面板搜索「${plugin.name}」）`,
+  ].filter(Boolean);
+  process.stdout.write(lines.join('\n') + '\n');
+  return 0;
+}
+
+
 
 /**
  * 第三十二轮⑨：zkit desktop —— 桌面壳体检。
@@ -1298,8 +1426,31 @@ function cmdMarket(args: string[]): number {
     return 0;
   }
 
-  process.stderr.write('用法：zkit market <list|add|remove|refresh|search|index>\n');
+  // ⑤zkit market lint：校验一份 market.json（默认仓库根目录的；--file 指定）
+  if (sub === 'lint') {
+    const fIdx = args.indexOf('--file');
+    const file = (fIdx >= 0 ? args[fIdx + 1] : undefined) ?? path.join(PKG_ROOT_CWD, 'market.json');
+    if (!fs.existsSync(file)) {
+      process.stderr.write(c.red(`✗ 找不到 ${file}（--file 指定别的路径）\n`));
+      return 1;
+    }
+    const { lintMarketIndex } = marketDistro();
+    const f2: string = file;
+    const r = lintMarketIndex(fs.readFileSync(f2, 'utf8'), { baseDir: path.dirname(path.resolve(f2)) });
+    process.stdout.write(`${file}：${r.pluginCount} 个插件\n`);
+    for (const e of r.errors) process.stdout.write(c.red(`  ✗ ${e}\n`));
+    for (const w of r.warnings) process.stdout.write(c.yellow(`  ! ${w}\n`));
+    if (r.ok && r.warnings.length === 0) process.stdout.write(c.green('  ✓ 登记表干净\n'));
+    else if (r.ok) process.stdout.write(c.yellow(`  ✓ 可用（${r.warnings.length} 条建议）\n`));
+    return r.ok ? 0 : 1;
+  }
+  process.stderr.write('用法：zkit market <list|add|remove|refresh|search|index|lint>\n');
   return 2;
+}
+
+const PKG_ROOT_CWD = process.cwd();
+function marketDistro() {
+  return distroNs;
 }
 
 function humanDuration(ms: number): string {

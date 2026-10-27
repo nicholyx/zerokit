@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { lintMarketIndex } from './distro.ts';
 import path from 'node:path';
 import { type LoadResult, loadPlugin } from './manifest.ts';
 import { HOME, ensureDirs } from './paths.ts';
@@ -132,6 +133,16 @@ export function addMarket(source: string): { ok: boolean; name?: string; message
   }
   const name = String(index.name || path.basename(cacheDir));
   if (!name) return { ok: false, message: 'market.json 里缺少 name' };
+
+  // ⑨源健康检查提前到 add 时：登记表有硬伤就不让加——
+  // 加进来的集市会在 install 时才炸，排障距离拉得太远。
+  const lint = lintMarketIndex(JSON.stringify(index), { baseDir: indexPath });
+  if (!lint.ok) {
+    return {
+      ok: false,
+      message: `market.json 有 ${lint.errors.length} 个硬伤，未添加：\n  - ${lint.errors.slice(0, 5).join('\n  - ')}`,
+    };
+  }
 
   const list = loadMarkets().filter((m) => m.name !== name);
   list.push({ name, url, path: cacheDir, addedAt: new Date().toISOString() });

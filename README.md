@@ -232,6 +232,7 @@ mcp-allow.json      已授权给 AI 调用的有副作用动作
 - [x] **MCP 与 AI 协作面（第三十一轮）**——MCP 工具描述带参数说明、结果摘要与脱敏、失败补救提示与连击冷却、`zkit mcp tools` 清单（#134 → v0.36.0）
 - [x] **桌面壳与系统集成（第三十二轮，v0.37.0）**——托盘菜单/双击、热键可配、窗口记忆、Alt+←→导航、外链走系统浏览器、`zkit desktop` 体检、doctor 联动（#137）
 - [x] **内核可观测性与运维面（第三十三轮，v0.38.0）**——`zkit stats` 耗时统计（P50/P95）、`logs --follow` 跟读、`zkit health`、`audit --last`、`/api/health` 探活、慢动作水位线、`zkit gc` 审计清理、doctor 24h 错误计数；修复审计写入丢行（#140 → v0.38.0）
+- [x] **插件市场与分发（第三十四轮，v0.39.0）**——`plugin pack/unpack`（零依赖 zip）、`publish-ready` 上架检查、`market lint`、`plugin info/recommend`、`market add` 源健康检查（#143 → v0.39.0）
 - [x] **自动化与粘性**：完成通知、定时任务面板、失败重试、收藏快速条、每日简报、更新检查、Ctrl+K（v0.15.0 第十轮十项）
 - [x] **内容智能匹配**：粘链接就出「打开链接」、粘时间戳就出「转成日期」，回车即用
 - [x] **最近使用**：空输入时常用动作排前面（纯本地 localStorage）
