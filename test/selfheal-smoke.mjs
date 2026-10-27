@@ -89,9 +89,12 @@ run(['plugin', 'bundled']);
   if (r7.stdout.includes('已清理 halfplug') && !fs.existsSync(path.join(TMP, 'plugins', 'halfplug'))
       && r7.stdout.includes('数据目录结构已确保齐全')) pass('⑦--fix 清理孤儿 + 确保目录');
   else fail('⑦--fix 不对');
-  // ⑨异平台路径警告
-  const r8 = run(['run', 'quick', 'b64', '--text', 'C:/Users/a.txt', '--yes']);
-  if (r8.stderr.includes('另一个平台的路径')) pass('⑨异平台路径提前点破');
+  // ⑨异平台路径警告——喂「当前平台的异己路径」：
+  // Unix runner 上给盘符路径，Windows runner 上给 /usr/... 路径。
+  // （产品语义是相对当前平台检测，不是固定查 C:\）
+  const alien = process.platform === 'win32' ? '/usr/local/bin/x' : 'C:/Users/a.txt';
+  const r8 = run(['run', 'quick', 'b64', '--text', alien, '--yes']);
+  if (r8.stderr.includes('另一个平台的路径')) pass(`⑨异平台路径提前点破（${alien}）`);
   else fail('⑨foreignPath 警告没出');
 }
 
