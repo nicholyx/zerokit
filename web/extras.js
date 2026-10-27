@@ -1133,3 +1133,104 @@ export function actionRiskCard(runs, risk) {
     level: risk === 'destructive' ? 'destruct' : risk === 'mutate' ? (failRate >= 0.5 && list.length >= 2 ? 'risky' : 'mutate') : 'read',
   };
 }
+
+// ============ 第二十轮：数据备份与迁移 ============
+// 个性化数据全在 localStorage（zerokit.* 键），清缓存/换机器就全丢。
+// 这里只做纯函数：收集、校验、归类、合并、文件名；DOM 与下载在 app.js。
+
+/** 备份里的固定键前缀 → 展示分组。动态前缀（colvis./colw.）单列。
+ * 顺序就是导入预览里的展示顺序。 */
+export const BACKUP_GROUPS = [
+  { match: ['zerokit.favorites', 'zerokit.plugin-tags', 'zerokit.action-tags', 'zerokit.nicknames', 'zerokit.aliases', 'zerokit.action-hotkeys'], label: '收藏与标记' },
+  { match: ['zerokit.runs', 'zerokit.params', 'zerokit.searches', 'zerokit.recent', 'zerokit.saved-results', 'zerokit.run-notes'], label: '历史与参数' },
+  { match: ['zerokit.theme', 'zerokit.accent', 'zerokit.font-scale', 'zerokit.lang', 'zerokit.plugin-sort'], label: '外观与设置' },
+  { match: ['zerokit.snapA', 'zerokit.snapB', 'zerokit.snapCur'], label: '配置快照' },
+];
+const PREFIX_GROUPS = [
+  { prefix: 'zerokit.colvis.', label: '表格列显隐' },
+  { prefix: 'zerokit.colw.', label: '表格列宽' },
+];
+const OTHER_LABEL = '其它';
+
+/** 单个键属于哪个分组（预览与选择性导入共用一个归类口径） */
+export function classifyKey(key) {
+  if (!key.startsWith('zerokit.')) return null;
+  for (const g of BACKUP_GROUPS) if (g.match.includes(key)) return g.label;
+  for (const g of PREFIX_GROUPS) if (key.startsWith(g.prefix)) return g.label;
+  return OTHER_LABEL;
+}
+
+/** 收集备份：entries 是 [key, value] 数组（localStorage 直接给）。
+ *  只收 zerokit.* 键；theme-before-fast 这类瞬时态也收（无害，导入时被覆盖）。
+ *  返回信封：{app, version, exportedAt, keys, meta}。 */
+export function collectBackup(entries, now = Date.now(), version = '0.25.0') {
+  const keys = {};
+  let bytes = 0;
+  for (const [k, v] of entries) {
+    if (!k.startsWith('zerokit.')) continue;
+    keys[k] = v;
+    bytes += k.length + String(v ?? '').length;
+  }
+  return {
+    app: 'zerokit',
+    version,
+    exportedAt: new Date(now).toISOString(),
+    keys,
+    meta: { keyCount: Object.keys(keys).length, bytes },
+  };
+}
+
+/** 解析并校验备份文本。格式不对返回 {ok:false, error}——错误要说人话。 */
+export function parseBackup(text) {
+  let data;
+  try { data = JSON.parse(text); } catch { return { ok: false, error: '不是有效的 JSON 文件' }; }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return { ok: false, error: '文件结构不对：需要备份对象' };
+  if (data.app !== 'zerokit') return { ok: false, error: `不是 zerokit 的备份（app 字段为 ${JSON.stringify(data.app ?? null)}）` };
+  if (!data.keys || typeof data.keys !== 'object' || Array.isArray(data.keys)) return { ok: false, error: '备份里没有 keys 数据' };
+  return { ok: true, backup: data };
+}
+
+/** 合并导入：current/incoming 都是 {key: value} 的键值表。
+ *  selected 是选中的分组标签集合（null = 全部）。
+ *  策略：新优先——对象值按键合并（incoming 覆盖同键），标量直接覆盖。
+ *  只跳过「未选中的分组」，选中分组里的键一律应用，不存在静默丢弃。 */
+export function mergeBackup(current, incoming, selected = null) {
+  const cur = current ?? {};
+  const inc = incoming ?? {};
+  const out = { ...cur };
+  let applied = 0;
+  let skipped = 0;
+  for (const [k, v] of Object.entries(inc)) {
+    const group = classifyKey(k);
+    if (group === null) { skipped++; continue; }
+    if (selected && !selected.has(group)) { skipped++; continue; }
+    // localStorage 里存的是 JSON 字符串：对象值要先解开再按对象合并（新优先），
+    // 保留本地独有的子键——直接覆盖字符串会把本地没有备份里的键整段丢掉。
+    // 数组（favorites 这类）整段替换：数组没有可靠的按 id 合并语义。
+    const vObj = tryParseObject(v);
+    const curObj = tryParseObject(out[k]);
+    if (vObj && curObj) {
+      out[k] = JSON.stringify({ ...curObj, ...vObj });
+    } else {
+      out[k] = v;
+    }
+    applied++;
+  }
+  return { out, applied, skipped };
+}
+
+/** 解一个「可能是 JSON 对象的 localStorage 值」；不是对象（数组/标量/坏 JSON）返回 null */
+function tryParseObject(v) {
+  if (typeof v !== 'string' || !v.startsWith('{')) return null;
+  try {
+    const d = JSON.parse(v);
+    return d && typeof d === 'object' && !Array.isArray(d) ? d : null;
+  } catch { return null; }
+}
+
+/** 可预测的备份文件名：zerokit-backup-YYYYMMDD-HHMMSS.json */
+export function backupFilename(now = Date.now()) {
+  const d = new Date(now);
+  const p = (n) => String(n).padStart(2, '0');
+  return `zerokit-backup-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.json`;
+}

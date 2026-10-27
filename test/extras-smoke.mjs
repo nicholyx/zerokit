@@ -553,6 +553,7 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
 // ------------------------------------------------ 第十九轮：安全与危险操作防护
 {
   const { dangerousPattern, maskSecrets, rateLimitHits, trimAuditLog, actionRiskCard } = await import('../web/extras.js');
+  const { classifyKey, collectBackup, parseBackup, mergeBackup, backupFilename } = await import('../web/extras.js');
   check('dangerousPattern: rm -rf 命中', dangerousPattern('rm -rf /tmp/x') !== null);
   check('dangerousPattern: 系统目录命中', dangerousPattern('cp a /etc/hosts') !== null);
   check('dangerousPattern: 格式化命中', dangerousPattern('mkfs.ext4 /dev/sda1') !== null);
@@ -596,6 +597,55 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
   check('actionRiskCard: 失败率与均值', (() => {
     const c = actionRiskCard([{ ok: true, ms: 10 }, { ok: false, ms: 30 }], 'read');
     return c.runs === 2 && c.failRate === 0.5 && c.avgMs === 20;
+  })());
+  // ---- 第二十轮：数据备份与迁移 ----
+  check('classifyKey: 收藏归组', classifyKey('zerokit.favorites') === '收藏与标记');
+  check('classifyKey: 前缀键归组（列宽）', classifyKey('zerokit.colw.t3') === '表格列宽');
+  check('classifyKey: 未知 zerokit 键归其它', classifyKey('zerokit.brand-new') === '其它');
+  check('classifyKey: 非 zerokit 键拒绝', classifyKey('other.key') === null);
+  check('collectBackup: 只收 zerokit 键 + 信封元信息', (() => {
+    const b = collectBackup([['zerokit.theme', 'dark'], ['unrelated', 'x']], 1730000000000, '9.9.9');
+    return b.app === 'zerokit' && b.version === '9.9.9' && b.meta.keyCount === 1
+      && b.keys['zerokit.theme'] === 'dark' && !('unrelated' in b.keys)
+      && b.exportedAt === new Date(1730000000000).toISOString();
+  })());
+  check('collectBackup: 字节数统计', collectBackup([['zerokit.a', 'abc']]).meta.bytes === 'zerokit.a'.length + 3);
+  check('parseBackup: 合法备份过', (() => {
+    const r = parseBackup(JSON.stringify({ app: 'zerokit', version: '1', keys: { 'zerokit.theme': 'dark' } }));
+    return r.ok && r.backup.keys['zerokit.theme'] === 'dark';
+  })());
+  check('parseBackup: 非JSON拒绝且说人话', (() => {
+    const r = parseBackup('not json');
+    return !r.ok && r.error.includes('JSON');
+  })());
+  check('parseBackup: 别家备份拒绝', (() => {
+    const r = parseBackup(JSON.stringify({ app: 'other', keys: {} }));
+    return !r.ok && r.error.includes('zerokit');
+  })());
+  check('parseBackup: 缺 keys 拒绝', (() => {
+    const r = parseBackup(JSON.stringify({ app: 'zerokit' }));
+    return !r.ok && r.error.includes('keys');
+  })());
+  check('mergeBackup: 对象合并新优先保本地独有', (() => {
+    const cur = { 'zerokit.runs': JSON.stringify({ 'a.b': [{ id: 1 }] }) };
+    const inc = { 'zerokit.runs': JSON.stringify({ 'a.b': [{ id: 2 }], 'c.d': [{ id: 3 }] }) };
+    const { out, applied } = mergeBackup(cur, inc, new Set(['历史与参数']));
+    const merged = JSON.parse(out['zerokit.runs']);
+    // 子键级合并：备份覆盖 a.b（数组整段替换），本地没有的 c.d 从备份补进来
+    return applied === 1 && merged['a.b'].length === 1 && merged['a.b'][0].id === 2
+      && merged['c.d'].length === 1;
+  })());
+  check('mergeBackup: 未选分组跳过', (() => {
+    const { out, skipped } = mergeBackup({}, { 'zerokit.theme': 'dark' }, new Set(['历史与参数']));
+    return !('zerokit.theme' in out) && skipped === 1;
+  })());
+  check('mergeBackup: 非 zerokit 键剔除', (() => {
+    const { out, skipped } = mergeBackup({}, { evil: 'x' });
+    return !('evil' in out) && skipped === 1;
+  })());
+  check('backupFilename: 可预测格式', (() => {
+    const d = new Date(2026, 9, 27, 22, 13, 41);
+    return backupFilename(d.getTime()) === 'zerokit-backup-20261027-221341.json';
   })());
 }
 
