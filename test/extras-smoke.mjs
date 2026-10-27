@@ -213,9 +213,13 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
 {
   const { dailyBrief, trimRuns, idleSuggest } = await import('../web/extras.js');
   const now = Date.now();
-  const today = now - 36e5;
+  // 「今天」不能拿 now-1h 造假——CI 在 UTC 午夜后跑会跨天（本地过、CI 挂）。
+  // 锚定到当天以内：当天零点 +1h / +2h；昨天的样本固定 -2 天，永远出界。
+  const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
+  const todayA = dayStart.getTime() + 3600_000;
+  const todayB = dayStart.getTime() + 7200_000;
   check('dailyBrief: 只数今天', (() => {
-    const b = dailyBrief({ 'a.b': [{ ok: true, ms: 40, ts: today }, { ok: false, ms: 60, ts: today }], 'c.d': [{ ok: true, ms: 200, ts: now - 2 * 864e5 }] }, now);
+    const b = dailyBrief({ 'a.b': [{ ok: true, ms: 40, ts: todayA }, { ok: false, ms: 60, ts: todayB }], 'c.d': [{ ok: true, ms: 200, ts: now - 2 * 864e5 }] }, now);
     return b.total === 2 && b.ok === 1 && b.failed === 1 && b.top[0][0] === 'a.b' && b.avgMs === 50;
   })());
   check('dailyBrief: 空记录', dailyBrief({}, now).total === 0);
