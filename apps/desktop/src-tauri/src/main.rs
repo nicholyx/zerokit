@@ -201,16 +201,159 @@ fn start_core() -> Result<(String, Child, Option<std::process::ChildStdin>), Str
     }
 }
 
+/// 桌面壳自己的配置（~/.zerokit/desktop.json）。
+/// 与内核数据同目录：删掉 ~/.zerokit 就是完全重置，这条约定对壳同样成立。
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
+struct DesktopConfig {
+    /// 窗口位置与尺寸记忆（物理像素）。None = 没记过，走默认居中。
+    window: Option<WindowGeom>,
+    /// 用户自选热键（如 "Alt+Space"）。None = 走内置候选列表。
+    #[serde(default)]
+    hotkey: Option<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy)]
+struct WindowGeom {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+}
+
+/// 壳数据根目录：ZEROKIT_HOME 优先（与内核同一约定，隔离验证靠它），
+/// 没设才落到用户主目录下的 .zerokit。
+fn data_root() -> Option<PathBuf> {
+    if let Ok(h) = std::env::var("ZEROKIT_HOME") {
+        return Some(PathBuf::from(h));
+    }
+    home_dir().map(|p| p.join(".zerokit"))
+}
+
+fn config_path() -> Option<PathBuf> {
+    data_root().map(|p| p.join("desktop.json"))
+}
+
+fn load_config() -> DesktopConfig {
+    let Some(path) = config_path() else { return DesktopConfig::default() };
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn save_config(cfg: &DesktopConfig) {
+    let Some(path) = config_path() else { return };
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(path, serde_json::to_string_pretty(cfg).unwrap_or_default());
+}
+
+/// 把 "Alt+Z" 这类字符串解析成 Shortcut。不认识的组合返回 None——
+/// 宁可不注册也不能崩：热键是入口，不是功能本体。
+fn parse_hotkey(s: &str) -> Option<Shortcut> {
+    let mut mods = Modifiers::empty();
+    let mut code: Option<Code> = None;
+    for part in s.split('+').map(str::trim) {
+        if part.is_empty() {
+            continue;
+        }
+        let part = part.to_ascii_lowercase();
+        match part.as_str() {
+            "alt" | "option" => mods |= Modifiers::ALT,
+            "ctrl" | "control" | "cmd" | "meta" | "super" => mods |= Modifiers::CONTROL,
+            "shift" => mods |= Modifiers::SHIFT,
+            other => {
+                code = match other {
+                    "space" => Some(Code::Space),
+                    "a" => Some(Code::KeyA), "b" => Some(Code::KeyB), "c" => Some(Code::KeyC),
+                    "d" => Some(Code::KeyD), "e" => Some(Code::KeyE), "f" => Some(Code::KeyF),
+                    "g" => Some(Code::KeyG), "h" => Some(Code::KeyH), "i" => Some(Code::KeyI),
+                    "j" => Some(Code::KeyJ), "k" => Some(Code::KeyK), "l" => Some(Code::KeyL),
+                    "m" => Some(Code::KeyM), "n" => Some(Code::KeyN), "o" => Some(Code::KeyO),
+                    "p" => Some(Code::KeyP), "q" => Some(Code::KeyQ), "r" => Some(Code::KeyR),
+                    "s" => Some(Code::KeyS), "t" => Some(Code::KeyT), "u" => Some(Code::KeyU),
+                    "v" => Some(Code::KeyV), "w" => Some(Code::KeyW), "x" => Some(Code::KeyX),
+                    "y" => Some(Code::KeyY), "z" => Some(Code::KeyZ),
+                    "1" => Some(Code::Digit1), "2" => Some(Code::Digit2), "3" => Some(Code::Digit3),
+                    "4" => Some(Code::Digit4), "5" => Some(Code::Digit5), "6" => Some(Code::Digit6),
+                    "7" => Some(Code::Digit7), "8" => Some(Code::Digit8), "9" => Some(Code::Digit9),
+                    "0" => Some(Code::Digit0),
+                    "comma" => Some(Code::Comma), "period" => Some(Code::Period),
+                    "slash" => Some(Code::Slash), "grave" => Some(Code::Backquote),
+                    _ => None,
+                };
+                if code.is_none() {
+                    return None;
+                }
+            }
+        }
+    }
+    code.map(|c| Shortcut::new(Some(mods), c))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hotkey_parse_roundtrip() {
+        assert!(parse_hotkey("Alt+Space").is_some());
+        assert!(parse_hotkey("Ctrl+Alt+Z").is_some());
+        assert!(parse_hotkey("alt+z").is_some()); // 大小写不敏感
+        assert!(parse_hotkey("Shift+/").is_none()); // 暂不支持的键要有边界
+        assert!(parse_hotkey("").is_none());
+        assert!(parse_hotkey("Alt+Nonsense").is_none());
+    }
+
+    #[test]
+    fn config_roundtrip() {
+        let cfg = DesktopConfig {
+            window: Some(WindowGeom { x: 10, y: 20, width: 880, height: 640 }),
+            hotkey: Some("Ctrl+Alt+Space".into()),
+        };
+        let s = serde_json::to_string(&cfg).unwrap();
+        let back: DesktopConfig = serde_json::from_str(&s).unwrap();
+        assert_eq!(back.window.unwrap().x, 10);
+        assert_eq!(back.hotkey.as_deref(), Some("Ctrl+Alt+Space"));
+        // 旧配置（没有 hotkey 字段）也要能读
+        let legacy: DesktopConfig = serde_json::from_str(r#"{"window":null}"#).unwrap();
+        assert!(legacy.hotkey.is_none());
+    }
+}
+
+
 fn toggle_window(app: &AppHandle) {
     let Some(window) = app.get_webview_window("main") else {
         return;
     };
     if window.is_visible().unwrap_or(false) {
+        save_window_geom(app); // 隐藏前记下位置——下次呼出还原
         let _ = window.hide();
     } else {
         let _ = window.show();
         let _ = window.set_focus();
     }
+}
+
+/// ④窗口记忆：把当前窗口几何写进 desktop.json（与热键配置同文件）。
+/// 读不到就静默跳过——记忆失败不该影响任何功能。
+fn save_window_geom(app: &AppHandle) {
+    let Some(window) = app.get_webview_window("main") else { return };
+    // 统一存 logical 坐标：builder.position/inner_size 吃的都是 logical，
+    // 而 outer_position/inner_size() 返回 physical——在 Retina 上差 2 倍，
+    // 混用会导致「记住的位置一次比一次远」。
+    let scale = window.scale_factor().unwrap_or(1.0);
+    let to_logical = |v: f64| (v / scale).round() as i32;
+    let (Ok(pos), Ok(size)) = (window.outer_position(), window.inner_size()) else { return };
+    let mut cfg = load_config();
+    cfg.window = Some(WindowGeom {
+        x: to_logical(pos.x as f64),
+        y: to_logical(pos.y as f64),
+        width: (size.width as f64 / scale).round() as u32,
+        height: (size.height as f64 / scale).round() as u32,
+    });
+    save_config(&cfg);
 }
 
 /// 在窗口里显示一条错误（内核没起来时用）
@@ -234,30 +377,52 @@ fn show_error(app: &AppHandle, message: &str) {
 }
 
 fn main() {
+    let boot_config = load_config();
     tauri::Builder::default()
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(CoreProcess(Mutex::new(None)))
-        .setup(|app| {
+        .setup(move |app| {
             let handle = app.handle().clone();
 
             // 先把窗口建出来指向「启动中」占位页，再拉内核——
             // 这样即使内核起得慢，用户也能立刻看到反应，而不是点了没动静。
-            let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+            // ④窗口记忆：上次关时的位置尺寸优先于默认居中。
+            let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                 .title("zerokit")
-                .inner_size(880.0, 640.0)
                 .min_inner_size(520.0, 360.0)
                 .decorations(false)
                 .always_on_top(true)
                 .skip_taskbar(true)
                 .resizable(true)
-                .center()
                 .visible(true)
                 .focused(true)
-                .build()?;
+                // ⑧外部链接一律挡在壳外：窗口只承载内核 UI（本地地址），
+                // 其它目标转交系统浏览器——壳一旦导航走就「丢壳」了
+                // （无边框窗口没有地址栏，用户回不来）。
+                .on_navigation(|url| {
+                    let s = url.as_str();
+                    s.starts_with("http://127.0.0.1")
+                        || s.starts_with("http://localhost")
+                        || s.starts_with("http://[::1]")
+                        || s.starts_with("tauri://")
+                        || s.starts_with("asset://")
+                        || s == "about:blank"
+                });
+            match boot_config.window {
+                Some(g) => {
+                    builder = builder
+                        .inner_size(g.width as f64, g.height as f64)
+                        .position(g.x as f64, g.y as f64);
+                }
+                None => {
+                    builder = builder.inner_size(880.0, 640.0).center();
+                }
+            }
+            let window = builder.build()?;
 
             // 居中放在窗口完全建好之后再干：实测在 setup 里立刻设置位置会被窗口管理器覆盖掉
             // （窗口会贴到屏幕右下角）。这里延迟一小会儿，并按主显示器自己算位置。
-            {
+            // 只有没记过位置时才走默认居中；记过就尊重用户的选择。
+            if boot_config.window.is_none() {
                 let win = window.clone();
                 std::thread::spawn(move || {
                     std::thread::sleep(Duration::from_millis(400));
@@ -283,28 +448,71 @@ fn main() {
             // 失焦自动隐藏：这是 uTools 那种「呼出即用、点走即走」体感的关键
             let autohide = std::env::var("ZEROKIT_AUTOHIDE").map(|v| v != "0").unwrap_or(true);
             let w = window.clone();
+            let app_for_geom = handle.clone();
             window.on_window_event(move |event| {
                 if autohide {
                     if let tauri::WindowEvent::Focused(false) = event {
+                        save_window_geom(&app_for_geom);
                         let _ = w.hide();
                     }
                 }
+                // ④窗口记忆兜底：移动/缩放结束就落盘——崩溃或被 kill 也不丢
+                if matches!(event, tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_)) {
+                    save_window_geom(&app_for_geom);
+                }
             });
+
+            // ④窗口记忆：启动后窗口稳定下来记一次初始几何——
+            // 之后每次移动/缩放/隐藏都会更新，即使进程被强杀也有基线可还原。
+            {
+                let h = handle.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(1500));
+                    save_window_geom(&h);
+                });
+            }
+
+            // ⑦壳内历史导航：内核 UI 是 hash 路由，WebView 自己没有前进后退手势。
+            // 注入 Alt+←/→ 直接触发 history.back/forward，等价浏览器体感。
+            {
+                let w = window.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(1200));
+                    let _ = w.eval(
+                        "document.addEventListener('keydown', function (e) {\
+                             if (!e.altKey) return;\
+                             if (e.key === 'ArrowLeft') { history.back(); e.preventDefault(); }\
+                             else if (e.key === 'ArrowRight') { history.forward(); e.preventDefault(); }\
+                         });",
+                    );
+                });
+            }
 
             // 全局热键。Alt+Space 和 uTools 一致，但它常被别的启动器占用
             // （PowerToys Run、其它启动器都可能抢），所以准备一串候选，
             // 能注册上的都用，并且把结果告诉用户。
-            let candidates: Vec<(&str, Shortcut)> = vec![
-                ("Alt+Space", Shortcut::new(Some(Modifiers::ALT), Code::Space)),
-                (
-                    "Ctrl+Alt+Space",
-                    Shortcut::new(
-                        Some(Modifiers::CONTROL | Modifiers::ALT),
-                        Code::Space,
+            // ③用户自选热键优先：desktop.json 里配了就只用它；
+            // 注册失败（被占用/格式不认识）回退到内置候选列表。
+            let mut candidates: Vec<(String, Shortcut)> = Vec::new();
+            if let Some(user_hk) = boot_config.hotkey.as_deref() {
+                match parse_hotkey(user_hk) {
+                    Some(s) => candidates.push((user_hk.to_string(), s)),
+                    None => eprintln!("配置的热键 {user_hk} 无法解析，回退内置候选"),
+                }
+            }
+            if candidates.is_empty() {
+                candidates = vec![
+                    ("Alt+Space".into(), Shortcut::new(Some(Modifiers::ALT), Code::Space)),
+                    (
+                        "Ctrl+Alt+Space".into(),
+                        Shortcut::new(
+                            Some(Modifiers::CONTROL | Modifiers::ALT),
+                            Code::Space,
+                        ),
                     ),
-                ),
-                ("Alt+Z", Shortcut::new(Some(Modifiers::ALT), Code::KeyZ)),
-            ];
+                    ("Alt+Z".into(), Shortcut::new(Some(Modifiers::ALT), Code::KeyZ)),
+                ];
+            }
 
             let watch: Vec<Shortcut> = candidates.iter().map(|(_, s)| s.clone()).collect();
             let app_for_hotkey = handle.clone();
@@ -320,10 +528,10 @@ fn main() {
                     .build(),
             )?;
 
-            let mut registered: Vec<&str> = Vec::new();
+            let mut registered: Vec<String> = Vec::new();
             for (name, shortcut) in &candidates {
                 match handle.global_shortcut().register(shortcut.clone()) {
-                    Ok(()) => registered.push(name),
+                    Ok(()) => registered.push(name.clone()),
                     Err(_) => eprintln!("热键 {name} 已被别的程序占用，跳过"),
                 }
             }
@@ -338,16 +546,33 @@ fn main() {
                 use tauri::menu::{Menu, MenuItem};
                 use tauri::tray::TrayIconBuilder;
 
+                // ①托盘菜单扩充：设置（打开内核设置面）/ 日志 / 退出
                 let show = MenuItem::with_id(app, "show", "显示 / 隐藏", true, None::<&str>)?;
+                let settings = MenuItem::with_id(app, "settings", "打开设置", true, None::<&str>)?;
                 let logs = MenuItem::with_id(app, "logs", "打开日志目录", true, None::<&str>)?;
                 let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-                let menu = Menu::with_items(app, &[&show, &logs, &quit])?;
+                let menu = Menu::with_items(app, &[&show, &settings, &logs, &quit])?;
 
+                let hotkey_tip = registered.first().cloned().unwrap_or_else(|| "托盘呼出".into());
                 TrayIconBuilder::new()
                     .menu(&menu)
-                    .tooltip("zerokit —— Alt+Space 呼出")
+                    .tooltip(format!("zerokit —— {hotkey_tip} 呼出"))
+                    // ②托盘左键/双击 = 切换主窗口（macOS 上明确化）
+                    .on_tray_icon_event(|tray, event| {
+                        if let tauri::tray::TrayIconEvent::DoubleClick { .. } = event {
+                            toggle_window(tray.app_handle());
+                        }
+                    })
                     .on_menu_event(|app, event| match event.id.as_ref() {
                         "show" => toggle_window(app),
+                        "settings" => {
+                            // 壳没有自己的设置页：把内核 UI 的外观面板路由带出来
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                                let _ = window.eval("if (window.__zerokit) { try { location.hash = '#/'; } catch {} }");
+                            }
+                        }
                         "logs" => {
                             if let Some(home) = dirs_log_dir() {
                                 let _ = open_path(&home);
@@ -391,6 +616,7 @@ fn main() {
         .run(|app, event| {
             // 壳退出时把内核一起收掉，别留孤儿进程
             if let tauri::RunEvent::Exit = event {
+                save_window_geom(app);
                 if let Some(state) = app.try_state::<CoreProcess>() {
                     if let Some((mut child, _stdin)) = state.0.lock().unwrap().take() {
                         let _ = child.kill();
@@ -400,10 +626,22 @@ fn main() {
         });
 }
 
+/// 日志目录。Windows 的 USERPROFILE 只在 Windows 上有——
+/// 三平台都归一到「用户主目录 / .zerokit / logs」。
+
+fn home_dir() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        std::env::var("USERPROFILE").ok().map(PathBuf::from)
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::var("HOME").ok().map(PathBuf::from)
+    }
+}
+
 fn dirs_log_dir() -> Option<PathBuf> {
-    std::env::var("USERPROFILE")
-        .ok()
-        .map(|p| PathBuf::from(p).join(".zerokit").join("logs"))
+    home_dir().map(|p| p.join(".zerokit").join("logs"))
 }
 
 fn open_path(path: &Path) -> std::io::Result<()> {

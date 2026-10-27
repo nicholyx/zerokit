@@ -5,6 +5,7 @@
 // 产出一份结构化报告：CLI 负责用颜色打印，HTTP 面负责原样转 JSON。
 // 判定规则只有一份，两个面不会各说各话。
 import process from 'node:process';
+import { existsSync, readFileSync } from 'node:fs';
 import { HOME, PLUGINS_DIR } from './paths.ts';
 import { checkRequires, resolveTool } from './resolve.ts';
 import { findPlugin, listPlugins } from './registry.ts';
@@ -42,7 +43,22 @@ export interface DoctorReport {
   tools: DoctorTool[];
   dirs: { home: string; plugins: string };
   plugins: DoctorPlugin[];
+  /** 第三十二轮⑩：桌面壳（可选组件）的安装状态。没装是 warning 级提示，不是 error。 */
+  desktop: { installed: boolean; path?: string; hotkey?: string };
   summary: { plugins: number; actions: number; errors: number; warnings: number };
+}
+
+/** 第三十二轮⑩：找桌面壳可执行文件（仓库本地构建 / ~/.zerokit/bin）。 */
+function findDesktopShell(): { installed: boolean; path?: string } {
+  const exeName = process.platform === 'win32' ? 'zerokit-desktop.exe' : 'zerokit-desktop';
+  const repoTarget = new URL('../..', import.meta.url).pathname
+    + `apps/desktop/src-tauri/target/release/${exeName}`;
+  const candidates = [
+    repoTarget,
+    HOME + '/bin/' + exeName,
+  ];
+  const hit = candidates.find((p) => { try { return existsSync(p); } catch { return false; } });
+  return hit ? { installed: true, path: hit } : { installed: false };
 }
 
 /** 检查一个插件的命令依赖、插件依赖、设置项、链路引用与清单警告。 */
@@ -137,10 +153,19 @@ export function buildDoctorReport(): DoctorReport {
     }
   }
 
+  // 第三十二轮⑩：桌面壳状态进报告（与 zkit desktop 同一套判定）
+  const shell = findDesktopShell();
+  let hotkey: string | undefined;
+  try {
+    const cfg = JSON.parse(readFileSync(HOME + '/desktop.json', 'utf8')) as { hotkey?: string };
+    hotkey = cfg.hotkey;
+  } catch { /* 没配过热键 */ }
+
   return {
     node: { version: process.version, execPath: process.execPath },
     tools,
     dirs: { home: HOME, plugins: PLUGINS_DIR },
+    desktop: { installed: shell.installed, path: shell.path, hotkey },
     plugins,
     summary: {
       plugins: plugins.length,
