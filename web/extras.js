@@ -1360,3 +1360,93 @@ export function emptySearchSuggestions(entries, limit = 5) {
     .slice(0, Math.max(1, limit))
     .map((e) => ({ key: `${e.plugin.id}.${e.action.id}`, title: e.action.title, plugin: e.plugin.name }));
 }
+
+// ---------------- 第二十三轮：结果工作台 ----------------
+
+/** ②结果页签标题：动作名 + 相对时间（紧凑；区别于第十八轮的标签页标题 tabTitle） */
+export function resultTabTitle(name, ts, now = Date.now()) {
+  if (typeof name !== 'string' || !name) return '结果';
+  if (!ts || typeof ts !== 'number') return name;
+  const s = Math.max(0, Math.floor((now - ts) / 1000));
+  let rel;
+  if (s < 10) rel = '刚刚';
+  else if (s < 60) rel = `${s} 秒前`;
+  else if (s < 3600) rel = `${Math.floor(s / 60)} 分钟前`;
+  else if (s < 86400) rel = `${Math.floor(s / 3600)} 小时前`;
+  else rel = `${Math.floor(s / 86400)} 天前`;
+  return `${name} · ${rel}`;
+}
+
+/**
+ * ④页签逐出：超过上限先挤最老的未固定页签；全固定则不挤（调用方决定拒新或扩容）。
+ * 返回新数组（不动入参）。pinned 用 id 标。
+ */
+export function tabEvict(tabs, limit = 8) {
+  if (!Array.isArray(tabs)) return [];
+  if (tabs.length <= limit) return tabs.slice();
+  const unpinned = tabs.filter((t) => t && t.pinned !== true);
+  if (unpinned.length === 0) return tabs.slice();   // 全固定：不挤，调用方拒绝新页签
+  // 挤「最老的未固定」（ts 最小；无 ts 视为最老）
+  let victim = 0;
+  let minTs = Infinity;
+  tabs.forEach((t, i) => {
+    if (t && t.pinned !== true) {
+      const ts = typeof t.ts === 'number' ? t.ts : 0;
+      if (ts < minTs) { minTs = ts; victim = i; }
+    }
+  });
+  return tabs.filter((_, i) => i !== victim);
+}
+
+/**
+ * ⑤⑥结果查询：对表格行做过滤。支持普通词（子串）与数字比较（size>100、<=5、=7）。
+ * 返回过滤后的行数组（浅拷贝，不改原表）。
+ */
+export function resultQuery(rows, q) {
+  if (!Array.isArray(rows)) return [];
+  if (!q || !String(q).trim()) return rows.slice();
+  const terms = String(q).trim().split(/\s+/);
+  // 数字比较符映射：field>10 / field>=10 / field<10 / field<=10 / field=10
+  const cmpRe = /^([\w\u4e00-\u9fa5.-]+)(>=|<=|>|<|=)(-?\d+(?:\.\d+)?)$/;
+  const predicates = terms.map((term) => {
+    const m = cmpRe.exec(term);
+    if (!m) return (r) => JSON.stringify(r).includes(term);
+    const [, col, op, numStr] = m;
+    const num = Number(numStr);
+    const colMatch = (k) => k === col || k.endsWith(`.${col}`) || String(k).toLowerCase() === col.toLowerCase();
+    return (r) => {
+      for (const [k, v] of Object.entries(r ?? {})) {
+        if (!colMatch(k)) continue;
+        const n = typeof v === 'number' ? v : Number(String(v).replace(/^(\d+(?:\.\d+)?).*$/, '$1'));
+        if (!Number.isFinite(n)) continue;
+        if (op === '>' && n > num) return true;
+        if (op === '<' && n < num) return true;
+        if (op === '>=' && n >= num) return true;
+        if (op === '<=' && n <= num) return true;
+        if (op === '=' && n === num) return true;
+      }
+      return false;
+    };
+  });
+  return rows.filter((r) => predicates.every((p) => p(r)));
+}
+
+/** ⑦两结果对比：键并集逐行比对，同键不同值高亮。返回 [{key, a, b, diff}] */
+export function resultCompare(a, b) {
+  const norm = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+  const A = norm(a); const B = norm(b);
+  const keys = [...new Set([...Object.keys(A), ...Object.keys(B)])];
+  return keys.map((k) => {
+    const va = A[k]; const vb = B[k];
+    const diff = JSON.stringify(va) !== JSON.stringify(vb);
+    return { key: k, a: va, b: vb, diff };
+  });
+}
+
+/** ⑨复制带备注：正文 + 备注头。note 为空时原样返回。 */
+export function withNoteHeader(text, note, ts) {
+  const body = String(text ?? '');
+  if (!note || !String(note).trim()) return body;
+  const when = ts ? new Date(ts).toLocaleString() : new Date().toLocaleString();
+  return `// ${String(note).trim()}（${when}）\n${body}`;
+}

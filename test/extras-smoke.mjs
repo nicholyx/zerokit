@@ -10,7 +10,8 @@ import {
   topActions, recentRuns, invocationText, resultMarkdown,
   classifyKey,
   profileList, validProfileName, upsertProfile, deleteProfile, renameProfile,
-  HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions } from '../web/extras.js';
+  HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions,
+  resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader } from '../web/extras.js';
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -723,6 +724,62 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
   check('emptySearchSuggestions: 非数组兜底空表', emptySearchSuggestions(null).length === 0);
 
 const failed = results.filter(([, ok]) => !ok);
+// ---------------- 第二十三轮：结果工作台 ----------------
+check('resultTabTitle: 刚刚/分钟/小时/天', (() => {
+  const now = Date.now();
+  return resultTabTitle('查IP', now - 5 * 1000, now) === '查IP · 刚刚'
+    && resultTabTitle('查IP', now - 3 * 60 * 1000, now) === '查IP · 3 分钟前'
+    && resultTabTitle('查IP', now - 2 * 3600 * 1000, now) === '查IP · 2 小时前'
+    && resultTabTitle('查IP', now - 26 * 86400 * 1000, now) === '查IP · 26 天前';
+})());
+check('resultTabTitle: 无时间/无名兜底', resultTabTitle('查IP') === '查IP' && resultTabTitle('', 123) === '结果');
+check('tabEvict: 超限挤最老未固定', (() => {
+  const tabs = [
+    { id: 'a', ts: 100, pinned: true },
+    { id: 'b', ts: 50 },
+    { id: 'c', ts: 200 },
+  ];
+  const out = tabEvict(tabs, 2);
+  return out.length === 2 && out.every((t) => t.id !== 'b') && tabs.length === 3;
+})());
+check('tabEvict: 全固定不挤', (() => {
+  const tabs = [{ id: 'a', ts: 1, pinned: true }, { id: 'b', ts: 2, pinned: true }];
+  return tabEvict(tabs, 1).length === 2;
+})());
+check('tabEvict: 未超限原样', tabEvict([{ id: 'a', ts: 1 }], 8).length === 1);
+check('resultQuery: 子串过滤', (() => {
+  const rows = [{ name: '磁盘', size: 10 }, { name: '内存', size: 20 }];
+  return resultQuery(rows, '磁盘').length === 1;
+})());
+check('resultQuery: 数字比较 > <= =', (() => {
+  const rows = [{ size: 10 }, { size: 100 }, { size: 5 }];
+  return resultQuery(rows, 'size>9').length === 2
+    && resultQuery(rows, 'size<=5').length === 1
+    && resultQuery(rows, 'size=100').length === 1;
+})());
+check('resultQuery: 数字串值也可比', (() => {
+  const rows = [{ size: '120 MB' }, { size: '30 MB' }];
+  return resultQuery(rows, 'size>100').length === 1;
+})());
+check('resultQuery: 多词 AND', (() => {
+  const rows = [{ name: '磁盘', size: 10 }, { name: '磁盘', size: 200 }];
+  return resultQuery(rows, '磁盘 size>100').length === 1;
+})());
+check('resultCompare: 键并集+diff 标记', (() => {
+  const out = resultCompare({ a: 1, b: 2 }, { a: 1, c: 3 });
+  return out.length === 3
+    && out.find((r) => r.key === 'a').diff === false
+    && out.find((r) => r.key === 'b').diff === true
+    && out.find((r) => r.key === 'c').a === undefined;
+})());
+check('resultCompare: 非对象输入兜底空', resultCompare(null, [1]).length === 0);
+check('withNoteHeader: 有备注带头/无备注原样', (() => {
+  const withN = withNoteHeader('body', '发布前快照', 1760000000000);
+  return withN.startsWith('// 发布前快照（') && withN.endsWith('\nbody')
+    && withNoteHeader('body', '', 1) === 'body'
+    && withNoteHeader('body', '   ', 1) === 'body';
+})());
+
 console.log('\n' + '='.repeat(60));
 console.log(`通过 ${results.length - failed.length} / ${results.length}`);
 if (failed.length) process.exitCode = 1;

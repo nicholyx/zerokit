@@ -17,6 +17,7 @@ import { dangerousPattern, maskSecrets, rateLimitHits, trimAuditLog, actionRiskC
 import { BACKUP_GROUPS, classifyKey, collectBackup, parseBackup, mergeBackup, backupFilename } from './extras.js';
 import { HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions } from './extras.js';
 import { profileList, validProfileName, upsertProfile, deleteProfile, renameProfile } from './extras.js';
+import { resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader } from './extras.js';
 import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport, virtualWindow, pageSlice, breadcrumb, listStateQuery, parseListState, digitPick } from './extras.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
@@ -2205,6 +2206,7 @@ async function submitInner(remember) {
     lastValues = values;
     lastResult = res;
     renderResult(res);
+    if (res.ok === true) pushResultTab(res);   // 第二十三轮①：成功结果进页签工作台
     if (res.ok === true && action.risk === 'destructive') renderUndoHint(plugin, action);
     // 结果可能很长，直接把卡片顶部带进视野（否则用户以为「点了没反应」）
     if (res.ok === false && !window.__zkRetried) {
@@ -2561,6 +2563,126 @@ function renderUndoHint(plugin, action) {
 
 let currentResult = null;
 let lastExport = null;  // 第十七轮④⑥：最近一次导出（文件名/大小/内容），供「外部接力」用
+
+// 第二十三轮：结果页签工作台。tabs=[{id,res,name,ts,pinned,note}]；activeTab=当前页签 id。
+const resultTabs = [];
+let activeTab = null;
+function tabById(id) { return resultTabs.find((t) => t.id === id) ?? null; }
+
+/** 结果进页签：新成功结果 upsert 到当前页签（同动作重跑=刷新），否则开新页签并逐出旧的 */
+function pushResultTab(res) {
+  if (!detail) return;
+  const name = detail.action.title || detail.action.id;
+  const sameActionTab = tabById(activeTab);
+  const entry = {
+    id: `t${Date.now()}${Math.floor(Math.random() * 1000)}`,
+    res, name, ts: Date.now(), pinned: false, note: '',
+    pluginId: detail.plugin.id, actionId: detail.action.id,
+  };
+  // 同一动作重跑：沿用当前页签（保 pinned/note），只换结果与时间
+  if (sameActionTab && sameActionTab.pluginId === detail.plugin.id && sameActionTab.actionId === detail.action.id) {
+    sameActionTab.res = res; sameActionTab.ts = entry.ts;
+    renderTabBar();
+    return;
+  }
+  let next = resultTabs.slice();
+  if (next.length >= 8) next = tabEvict(next, 7);   // 给新页签腾位
+  if (next.length >= 8 && next.every((t) => t.pinned)) { el.count.textContent = '页签满了：先关或取消固定一个'; return; }
+  next.push(entry);
+  resultTabs.length = 0; resultTabs.push(...next);
+  activeTab = entry.id;
+  renderTabBar();
+}
+
+/** ①②③④⑧页签栏渲染：挂在 #result 上方（detail 视图内动态插） */
+function renderTabBar() {
+  const box = $('result');
+  if (!box) return;
+  let bar = $('rtabs');
+  if (!resultTabs.length) { bar?.remove(); return; }
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'rtabs'; bar.className = 'rtabs';
+    box.parentNode?.insertBefore(bar, box);
+  }
+  bar.innerHTML = resultTabs.map((t) => `
+    <button class="rtab${t.id === activeTab ? ' active' : ''}" data-rtab="${esc(t.id)}"
+      title="${esc(t.note ? `备注：${t.note}` : '点击切换 · 双击写备注 · 右键固定/取消固定')}${t.pinned ? '（已固定）' : ''}">
+      ${t.pinned ? '📌 ' : ''}${esc(resultTabTitle(t.name, t.ts))}
+      <span class="rtab-x" data-rx="${esc(t.id)}" title="关闭">✕</span>
+    </button>`).join('')
+    + (resultTabs.length >= 2 ? '<button class="rtab rtab-cmp ghost" data-rcmp title="选两个页签并排对比">⇄ 对比</button>' : '');
+  bar.querySelectorAll('[data-rtab]').forEach((b) => {
+    const tid = b.dataset.rtab;
+    b.addEventListener('click', (e) => {
+      if (e.target.closest('[data-rx]')) return;
+      const t = tabById(tid);
+      if (!t) return;
+      activeTab = t.id;
+      renderResult(t.res);
+      renderTabBar();
+    });
+    // ⑧备注：双击页签写一句，title 显示
+    b.addEventListener('dblclick', () => {
+      const t = tabById(tid);
+      if (!t) return;
+      const v = prompt('给这个结果写句备注（页签悬停可见，复制可附带）：', t.note || '');
+      if (v === null) return;
+      t.note = String(v).slice(0, 60);
+      renderTabBar();
+      el.count.textContent = t.note ? '备注已保存' : '备注已清空';
+    });
+    // ④固定：右键切换 pinned——固定页签不会被新结果挤出
+    b.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const t = tabById(tid);
+      if (!t) return;
+      t.pinned = !t.pinned;
+      renderTabBar();
+      el.count.textContent = t.pinned ? '已固定（不会被挤出）' : '已取消固定';
+    });
+  });
+  bar.querySelectorAll('[data-rx]').forEach((x) => x.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const idx = resultTabs.findIndex((t) => t.id === x.dataset.rx);
+    if (idx < 0) return;
+    resultTabs.splice(idx, 1);
+    if (activeTab === x.dataset.rx) {
+      const last = resultTabs.at(-1);
+      activeTab = last ? last.id : null;
+      if (last) renderResult(last.res); else refreshResult();
+    }
+    renderTabBar();
+  }));
+  // ⑦对比：前两个未固定顺序取最早两个？不——取「当前激活 + 最近一个其它页签」
+  bar.querySelector('[data-rcmp]')?.addEventListener('click', () => {
+    const cur = tabById(activeTab);
+    const other = resultTabs.filter((t) => t.id !== activeTab).at(-1);
+    if (!cur || !other) { el.count.textContent = '对比需要两个页签'; return; }
+    showCompareView(cur, other);
+  });
+}
+
+/** ⑦对比视图：两结果键级并排 diff（object 类型才可比） */
+function showCompareView(ta, tb) {
+  const rows = resultCompare(ta.res?.data, tb.res?.data);
+  const box = $('result');
+  if (!box) return;
+  const tr = rows.map((r) => `
+    <tr class="${r.diff ? 'cmp-diff' : ''}">
+      <td>${esc(r.key)}</td>
+      <td>${esc(JSON.stringify(r.a ?? '—'))}</td>
+      <td>${esc(JSON.stringify(r.b ?? '—'))}</td>
+    </tr>`).join('');
+  box.innerHTML = `
+    <div class="result-card">
+      <h4>⇄ 对比：${esc(ta.name)} vs ${esc(tb.name)}</h4>
+      <table class="kv-table cmp-table"><thead><tr><th>键</th><th>${esc(ta.name)}</th><th>${esc(tb.name)}</th></tr></thead>
+      <tbody>${tr || '<tr><td colspan="3">无可比数据（两结果都不是对象）</td></tr>'}</tbody></table>
+      <div class="help">黄色行 = 值不同。点任意页签回到结果。</div>
+    </div>`;
+}
+
 function refreshResult() {
   if (currentResult) renderResult(currentResult);
 }
@@ -2784,7 +2906,7 @@ function renderResult(res) {
         <button class="ghost" id="cardFold" title="折叠 / 展开结果">收起</button>
       </div>
       <div class="result-tools">
-        <button class="ghost" id="copyRes" title="把结果复制到剪贴板">复制</button>
+        <button class="ghost" id="copyRes" title="复制结果；Shift=美化 JSON；Alt=带备注与时间">复制</button>
         <button class="ghost" id="saveRes" title="把结果存成文本文件">下载</button>
         <button class="ghost" id="mdRes" title="导出成 Markdown（表格/代码块），方便贴进文档或 Issue">导出 Markdown</button>
         ${res.data !== undefined ? `<button class="ghost" id="csvRes" title="导出成 CSV，Excel / Numbers 直接打开">导出 CSV</button>
@@ -2822,6 +2944,15 @@ function renderResult(res) {
       if (rendered !== null) text = rendered;
     } else if (ev.shiftKey && res.data !== undefined) {
       text = JSON.stringify(res.data, null, 2);
+    }
+    // 第二十三轮⑨：Alt+点=带备注复制（有备注的页签附上备注头与时间）
+    if (ev.altKey) {
+      const t = tabById(activeTab);
+      text = withNoteHeader(text, t?.note || '', t?.ts);
+      btn.textContent = '已复制(带备注)';
+      try { await navigator.clipboard.writeText(text); } catch { btn.textContent = '复制失败'; }
+      setTimeout(() => { btn.textContent = '复制'; }, 1500);
+      return;
     }
     try {
       await navigator.clipboard.writeText(text);
@@ -3315,8 +3446,11 @@ function renderTable(rows0, tableId = '') {
   // 第十六轮③：表格筛选行——空格分词，每词都要在某列命中
   const fterms = tableFilterTerms[tableId] ?? [];
   const frows = filterRows(rows, fterms);
+  // 第二十三轮⑤⑥：结果查询——支持子串词与数字比较（size>100）；与筛选行叠加
+  const rq = resultQueryTerms[tableId] ?? '';
+  const qrows = rq ? resultQuery(frows, rq) : frows;
   const state = tableState[tableId] ?? { col: null, dir: 1 };
-  const view = state.col ? sortRows(frows, state.col, state.dir) : frows;
+  const view = state.col ? sortRows(qrows, state.col, state.dir) : qrows;
   const arrow = (c) => state.col === c ? (state.dir === 1 ? ' ▲' : ' ▼') : '';
   const head = visCols.map((c) =>
     `<th class="sortable${numeric[c] ? ' num' : ''}" data-col="${esc(c)}">${esc(c)}${arrow(c)}</th>`).join('');
@@ -3350,7 +3484,9 @@ function renderTable(rows0, tableId = '') {
   // 第十六轮③：筛选输入行（thead 第二行）
   const fRow = `<tr class="tfilter">${visCols.map((c) => `<th><input data-tf="${esc(c)}" placeholder="筛…" value="${esc((fterms[0] && tableFilterTerms[tableId]?.join(' ')) || '')}" autocomplete="off" spellcheck="false"></th>`).join('')}</tr>`;
   const gear = `<span class="colvis-btn" data-colvis="${esc(tableId || 't')}" title="显示/隐藏列" role="button" tabindex="0">⚙</span>`;
-  return `${unitBtns ? `<div class="unit-bar">${unitBtns}</div>` : ''}${gear}<table class="grid" data-table="${esc(tableId)}"><thead><tr>${head}</tr>${fRow}</tr></thead><tbody>${body}</tbody><tfoot><tr>${foot}</tr></tfoot></table>
+  // 第二十三轮⑤⑥：查询框（与第十六轮筛选行不同：这是整表查询，支持 > < = 数字比较）
+  const qbar = `<div class="rquery"><input data-rq="${esc(tableId || 't')}" placeholder="查询：词 或 size>100 …" value="${esc(resultQueryTerms[tableId] ?? '')}" autocomplete="off" spellcheck="false"><span class="sub" data-rqc="${esc(tableId || 't')}">${rq ? `${qrows.length} / ${frows.length} 行` : ''}</span></div>`;
+  return `${unitBtns ? `<div class="unit-bar">${unitBtns}</div>` : ''}${gear}${qbar}<table class="grid" data-table="${esc(tableId)}"><thead><tr>${head}</tr>${fRow}</tr></thead><tbody>${body}</tbody><tfoot><tr>${foot}</tr></tfoot></table>
   <div class="tcount sub">${view.length === rows.length ? `共 ${rows.length} 行` : `${view.length} / ${rows.length} 行（筛选中）`}</div>`;
 }
 
@@ -3360,6 +3496,8 @@ const tableState = {};
 const tableFilterTerms = {};
 // 第十六轮⑦：单位换算请求（tableId → {col, to}），换算后的数据走 refreshResult 重画
 const tableUnitConv = {};
+// 第二十三轮⑤⑥：结果查询词（tableId → 串）——支持子串与数字比较（size>100）
+const resultQueryTerms = {};
 function bindTableSorts(scope) {
   scope.querySelectorAll('table.grid[data-table]').forEach((tbl) => {
     const id = tbl.dataset.table || 't';
@@ -3421,6 +3559,15 @@ function bindTableSorts(scope) {
       tableUnitConv[id] = (cur && cur.col === col && cur.to === to) ? null : { col, to };
       refreshResult();
     }));
+    // 第二十三轮⑤⑥：结果查询框（整表查询，支持数字比较）
+    tbl.parentNode?.querySelectorAll('input[data-rq]').forEach((inp) => {
+      inp.addEventListener('input', () => {
+        resultQueryTerms[inp.dataset.rq] = inp.value;
+        refreshResult();
+        const again = document.querySelector(`input[data-rq="${CSS.escape(inp.dataset.rq)}"]`);
+        if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+      });
+    });
     // 列名右键：复制这一列（去重可选）——右键不抢交互，提示走 count 栏
     tbl.querySelectorAll('th.sortable').forEach((th) => th.addEventListener('contextmenu', (ev) => {
       ev.preventDefault();
@@ -5965,6 +6112,10 @@ window.__zerokit = {
   __zerokitCreateProfile: createProfileFromCurrent,
   __zerokitSwitchProfile: switchProfile,
   __zerokitShowHelp: showHelpPanel,
+  __zerokitResultTabs: resultTabs,
+  __zerokitPushResultTab: pushResultTab,
+  __zerokitRenderTabBar: renderTabBar,
+  __zerokitResultQueryTerms: resultQueryTerms,
   __zerokitShowFirstRun: showFirstRunGuide,
   __zerokitRenameProfile(from, to) {
     const r = renameProfile(loadProfiles(), from, to);
