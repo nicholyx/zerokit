@@ -13,7 +13,8 @@ import {
   HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions,
   resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader,
   COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory,
-  chainFill, batchDedup, chunkWindows, parseBatchList } from '../web/extras.js';
+  chainFill, batchDedup, chunkWindows, parseBatchList,
+  pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand } from '../web/extras.js';
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -863,6 +864,68 @@ check('parseBatchList: 合法清单/坏 JSON/缺字段', (() => {
     && noAction.ok === false && noAction.error.includes('plugin/action');
 })());
 check('parseBatchList: 非数组拒绝', parseBatchList('{"a":1}').ok === false);
+
+// ---------------- 第二十六轮：插件生态体验 ----------------
+check('pluginCompare: 动作数/风险构成/依赖', (() => {
+  const a = { id: 'a', name: 'A', version: '1', actions: [{ risk: 'read' }, { risk: 'read' }, { risk: 'write' }], pluginDeps: [{ id: 'd1', installed: true }] };
+  const b = { id: 'b', name: 'B', version: '2', actions: [{ risk: 'read' }, { risk: 'destructive' }] };
+  const c = pluginCompare(a, b);
+  return c.a.actions === 3 && c.b.actions === 2
+    && c.risks.find((r) => r.risk === 'read').a === 2
+    && c.risks.find((r) => r.risk === 'write').b === 0
+    && c.risks.find((r) => r.risk === 'destructive').b === 1
+    && c.deps.a.length === 1 && c.deps.b.length === 0;
+})());
+check('pluginCompare: 不完整输入返回 null', pluginCompare(null, { actions: [] }) === null && pluginCompare({ actions: [] }, {}) === null);
+check('versionDiff: 有更新/无更新/无集市信息', (() => {
+  return versionDiff('1.0', '1.1').hasUpdate === true
+    && versionDiff('1.0', '1.0') === null
+    && versionDiff('1.0', null) === null
+    && versionDiff(null, '2.0').installed === '未装';
+})());
+check('depTreeLines: 无依赖单行/有依赖缩进树', (() => {
+  return depTreeLines('root', []).length === 1 && depTreeLines('root', []).join() === 'root'
+    && depTreeLines('root', [{ id: 'x', installed: true }, { id: 'y', installed: false }]).join('|')
+      === 'root|  └ x|  └ y（未装）';
+})());
+check('filterPluginActions: 词 AND 匹配标题/id/风险', (() => {
+  const acts = [
+    { id: 'overview', title: '系统概况', risk: 'read', description: '' },
+    { id: 'kill', title: '停止进程', risk: 'destructive', description: '' },
+  ];
+  return filterPluginActions(acts, '概况').length === 1
+    && filterPluginActions(acts, 'kill').length === 1
+    && filterPluginActions(acts, 'destructive').length === 1
+    && filterPluginActions(acts, '').length === 2
+    && filterPluginActions(acts, '概况 read').length === 1
+    && filterPluginActions(acts, '不存在').length === 0;
+})());
+check('pluginTags: keywords 并集去重排序', (() => {
+  const p = { keywords: ['网络', 'ip'], actions: [{ keywords: ['ip', '公网'] }] };
+  const t = pluginTags(p);
+  return t.length === 3 && t.includes('网络') && t.includes('公网') && pluginTags(null).length === 0;
+})());
+check('pluginStatCards: 动作/组合/执行统计/健康', (() => {
+  const p = { id: 'sysinfo', requiresOk: true, actions: [{ id: 'a' }, { id: 'c', steps: [{}] }] };
+  const rs = { 'sysinfo.a': [{ ts: 1000 }], 'other.x': [{ ts: 9999 }] };
+  const c = pluginStatCards(p, rs, 61000);
+  return c.actions === 2 && c.chains === 1 && c.runs === 1 && c.lastUsed === 1 && c.health === 'ok';
+})());
+check('pluginStatCards: 缺命令依赖→warn / 无记录→null', (() => {
+  return pluginStatCards({ id: 'x', requiresOk: false, actions: [] }, {}).health === 'warn'
+    && pluginStatCards({ id: 'x', actions: [] }, {}).lastUsed === null;
+})());
+check('installedList: 信封结构 + 条目字段', (() => {
+  const l = installedList([{ id: 'p1', version: '1', source: { type: 'market' }, actions: [1, 2] }]);
+  return l.app === 'zerokit' && l.kind === 'plugin-list'
+    && l.plugins.length === 1 && l.plugins[0].id === 'p1' && l.plugins[0].actions === 2
+    && installedList(null).plugins.length === 0;
+})());
+check('installCommand: 集市/内置/null 三态', (() => {
+  return installCommand({ id: 'pp', source: { type: 'market', market: 'demo' } }) === 'zkit plugin install pp --market demo'
+    && installCommand({ source: { type: 'bundled' } }) === 'zkit plugin bundled'
+    && installCommand(null) === '';
+})());
 
 console.log('\n' + '='.repeat(60));
 console.log(`通过 ${results.length - failed.length} / ${results.length}`);
