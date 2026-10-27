@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import { suggestLine, diagnose, foreignPath, findOrphanPlugins } from './core/suggest.ts';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -498,7 +499,10 @@ async function cmdRun(args: string[]): Promise<number> {
   }
   const action = plugin.actions.find((a) => a.id === actionId);
   if (!action) {
+    // 第三十五轮②：动作打错也给模糊建议
     process.stderr.write(c.red(`✗ 插件 ${pluginId} 里没有动作 "${actionId}"\n`));
+    const hint = suggestLine(actionId, plugin.actions.map((a) => a.id));
+    if (hint) process.stderr.write(c.yellow(`  ${hint}\n`));
     process.stderr.write(c.dim(`  可用：${plugin.actions.map((a) => a.id).join(' / ')}\n`));
     return 1;
   }
@@ -514,14 +518,33 @@ async function cmdRun(args: string[]): Promise<number> {
     }
     return 0;
   }
+  const paramTable = (): void => {
+    // 第三十五轮③：缺参数不只是报错——把这张动作的参数表和完整示例摊给人看
+    process.stderr.write(c.bold(`\n${pluginId} ${actionId} 的参数：\n`));
+    for (const f of toCliFlags(action)) {
+      const req = f.required ? c.yellow('（必填）') : c.dim('（可选）');
+      process.stderr.write(`  --${f.name}${f.takesValue ? ' <值>' : ''}  ${f.description}${req}\n`);
+    }
+    process.stderr.write(c.dim(`  完整帮助：zkit run ${pluginId} ${actionId} --help\n`));
+  };
   if (parsed.errors.length > 0) {
     for (const e of parsed.errors) process.stderr.write(c.red(`✗ ${e}`) + '\n');
+    paramTable();
     return 2;
   }
   const withDefaults = applyDefaults(action, parsed.values);
   if (withDefaults.errors.length > 0) {
     for (const e of withDefaults.errors) process.stderr.write(c.red(`✗ ${e}`) + '\n');
+    paramTable();
     return 2;
+  }
+
+  // 第三十五轮⑨：参数里混入异平台路径（mac 上给 C:\...）提前点破——
+  // 这类错误跑起来才炸，报错还指向插件本身，排障方向全错
+  const fp = foreignPath(Object.values(withDefaults.values).map(String));
+  if (fp) {
+    process.stderr.write(c.yellow(`! 参数里像是混入了另一个平台的路径：${fp}\n`) +
+      c.dim(`  当前平台 ${process.platform}；跨平台脚本建议用 / 或让插件自己拼 path.join\n`));
   }
 
   // 依赖自检：缺什么直接说清楚，而不是让命令以莫名其妙的方式失败
@@ -554,6 +577,14 @@ async function cmdRun(args: string[]): Promise<number> {
 
   const result = await runAction(plugin, action, { caller: 'cli', values: withDefaults.values });
   printRunResult(action, result, asJson);
+  if (!result.ok && !asJson) {
+    // 第三十五轮⑤⑥：失败输出自诊断——error 与 stderr 都扫，认不出就不添乱
+    const d = diagnose(String((result as { error?: string }).error ?? '') + '\n' + String(result.stderr ?? ''));
+    if (d) {
+      process.stderr.write(c.yellow(`\n⟐ 看起来是：${d.headline}\n下一步：\n`));
+      for (const st of d.nextSteps) process.stderr.write(`  - ${st}\n`);
+    }
+  }
   return result.ok ? 0 : 1;
 }
 
@@ -1030,7 +1061,7 @@ function cmdDesktop(args: string[]): number {
   return 0;
 }
 
-function cmdDoctor(): number {
+async function cmdDoctor(): Promise<number> {
   const report = buildDoctorReport();
   // ⑨最近错误计数：审计里的 deny/非零退出——「环境没坏但一直在失败」要浮出来
   const auditView = readAuditDetailed();
@@ -1051,6 +1082,30 @@ function cmdDoctor(): number {
       })),
     }, null, 2) + '\n');
     return report.summary.errors === 0 ? 0 : 1;
+  }
+  // 第三十五轮⑦⑧：--fix 自动修可修项 + 半安装插件检测
+  const fix = process.argv.includes('--fix');
+  const orphans = findOrphanPlugins(report.dirs.plugins);
+  if (orphans.length > 0) {
+    process.stdout.write(c.yellow(`! 发现 ${orphans.length} 个装了一半的插件目录（无 plugin.toml）：\n`));
+    for (const o of orphans) {
+      process.stdout.write(c.yellow(`    ${o.id}  ${c.dim(o.hasFiles.join(' ') || '空目录')}\n`));
+    }
+    if (fix) {
+      const fsmod = await import('node:fs');
+      for (const o of orphans) {
+        fsmod.rmSync(o.dir, { recursive: true, force: true });
+        process.stdout.write(c.green(`  ✓ 已清理 ${o.id}\n`));
+      }
+    } else {
+      process.stdout.write(c.dim('    zkit doctor --fix 可清理这些残留目录\n'));
+    }
+  }
+  if (fix) {
+    // 缺数据目录/缓存目录直接补齐（ensure 系幂等）
+    const { ensureDirs } = await import('./core/paths.ts');
+    ensureDirs();
+    process.stdout.write(c.green('✓ 数据目录结构已确保齐全\n'));
   }
   process.stdout.write(c.bold('环境自检\n'));
   // 第三十二轮⑩：桌面壳是可选组件，单独一行说清状态
@@ -1585,6 +1640,8 @@ async function cmdWeb(args: string[]): Promise<number> {
   });
 }
 
+const KNOWN_COMMANDS = ['audit', 'config', 'desktop', 'doctor', 'gc', 'health', 'help', 'kill', 'list', 'logs', 'ls', 'market', 'mcp', 'path', 'plugin', 'ps', 'run', 'show', 'stats', 'ui', 'web'];
+
 async function main(): Promise<number> {
   const [, , cmd, ...rest] = process.argv;
   switch (cmd) {
@@ -1637,10 +1694,14 @@ async function main(): Promise<number> {
     }
     case 'web':
       return cmdWeb(rest);
-    default:
+    default: {
+      // 第三十五轮①：打错命令给最接近的建议，而不是只甩一份全量帮助
       process.stderr.write(c.red(`未知命令：${cmd}`) + '\n');
+      const hint = suggestLine(String(cmd), KNOWN_COMMANDS);
+      if (hint) process.stderr.write(c.yellow(`  ${hint}`) + '\n');
       process.stdout.write(HELP);
       return 2;
+    }
   }
 }
 

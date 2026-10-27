@@ -1,5 +1,14 @@
 ## [Unreleased]
 
+### Added
+
+- 命令与动作打错给模糊建议（`zkit plugn` → 「是不是想敲 plugin？」；编辑距离+前缀加权，差太远不瞎猜）
+- 参数缺失时的错误输出附完整参数表（必填标注 + `--help` 指引）
+- 执行失败输出自诊断：stderr 关键词（permission denied / ENOENT / ENOEXEC / 超时 / 依赖缺失）识别后给「下一步」处置
+- `zkit doctor --fix`：自动清理装了一半的插件目录（无 plugin.toml 的残留）、确保数据目录结构齐全
+- 半安装插件检测：doctor 列出无清单的插件目录（unpack 中断/手工拷贝残留）
+- 参数里的异平台路径提前点破（mac 上给 `C:\...`、Windows 上给 `/usr/...`）
+
 ## [0.39.0] - 2026-10-28
 
 ### Added
