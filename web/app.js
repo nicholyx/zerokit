@@ -6,7 +6,7 @@ import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
 import { pickLang, makeT } from './extras.js';
-import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets } from './extras.js';
+import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
 import { barsScale, sparkPoints, formatMs, paletteScore, p95Ms } from './extras.js';
@@ -544,7 +544,9 @@ function scoreEntry(entry, token, explain) {
 function search(query) {
   const content = query.trim();
   const sniffed = detectContent(content);
-  const tokens = content.toLowerCase().split(/\s+/).filter(Boolean);
+  // 第二十七轮⑥：剥掉「看看/帮我」这类虚词——它们对任何动作都不命中，
+  // 带着搜等于全灭；剩下的实词才进 AND 匹配
+  const tokens = stripStopwords(content.toLowerCase().split(/\s+/).filter(Boolean));
 
   // 空输入：把最近用过的排前面。启动器高频用的就是那几个，让它们待在顺手的位置。
   if (tokens.length === 0) {
@@ -556,6 +558,9 @@ function search(query) {
     return out;
   }
 
+  // 第二十七轮⑥：同义词弱路由——「看看内存」这种描述型 query，把词展开成
+  // 同义词组参与匹配（原词仍要命中——同义词只补召回，不降低精度）
+  const synTokens = expandSynonyms(tokens);
   const out = [];
   for (const entry of entries) {
     let total = 0;
@@ -567,9 +572,17 @@ function search(query) {
       total += s;
     }
     if (!ok) continue;
+    // 同义词补充召回：每个同义词命中给小额加分（远低于原词，只用于排序微调）
+    if (synTokens.length) {
+      for (const syn of synTokens) {
+        if (tokens.includes(syn)) continue;
+        const s2 = scoreEntry(entry, syn);
+        if (s2 > 0) total += s2 * 0.3;
+      }
+    }
     entry.lastWhy = why;   // 详情页「为什么命中」用（ WeakMap 更干净但没必要）
     const rank = recentRank(entry);
-    if (rank >= 0) total += Math.max(0, 12 - rank);   // 用过的略微加分
+    if (rank >= 0) total += recencyBoost(rank);   // 第二十七轮②：统一走纯函数
     out.push({ entry, score: total });
   }
 
@@ -640,6 +653,7 @@ function itemHtml(entry, i, showPlugin, query = '') {
     ${(actionTags[key] ?? []).map((tg) => `<span class="badge tag">#${esc(tg)}</span>`).join(' ')}
     ${a.steps?.length ? `<span class="badge">组合 ${a.steps.length} 步</span>` : ''}
     ${smart ? `<span class="badge smart-badge">智能匹配</span>` : ''}
+    ${!smart && entry.lastWhy?.length ? `<span class="badge why-badge" title="${esc(whyLabel(entry.lastWhy))}">${esc(whyLabel(entry.lastWhy))}</span>` : ''}
     ${dep}
     <span class="badge ${esc(a.risk)}">${esc(RISK_TEXT[a.risk] || a.risk)}</span>
   </li>`;
@@ -682,8 +696,10 @@ function renderListTools(base, q) {
   const count = (id) => filterActions(base, id, favorites).length;
   const chips = FILTERS.map((f) => `<button class="chip${listFilter === f.id ? ' on' : ''}"
     data-filter="${f.id}">${f.label}<b>${count(f.id)}</b></button>`).join('');
-  const hist = q.trim() === '' && searchHistory.length
-    ? `<div class="hist-chips"><span class="hist-label">最近搜索</span>${searchHistory
+  // 第二十七轮⑧：搜索历史不再只在空 q 时显示——输入态也给（回填替换当前词），
+  // 上限 8 条由 pushSearch 维护
+  const hist = searchHistory.length
+    ? `<div class="hist-chips${q.trim() ? ' while-typing' : ''}"><span class="hist-label">最近搜索</span>${searchHistory
       .map((x) => `<button class="chip quiet" data-hist="${esc(x)}">${esc(x)}</button>`).join('')}
       <button class="chip quiet" id="clearHist">清空</button></div>`
     : '';
@@ -975,9 +991,28 @@ function renderList() {
       });
     });
   } else {
-    // 虚拟滚动：条目多时只渲染视口附近（+缓冲），上下用 spacer 撑出总高度。
-    // 上百个动作时 DOM 节点从 N 降到 ~20，滚动不再卡。
-    if (filtered.length > 60) {
+    // 第二十七轮⑦：搜索结果 ≥2 个插件时分组显示（组头带计数）——
+    // 平铺 20 条时看不出「这些动作是哪几个插件的」，分组一眼看出结构
+    const pluginsHit = new Set(filtered.map((e) => e.plugin.id));
+    if (pluginsHit.size >= 2 && filtered.length <= 60) {
+      const groups = new Map();
+      filtered.forEach((entry, i) => {
+        const id = entry.plugin.id;
+        if (!groups.has(id)) groups.set(id, []);
+        groups.get(id).push([entry, i]);
+      });
+      el.list.innerHTML = [...groups.entries()].map(([id, items]) => {
+        const p2 = items[0][0].plugin;
+        return `<li class="group-head search-group" data-group="${esc(id)}">
+            <span class="g-arrow">▾</span>
+            <span class="g-name">${esc(p2.name)}</span>
+            <span class="g-meta">${items.length} 个命中</span>
+          </li>`
+          + items.map(([entry, i]) => itemHtml(entry, i, false, q)).join('');
+      }).join('');
+    } else if (filtered.length > 60) {
+      // 虚拟滚动：条目多时只渲染视口附近（+缓冲），上下用 spacer 撑出总高度。
+      // 上百个动作时 DOM 节点从 N 降到 ~20，滚动不再卡。
       renderVirtualList(q);
     } else {
       el.list.innerHTML = filtered.map((entry, i) => itemHtml(entry, i, true, q)).join('');
@@ -6431,6 +6466,22 @@ function applyHash() {
   // #/stats  全局统计
   if ((location.hash || '') === '#/stats') {
     showStats();
+    return;
+  }
+
+  // 第二十七轮⑤：#/history/<plugin>.<action> 历史深链——「上次那个」直达
+  const hh = parseHistoryHash(location.hash || '');
+  if (hh) {
+    const dot = hh.lastIndexOf('.');
+    const entry = entries.find((e) => e.plugin.id === hh.slice(0, dot) && e.action.id === hh.slice(dot + 1));
+    if (entry) {
+      openDetail(entry.plugin, entry.action);
+      return;
+    }
+    // 动作不存在（被卸载？）：退回列表并说明
+    el.q.value = '';
+    renderList();
+    el.count.textContent = `历史里的 ${hh} 已不存在（插件可能被卸载）`;
     return;
   }
 

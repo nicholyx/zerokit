@@ -1647,3 +1647,98 @@ export function installCommand(p) {
   if (p.source?.type === 'market') return `zkit plugin install ${p.id} --market ${p.source.market || 'default'}`;
   return `zkit plugin bundled`;
 }
+
+// ---------------------------------------------------------------- 第二十七轮：搜索与发现的深度
+
+/** ①搜索命中解释：把 explain 分数摊开成人话标签（「命中：动作名·拼音」）。
+ * 输入是 scoreEntry 收集的 why 数组 [[label, score, weight], ...]。 */
+export function whyLabel(why) {
+  const labels = (why ?? []).map((r) => r[0]).filter(Boolean);
+  if (!labels.length) return '';
+  const uniq = [...new Set(labels)];
+  return `命中：${uniq.join('·')}`;
+}
+
+/** ⑥同义词弱路由：描述型 query 映射到可能的关键词。
+ * 表是手工精选的高频意图（内存/磁盘/网络/时间/剪贴板/搜索），
+ * 命中同义词的 query 在打分时把同义词也当一个 token 参与匹配。 */
+export const SYNONYMS = {
+  '内存': ['内存', 'memory', 'mem'],
+  '磁盘': ['磁盘', '硬盘', 'disk', '存储'],
+  '网络': ['网络', '网速', 'network', '联网'],
+  '时间': ['时间', '日期', '时钟', 'time', 'date'],
+  '剪贴板': ['剪贴板', '粘贴板', 'clipboard'],
+  '搜索': ['搜索', '查找', '找', 'search'],
+  '看看': ['', '查看', '显示'],
+};
+
+/** ⑥虚词剥离：描述型 query 的「看看/显示/帮我/查一下」这类意图词不参与 AND 匹配——
+ * 它们对哪个动作都不命中，带着它们搜等于全灭。剥离后剩下的实词才进打分。 */
+export const QUERY_STOPWORDS = ['看看', '显示', '帮我', '查一下', '看一下', '我想', '想要', '请'];
+
+/** ⑥剥掉停用词后的实词列表（原样返回新数组，不改入参）。
+ * 支持两种形态：整词等于停用词（「看看 内存」）和前缀粘连（「看看内存」——
+ * 中文不分词，用户随手把动词和宾语连着打）。 */
+export function stripStopwords(tokens) {
+  const list = (tokens ?? []).filter((t) => !QUERY_STOPWORDS.includes(t));
+  const stripped = [];
+  for (const t of list) {
+    let out = t;
+    for (const w of QUERY_STOPWORDS) {
+      if (out.startsWith(w) && out.length > w.length) out = out.slice(w.length);
+    }
+    if (out) stripped.push(out);
+  }
+  return stripped;
+}
+
+/** ⑥从 query 词展开同义词 tokens（原词优先级不变，同义词只作补充召回）。 */
+export function expandSynonyms(tokens) {
+  const out = [];
+  for (const t of stripStopwords(tokens ?? [])) {
+    for (const [canon, words] of Object.entries(SYNONYMS)) {
+      if (words.includes(t) || t === canon) {
+        for (const w of words) if (w && !out.includes(w)) out.push(w);
+        if (!out.includes(canon)) out.push(canon);
+      }
+    }
+  }
+  return out;
+}
+
+/** ⑨大小写保真高亮：与 highlightSegments 相同的匹配规则（大小写不敏感），
+ * 但 mark 里的文本保留原文大小写（此前 toLowerCase 后 mark 的内容也是小写副本——
+ * 其实原文本来就没变，这条保证的是 query 大小写不参与匹配但也不改写原文）。 */
+export function highlightSegmentsCaseKept(text, query, maxParts = 24) {
+  const src = String(text ?? '');
+  const q = String(query ?? '').trim();
+  if (!q || !src) return [{ text: src, hit: false }];
+  const lowerSrc = src.toLowerCase();
+  const lowerQ = q.toLowerCase();
+  const parts = [];
+  let from = 0;
+  let guard = 0;
+  while (from < src.length && guard < maxParts) {
+    const at = lowerSrc.indexOf(lowerQ, from);
+    if (at < 0) break;
+    if (at > from) parts.push({ text: src.slice(from, at), hit: false });
+    parts.push({ text: src.slice(at, at + q.length), hit: true });
+    from = at + q.length;
+    guard += 1;
+  }
+  if (from < src.length) parts.push({ text: src.slice(from), hit: false });
+  return parts.length ? parts : [{ text: src, hit: false }];
+}
+
+/** ⑤历史深链解析：#/history/<plugin>.<action> → key；不匹配返回 null。 */
+export function parseHistoryHash(hash) {
+  const m = /^#\/history\/([\w.-]+\.[\w.-]+)$/.exec(String(hash ?? ''));
+  return m ? m[1] : null;
+}
+
+/** ②最近优先加权值：最近执行过的动作在同名命中分上叠加。
+ * rank 是「最近第几次执行」（0=最近一次）；没执行过返回 0。 */
+export function recencyBoost(rank, base = 12) {
+  if (!Number.isFinite(rank) || rank < 0) return 0;
+  return Math.max(0, base - rank);
+}
