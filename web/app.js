@@ -1,3 +1,4 @@
+let qClearBound = false;
 // zerokit 启动器前端。
 // 纯静态、无构建步骤，所以浏览器和 Tauri 壳用的是同一份代码。
 // 所有来自插件的文本都经过 esc() 转义再插入 DOM——插件内容属于不可信输入。
@@ -33,7 +34,7 @@ import { chainFill, batchDedup, chunkWindows, parseBatchList } from './extras.js
 import { toAiMarkdown, packContext, toMcpConfig, toCurl, toLlmJsonl, watchTrendMarkdown } from './extras.js';
 import { navGroups, emptyState, skeletonRows, resultHeightTier, viewportMode, classifyError, batchSummary } from './extras.js';
 import { pluginCompare as plugCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags as pluginTagChips, pluginStatCards, installedList, installCommand } from './extras.js';
-import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport, virtualWindow, pageSlice, breadcrumb, listStateQuery, parseListState, digitPick } from './extras.js';
+import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport, virtualWindow, pageSlice, breadcrumb, listStateQuery, parseListState, digitPick, suggestNext, comboLabel } from './extras.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
 const $ = (id) => document.getElementById(id);
@@ -690,7 +691,7 @@ function itemHtml(entry, i, showPlugin, query = '') {
     ${who}
     <span class="title">
       <span class="name">${highlightHtml(a.title, query, esc)}${nicknames[key] ? `<i class="nick">（${esc(nicknames[key])}）</i>` : ''}</span>
-      <span class="desc">${smart ? `内容看起来是${esc(smart)}，可以直接用` : esc(a.description || p.summary || '')}</span>
+      <span class="desc">${smart ? `内容看起来是${esc(smart)}，可以直接用` : highlightHtml(a.description || p.summary || '', query, esc)}</span>
     </span>
     <button class="star${fav ? ' on' : ''}" data-fav="${esc(key)}" title="${fav ? '取消收藏' : '收藏这个动作'}" aria-label="${fav ? '取消收藏' : '收藏这个动作'}">${fav ? '★' : '☆'}</button>
     <span class="aid">${esc(a.id)}</span>
@@ -711,9 +712,10 @@ function hidePanels() {
 }
 
 function rememberSearch(query) {
-  const q = String(query ?? '').trim();
-  if (!q) return;
-  searchHistory = pushSearch(searchHistory, q);
+  // 第五十一轮②：词+筛选 chip 的组合也记忆（「磁盘 [safe]」比裸「磁盘」更有上下文）
+  const label = comboLabel(query, listFilter);
+  if (!label) return;
+  searchHistory = pushSearch(searchHistory, label);
   writeJson(PREF.searches, searchHistory);
 }
 
@@ -744,7 +746,7 @@ function renderListTools(base, q) {
   // 上限 8 条由 pushSearch 维护
   const hist = searchHistory.length
     ? `<div class="hist-chips${q.trim() ? ' while-typing' : ''}"><span class="hist-label">最近搜索</span>${searchHistory
-      .map((x) => `<button class="chip quiet" data-hist="${esc(x)}">${esc(x)}</button>`).join('')}
+      .map((x) => `<span class="chip-wrap"><button class="chip quiet" data-hist="${esc(x)}">${esc(x)}</button><button class="chip-x" data-hist-x="${esc(x)}" title="删掉这条记录" aria-label="删掉这条搜索记录">✕</button></span>`).join('')}
       <button class="chip quiet" id="clearHist">清空</button></div>`
     : '';
   el.listTools.innerHTML = `<div class="chips">${chips}</div>${hist}`;
@@ -752,7 +754,22 @@ function renderListTools(base, q) {
     b.addEventListener('click', () => { listFilter = b.dataset.filter; renderList(); });
   });
   el.listTools.querySelectorAll('[data-hist]').forEach((b) => {
-    b.addEventListener('click', () => { el.q.value = b.dataset.hist; listFilter = 'all'; renderList(); });
+    b.addEventListener('click', () => {
+      const raw = b.dataset.hist;
+      const m = raw.match(/^(.*) \[(\w+)\]$/);   // 组合记忆还原：词 + chip
+      if (m && FILTERS.some((f) => f.id === m[2])) { el.q.value = m[1]; listFilter = m[2]; }
+      else { el.q.value = raw; listFilter = 'all'; }
+      renderList();
+    });
+  });
+  // 第五十一轮⑨：单条删历史
+  el.listTools.querySelectorAll('[data-hist-x]').forEach((b) => {
+    b.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      searchHistory = searchHistory.filter((x) => x !== b.dataset.histX);
+      writeJson(PREF.searches, searchHistory);
+      renderList();
+    });
   });
   $('clearHist')?.addEventListener('click', () => {
     searchHistory = [];
@@ -969,6 +986,11 @@ function renderListInner() {
 
   if (filtered.length > 0) {
     el.empty.classList.add('hidden');
+    // 第五十一轮⑤：结果计数徽标——X 项 · 来自 Y 个插件（搜索态才显示，浏览态是全部）
+    if (q.trim()) {
+      const fromPlugins = new Set(filtered.map((e) => e.plugin.id)).size;
+      el.count.textContent = `${filtered.length} 项 · 来自 ${fromPlugins} 个插件`;
+    }
   } else {
     // 空状态不是死胡同：给出「下一步做什么」的可点建议
     const suggestions = [];
@@ -976,6 +998,16 @@ function renderListInner() {
       suggestions.push(`<button class="link" data-sug="clear">清空搜索，浏览全部动作</button>`);
       suggestions.push(`<button class="link" data-sug="market">去集市找一个能做这件事的插件</button>`);
       suggestions.push(`<button class="link" data-sug="wb">问 AI 工作台：「${esc(q.trim())}」</button>`);
+      // 第五十一轮①：丢词建议——「A B」全灭时，去掉哪个词能救回多少项
+      const rawTokens = stripStopwords(q.trim().toLowerCase().split(/\s+/).filter(Boolean));
+      const hayEntries = entries.map((e) => ({ hay: `${e.plugin.name} ${e.action.title} ${e.action.description ?? ''} ${(e.action.keywords ?? []).join(' ')}`.toLowerCase() }));
+      const sugg = suggestNext(rawTokens, hayEntries);
+      if (sugg.length) {
+        suggestions.push('<div class="empty-sug-title">丢一个词试试：</div>');
+        for (const sg of sugg) {
+          suggestions.push(`<button class="link" data-sug="dropword" data-word="${esc(sg.drop)}">去掉「${esc(sg.drop)}」——能救回 ${sg.hit} 项</button>`);
+        }
+      }
       // 第二十二轮③：无结果时给「试试这些」——只读动作直达，新用户有路可走
       const picks = emptySearchSuggestions(entries, 5);
       if (picks.length) {
@@ -1008,6 +1040,13 @@ function renderListInner() {
       else if (act2 === 'market') showMarket();
       else if (act2 === 'doctor') showDoctor();
       else if (act2 === 'wb') showWorkbench(el.q.value.trim());
+      else if (act2 === 'dropword') {
+        // 第五十一轮①：丢词重搜
+        const w = b.dataset.word || '';
+        const parts = el.q.value.trim().split(/\s+/).filter((x) => x !== w);
+        el.q.value = parts.join(' ');
+        renderList(); el.q.focus();
+      }
       else if (act2 === 'go') {
         const key = b.dataset.go || '';
         const dot = key.lastIndexOf('.');
@@ -1065,13 +1104,24 @@ function renderListInner() {
       });
       el.list.innerHTML = [...groups.entries()].map(([id, items]) => {
         const p2 = items[0][0].plugin;
-        return `<li class="group-head search-group" data-group="${esc(id)}">
+        const collapsedNow = loadCollapsed().has(id);
+        return `<li class="group-head search-group${collapsedNow ? ' collapsed' : ''}" data-group="${esc(id)}" data-gtoggle="1">
             <span class="g-arrow">▾</span>
             <span class="g-name">${esc(p2.name)}</span>
             <span class="g-meta">${items.length} 个命中</span>
           </li>`
-          + items.map(([entry, i]) => itemHtml(entry, i, false, q)).join('');
+          + (collapsedNow ? '' : items.map(([entry, i]) => itemHtml(entry, i, false, q)).join(''));
       }).join('');
+      // 第五十一轮③：搜索态分组头点击也能折叠/展开（与浏览态同一份状态）
+      el.list.querySelectorAll('[data-gtoggle]').forEach((head) => {
+        head.addEventListener('click', () => {
+          const id = head.dataset.group;
+          const set = loadCollapsed();
+          set.has(id) ? set.delete(id) : set.add(id);
+          saveCollapsed(set);
+          renderList();
+        });
+      });
     } else if (filtered.length > 60) {
       // 虚拟滚动：条目多时只渲染视口附近（+缓冲），上下用 spacer 撑出总高度。
       // 上百个动作时 DOM 节点从 N 降到 ~20，滚动不再卡。
@@ -6952,6 +7002,9 @@ function perfMark(name) {
 
 el.q.addEventListener('input', () => {
   const q = el.q.value;
+  // 第五十一轮⑥：清空按钮显隐
+  $('qClear')?.classList.toggle('hidden', q.length === 0);
+  if (!qClearBound) { qClearBound = true; $('qClear')?.addEventListener('click', () => { el.q.value = ''; renderList(); el.q.focus(); $('qClear')?.classList.add('hidden'); }); }
   // 输入 ? 即切到工作台，后面的内容当作第一个问题带过去
   if (q.startsWith('?') && mode !== 'workbench') {
     el.q.value = '';

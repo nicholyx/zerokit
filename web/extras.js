@@ -2245,3 +2245,33 @@ export function typeScaleStep(base, step) {
   const r = base * Math.pow(1.25, step);
   return Math.round(r * 2) / 2;
 }
+
+/**
+ * 第五十一轮⑧：搜索零结果时的「下一步建议」。
+ * 输入词逐个去掉一个（留其余）后重试能命中多少动作；命中多的丢词就是建议。
+ * allTokens(entry)=>string[] 由调用方给（title/desc/keywords 拼好小写）。
+ * 返回 [{drop, hit}] 按 hit 降序；全都救不回来返回 []。
+ */
+export function suggestNext(tokens, entries) {
+  if (!Array.isArray(tokens) || tokens.length < 2 || !Array.isArray(entries)) return [];
+  const out = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const rest = tokens.filter((_, j) => j !== i);
+    let hit = 0;
+    for (const e of entries) {
+      const hay = typeof e === 'string' ? e : (e.hay ?? '');
+      if (rest.every((t) => hay.includes(t))) hit++;
+    }
+    if (hit > 0) out.push({ drop: tokens[i], hit });
+  }
+  out.sort((a, b) => b.hit - a.hit);
+  return out.slice(0, 3);
+}
+
+/** 第五十一轮⑧：搜索词+筛选 chip 的组合标签（组合记忆入历史用）。 */
+export function comboLabel(q, filter) {
+  const qq = String(q ?? '').trim();
+  const ff = String(filter ?? '').trim();
+  if (qq && ff && ff !== 'all') return `${qq} [${ff}]`;
+  return qq || '';
+}
