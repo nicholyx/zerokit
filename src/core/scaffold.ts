@@ -14,6 +14,9 @@ import { type LoadResult } from './manifest.ts';
 import { loadDir } from './registry.ts';
 
 export type ScaffoldRuntime = 'node' | 'python';
+/** 第三十六轮③：专题模板——chain/setting/http 三种能力的教学骨架。 */
+export type ScaffoldExample = 'chain' | 'setting' | 'http';
+export const SCAFFOLD_EXAMPLES: readonly ScaffoldExample[] = ['chain', 'setting', 'http'];
 
 export interface ScaffoldOptions {
   /** 显示名，默认取 id */
@@ -23,6 +26,8 @@ export interface ScaffoldOptions {
   web?: boolean;
   /** 生成到哪个父目录下，默认当前目录 */
   dir?: string;
+  /** 专题模板（chain/setting/http）：manifestTmpl 让位给 EXAMPLE_MANIFESTS */
+  example?: ScaffoldExample;
 }
 
 export interface ScaffoldResult {
@@ -178,6 +183,31 @@ const WEB_INDEX = `<!DOCTYPE html>
 </html>
 `;
 
+// ---------------- 第三十六轮③：专题模板（chain / setting / http） ----------------
+
+const EXAMPLE_MANIFESTS: Record<ScaffoldExample, { files: Record<string, string>; manifest: (id: string, name: string) => string }> = {
+  chain: {
+    files: {
+      'chain.py': '# 组合动作演示：get 产出数据，use 拿上一步的结果加工。\n# {别名.data.字段} 取上一步的结构化输出；risk 必须 ≥ 每一步（fail-closed）。\nimport json, sys\n\ncmd = sys.argv[1] if len(sys.argv) > 1 else ""\nif cmd == "get":\n    print(json.dumps({"value": 21}))\nelif cmd == "use":\n    v = int(sys.argv[sys.argv.index("--value") + 1])\n    print(json.dumps({"doubled": v * 2, "from": v}))\n',
+      'README.md': '# 组合动作（chain）示例\n\n`zkit run ID pipeline`：第一步产出 21，第二步翻倍成 42。\n\n规则：步骤按序执行；risk 取各步最大；禁嵌套/后台步骤。\n',
+    },
+    manifest: (id, name) => `# ${name}——组合动作（type=chain）教学骨架。\n# 两步：get 取数 → use 加工。真实场景：先查询再加工、先备份再清理。\n[plugin]\nid       = "${id}"\nname     = "${name}"\nversion  = "0.1.0"\nsummary  = "组合动作演示：把两步串成一条流水线"\nkeywords = ["chain", "示例"]\n\n[[action]]\nid          = "get"\ntitle       = "取数据"\ndescription = "链路第一步：产出一个数给后面的步骤用。"\nrisk        = "read"\nrun         = ["{python}", "chain.py", "get"]\noutput      = "json"\n\n[[action]]\nid          = "use"\ntitle       = "翻倍"\ndescription = "把传进来的数翻倍。独立可用，也作为链路第二步。"\nrisk        = "read"\nrun         = ["{python}", "chain.py", "use", "--value", "{value}"]\noutput      = "json"\n\n  [[action.param]]\n  name        = "value"\n  type        = "integer"\n  description = "要翻倍的数"\n\n[[action]]\nid          = "pipeline"\ntitle       = "取数再翻倍"\ndescription = "组合动作：先跑 get，再跑 use 并把 get 的结果传进去。"\nrisk        = "read"\ntype        = "chain"\ntemplate    = "{first.data.value} 翻倍后是 {result.data.doubled}"\n\n  [[action.step]]\n  use = "self.get"\n  as  = "first"\n\n  [[action.step]]\n  use    = "self.use"\n  as     = "result"\n  params = { value = "{first.data.value}" }\n`,
+  },
+  setting: {
+    files: {
+      'settings_demo.py': '# 设置项演示：读 [[setting]] 声明的用户配置。\n# 非秘密值走 {setting.名} 占位符；secret 只走 ZEROKIT_SETTING_<NAME> 环境变量（不落命令行）。\nimport json, os\n\ngreeting = os.environ.get("ZEROKIT_SETTING_GREETING", "你好")\ntoken = os.environ.get("ZEROKIT_SETTING_API_TOKEN", "")\nprint(json.dumps({\n    "greeting": greeting,\n    "token_present": bool(token),\n    "token_masked": (token[:2] + "***") if token else "(未配置)",\n}, ensure_ascii=False))\n',
+      'README.md': '# 设置项（[[setting]]）示例\n\n```\nzkit config ID api_token    # 写入 secret（不回显）\nzkit run ID greet\n```\n\n设置存在 ~/.zerokit/settings/ID.json（0600）；secret 只回掩码。\n',
+    },
+    manifest: (id, name) => `# ${name}——设置项教学骨架。\n# [[setting]] 声明的配置由用户填写、存在数据目录；动作经占位符/环境变量读取。\n[plugin]\nid       = "${id}"\nname     = "${name}"\nversion  = "0.1.0"\nsummary  = "设置项演示：用户配置与 secret 的正确用法"\nkeywords = ["setting", "示例"]\n\n[[setting]]\nname        = "greeting"\ntitle       = "问候语"\ndescription = "打招呼的开头语"\ntype        = "string"\ndefault     = "你好"\n\n[[setting]]\nname        = "api_token"\ntitle       = "API 令牌"\ndescription = "演示 secret：命令行与结果里都不会出现明文"\ntype        = "string"\nsecret      = true\n\n[[action]]\nid          = "greet"\ntitle       = "按设置打招呼"\ndescription = "读取用户设置并使用；secret 只验证存在不回显。"\nrisk        = "read"\nrun         = ["{python}", "settings_demo.py"]\n`,
+  },
+  http: {
+    files: {
+      'README.md': '# HTTP 动作示例\n\n`zkit run ID fetch` 取 zerokit 仓库信息。\n\nHTTP 动作不需要脚本文件：内核发请求（走系统代理或 config.toml [proxy]），headers 支持占位符，pick 挑字段。\n',
+    },
+    manifest: (id, name) => `# ${name}——HTTP 动作教学骨架。\n# type = "http"：内核发请求，响应 JSON 自动成为结构化结果。\n[plugin]\nid       = "${id}"\nname     = "${name}"\nversion  = "0.1.0"\nsummary  = "HTTP 动作演示：取 GitHub 仓库信息"\nkeywords = ["http", "示例"]\n\n[[action]]\nid          = "fetch"\ntitle       = "取仓库信息"\ndescription = "GET 一个公开 API 并挑出关键字段。什么场景用：查 GitHub 仓库概况。"\nrisk        = "read"\n\ntype    = "http"\nmethod  = "GET"\nurl     = "https://api.github.com/repos/nicholyx/zerokit"\npick    = ["full_name", "description", "stargazers_count"]\n\n[[action.param]]\nname        = "ua"\ntype        = "string"\ndefault     = "zerokit-demo"\ndescription = "User-Agent（GitHub API 必需）"\n\n[headers]\nUser-Agent = "{ua}"\n`,
+  },
+};
+
 /** 生成插件骨架。目录已存在时拒绝（绝不覆盖任何已有文件）。 */
 export function scaffoldPlugin(id: string, opts: ScaffoldOptions = {}): ScaffoldResult {
   if (!ID_RE.test(id)) {
@@ -194,11 +224,16 @@ export function scaffoldPlugin(id: string, opts: ScaffoldOptions = {}): Scaffold
     return { ok: false, dir: target, files: [], message: `${target} 已存在，换个 id 或用 --dir 指定别的位置` };
   }
   const name = opts.name || id;
-  const files: Record<string, string> = {
+  const files: Record<string, string> = opts.example
+    ? {
+        'plugin.toml': EXAMPLE_MANIFESTS[opts.example].manifest(id, name),
+        ...EXAMPLE_MANIFESTS[opts.example].files,
+      }
+    : {
     'plugin.toml': manifestTmpl(id, name, runtime, opts.web ?? false),
     ...entryFiles(runtime, opts.web ?? false),
     'README.md': `# ${name}\n\n由 \`zkit plugin new\` 生成的 zerokit 插件骨架。\n\n## 开发\n\n\`\`\`bash\nzkit plugin dev .      # 进入开发模式（改文件即生效）\nzkit run ${id} hello   # 跑起来\nzkit plugin validate . # 校验清单\n\`\`\`\n\n## 发布\n\n\`\`\`bash\nzkit plugin add .          # 转成正式副本\nzkit plugin export ${id}   # 打包成 .toolpack 单文件\n\`\`\`\n\n完整规范见 zerokit 仓库的 docs/plugin-spec.md。\n\n> 开发模式会在本目录写 \`.zerokit-source.json\`（zerokit 的来源记录），建议加进 .gitignore。\n`,
-  };
+    };
   try {
     for (const [rel, content] of Object.entries(files)) {
       const full = path.join(target, rel);

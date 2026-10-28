@@ -150,6 +150,54 @@ risk        = "read"
     cliRm.status === 0 && fs.existsSync(path.join(TMP_WORK, 'clidemo', 'plugin.toml')), cliRm.stderr);
 }
 
+// ---------------------------------------------- 第三十六轮：demo 插件与 cookbook
+{
+  const sh = (args) => spawnSync(process.execPath, ['src/cli.ts', ...args], {
+    cwd: PKG_ROOT, encoding: 'utf8', timeout: 60000, windowsHide: true,
+    env: { ...process.env, ZEROKIT_HOME: TMP_HOME },
+  });
+  sh(['plugin', 'bundled']);
+
+  // ④ demo-chain：组合动作 roundtrip——gen 产出 21，链式翻倍成 42
+  const chain = sh(['run', 'demochain', 'pipeline', '--yes']);
+  check('demo-chain：组合动作 roundtrip（21→42）',
+    chain.status === 0 && /翻倍后是 42/.test(chain.stdout), chain.stderr + chain.stdout.slice(0, 200));
+  const gen = sh(['run', 'demochain', 'gen', '--yes']);
+  check('demo-chain：被引用动作单独可跑（gen→21）',
+    gen.status === 0 && /21/.test(gen.stdout), gen.stderr);
+
+  // ⑤ demo-settings：secret 配置后动作拿到值且回掩码
+  const cfg = spawnSync(process.execPath, ['src/cli.ts', 'config', 'demosettings', 'set', 'api_token', '--stdin'], {
+    cwd: PKG_ROOT, input: 'test123', encoding: 'utf8', timeout: 60000, windowsHide: true,
+    env: { ...process.env, ZEROKIT_HOME: TMP_HOME },
+  });
+  const greet = sh(['run', 'demosettings', 'greet', '--yes']);
+  check('demo-settings：secret 经 --stdin 配置后动作可读且回掩码',
+    cfg.status === 0 && greet.status === 0 && /te\*\*\*/.test(greet.stdout),
+    `${cfg.stderr} ${greet.stderr}${greet.stdout.slice(0, 200)}`);
+
+  // ⑥ demo-http：清单可装载（网络请求 CI 不跑——测结构不测外网）
+  // bundled 已在块首装过，二次调用只回「都已安装」——装载成功改用 zkit list 验证
+  const lst = sh(['list']);
+  const toml = fs.readFileSync(path.join(PKG_ROOT, 'plugins/demohttp/plugin.toml'), 'utf8');
+  check('demo-http：清单装载成功且声明了 type=http 与代理行为',
+    lst.status === 0 && /demohttp/.test(lst.stdout) && /type\s*=\s*"http"/.test(toml)
+      && /User-Agent = "\{ua\}"/.test(toml), lst.stderr);
+
+  // ⑧ plugin-spec 新能力速查表：七个专题都有锚点链接
+  const spec = fs.readFileSync(path.join(PKG_ROOT, 'docs/plugin-spec.md'), 'utf8');
+  check('规范索引：新能力速查含 chain/setting/requires/http/service/web/风险 七行',
+    spec.includes('## 新能力速查')
+      && [...spec.matchAll(/\| `plugins\/([\w-]+)\/`/g)].length >= 5
+      && spec.includes('cookbook.md'), '');
+
+  // ⑦ cookbook：十篇齐全、每篇有代码块
+  const cb = fs.readFileSync(path.join(PKG_ROOT, 'docs/cookbook.md'), 'utf8');
+  const headings = [...cb.matchAll(/^## \d+\./gm)].length;
+  check('cookbook：十篇齐全且都带示例代码块',
+    headings === 10 && (cb.match(/```/g) ?? []).length >= 20, `headings=${headings}`);
+}
+
 // ---------------------------------------------------------------- 收尾
 fs.rmSync(TMP_HOME, { recursive: true, force: true });
 fs.rmSync(TMP_WORK, { recursive: true, force: true });

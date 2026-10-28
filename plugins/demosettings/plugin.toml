@@ -1,0 +1,31 @@
+# demo-settings——设置项（[[setting]]）与 secret 的活示例。
+# 什么场景用：插件要用户先配置（令牌、主机名），且敏感值不能出现在命令行/结果里。
+[plugin]
+id       = "demosettings"
+name     = "设置项演示"
+version  = "0.1.0"
+summary  = "演示用户设置与 secret：配置存本地、敏感值只走环境变量"
+keywords = ["setting", "settings", "设置", "secret", "演示"]
+
+# 设置存 ~/.zerokit/settings/<id>.json（0600 原子写）；动作里用 {setting.名} 占位。
+[[setting]]
+name = "greeting"
+title = "问候语"
+description = "打招呼的开头语"
+type = "string"
+default = "你好"
+
+# secret = true：zkit config 回显只给掩码；值经 ZEROKIT_SETTING_<NAME> 注入
+[[setting]]
+name = "api_token"
+title = "API 令牌"
+description = "演示 secret 的存取（只回掩码）"
+type = "string"
+secret = true
+
+[[action]]
+id      = "greet"
+title   = "按设置打招呼"
+description = "读取用户设置并使用。看看设置怎么进动作、secret 怎么掩码。"
+risk    = "read"
+run     = ["{python}", "settings_demo.py"]

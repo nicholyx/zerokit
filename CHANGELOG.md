@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### Added
+
+- 组合动作 / 设置项 / HTTP 动作三个演示插件进 bundled（demochain / demosettings / demohttp），新能力各有一个活示例
+- `docs/cookbook.md`：十篇可照抄的做法（每篇 ≤30 行）
+- 插件规范加「新能力速查」索引表：每个专题直达规范节与活示例
+- 三个 demo 插件登记进 market.json 集市表
+
 ## [0.40.0] - 2026-10-28
 
 ### Added

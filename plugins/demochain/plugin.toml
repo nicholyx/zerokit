@@ -1,0 +1,50 @@
+# demo-chain——组合动作（type = "chain"）的活示例。
+# 什么场景用：一个动作的产出是另一个动作的输入（先查、再算、后写）。
+[plugin]
+id       = "demochain"
+name     = "组合动作演示"
+version  = "0.1.0"
+summary  = "演示链式组合动作：第一步取数，第二步用它的结果算"
+keywords = ["chain", "组合", "演示", "pipeline"]
+
+# 第一步：独立可跑，产出结构化 JSON（被引用的动作要 output="json"）
+[[action]]
+id      = "gen"
+title   = "产出数据"
+description = "链路第一步：返回 {value: 21}。单独也能跑。"
+risk    = "read"
+run     = ["{python}", "chain.py", "gen"]
+output  = "json"
+
+# 第二步（被引用方）：独立可跑的翻倍动作，参数 --value 从命令行占位符拿
+[[action]]
+id      = "double"
+title   = "翻倍"
+description = "把输入翻倍。组合动作的第二步素材。"
+risk    = "read"
+run     = ["{python}", "chain.py", "double", "--value", "{value}"]
+params  = [
+  { name = "value", type = "number", description = "要翻倍的数" },
+]
+output  = "json"
+
+# 第三步：组合动作。type = "chain"，[[action.step]] 按序执行，
+# use 引用同插件动作；{别名.data.字段} 取上一步的结构化输出，
+# params 里用占位符把上一步的结果传给下一步的参数。
+# 注意：chain 动作不写 run；被引用动作要 output="json"；risk 必须 >= 每一步。
+[[action]]
+id      = "pipeline"
+title   = "取数再翻倍"
+description = "组合动作演示：跑 gen 拿 21，翻倍成 42。想看多步传值怎么写就看这个。"
+type    = "chain"
+risk    = "read"
+template = "拿到 {first.data.value}，翻倍后是 {second.data.doubled}"
+
+[[action.step]]
+use = "self.gen"
+as  = "first"
+
+[[action.step]]
+use    = "self.double"
+as     = "second"
+params = { value = "{first.data.value}" }
