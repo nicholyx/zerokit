@@ -1,5 +1,17 @@
 ## [Unreleased]
 
+
+## [Unreleased]
+
+### Added
+
+### Changed
+
+### Fixed
+
+
+## [0.48.0] - 2026-10-28
+
 ### Added
 
 - 新示例插件 `convert`：进制/大小写/JSON 美化与压缩/Base64/URL 编解码/字节数/千分位八个转换动作 + `hex-flow` 组合动作（十六进制→十进制→千分位一步完成）
