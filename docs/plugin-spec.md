@@ -538,6 +538,24 @@ cwd         = "D:/software/proxy"
 zerokit 对 python 解释器会自动注入 `PYTHONIOENCODING=utf-8`；其它语言输出非 UTF-8 时，
 在动作里声明 `encoding` 即可。
 
+## 插件间共享代码（`_vendor` 层）
+
+插件目录里以 `_` 开头的目录不是插件（没有 `plugin.toml`，`zkit list` 与
+体检都会跳过），是**插件间的共享代码层**。仓库自带 `plugins/_vendor/zkutil.mjs`
+（统一输出协议 `ok()` / `err()`、`humanBytes`、`groupDigits`）：
+
+```js
+// plugins/convert/convert.mjs
+import { ok, err } from '../_vendor/zkutil.mjs';
+ok({ value: '255' });   // stdout 打一行 JSON
+```
+
+- `zkit plugin bundled` 会把 `_vendor` 与插件一起拷进数据目录
+- 输出约定：`ok()` 直接打 payload（顶层就是数据对象，不包 `{ok,data}` 信封）——
+  chain 的 `{别名.data.字段}` 取的是 stdout 解析结果，包信封会让引用多一级
+- 也可以直接借用邻居插件的成熟模块：`typist` 写剪贴板用的就是
+  `../clipboard/clipio.mjs`
+
 ## 风险等级
 
 `risk` 是**必填**的，不是装饰。副作用常常超出接口名所示（"查询订单"内部可能带消息推送和写盘），

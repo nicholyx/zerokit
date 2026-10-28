@@ -153,6 +153,7 @@ export function findOrphanPlugins(pluginsDir: string): OrphanPlugin[] {
   const out: OrphanPlugin[] = [];
   for (const name of fs.readdirSync(pluginsDir)) {
     if (name.endsWith('.bak')) continue; // unpack --replace 的备份，有意为之
+    if (name.startsWith('_')) continue; // 共享代码层（_vendor），有意存在
     const dir = path.join(pluginsDir, name);
     if (!fs.statSync(dir).isDirectory()) continue;
     const files = fs.readdirSync(dir);

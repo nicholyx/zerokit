@@ -1,5 +1,16 @@
 ## [Unreleased]
 
+### Added
+
+- 新示例插件 `convert`：进制/大小写/JSON 美化与压缩/Base64/URL 编解码/字节数/千分位八个转换动作 + `hex-flow` 组合动作（十六进制→十进制→千分位一步完成）
+- 新示例插件 `snap`：系统自带工具截图（macOS screencapture / Windows PowerShell / Linux 工具探测），无显示器环境报错会说清补救路径
+- 新示例插件 `typist`：SQL/Markdown/CI YAML/提交信息四类文本片段一键写剪贴板（平台写入复用 clipboard 插件的 clipio）
+- 插件共享代码层 `plugins/_vendor/`：`zkit plugin bundled` 会一并拷贝；插件加载与孤儿检测跳过下划线目录
+
+### Fixed
+
+- `zkit health` 此前会把共享代码目录当成「清单有问题的插件」报出来（1 个加载失败）
+
 ## [0.47.0] - 2026-10-28
 
 ### Changed
