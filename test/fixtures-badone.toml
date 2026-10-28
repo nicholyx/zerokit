@@ -1,0 +1,21 @@
+[plugin]
+id = "badone"
+name = "坏示例"
+version = "0.1.0"
+summary = "短"
+
+[[action]]
+id = "del"
+title = "删除文件"
+description = "删掉一个文件"
+type = "exec"
+run = ["node", "-e", "1"]
+output = "text"
+risk = "read"
+
+[[action.param]]
+name = "target"
+description = "哪个文件"
+required = true
+type = "path"
+secret = true

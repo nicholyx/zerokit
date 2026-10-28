@@ -3,6 +3,10 @@
 ## [0.44.0] - 2026-10-28
 
 ### Added
+- 插件体检 `zkit plugin lint`：十级规则（L01–L10）error/warn/info 分级，error 退出码非零（CI 可用），`--json` 机读
+- 插件文档生成 `zkit plugin doc`：从清单生成 Markdown 动作参考（参数表/风险/示例），`--json` 机读版供启动器与 AI 面用
+- 六个内置插件全部通过自身 lint（零 error 零 warn，示范级）
+- plugin-spec.md 新增「体检规则」一节（规则编号与文案对照表）
 
 - 表格首列冻结（sticky）：宽表横向滚动时关键字段不丢
 - 宽表格左右滚动阴影提示（还有内容可滚时渐变提示）
