@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [0.46.0] - 2026-10-28
+
 ### Added
 
 - CLI 显式授权 `zkit allow list/add/remove`：带 TTL 与过期清理
