@@ -15,22 +15,26 @@ command -v "$PY" >/dev/null 2>&1 || PY=py
 # ① Markdown 相对内链存在性
 "$PY" - <<'PY'
 import pathlib, re, sys
-bad = []
-for md in pathlib.Path('.').rglob('*.md'):
-    if any(part in ('node_modules', '.git', 'target', '.trellis', 'apps', '.claude', '.codex', '.agents') for part in md.parts):
-        continue
-    for m in re.finditer(r'\[[^\]]*\]\(([^)#\s]+)(#[^)]*)?\)', md.read_text(encoding='utf-8')):
-        t = m.group(1)
-        if t.startswith(('http://', 'https://', 'mailto:')):
+try:
+    bad = []
+    for md in pathlib.Path('.').rglob('*.md'):
+        if any(part in ('node_modules', '.git', 'target', '.trellis', 'apps', '.claude', '.codex', '.agents') for part in md.parts):
             continue
-        if not (md.parent / t).resolve().exists():
-            bad.append(f"{md}:{t}")
-if bad:
-    print("✗ 死链：")
-    for b in bad:
-        print("   ", b)
+        for m in re.finditer(r'\[[^\]]*\]\(([^)#\s]+)(#[^)]*)?\)', md.read_text(encoding='utf-8')):
+            t = m.group(1)
+            if t.startswith(('http://', 'https://', 'mailto:')):
+                continue
+            if not (md.parent / t).resolve().exists():
+                bad.append(f"{md}:{t}")
+    if bad:
+        print("✗ 死链：")
+        for b in bad:
+            print("   ", b)
+        sys.exit(1)
+    print("✓ 内链全部存在")
+except Exception as e:
+    print(f"死链巡检异常: {e!r}")
     sys.exit(1)
-print("✓ 内链全部存在")
 PY
 python_exit=$?
 [ "$python_exit" -ne 0 ] && fail=$((fail+1))

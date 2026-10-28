@@ -74,10 +74,12 @@ cli(['plugin', 'bundled']);
   ok(bad.status === 2, 'stats --since 非法 = 2');
 }
 
-// ⑤ check-docs.sh
+// ⑤ check-docs.sh（bash 不存在的平台跳过——windows runner 也有 git bash，基本都有）
 {
-  const r = spawnSync('bash', [path.join(REPO, 'scripts/check-docs.sh')], { encoding: 'utf8', cwd: REPO });
-  ok(r.status === 0 && r.stdout.includes('文档巡检全部通过'), 'check-docs 全过', (r.stdout + r.stderr).slice(-600));
+  const hasBash = spawnSync('bash', ['-c', 'echo ok'], { encoding: 'utf8' }).status === 0;
+  const r = hasBash ? spawnSync('bash', [path.join(REPO, 'scripts/check-docs.sh')], { encoding: 'utf8', cwd: REPO }) : null;
+  ok(!hasBash || (r.status === 0 && r.stdout.includes('文档巡检全部通过')), 'check-docs 全过',
+     hasBash ? `status=${r.status} out=[${r.stdout}] err=[${r.stderr.slice(0, 300)}]` : 'no bash');
 }
 
 console.log(`通过 ${pass} / ${pass + fail}`);
