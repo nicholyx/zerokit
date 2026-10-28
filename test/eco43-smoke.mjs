@@ -64,9 +64,11 @@ const cli = (args) => spawnSync(process.execPath, [path.join(REPO, 'src/cli.ts')
   ok(r.status === 0 && d?.rows?.length === 2 && d?.dir === HOME, 'snap list');
   const full = cli(['run', 'snap', 'full', '--dir', HOME, '--name', 'probe', '--yes']);
   // 无显示器环境（CI/SSH）应失败且文案说清补救；有显示器则成功。两者都算验收过——断言「要么成功要么给出指引」
+  // Linux CI 的报错来自 gnome-screenshot/scrot/import 的 ENOENT 分支（文案是「没有可用的截图工具」），
+  // macOS headless 是「屏幕录制/显示器」指引——平台不同但都符合「说人话的失败」
   const succeeded = full.status === 0 && fs.existsSync(path.join(HOME, 'probe.png'));
-  const guided = full.status === 1 && /屏幕录制|显示器/.test(full.stdout + full.stderr);
-  ok(succeeded || guided, 'snap full: success or guided error', `status=${full.status}`);
+  const guided = full.status === 1 && /屏幕录制|显示器|截图工具/.test(full.stdout + full.stderr);
+  ok(succeeded || guided, 'snap full: success or guided error', `status=${full.status} out=${(full.stdout + full.stderr).slice(0, 160)}`);
 }
 
 // typist：preview + 写剪贴板
