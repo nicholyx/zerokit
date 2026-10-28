@@ -77,7 +77,7 @@ cli(['plugin', 'bundled']);
 // ⑤ check-docs.sh
 {
   const r = spawnSync('bash', [path.join(REPO, 'scripts/check-docs.sh')], { encoding: 'utf8', cwd: REPO });
-  ok(r.status === 0 && r.stdout.includes('文档巡检全部通过'), 'check-docs 全过', r.stdout.slice(-200));
+  ok(r.status === 0 && r.stdout.includes('文档巡检全部通过'), 'check-docs 全过', (r.stdout + r.stderr).slice(-600));
 }
 
 console.log(`通过 ${pass} / ${pass + fail}`);
