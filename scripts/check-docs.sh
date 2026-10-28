@@ -2,7 +2,7 @@
 # 第四十六轮⑤：文档一致性巡检——内链存在性 + 版本号四处同步 + cookbook 与 README 命令漂移。
 # 与 CI 同源可本地跑：bash scripts/check-docs.sh
 set -uo pipefail
-trap 'say "trap: 脚本中止于 line $LINENO（rc=$?）——若非预期请看上方输出"' EXIT
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then say "trap: 异常中止 rc=$rc"; fi' EXIT
 cd "$(dirname "$0")/.." || exit 1
 fail=0
 say() { printf '%s\n' "$*"; }
