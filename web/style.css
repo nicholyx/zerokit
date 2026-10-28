@@ -4,12 +4,19 @@
   --panel-2: #1c2129;
   --line: #262c36;
   --fg: #e6e9ef;
-  --fg-dim: #8b93a1;
+  --fg-dim: #99a1b0;
   --accent: #5aa9ff;
   --ok: #46c98b;
   --warn: #e8b13a;
   --bad: #f0685f;
   --mono: ui-monospace, "Cascadia Code", Consolas, "Courier New", monospace;
+  /* 第五十轮①⑦：字号/间距/过渡/危险色阶梯（语义化，消灭零散 px 与魔数） */
+  --fs-lg: 15px;   /* 标题/品牌 */
+  --fs-md: 14px;   /* 正文（跟随 html 基准，这里只是显式命名） */
+  --fs-sm: 12px;   /* 辅助/徽标 */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 20px;
+  --tr-fast: 120ms; --tr-slow: 280ms;
+  --danger: var(--bad);   /* ⑤：危险操作语义色（destructive 确认按钮专用） */
 }
 
 * { box-sizing: border-box; }
@@ -1484,3 +1491,32 @@ pre.out.numbered .ln::before {
 .cmp-view .cmp-table { width: 100%; font-size: 13px; border-collapse: collapse; }
 .cmp-view td, .cmp-view th { padding: 3px 8px; border-bottom: 1px solid var(--line, rgba(127,127,127,.15)); text-align: left; }
 [data-sel].on { background: var(--accent, #5aa9ff); color: #fff; }
+
+/* ---------------- 第五十轮⑤：危险操作语义色 ---------------- */
+.btn-danger {
+  background: transparent; color: var(--danger);
+  border: 1px solid var(--danger); border-radius: 7px;
+  padding: var(--sp-1) 10px; font-size: var(--fs-sm); cursor: pointer; font-weight: 600;
+}
+.btn-danger:hover { background: var(--danger); color: #fff; }
+
+/* ---------------- 第四十九…第五十轮④：表格斑马纹 ---------------- */
+.zk-table tbody tr:nth-child(even), table tbody tr:nth-child(even) { background: color-mix(in srgb, var(--panel-2) 40%, transparent); }
+
+/* ---------------- 第五十轮⑥：滚动条细化 ---------------- */
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--fg-dim) 35%, transparent); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--fg-dim) 60%, transparent); border: 2px solid transparent; background-clip: content-box; }
+
+/* ---------------- 第五十轮⑦：过渡统一 ---------------- */
+button, .item, .card, .chip { transition: color var(--tr-fast) ease, background var(--tr-fast) ease, border-color var(--tr-fast) ease; }
+.drawer, .overlay, .modal { transition: opacity var(--tr-slow) ease, transform var(--tr-slow) ease; }
+
+/* ---------------- 第五十轮⑧：打印样式（结果存档用） ---------------- */
+@media print {
+  .bar, .drawer, .drawer-mask, .foot, #rtabs, .actions, .skel-row, button { display: none !important; }
+  body { background: #fff; color: #000; }
+  .shell { max-width: 100%; padding: 0; }
+  #result pre, #result table { page-break-inside: avoid; }
+}

@@ -2221,3 +2221,27 @@ export function durationStats(msList) {
   const pick = (q) => a[Math.min(a.length - 1, Math.floor(q * a.length))];
   return { p50: pick(0.5), p95: pick(0.95), min: a[0], max: a[a.length - 1], count: a.length };
 }
+
+/**
+ * 第五十轮⑨：相对亮度（WCAG）：hex → 0~1。
+ * sRGB 每通道按分段公式线性化（≤0.03928 除 12.92，其余 ((c+0.055)/1.055)^2.4）。
+ */
+function srgbLum(hex) {
+  const h = hex.replace('#', '');
+  const n = h.length === 3 ? h.split('').map((c) => parseInt(c + c, 16)) : [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const [r, g, b] = n.map((v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** 对比度比值：1~21（同色=1，黑白=21）。两色都收 #rgb/#rrggbb。 */
+export function contrastRatio(hex1, hex2) {
+  const l1 = srgbLum(hex1), l2 = srgbLum(hex2);
+  const hi = Math.max(l1, l2), lo = Math.min(l1, l2);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** 字号阶梯一步：base(px) × 1.25^step，step 可为负（缩小），四舍五入到 0.5px。 */
+export function typeScaleStep(base, step) {
+  const r = base * Math.pow(1.25, step);
+  return Math.round(r * 2) / 2;
+}
