@@ -24,7 +24,10 @@ const { runAction } = await import('../src/core/runner.ts');
 // 第六十轮：跑一次垫片运行时（spawn node，等待退出，回 {stdout, stderr, code}）
 async function runRuntime(dir, dataDir) {
   const { spawnSync } = await import('node:child_process');
-  const runtime = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'src', 'core', 'utools-runtime.mjs');
+  // Windows 教训：new URL().pathname 在 Windows 上是 /D:/...（带前导斜杠），
+  // path.join 出来的路径加载不了——必须走 fileURLToPath（CONTRIBUTING 军规同款）
+  const { fileURLToPath } = await import('node:url');
+  const runtime = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'core', 'utools-runtime.mjs');
   const entry = path.join(dir, 'p.js');
   const r = spawnSync(process.execPath, [runtime, entry,
     '--zkit-code', 'main', '--zkit-data', dataDir, '--zkit-plugin', 'runtime60',
@@ -326,7 +329,16 @@ globalThis.utools.onPluginEnter(() => {
   const r = await runRuntime(dir3, dataDir);
   if (process.env['ZK_DBG60']) console.error('DBG:', fs.readFileSync(path.join(dir3, 'p.js'), 'utf8').split('\n').filter((l) => l.includes('redirect') || l.includes('rd:')).join(' || '));
   const jsonLine = r.stdout.trim().split('\n').filter((l) => l.trim().startsWith('{')).pop() ?? '';
-  const j = JSON.parse(jsonLine);
+  // Windows 上子进程可能整个没输出（runtime 退出码非 0 或控制台编码问题）——
+  // 给出带 stdout/stderr 的可诊断失败，而不是 JSON.parse 裸崩（CI 教训：裸崩没有汇总行）
+  let j;
+  try {
+    j = JSON.parse(jsonLine);
+  } catch {
+    check('六轮④⑤：runtime 端到端有 JSON 输出', false,
+      `jsonLine="${jsonLine.slice(0, 120)}" code=${r.code} stdout=${r.stdout.slice(0, 200)} stderr=${r.stderr.slice(0, 300)}`);
+    j = {};
+  }
   check('六轮⑤：首次 put 成功', j.r1?.ok === true, JSON.stringify(j.r1));
   check('六轮⑤：不带 _rev 重复 put 报 conflict', j.dup?.ok === false && j.dup?.error === 'conflict', JSON.stringify(j.dup));
   check('六轮⑤：带正确 _rev 可覆盖', j.upd === true, JSON.stringify(j.upd));
