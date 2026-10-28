@@ -1520,3 +1520,11 @@ button, .item, .card, .chip { transition: color var(--tr-fast) ease, background 
   .shell { max-width: 100%; padding: 0; }
   #result pre, #result table { page-break-inside: avoid; }
 }
+
+/* ---------------- 第五十一轮：搜索体验 ---------------- */
+.chip-wrap { display: inline-flex; align-items: center; gap: 2px; }
+.chip-x { background: none; border: none; color: var(--fg-dim); cursor: pointer; font-size: 10px; padding: 0 2px; }
+.chip-x:hover { color: var(--danger); }
+.q-clear { padding: 2px 8px; }
+.group-head.collapsed .g-arrow { transform: rotate(-90deg); }
+.group-head.collapsed + li.item, .group-head.collapsed ~ li.item { display: none; }
