@@ -118,7 +118,7 @@ Rust `target/`。
 ## 写插件
 
 插件不需要改内核代码——一份 `plugin.toml` 清单就够了。
-完整规范见 [`docs/plugin-spec.md`](docs/plugin-spec.md)，
+完整规范见 [`docs/reference/plugin-spec.md`](docs/reference/plugin-spec.md)，
 仓库自带的 6 个示例插件在 [`plugins/`](plugins/) 目录，
 其中 `ip` 是零代码插件、`proxy` 演示接管已有工具。
 

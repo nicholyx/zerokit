@@ -185,14 +185,14 @@ risk        = "read"
       && /User-Agent = "\{ua\}"/.test(toml), lst.stderr);
 
   // ⑧ plugin-spec 新能力速查表：七个专题都有锚点链接
-  const spec = fs.readFileSync(path.join(PKG_ROOT, 'docs/plugin-spec.md'), 'utf8');
+  const spec = fs.readFileSync(path.join(PKG_ROOT, 'docs/reference/plugin-spec.md'), 'utf8');
   check('规范索引：新能力速查含 chain/setting/requires/http/service/web/风险 七行',
     spec.includes('## 新能力速查')
       && [...spec.matchAll(/\| `plugins\/([\w-]+)\/`/g)].length >= 5
       && spec.includes('cookbook.md'), '');
 
   // ⑦ cookbook：十篇齐全、每篇有代码块
-  const cb = fs.readFileSync(path.join(PKG_ROOT, 'docs/cookbook.md'), 'utf8');
+  const cb = fs.readFileSync(path.join(PKG_ROOT, 'docs/reference/cookbook.md'), 'utf8');
   const headings = [...cb.matchAll(/^## \d+\./gm)].length;
   check('cookbook：十篇齐全且都带示例代码块',
     headings === 10 && (cb.match(/```/g) ?? []).length >= 20, `headings=${headings}`);

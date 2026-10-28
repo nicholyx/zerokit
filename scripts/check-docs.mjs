@@ -16,6 +16,25 @@ process.chdir(ROOT);
 const problems = [];
 const bad = (msg) => { console.log(`✗ ${msg}`); problems.push(msg); };
 
+
+// ⑤ 第五十六轮⑨：docs 导航断言——导航页必须链到四层全部核心文档
+{
+  const nav = (() => { try { return fs.readFileSync('docs/README.md', 'utf8'); } catch { return ''; } })();
+  const required = [
+    'guide/quickstart.md', 'guide/glossary.md', 'guide/faq.md',
+    'architecture.md',
+    'reference/actions-reference.md', 'reference/plugin-spec.md', 'reference/cookbook.md', 'reference/overview.md',
+    'deep/design.md',
+  ];
+  for (const t of required) {
+    if (!nav.includes(t)) bad(`docs/README.md 导航缺少 ${t}`);
+  }
+  // 四层文档自身都要存在
+  for (const t of required) {
+    if (!fs.existsSync(path.join('docs', t))) bad(`docs/${t} 不存在`);
+  }
+}
+
 // ① Markdown 相对内链存在性
 {
   const skip = new Set(['node_modules', '.git', 'target', '.trellis', 'apps', '.claude', '.codex', '.agents']);
@@ -56,7 +75,7 @@ const bad = (msg) => { console.log(`✗ ${msg}`); problems.push(msg); };
 // ③ cookbook 与 --help 命令漂移
 {
   const help = spawnSync(process.execPath, ['src/cli.ts', '--help'], { encoding: 'utf8' }).stdout ?? '';
-  const cb = fs.readFileSync('docs/cookbook.md', 'utf8');
+  const cb = fs.readFileSync('docs/reference/cookbook.md', 'utf8');
   const subs = [...new Set([...cb.matchAll(/zkit (plugin )?([a-z][a-z-]*)/g)].map((m) => m[2]))];
   const pluginFamily = /(new|dev|validate|install|add|update|remove|bundled|export|import|pack|unpack|info|recommend|lint|doc|publish-ready)/;
   for (const sub of subs) {

@@ -12,5 +12,5 @@ contact_links:
     about: 从零到跑通的三步指南，环境问题先看这里。
 
   - name: 🔌 怎么写插件
-    url: https://github.com/nicholyx/zerokit/blob/main/docs/plugin-spec.md
+    url: https://github.com/nicholyx/zerokit/blob/main/docs/reference/plugin-spec.md
     about: 插件清单（plugin.toml）的完整规范与示例。
