@@ -54,8 +54,18 @@ const { classifyError, batchSummary } = await import(pathToFileURL(path.join(REP
     await new Promise((r2) => setTimeout(r2, 700));
   }
   cp.stdin.end();
-  await new Promise((r2) => { cp.on('close', r2); setTimeout(r2, 3000); });
+  // CI 上冷启动慢（插件 bundled 装完才 ready）：给到 15s，本地一般 <2s
+  await new Promise((r2) => { cp.on('close', r2); setTimeout(r2, 15000); });
   let d = null;
+  for (let w = 0; w < 30 && !d; w++) {
+    for (const l of out.split('\n')) {
+      const t = l.trim();
+      if (!t.startsWith('{')) continue;
+      try { const j = JSON.parse(t); if (j.id === 2) d = j; } catch { }
+    }
+    if (d) break;
+    await new Promise((r2) => setTimeout(r2, 500));
+  }
   for (const l of out.split('\n')) {
     const t = l.trim();
     if (!t.startsWith('{')) continue;
