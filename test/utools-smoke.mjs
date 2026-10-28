@@ -130,7 +130,7 @@ const write = (dir, files) => {
       pluginName: '六轮演示',
       version: '1.0.0',
       logo: 'icon.png',
-      platform: ['win32'],
+      platform: [process.platform === 'win32' ? 'darwin' : 'win32'],
       preload: 'p.js',
       features: [
         { code: 'img-in', explain: '图片输入', cmds: [{ type: 'img' }] },
