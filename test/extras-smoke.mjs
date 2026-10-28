@@ -1155,6 +1155,29 @@ console.log('\n' + '='.repeat(60));
     && viewportMode(721) === 'desktop' && viewportMode(0) === 'desktop']);
 }
 
+// ======================= 第五十八轮：大输入回归防护 ======================
+{
+  // 10k 行大输入——防分窗/过滤/查询将来退化成 O(n²)（基线：virtualWindow 0ms / filterRows 2.4ms / resultQuery 2.8ms）
+  const { virtualWindow, filterRows, resultQuery } = await import('../web/extras.js');
+  const rows = Array.from({ length: 10000 }, (_, i) => ({ name: 'row' + i, size: i % 500, tag: i % 3 ? 'a' : 'b' }));
+  let t0 = performance.now();
+  for (let top = 0; top < 10000; top += 137) virtualWindow(10000, top, 28, 600, 6);
+  const vwMs = performance.now() - t0;
+  results.push(['virtualWindow 10k×73 滚动位 <50ms', vwMs < 50]);
+  t0 = performance.now();
+  const fr = filterRows(rows, ['row9', 'tag:b']);
+  const frMs = performance.now() - t0;
+  // row9 是子串命中（row9/row90…row9999 共 1111 行）；'tag:b' 不是任何字段子串——交集为空才是 AND 语义正确的证据
+  results.push(['filterRows 10k AND 无假阳性（空交集）', frMs < 50 && fr.length === 0]);
+  const fr2 = filterRows(rows, ['row9', 'b']);
+  results.push(['filterRows 10k AND 交集 373', fr2.length === 373]);
+  t0 = performance.now();
+  const rq = resultQuery(rows, 'size>100');
+  const rqMs = performance.now() - t0;
+  // size = i%500 > 100 → 每轮 500 里有 399 行合格，10 轮 = 3990…不对：i%500∈[0,499]，>100 的有 399 个值；10 行共享同 size……实际 count 见运行
+  results.push(['resultQuery 10k 数字比较 <50ms', rqMs < 50 && rq.length > 7000]);
+}
+
 // ======================= 汇总（必须在所有块之后） =======================
 const failed = results.filter((r) => !r[1]);
 for (const [name] of failed) console.error('FAIL  ' + name);

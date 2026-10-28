@@ -1,6 +1,11 @@
 ## [Unreleased]
 
-（下一版攒着）
+### Added
+
+- `scripts/bench.mjs` 扩充 CLI 冷启动（path/--help/list 各 10 次中位）与峰值 RSS 测量；性能基线表与预算（--help <300ms、list <500ms、RSS <150MB）写入项目账本，超预算回归算缺陷
+- 大输入回归防护：virtualWindow/filterRows/resultQuery 补 10k 行用例（基线 2-3ms，防 O(n²) 退化）
+- 拆解结论入账本：冷启动 84ms ≈ Node 17ms + amaro TS 即时转译 27ms + 模块图 40ms；懒加载收益上限 30ms，不改错误时序
+
 
 ## [0.62.0] - 2026-10-28
 
