@@ -1827,8 +1827,12 @@ export function highlightSegmentsCaseKept(text, query, maxParts = 24) {
 
 /** ⑤历史深链解析：#/history/<plugin>.<action> → key；不匹配返回 null。 */
 export function parseHistoryHash(hash) {
-  const m = /^#\/history\/([\w.-]+\.[\w.-]+)$/.exec(String(hash ?? ''));
-  return m ? m[1] : null;
+  // 第五十五轮⑨：插件名/动作名可以是中文——path 段按 encodeURIComponent 编码，
+  // 正则放宽到非斜杠非井号（编码后的 %2F 也拦在段外）；老 ASCII 链接不破
+  const raw = String(hash ?? '');
+  const m = /^#\/history\/([^/#]+)$/.exec(raw);
+  if (!m || /%2f/i.test(m[1]) || m[1].includes('/')) return null;
+  try { return decodeURIComponent(m[1]); } catch { return m[1]; }
 }
 
 /** ②最近优先加权值：最近执行过的动作在同名命中分上叠加。

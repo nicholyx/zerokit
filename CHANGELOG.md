@@ -2,6 +2,13 @@
 
 （下一版攒着）
 
+## [0.60.0] - 2026-10-28
+
+### Added
+
+- 发布准备工具 scripts/release-prep.mjs：CHANGELOG 归档 + 版本号四处同步一步到位，归档前后三重自检（段标题/条目数/空壳），Cargo.lock 结构化定位 zerokit-desktop 段，--dry-run 干跑；终结连续两轮手搓归档事故
+- 启动器三处修复：搜索历史 chip 点击后焦点回搜索框；#/timeline 进入浏览器历史（后退回列表）；#/history/<key> 中文键编码修复（decodeURIComponent + encodeURIComponent 对称）
+
 ## [0.59.0] - 2026-10-28
 
 ### Added
