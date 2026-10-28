@@ -49,30 +49,27 @@ const { classifyError, batchSummary } = await import(pathToFileURL(path.join(REP
   const cp = spawn(process.execPath, [path.join(REPO, 'src/cli.ts'), 'mcp', 'serve'], { stdio: ['pipe', 'pipe', 'ignore'] });
   let out = '';
   cp.stdout.on('data', (b) => { out += b; });
-  for (const q of reqs) {
-    cp.stdin.write(JSON.stringify(q) + '\n');
-    await new Promise((r2) => setTimeout(r2, 700));
+  const writeLine = (obj) => cp.stdin.write(JSON.stringify(obj) + '\n');
+  writeLine(reqs[0]);
+  // 等 initialize 响应（id:1）再继续——CI 冷启动可能十几秒
+  let ready = false;
+  for (let w = 0; w < 60 && !ready; w++) {
+    ready = out.split('\n').some((l) => { try { return JSON.parse(l).id === 1; } catch { return false; } });
+    if (!ready) await new Promise((r2) => setTimeout(r2, 500));
   }
-  cp.stdin.end();
-  // CI 上冷启动慢（插件 bundled 装完才 ready）：给到 15s，本地一般 <2s
-  await new Promise((r2) => { cp.on('close', r2); setTimeout(r2, 15000); });
-  let d = null;
-  for (let w = 0; w < 30 && !d; w++) {
-    for (const l of out.split('\n')) {
-      const t = l.trim();
-      if (!t.startsWith('{')) continue;
-      try { const j = JSON.parse(t); if (j.id === 2) d = j; } catch { }
-    }
-    if (d) break;
-    await new Promise((r2) => setTimeout(r2, 500));
+  writeLine(reqs[1]);
+  writeLine(reqs[2]);
+  // 等 id:2 响应（最多 30s）
+  let d0 = null;
+  for (let w = 0; w < 60 && !d0; w++) {
+    for (const l of out.split('\n')) { try { const j = JSON.parse(l); if (j.id === 2) d0 = j; } catch { } }
+    if (!d0) await new Promise((r2) => setTimeout(r2, 500));
   }
-  for (const l of out.split('\n')) {
-    const t = l.trim();
-    if (!t.startsWith('{')) continue;
-    try { const j = JSON.parse(t); if (j.id === 2) d = j; } catch { /* 非 JSON 行跳过 */ }
-  }
+  cp.kill();
+  await new Promise((r2) => { cp.on('close', r2); setTimeout(r2, 2000); });
+  const d = d0;
   const texts = d?.result?.content?.map((c) => c.text).join('\n') ?? '';
-  ok(texts.includes('分类：'), 'MCP 失败附分类');
+  ok(texts.includes('分类：'), 'MCP 失败附分类', `d=${JSON.stringify(d)?.slice(0, 400)} out=${out.slice(-400)}`);
   ok(d?.result?.isError === true, 'MCP isError 标记');
 }
 
