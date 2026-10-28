@@ -1,6 +1,15 @@
 // zerokit 启动器前端。
 // 纯静态、无构建步骤，所以浏览器和 Tauri 壳用的是同一份代码。
 // 所有来自插件的文本都经过 esc() 转义再插入 DOM——插件内容属于不可信输入。
+//
+// ===== 文件地图（第四十二轮⑥：按「----- 域」分节，改哪里先看这里）=====
+//   本地偏好 ~55        配置档存取 ~364     最近使用 ~478      搜索 ~509
+//   列表渲染 ~656       详情/表单 ~1254     执行与确认 ~1941   危险度卡 ~2769
+//   数据备份 ~2819      结果渲染 ~2905      插件桥 ~3960       插件管理 ~4378
+//   集市面板 ~4384      审计日志 ~4413      环境自检 ~4530     工作台 ~5701
+//   全局统计 ~5989      结果收藏夹 ~6231    MCP 授权 ~6301     命令面板 ~6369
+//   键盘 ~6551          快捷键速查 ~6783    启动 ~6855
+// 行号会随改动漂移，定位以「------ 域」锚点 grep 为准。
 
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
@@ -684,7 +693,7 @@ function itemHtml(entry, i, showPlugin, query = '') {
   const fav = isFavorite(favorites, key);
   // 搜索态跨插件，条目里带上插件名；浏览态有分组头就不重复了
   const who = showPlugin ? `<span class="plugin">${highlightHtml(p.name, query, esc)}</span>` : '';
-  return `<li class="item${i === active ? ' active' : ''}${smart ? ' smart' : ''}${fav ? ' fav' : ''}" data-i="${i}" role="option"
+  return `<li class="item${i === active ? ' active' : ''}${smart ? ' smart' : ''}${fav ? ' fav' : ''}" data-i="${i}" data-key="${esc(key)}" role="option"
     aria-selected="${i === active ? 'true' : 'false'}" tabindex="${i === active ? 0 : -1}">
     ${who}
     <span class="title">
@@ -835,6 +844,7 @@ function renderList() {
   } finally {
     perfStats.listMs = Math.round((performance.now() - t0) * 10) / 10;
     perfStats.lastRenderAt = Date.now();
+    perfMark('zk-renderList');
   }
 }
 
@@ -1087,50 +1097,73 @@ function renderListInner() {
 }
 
 /** 列表条目的事件绑定（渲染后调用；虚拟滚动重渲染窗口后也要再调）。 */
+// 第四十二轮⑧：事件委托——#list 单监听器收口全部条目交互。
+// 此前每项 li/星标都各自 addEventListener，重渲一次列表挂一批监听器，
+// 千项列表就是几千个闭包；委托后只有一个，重渲不再重新绑定。
+let listEventsBound = false;
 function bindListItems(q) {
-  el.list.querySelectorAll('[data-recent]').forEach((node) => {
-    node.addEventListener('click', () => {
-      const key = node.dataset.recent;
+  if (listEventsBound) return;
+  listEventsBound = true;
+  el.list.addEventListener('click', (ev) => {
+    // 星标不打开动作：它只是「把这一条钉在前面」，所以单独拦一层
+    const favBtn = ev.target.closest('[data-fav]');
+    if (favBtn) {
+      ev.stopPropagation();
+      favorites = toggleFavorite(favorites, favBtn.dataset.fav);
+      savePrefs();
+      // 第四十二轮①：收藏切换只改这一项的类与按钮，不再整表重建
+      patchItemFav(favBtn.dataset.fav);
+      return;
+    }
+    const recent = ev.target.closest('[data-recent]');
+    if (recent) {
+      const key = recent.dataset.recent;
       const dot = key.lastIndexOf('.');
       const entry = entries.find((e) => e.plugin.id === key.slice(0, dot)
         && e.action.id === key.slice(dot + 1));
       if (entry) openDetail(entry.plugin, entry.action);
-    });
-  });
-  el.list.querySelectorAll('.item').forEach((node) => {
-    node.addEventListener('click', (ev) => {
-      if (ev.target.closest('[data-fav]')) return;
-      // Alt+点击：不打开，而是加入批量篮（巡检/报表场景）
-      if (ev.altKey) {
-        ev.preventDefault();
-        const entry = filtered[Number(node.dataset.i)];
-        if (entry) {
-          const k = actionKey(entry.plugin.id, entry.action.id);
-          const existed = batch.some((x) => actionKey(x.plugin.id, x.action.id) === k);
-          if (!existed) batch.push(entry);
-          // 第二十五轮：篮子内容变了就要重渲染浮条（此前只在第一次创建，
-          // 之后加项不刷新条目列表，看起来像只有第一项进了篮子）
-          renderList();
-          el.count.textContent = existed ? `已在篮子里：${entry.action.title}` : `已加入批量篮：${entry.action.title}（共 ${batch.length} 项）`;
-        }
-        return;
+      return;
+    }
+    const node = ev.target.closest('.item');
+    if (!node) return;
+    // Alt+点击：不打开，而是加入批量篮（巡检/报表场景）
+    if (ev.altKey) {
+      ev.preventDefault();
+      const entry = filtered[Number(node.dataset.i)];
+      if (entry) {
+        const k = actionKey(entry.plugin.id, entry.action.id);
+        const existed = batch.some((x) => actionKey(x.plugin.id, x.action.id) === k);
+        if (!existed) batch.push(entry);
+        // 第二十五轮：篮子内容变了就要重渲染浮条
+        renderList();
+        el.count.textContent = existed ? `已在篮子里：${entry.action.title}` : `已加入批量篮：${entry.action.title}（共 ${batch.length} 项）`;
       }
-      active = Number(node.dataset.i);
-      openActive();
-    });
-    node.addEventListener('mousemove', () => {
-      const i = Number(node.dataset.i);
-      if (i !== active) { active = i; paintActive(); }
-    });
+      return;
+    }
+    active = Number(node.dataset.i);
+    openActive();
   });
-  // 星标不打开动作：它只是「把这一条钉在前面」，所以单独拦一层
-  el.list.querySelectorAll('[data-fav]').forEach((btn) => {
-    btn.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      favorites = toggleFavorite(favorites, btn.dataset.fav);
-      savePrefs();
-      renderList();
-    });
+  el.list.addEventListener('mousemove', (ev) => {
+    const node = ev.target.closest('.item');
+    if (!node) return;
+    const i = Number(node.dataset.i);
+    if (i !== active) { active = i; paintActive(); }
+  });
+}
+
+/** 第四十二轮①④：收藏切换的就地补丁——DOM 身份不变（li 节点引用稳定），
+ * 只改 star 按钮与 li 的 fav 类。 */
+function patchItemFav(key) {
+  const on = isFavorite(favorites, key);
+  el.list.querySelectorAll(`.item[data-key="${CSS.escape(key)}"]`).forEach((li) => {
+    li.classList.toggle('fav', on);
+    const btn = li.querySelector('[data-fav]');
+    if (btn) {
+      btn.classList.toggle('on', on);
+      btn.textContent = on ? '★' : '☆';
+      btn.title = on ? '取消收藏' : '收藏这个动作';
+      btn.setAttribute('aria-label', btn.title);
+    }
   });
 }
 
@@ -1210,13 +1243,21 @@ function setupVirtualScroll() {
 }
 
 function paintActive() {
-  el.list.querySelectorAll('.item').forEach((node, i) => {
-    node.classList.toggle('active', i === active);
-    // roving tabindex：只有选中项在 Tab 序里，其余 tabindex=-1（键盘不用按 N 次 Tab）
-    node.setAttribute('aria-selected', i === active ? 'true' : 'false');
-    node.setAttribute('tabindex', i === active ? '0' : '-1');
-  });
-  el.list.querySelector('.item.active')?.scrollIntoView({ block: 'nearest' });
+  // 第四十二轮②：只改前一项和当前项的属性（此前全表 forEach）——
+  // 千项列表上键盘上下移动也从 O(N) 降为 O(1)，且不触发其它项的重排。
+  const prev = el.list.querySelector('.item.active');
+  const cur = el.list.querySelector(`.item[data-i="${active}"]`);
+  if (prev && prev !== cur) {
+    prev.classList.remove('active');
+    prev.setAttribute('aria-selected', 'false');
+    prev.setAttribute('tabindex', '-1');
+  }
+  if (cur) {
+    cur.classList.add('active');
+    cur.setAttribute('aria-selected', 'true');
+    cur.setAttribute('tabindex', '0');
+    cur.scrollIntoView({ block: 'nearest' });
+  }
 }
 
 // ---------------------------------------------------------------- 详情 / 表单
@@ -2251,6 +2292,7 @@ function showPerfPanel() {
     <div class="stat-cards">
       <div class="stat-card"><div class="stat-num">${perfStats.listItems}</div><div class="stat-label">列表项数</div></div>
       <div class="stat-card"><div class="stat-num">${perfStats.listMs} ms</div><div class="stat-label">列表渲染耗时</div></div>
+      <div class="stat-card"><div class="stat-num">${perfStats.renderCount}</div><div class="stat-label">累计渲染次数</div></div>
       <div class="stat-card"><div class="stat-num">${perfStats.searchMs} ms</div><div class="stat-label">搜索打分耗时</div></div>
     </div>
     <p class="ps-empty" role="status">最近一次渲染：${perfStats.lastRenderAt ? new Date(perfStats.lastRenderAt).toLocaleString() : '尚未渲染'}。
@@ -6716,7 +6758,13 @@ el.clipBtn.addEventListener('click', async () => {
 // rAF 保证同帧内多次触发只画一次。搜索计时进 perfStats 供 #/perf 展示。
 let searchDebounceTimer = 0;
 let searchRaf = 0;
-const perfStats = { listItems: 0, listMs: 0, searchMs: 0, lastRenderAt: 0 };
+const perfStats = { listItems: 0, listMs: 0, searchMs: 0, lastRenderAt: 0, renderCount: 0 };
+
+// 第四十二轮⑨：热点入口打 perf 标签——Performance 面板/面板页都能对上时间线
+function perfMark(name) {
+  perfStats.renderCount += 1;
+  try { performance.mark(name); } catch { /* 老嵌入环境无 performance.mark */ }
+}
 
 el.q.addEventListener('input', () => {
   const q = el.q.value;
