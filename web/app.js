@@ -763,6 +763,9 @@ function renderListTools(base, q) {
       if (m && FILTERS.some((f) => f.id === m[2])) { el.q.value = m[1]; listFilter = m[2]; }
       else { el.q.value = raw; listFilter = 'all'; }
       renderList();
+      // 第五十五轮⑦：renderList 重画 chips 后焦点不在任何输入上——把焦点还给搜索框，
+      // 下一次输入/快捷键不用先点鼠标
+      el.q.focus();
     });
   });
   // 第五十一轮⑨：单条删历史
@@ -2136,7 +2139,7 @@ function showTimeline() {
   el.modeLabel.textContent = '时间线';
   el.listView.classList.add('hidden');
   el.detailView.classList.add('hidden');
-  if (location.hash !== '#/timeline') history.replaceState(null, '', '#/timeline');
+  if (location.hash !== '#/timeline') history.pushState(null, '', '#/timeline');
   // runStore 是 {actionKey: [runs]}——摊平成带 plugin/action 的列表
   const flat = [];
   for (const [key, list] of Object.entries(runStore)) {

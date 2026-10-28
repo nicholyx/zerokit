@@ -43,6 +43,23 @@ run "yamllint（YAML 风格）" yamllint -c .yamllint .github/ market.json
 run "shellcheck（shell 脚本）" shellcheck scripts/*.sh
 run "bash -n（脚本语法）" bash -n scripts/check-commit-msg.sh
 
+# 第五十五轮⑥：插件清单 lint 进本地静态检查——所有内置插件零 error 才算过
+echo
+lint_fail=0
+for d in plugins/*/; do
+  name=$(basename "$d")
+  [[ "$name" == _* ]] && continue   # _vendor 不是插件
+  if ! node src/cli.ts plugin lint "$d" >/dev/null 2>&1; then
+    echo "FAIL  plugin lint（$name）—— node src/cli.ts plugin lint $d 看详情"
+    lint_fail=1
+  fi
+done
+if [[ "$lint_fail" -eq 0 ]]; then
+  echo "OK    plugin lint（内置插件清单）"
+else
+  fail=1
+fi
+
 # zizmor：CI 用容器跑，本地有 docker 才跑
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   if docker run --rm -v "$PWD":/repo:ro \
