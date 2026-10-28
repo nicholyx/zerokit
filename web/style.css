@@ -1461,3 +1461,13 @@ pre.out.numbered .ln::before {
   .drawer { width: 100vw; }
   #stage { padding: 0 8px; }
 }
+
+/* ======================= 第四十八轮：失败体验 ======================= */
+.fail-card { border: 1px solid var(--bad); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; background: color-mix(in srgb, var(--bad) 8%, transparent); }
+.fail-title { font-weight: 600; color: var(--bad); margin-bottom: 6px; }
+.fail-steps { font-size: 12px; color: var(--fg-dim); margin-bottom: 8px; line-height: 1.7; }
+.fail-actions { display: flex; gap: 6px; margin-bottom: 8px; }
+.fail-raw { max-height: 40vh; overflow-y: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+.watch-stoplog { margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 8px; }
+.watch-stoprow { font-size: 12px; margin: 3px 0; }
+#result pre.out { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; max-height: 40vh; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
