@@ -39,6 +39,8 @@ export function listPlugins(): PluginEntry[] {
     if (!fs.statSync(dir).isDirectory()) continue;
     // 忽略安装过程中的临时目录（.tmp-xxx / .tmp-pack-xxx）
     if (name.startsWith('.tmp-')) continue;
+    // 第四十三轮：_vendor 这类下划线目录是插件共享代码层，不是插件本身
+    if (name.startsWith('_')) continue;
     const result = loadDir(dir);
     const entry: PluginEntry = { dir, errors: result.errors, warnings: result.warnings };
     if (result.plugin) entry.plugin = result.plugin;
@@ -69,9 +71,17 @@ export function installBundled(): string[] {
   ensureDirs();
   const installed: string[] = [];
   if (!fs.existsSync(BUNDLED_PLUGINS_DIR)) return installed;
+  // 第四十三轮④：插件共享代码层 plugins/_vendor/——本身不是插件（无 plugin.toml），
+  // 但装插件时得跟着一起拷，否则插件间的相对路径 import 会断。
+  const vendorSrc = path.join(BUNDLED_PLUGINS_DIR, '_vendor');
+  if (fs.existsSync(vendorSrc)) {
+    const vendorDst = path.join(PLUGINS_DIR, '_vendor');
+    if (!fs.existsSync(vendorDst)) fs.cpSync(vendorSrc, vendorDst, { recursive: true });
+  }
   for (const name of fs.readdirSync(BUNDLED_PLUGINS_DIR)) {
     const src = path.join(BUNDLED_PLUGINS_DIR, name);
     if (!fs.statSync(src).isDirectory()) continue;
+    if (name.startsWith('_')) continue;
     if (!fs.existsSync(path.join(src, 'plugin.toml'))) continue;
     const dst = path.join(PLUGINS_DIR, name);
     if (fs.existsSync(dst)) continue;
@@ -180,6 +190,10 @@ export function installBundledPlugin(id: string): { ok: boolean; message: string
   if (!src) return { ok: false, message: `仓库自带的插件里没有 "${id}"` };
   const dst = path.join(PLUGINS_DIR, id);
   if (fs.existsSync(dst)) return { ok: true, message: `${id} 已经装过了` };
+  const vendorSrc = path.join(BUNDLED_PLUGINS_DIR, '_vendor');
+  if (fs.existsSync(vendorSrc) && !fs.existsSync(path.join(PLUGINS_DIR, '_vendor'))) {
+    fs.cpSync(vendorSrc, path.join(PLUGINS_DIR, '_vendor'), { recursive: true });
+  }
   try {
     fs.cpSync(src, dst, { recursive: true });
   } catch (e) {

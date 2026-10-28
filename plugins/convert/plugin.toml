@@ -1,0 +1,122 @@
+[plugin]
+id       = "convert"
+name     = "编码转换台"
+summary  = "进制/大小写/JSON 美化等八种常用转换，零依赖纯计算"
+keywords = ["转换", "进制", "十六进制", "json", "大小写", "encode"]
+version  = "0.1.0"
+
+[[action]]
+id          = "radix"
+title       = "进制转换"
+description = "在二进制、八进制、十进制、十六进制之间换一个数的进制。比如查 255 的十六进制、0xff 的十进制。"
+risk        = "read"
+output      = "json"
+params  = [
+  { name = "value", type = "string", description = "要转换的数" },
+  { name = "to", type = "enum", description = "目标进制", options = ["2", "8", "10", "16"] },
+]
+run         = ["{node}", "convert.mjs", "radix", "{value}", "{to}"]
+
+[[action]]
+id          = "case"
+title       = "大小写转换"
+description = "把一段文本整个转成大写、小写，或每个单词首字母大写。"
+risk        = "read"
+output      = "json"
+params  = [
+  { name = "text", type = "string", description = "文本" },
+  { name = "mode", type = "enum", description = "模式", options = ["upper", "lower", "title"] },
+]
+run         = ["{node}", "convert.mjs", "case", "{text}", "{mode}"]
+
+[[action]]
+id          = "json-pretty"
+title       = "JSON 美化"
+description = "把压缩成一行的 JSON 串摊开成带缩进的多行（或反过来压成一行）。校验失败会说清第几个字符出的问题。"
+risk        = "read"
+output      = "json"
+params  = [
+  { name = "text", type = "string", description = "JSON 文本" },
+  { name = "indent", type = "number", description = "缩进空格数", default = 2 },
+]
+run         = ["{node}", "convert.mjs", "json-pretty", "{text}", "{indent}"]
+
+[[action]]
+id          = "json-min"
+title       = "JSON 压缩"
+description = "把多行 JSON 压成一行（去掉所有空白），给 URL 参数或日志用。"
+risk        = "read"
+output      = "json"
+params  = [
+  { name = "text", type = "string", description = "JSON 文本" },
+]
+run         = ["{node}", "convert.mjs", "json-min", "{text}"]
+
+[[action]]
+id          = "b64"
+title       = "Base64 编解码"
+description = "文本转 Base64，或 Base64 还原成文本（UTF-8 安全，中文没问题）。"
+risk        = "read"
+output      = "json"
+params  = [
+  { name = "text", type = "string", description = "内容" },
+  { name = "mode", type = "enum", description = "方向", options = ["encode", "decode"] },
+]
+run         = ["{node}", "convert.mjs", "b64", "{text}", "{mode}"]
+
+[[action]]
+id          = "url"
+title       = "URL 编解码"
+description = "把文本里的特殊字符转成 %XX（给拼 URL 用），或把 %XX 还原。"
+risk        = "read"
+output      = "json"
+params  = [
+  { name = "text", type = "string", description = "内容" },
+  { name = "mode", type = "enum", description = "方向", options = ["encode", "decode"] },
+]
+run         = ["{node}", "convert.mjs", "url", "{text}", "{mode}"]
+
+[[action]]
+id          = "bytes"
+title       = "字节数人性化"
+description = "把 1073741824 这样的数字换成 1.0 GB 这样人能读的字节数（1024 进制）。"
+risk        = "read"
+output      = "json"
+params  = [
+  { name = "value", type = "number", description = "字节数" },
+]
+run         = ["{node}", "convert.mjs", "bytes", "{value}"]
+
+[[action]]
+id          = "digits"
+title       = "千分位"
+description = "给大数字加千分位分隔（1234567 → 1,234,567）。"
+risk        = "read"
+output      = "json"
+params  = [
+  { name = "value", type = "number", description = "数字" },
+]
+run         = ["{node}", "convert.mjs", "digits", "{value}"]
+
+[[action]]
+id    = "hex-flow"
+title = "十六进制流水线"
+description = "演示组合：把十六进制数转十进制、再加千分位——chain 引用同插件的两个动作一步完成。"
+type    = "chain"
+risk    = "read"
+template = "十进制是 {first.data.value}，加千分位是 {second.data.value}"
+
+params  = [
+  { name = "hex", type = "string", description = "十六进制数" },
+]
+
+[[action.step]]
+use = "self.radix"
+as  = "first"
+params = { value = "{hex}", to = "10" }
+
+[[action.step]]
+use    = "self.digits"
+as     = "second"
+params = { value = "{first.data.value}" }
+

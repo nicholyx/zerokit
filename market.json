@@ -139,6 +139,24 @@
         "示例"
       ],
       "source": "path:plugins/demohttp"
+    },
+    {
+      "id": "convert",
+      "name": "编码转换台",
+      "source": "path:plugins/convert",
+      "description": ""
+    },
+    {
+      "id": "snap",
+      "name": "截图到文件",
+      "source": "path:plugins/snap",
+      "description": ""
+    },
+    {
+      "id": "typist",
+      "name": "文本片段台",
+      "source": "path:plugins/typist",
+      "description": ""
     }
   ]
 }

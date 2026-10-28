@@ -1,0 +1,44 @@
+[plugin]
+id       = "typist"
+name     = "文本片段台"
+summary  = "常用文本模板（SQL/Markdown/YAML 骨架等）一键写入剪贴板，改两个占位就能用"
+keywords = ["模板", "片段", "snippet", "sql", "yaml", "markdown"]
+version  = "0.1.0"
+
+[[action]]
+id          = "sql-select"
+title       = "SELECT 骨架"
+description = "生成一段带 JOIN/ORDER BY/LIMIT 的 SELECT 骨架写入剪贴板，表名和字段是占位符。写新查询不想手打框架时用。"
+risk        = "mutate"
+run         = ["{node}", "typist.mjs", "sql-select"]
+
+[[action]]
+id          = "md-todo"
+title       = "Markdown 待办"
+description = "生成一段 Markdown 任务清单模板（标题/负责人/截止/子任务）写入剪贴板。"
+risk        = "mutate"
+run         = ["{node}", "typist.mjs", "md-todo"]
+
+[[action]]
+id          = "yaml-ci"
+title       = "CI 骨架"
+description = "生成一段两 job（lint+test）的 GitHub Actions YAML 骨架写入剪贴板。"
+risk        = "mutate"
+run         = ["{node}", "typist.mjs", "yaml-ci"]
+
+[[action]]
+id          = "git-commit"
+title       = "提交信息骨架"
+description = "生成约定式提交的信息模板（feat/fix/docs 三行候选 + 正文 Why）写入剪贴板。"
+risk        = "mutate"
+run         = ["{node}", "typist.mjs", "git-commit"]
+
+[[action]]
+id          = "preview"
+title       = "预览片段"
+description = "不写剪贴板，直接把所有片段列出来看内容——先确认再写。"
+risk        = "read"
+params  = [
+  { name = "name", type = "string", description = "片段名（留空看全部）", default = "" },
+]
+run         = ["{node}", "typist.mjs", "preview", "{name}"]

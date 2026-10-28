@@ -1,0 +1,38 @@
+[plugin]
+id       = "snap"
+name     = "截图到文件"
+summary  = "用系统自带工具截全屏/当前窗口，存到文件——不装任何第三方依赖"
+keywords = ["截图", "屏幕", "截屏", "screenshot"]
+version  = "0.1.0"
+
+[[action]]
+id          = "full"
+title       = "截全屏"
+description = "把整个屏幕截下来存成 PNG。macOS 用 screencapture、Windows 用 PowerShell、Linux 用 gnome-screenshot/scrot/import 里第一个可用的。需要屏幕录制权限（macOS 首次会弹）。"
+risk        = "mutate"
+params  = [
+  { name = "dir", type = "string", description = "保存目录", default = "~/Desktop" },
+  { name = "name", type = "string", description = "文件名（不带扩展名）", default = "snap" },
+]
+run         = ["{node}", "snap.mjs", "full", "{dir}", "{name}"]
+
+[[action]]
+id          = "window"
+title       = "截当前窗口"
+description = "只截当前活跃窗口（macOS 支持；Windows/Linux 落到全屏）。保存位置和文件名自己指定。"
+risk        = "mutate"
+params  = [
+  { name = "dir", type = "string", description = "保存目录", default = "~/Desktop" },
+  { name = "name", type = "string", description = "文件名（不带扩展名）", default = "snap-window" },
+]
+run         = ["{node}", "snap.mjs", "window", "{dir}", "{name}"]
+
+[[action]]
+id          = "list"
+title       = "最近截图"
+description = "列出保存目录里最近的 PNG 文件（名字、大小、时间）。确认截图有没有成功时用。"
+risk        = "read"
+params  = [
+  { name = "dir", type = "string", description = "目录", default = "~/Desktop" },
+]
+run         = ["{node}", "snap.mjs", "list", "{dir}"]
