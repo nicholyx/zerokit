@@ -1123,3 +1123,35 @@ if (failed.length) process.exitCode = 1;
   n('37⑦curl 带端口与 token 占位符', cu.includes('http://127.0.0.1:1234/api/run') && cu.includes('<启动器页面里的令牌>') && cu.includes('"plugin":"p"'));
 }
 
+
+// ======================= 第四十七轮：信息架构纯函数 =======================
+{
+  const eq = (a, b, m) => { if (JSON.stringify(a) === JSON.stringify(b)) pass++; else { fail++; console.error(`FAIL: ${m}`); } };
+  // navGroups 三分类 + 未知归 manage
+  const g = navGroups([
+    { kind: 'exec', id: 'a' }, { kind: 'observe', id: 'b' }, { kind: 'manage', id: 'c' }, { id: 'd' },
+  ]);
+  eq(g.exec.map((x) => x.id), ['a'], 'navGroups exec');
+  eq(g.observe.map((x) => x.id), ['b'], 'navGroups observe');
+  eq(g.manage.map((x) => x.id), ['c', 'd'], 'navGroups manage（未归类收抽屉）');
+  eq(navGroups(null).manage, [], 'navGroups 空表安全');
+
+  // emptyState 三档
+  const fr = emptyState('first-run');
+  if (fr.title.includes('插件') && fr.hint.length > 10) pass++; else fail++;
+  const np = emptyState('no-plugins');
+  if (np.title.includes('没有')) pass++; else fail++;
+  const nm = emptyState('no-match', '内存');
+  if (nm.title.includes('内存') && nm.hint.length > 5) pass++; else fail++;
+
+  // skeletonRows 边界
+  if (skeletonRows(6).length === 6 && skeletonRows(0).length === 1 && skeletonRows(99).length === 12) pass++; else fail++;
+
+  // resultHeightTier
+  if (resultHeightTier(3) === 'compact' && resultHeightTier(20) === 'normal'
+    && resultHeightTier(100) === 'scroll' && resultHeightTier(NaN) === 'normal') pass++; else fail++;
+
+  // viewportMode
+  if (viewportMode(375) === 'narrow' && viewportMode(720) === 'narrow'
+    && viewportMode(721) === 'desktop' && viewportMode(0) === 'desktop') pass++; else fail++;
+}

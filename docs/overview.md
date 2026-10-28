@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-10-28（第四十六轮，v0.51.0）
+> 最后更新：2026-10-28（第四十七轮，v0.52.0）
 
 ---
 
@@ -266,6 +266,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 - 第四十四轮（v0.49.0）：web 插件面进阶——桥消息协议成文（消息表+四条安全边界进 plugin-spec）；外观跟随（context 带 appearance，桥写 --zk-accent/data-zk-dark，页面零配置跟上宿主皮肤）；受控跳转 zkit.openLink（仅 http(s)+宿主确认）；错误上报 zkit.reportError（白屏也看得见）；未知 type 一律忽略；演示插件 demoweb（六项能力一页）；webui-smoke 84→93、全量 29 文件 1012/1012（Issue #173）
 - 第四十五轮（v0.50.0）：CLI 人体工学——输出格式四选一（--out table/json/yaml/csv）/ --quiet 单行 JSON / --copy 复制结果 / --watch N 轮询打 diff / zkit last 重跑最近 / zkit history 带时间戳与 --rerun / zkit im 交互模式（裸 zkit 直达）/ run --interactive 逐参提示 / list --health 健康一屏；新 src/core/cliX.ts（历史/格式化/diff/菜单纯函数）；cli45-smoke 32 项、全量 29 文件 1012/1012（Issue #176）
 - 第四十六轮（v0.51.0）：CLI 收口与开发者体验——zkit completion 三 shell 补全 / man 命令参考 / --version 与 -V / stats --since 时间窗 / audit --follow 跟读 / 退出码细分（用法错误=2）/ check-docs 文档巡检（纯 node：内链+版本号四处同步+cookbook 命令漂移）/ README 快速开始补全；cli46-smoke 16 项、全量 30 文件 1012/1012（Issue #179）
+- 第四十七轮（v0.52.0）：启动器信息架构与首屏——设置抽屉（主题/语言/日志/自检等统一收纳）、命令面板直达抽屉、首屏骨架屏、空态三级文案、结果高度三档、≤720px 窄屏断点；navGroups/emptyState/skeletonRows/resultHeightTier/viewportMode 纯函数；webui-smoke 断言随 IA 更新、全量 30 文件 1012/1012（Issue #182）
 - 第四十六轮 v0.51.0（CLI 收口与开发者体验）：shell 补全三件套、man 命令参考、--version 短旗标、stats --since 时间窗、audit --follow 跟读、退出码细分（用法=2/失败=1）、check-docs.sh 文档巡检、README 快速开始矩阵（issue #179）
 - 第四十一轮（v0.46.0）：安全审计与权限收口——`zkit allow list/add/remove`（TTL 30 天默认、过期清理、插件级撤回连带提示）/ `audit --denied` / `audit --since 1h|30m|3d|2w` / 高危动作 7 天未执行警示、新 test/audit-smoke.mjs 37 项、全量 27 文件 920/920（Issue #164）
 - 第四十轮（v0.45.0）：插件开发体验闭环——`plugin lint` 十级体检（L01–L10、error/warn/info、CI 退出码、--json）/ `plugin doc` 文档生成（Markdown + --json 机读）/ 六内置插件零 error 零 warn 示范 / plugin-spec.md 体检规则对照表、新 test/lintdoc-smoke.mjs 29 项、全量 26 文件 883/883（Issue #161）
