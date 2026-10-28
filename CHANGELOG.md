@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [0.41.0] - 2026-10-28
+
 ### Added
 
 - 组合动作 / 设置项 / HTTP 动作三个演示插件进 bundled（demochain / demosettings / demohttp），新能力各有一个活示例
