@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import os from 'node:os';
 
 let pass = 0; let fail = 0;
 const ok = (cond, label, extra = '') => { if (cond) pass++; else { fail++; console.error(`FAIL: ${label} ${extra}`); } };
@@ -13,7 +14,7 @@ const sh = (cmd, args, opts = {}) => { try { return { code: 0, out: execFileSync
 
 {
   // ①⑤ release-prep：干跑 / 空段拒绝 / --write 全链（临时副本）
-  const tmp = fs.mkdtempSync('/tmp/rel55-');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'rel55-'));   // Windows 没有 /tmp
   const cp = (f) => { const dst = path.join(tmp, f); fs.mkdirSync(path.dirname(dst), { recursive: true }); fs.cpSync(path.join(REPO, f), dst); };
   ['CHANGELOG.md', 'package.json', 'scripts/release-prep.mjs', 'scripts/check-docs.mjs', 'apps/desktop/src-tauri/tauri.conf.json', 'apps/desktop/src-tauri/Cargo.toml', 'apps/desktop/src-tauri/Cargo.lock'].forEach(cp);
   // 注入一个有条目的 Unreleased（工具的输入契约）
