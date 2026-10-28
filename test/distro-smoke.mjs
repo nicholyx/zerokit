@@ -31,8 +31,10 @@ run(['plugin', 'bundled']);
   }
   // zip 结构合法性交给系统 unzip（跨三平台都有；没有就跳过这项外部校验）
   const uz = spawnSync('unzip', ['-t', zipPath], { encoding: 'utf8' });
+  // 平台差异：Windows 的 unzip 不在 /usr/bin；status 非 0 且 stderr 报 ENOENT（命令不存在）视为「无此工具」跳过
+  const noUnzip = uz.error?.code === 'ENOENT' || (/ENOENT|not found|不是内部或外部命令/.test(uz.stderr || '') && uz.status !== 0);
   if (uz.status === 0) pass('①zip 通过系统 unzip 完整性校验');
-  else if (!fs.existsSync('/usr/bin/unzip')) console.log('      (unzip 不存在，跳过外部校验)');
+  else if (noUnzip) console.log('      (unzip 不可用，跳过外部校验)');
   else fail('①unzip -t 报错：' + uz.stdout.slice(0, 120));
   // --list-only
   const lo = run(['plugin', 'pack', 'quick', '--list-only']);

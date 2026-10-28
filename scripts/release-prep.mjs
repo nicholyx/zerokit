@@ -28,12 +28,14 @@ if (!ver) {
   process.exit(2);
 }
 
-const die = (msg) => { console.error(`✗ ${msg}`); process.exit(1); };
+const die = (msg) => { console.error(`✗ ${msg}——拒绝执行`); process.exit(1); };
 const read = (f) => fs.readFileSync(path.join(REPO, f), 'utf8');
 const write = (f, s) => fs.writeFileSync(path.join(REPO, f), s);
 
 // ---------- ① CHANGELOG 归档 ----------
 const cl = read('CHANGELOG.md');
+// 第五十七轮⑥：目标版本段已存在 = 双段事故的前兆（第五十四轮 tag 打错重发时几乎踩到）——直接拒绝
+if (cl.includes(`## [${ver}] - `)) die(`版本 [${ver}] 的段已存在于 CHANGELOG（重复发布或版本号写错）`);
 const mUnrel = /## \[Unreleased\]\n\n### Added\n\n((?:- [^\n]*\n)+)/.exec(cl);
 if (!mUnrel) die('[Unreleased] 段没有 ### Added 条目——没有可归档的内容，拒绝执行');
 const entries = mUnrel[1];

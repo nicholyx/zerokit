@@ -1,6 +1,13 @@
 ## [Unreleased]
 
-（下一版攒着）
+### Added
+
+- `test-all` 失败详情全量列出并带 `[文件]` 前缀、每轮打印最慢 5 个测试文件；新增 `--shuffle` 随机顺序模式用于暴露测试间隐式顺序依赖
+- `release-prep` 新增重复版本号守卫：目标版本段已存在时拒绝执行（防双段事故）；`rel55-smoke` 补 CHANGELOG 边界用例（游离条目/重复版本/归档不丢旧段标题）
+- `distro-smoke` 的系统 unzip 探测改为跨平台判定（ENOENT 视为「无此工具」跳过，而非只在 `/usr/bin` 下找）
+- `extras-smoke` 修复第四十七轮块计数器未定义的崩溃（改为统一 `results` 模式，汇总行移到文件末尾）与时区敏感断言（`parseHistoryHash` 对齐第五十五轮中文 key 语义）；`timeline54/extras` 在 UTC、America/New_York、Pacific/Kiritimati 三个时区下复验全绿
+- CONTRIBUTING 新增「写测试的十条军规」（平台路径/时区锚定/断言反模式/自包含/优雅跳过——55+ 轮迭代踩坑精华）
+
 
 ## [0.61.0] - 2026-10-28
 

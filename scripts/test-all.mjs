@@ -20,11 +20,21 @@ const EXTRA_ARGS = {
   'mcp-smoke.mjs': ['src/mcp.ts'],
 };
 
+const flags = process.argv.slice(2).filter((a) => a.startsWith('-'));
 const only = process.argv.slice(2).filter((a) => !a.startsWith('-'));
 const files = fs.readdirSync(TEST_DIR)
   .filter((f) => f.endsWith('.mjs'))
   .filter((f) => only.length === 0 || only.some((o) => f.includes(o)))
   .sort();
+// --shuffle：随机顺序跑。用于暴露隐式的顺序依赖（理论上每个测试都该自包含；
+// 顺序换了就挂 = 有测试在偷读别的测试留下的状态）。
+if (flags.includes('--shuffle')) {
+  for (let i = files.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [files[i], files[j]] = [files[j], files[i]];
+  }
+  console.log('(--shuffle 随机顺序)');
+}
 
 if (files.length === 0) {
   process.stderr.write('没找到匹配的测试\n');
@@ -35,6 +45,7 @@ let passed = 0;
 let failed = 0;
 let missing = 0;
 const failures = [];
+const timings = [];
 
 for (const file of files) {
   const args = [path.join(TEST_DIR, file), ...(EXTRA_ARGS[file] ?? [])];
@@ -64,19 +75,27 @@ for (const file of files) {
   const bad = total - ok;
   failed += bad;
   if (bad > 0) failures.push(file);
+  timings.push([file, ms, bad]);
   const mark = bad === 0 ? '✓' : '✗';
   console.log(`${mark} ${label} ${ok} / ${total}   ${String(ms).padStart(6)}ms`);
   // 部分断言失败时也要把失败详情带出来——CI 上只看到「4 / 10」无从下手。
   // 失败行的格式是各测试的 check() 打的「FAIL  名称   <- 详情」，截前 8 条防刷屏
   if (bad > 0) {
-    for (const line of out.trim().split('\n').filter((l) => l.startsWith('FAIL')).slice(0, 8)) {
-      console.log(`    ${line}`);
+    // 第五十七轮③：失败行全量列出（此前截 8 条——失败多于 8 时剩下的要翻 CI 日志），
+    // 每行带文件名前缀，多文件失败时不用数行号猜归属
+    for (const line of out.trim().split('\n').filter((l) => l.startsWith('FAIL'))) {
+      console.log(`    [${file}] ${line}`);
     }
   }
 }
 
 console.log('\n' + '='.repeat(56));
 console.log(`${files.length} 个测试文件，断言通过 ${passed} / ${passed + failed}`);
+// 第五十七轮⑧：耗时 top5——帮定位慢用例（有 spawn 真进程的测试天然慢，只横向比）
+if (timings.length > 1) {
+  const top = [...timings].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  console.log('最慢 5 个：' + top.map(([f, m, bad]) => `${f.replace('.mjs', '')} ${m}ms${bad ? '（有失败）' : ''}`).join('、'));
+}
 if (missing > 0) console.log(`其中 ${missing} 个测试文件没能跑出汇总行（见上面的输出）`);
 if (failures.length > 0) console.log('有失败：' + failures.join(', '));
 process.exit(failed === 0 ? 0 : 1);

@@ -46,6 +46,22 @@ const sh = (cmd, args, opts = {}) => { try { return { code: 0, out: execFileSync
   fs.writeFileSync(path.join(tmp, 'CHANGELOG.md'), fs.readFileSync(path.join(REPO, 'CHANGELOG.md'), 'utf8').replace(/## \[Unreleased\]\n\n### Added\n\n(?:- [^\n]*\n)+/, '## [Unreleased]\n\n（下一版攒着）\n'));
   const r4 = sh('node', [path.join(tmp, 'scripts/release-prep.mjs'), '9.9.8'], { cwd: tmp });
   ok(r4.code !== 0 && r4.out.includes('拒绝'), '①空壳 Unreleased 再次执行拒绝（幂等安全）');
+  // ---- 第五十七轮⑥：CHANGELOG 边界（坏锚点/重复版本/归档丢段标题防护） ----
+  fs.mkdirSync(tmp, { recursive: true });
+  // 坏锚点：[Unreleased] 后直接跟已发布版本、无 ### 段名——归档应拒绝而不是吞掉条目
+  fs.writeFileSync(path.join(tmp, 'CHANGELOG.md'), '## [Unreleased]\n\n- 游离条目（没有 ### 分类）\n\n## [0.0.1] - 2020-01-01\n\n### Added\n\n- 旧条目\n');
+  const rb = sh('node', [path.join(tmp, 'scripts/release-prep.mjs'), '9.9.7'], { cwd: tmp });
+  ok(rb.code !== 0, '⑥游离条目（无分类段）拒绝执行', rb.out.slice(0, 200));
+  // 重复版本：目标版本号已存在——拒绝（防归档出两个同名段）
+  fs.writeFileSync(path.join(tmp, 'CHANGELOG.md'), '## [Unreleased]\n\n### Added\n\n- 新条目\n\n## [0.0.1] - 2020-01-01\n\n### Added\n\n- 旧条目\n');
+  const rd = sh('node', [path.join(tmp, 'scripts/release-prep.mjs'), '0.0.1'], { cwd: tmp });
+  ok(rd.code !== 0 && rd.out.includes('0.0.1'), '⑥重复版本号拒绝', rd.out.slice(0, 200));
+  // 归档后段标题完整性：写盘版必须同时保留旧版本段标题与新段标题（第五十四轮事故：丢标题致 release.yml 提不到段落）
+  fs.writeFileSync(path.join(tmp, 'CHANGELOG.md'), withEntries);
+  const rr = sh('node', [path.join(tmp, 'scripts/release-prep.mjs'), '9.9.6', '--write'], { cwd: tmp });
+  const cl2 = fs.readFileSync(path.join(tmp, 'CHANGELOG.md'), 'utf8');
+  ok(rr.code === 0 && cl2.includes('## [0.0.1] - 2020-01-01') && cl2.includes('## [9.9.6] - '), '⑥归档不丢旧段标题');
+  ok((cl2.match(/^## \[/gm) || []).length === (withEntries.match(/^## \[/gm) || []).length + 1, '⑥段数恰好 +1');
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
