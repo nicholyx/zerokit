@@ -2,7 +2,7 @@
 //
 // 这些函数都在 web/extras.js 里，不碰 DOM / localStorage / fetch，
 // 所以可以直接在 Node 里跑。界面接线另由 webui-smoke 断言。
-import { THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref, OVERFLOW_ROWS, PAGE_ROWS, toAiMarkdown, packContext, toMcpConfig, toLlmJsonl, toCurl, watchTrendMarkdown, TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory } from '../web/extras.js';
+import { THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref, OVERFLOW_ROWS, PAGE_ROWS, toAiMarkdown, packContext, toMcpConfig, toLlmJsonl, toCurl, watchTrendMarkdown, TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory, looksLikeTimestamp, humanTs, emptyReason, tocFromMd } from '../web/extras.js';
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -1048,6 +1048,29 @@ check('大表首屏窗口：500+ 行只画 200', (() => {
   check('38⑤历史只留最近 10 条', trimHistory(Array.from({ length: 15 }, (_, i) => i)).length === 10
     && trimHistory(Array.from({ length: 15 }, (_, i) => i))[9] === 14
     && trimHistory(null).length === 0, '');
+}
+
+
+// ===================== 第三十九轮：结果呈现 =====================
+{
+  // ⑤ 时间戳识别
+  check('39⑤10/13 位识别为时间戳', looksLikeTimestamp(1760000000) === true
+    && looksLikeTimestamp(1760000000000) === true && looksLikeTimestamp('1760000000') === true, '');
+  check('39⑤排除非时间（年份越界/长度不对/含字母）', looksLikeTimestamp(12345) === false
+    && looksLikeTimestamp(12345678901234) === false && looksLikeTimestamp('abc') === false, '');
+  check('39⑤人性化输出本地时间串', typeof humanTs(1760000000) === 'string' && /\d{4}/.test(humanTs(1760000000)), '');
+  check('39⑤非时间戳原样返回', humanTs('hello') === 'hello', '');
+  // ⑥ 空结果归因
+  check('39⑥空数组=查了没有', emptyReason([]).includes('没有匹配项'), '');
+  check('39⑥null=没返回', emptyReason(null).includes('没有返回数据'), '');
+  check('39⑥空对象=没产出', emptyReason({}).includes('空对象'), '');
+  check('39⑥非空返回 null', emptyReason([1]) === null && emptyReason({ a: 1 }) === null, '');
+  // ⑧ 目录
+  const md = '# t\n## a\ntext\n### b\n## c\n## d\n## e\n';
+  const mdFew = '## a\n## b\n';
+  check('39⑧>3 标题出目录', tocFromMd(md).length === 5 && tocFromMd(md)[1].level === 3, '');
+  check('39⑧≤3 不出 + 代码块里的井号不算', tocFromMd(mdFew).length === 0
+    && tocFromMd('## a\n```\n## fake\n```\n').length === 0, '');
 }
 
 console.log('\n' + '='.repeat(60));

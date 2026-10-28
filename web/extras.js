@@ -1970,3 +1970,47 @@ export function trimHistory(list, n = 10) {
   if (!Array.isArray(list)) return [];
   return list.slice(-n);
 }
+
+/* ===================== 第三十九轮：结果呈现最后一公里 ===================== */
+
+/** ⑤时间戳识别：10 位秒级/13 位毫秒级数字（含数字串），且落在 2001–2099 年。 */
+export function looksLikeTimestamp(v) {
+  if (v === null || v === undefined) return false;
+  const s = typeof v === 'number' ? String(v) : String(v).trim();
+  if (!/^\d{10}$|^\d{13}$/.test(s)) return false;
+  const n = Number(s);
+  const ms = s.length === 10 ? n * 1000 : n;
+  const d = new Date(ms);
+  return !Number.isNaN(d.getTime()) && d.getFullYear() >= 2001 && d.getFullYear() <= 2099;
+}
+
+/** ⑤人性化：秒/毫秒转本地时间串；非时间戳原样返回。 */
+export function humanTs(v) {
+  if (!looksLikeTimestamp(v)) return v;
+  const n = Number(String(v).trim());
+  const d = new Date(String(v).trim().length === 10 ? n * 1000 : n);
+  return d.toLocaleString();
+}
+
+/** ⑥空结果归因：空数组=查了没有；null/undefined=没返回；空对象=空配置。 */
+export function emptyReason(data) {
+  if (data === null || data === undefined) return '动作没有返回数据（null/undefined——检查动作是否真的有输出）';
+  if (Array.isArray(data)) return '查了，没有匹配项（空数组——筛选条件可能太严）';
+  if (typeof data === 'object' && Object.keys(data).length === 0) return '返回了空对象（动作没产出字段）';
+  return null;   // 非空：调用方正常渲染
+}
+
+/** ⑧Markdown 目录：抽 ##/### 标题；≤3 个不出（没有导航价值）。 */
+export function tocFromMd(md) {
+  if (typeof md !== 'string') return [];
+  const lines = md.split('\n');
+  const out = [];
+  let inFence = false;
+  for (const ln of lines) {
+    if (/^\s*```/.test(ln)) { inFence = !inFence; continue; }
+    if (inFence) continue;
+    const m = /^(#{2,3})\s+(.+)$/.exec(ln);
+    if (m) out.push({ level: m[1].length, text: m[2].trim() });
+  }
+  return out.length > 3 ? out : [];
+}
