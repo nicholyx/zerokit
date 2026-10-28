@@ -1,61 +1,62 @@
 #!/usr/bin/env bash
 # 第四十六轮⑤：文档一致性巡检——内链存在性 + 版本号四处同步 + cookbook 与 README 命令漂移。
-# 与 CI 同源可本地跑：bash scripts/check-docs.sh
+# 实现全部走 node（CI 三平台必有 node；python 解释器在 Windows runner 缺裸 python3、
+# macOS runner 行为不稳，踩过两轮 CI）。
 set -uo pipefail
-trap 'rc=$?; if [ "$rc" -ne 0 ]; then say "trap: 异常中止 rc=$rc"; fi' EXIT
 cd "$(dirname "$0")/.." || exit 1
 fail=0
 say() { printf '%s\n' "$*"; }
 bad() { say "✗ $*"; fail=$((fail+1)); }
-
-# python 解释器三平台探测（Windows runner 无裸 python3；py launcher 兜底）
-PY=python3
-command -v python3 >/dev/null 2>&1 || PY=python
-command -v "$PY" >/dev/null 2>&1 || PY=py
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then say "trap: 异常中止 rc=$rc"; fi' EXIT
 
 # ① Markdown 相对内链存在性
-"$PY" - <<'PY'
-import pathlib, re, sys
-try:
-    bad = []
-    for md in pathlib.Path('.').rglob('*.md'):
-        if any(part in ('node_modules', '.git', 'target', '.trellis', 'apps', '.claude', '.codex', '.agents') for part in md.parts):
-            continue
-        for m in re.finditer(r'\[[^\]]*\]\(([^)#\s]+)(#[^)]*)?\)', md.read_text(encoding='utf-8', errors='ignore')):
-            t = m.group(1)
-            if t.startswith(('http://', 'https://', 'mailto:')):
-                continue
-            if not (md.parent / t).resolve().exists():
-                bad.append(f"{md}:{t}")
-    if bad:
-        print("✗ 死链：")
-        for b in bad:
-            print("   ", b)
-        sys.exit(1)
-    print("✓ 内链全部存在")
-except Exception as e:
-    print(f"死链巡检异常: {e!r}")
-    sys.exit(1)
-PY
-python_exit=$?
-[ "$python_exit" -ne 0 ] && fail=$((fail+1))
+node - <<'JS'
+import fs from 'node:fs';
+import path from 'node:path';
+const bad = [];
+const skip = new Set(['node_modules', '.git', 'target', '.trellis', 'apps', '.claude', '.codex', '.agents']);
+const walk = (dir) => {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (skip.has(e.name)) continue;
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) walk(p);
+    else if (e.name.endsWith('.md')) {
+      const text = fs.readFileSync(p, 'utf8');
+      for (const m of text.matchAll(/\[[^\]]*\]\(([^)#\s]+)(#[^)]*)?\)/g)) {
+        const t = m[1];
+        if (/^(https?:|mailto:)/.test(t)) continue;
+        if (!fs.existsSync(path.resolve(path.dirname(p), t))) bad.push(`${p}:${t}`);
+      }
+    }
+  }
+};
+walk('.');
+if (bad.length) { console.log('✗ 死链：'); for (const b of bad) console.log('   ', b); process.exit(1); }
+console.log('✓ 内链全部存在');
+JS
+node_exit=$?
+[ "$node_exit" -ne 0 ] && fail=$((fail+1))
 
-# ② 版本号四处同步
-v=$("$PY" -c "import json;print(json.load(open('package.json'))['version'])")
-v2=$("$PY" -c "import json;print(json.load(open('apps/desktop/src-tauri/tauri.conf.json'))['version'])")
-[ -n "$v" ] || { echo "✗ 读不到 package.json 版本（无 python？）"; exit 1; }
+# ② 版本号四处同步（node 一把读，bash 只比对）
+read -r v v2 v3 v4 <<EOF
+$(node -e "
+const fs=require('fs');
+const pk=JSON.parse(fs.readFileSync('package.json','utf8'));
+const tj=JSON.parse(fs.readFileSync('apps/desktop/src-tauri/tauri.conf.json','utf8'));
+const ct=fs.readFileSync('apps/desktop/src-tauri/Cargo.toml','utf8').match(/version = \"([^\"]+)\"/);
+const cl=fs.readFileSync('apps/desktop/src-tauri/Cargo.lock','utf8').split('name = \"zerokit-desktop\"')[1]?.match(/version = \"([^\"]+)\"/);
+console.log([pk.version,tj.version,ct?.[1]??'',cl?.[1]??''].join(' '));
+")
+EOF
+[ -n "$v" ] || { echo "✗ node 读版本失败"; exit 1; }
 [ "$v" = "$v2" ] || bad "tauri.conf.json 版本 $v2 ≠ package.json $v"
-grep -q "version = \"$v\"" apps/desktop/src-tauri/Cargo.toml || bad "Cargo.toml 没有 version = \"$v\""
-if ! grep -A1 'name = "zerokit-desktop"' apps/desktop/src-tauri/Cargo.lock | grep -q "version = \"$v\""; then
-  bad "Cargo.lock zerokit-desktop 不是 $v"
-fi
+[ "$v" = "$v3" ] || bad "Cargo.toml 版本 $v3 ≠ $v"
+[ "$v" = "$v4" ] || bad "Cargo.lock zerokit-desktop 版本 $v4 ≠ $v"
 [ $fail -eq 0 ] && say "✓ 版本号四处同步（$v）"
 
-# ③ cookbook 与 README 的 zkit 命令漂移：cookbook 里出现的 `zkit <子命令>` 至少要在 HELP 里存在
+# ③ cookbook 与 --help 命令漂移
 node src/cli.ts --help > /tmp/zk-help.txt 2>/dev/null
 while IFS= read -r sub; do
-  # plugin 子族的二级命令（publish-ready/unpack/...）在 --help 里折叠成一行 plugin 清单，
-  # 漂移检测按「cookbook 命令词出现在 --help 任意行」算过；真命令漂移（改名/删除）自然失配。
   grep -q "$sub" /tmp/zk-help.txt || grep -qE "plugin (new|dev|validate|install|add|update|remove|bundled|export|import|pack|unpack|info|recommend|lint|doc|publish-ready)" /tmp/zk-help.txt \
     || bad "cookbook 用了子命令 '$sub'，但 --help 里没有（命令漂移？）"
 done < <(grep -oE 'zkit (plugin )?[a-z][a-z-]*' docs/cookbook.md | awk '{print $NF}' | sort -u)
