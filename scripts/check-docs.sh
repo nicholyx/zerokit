@@ -7,8 +7,13 @@ fail=0
 say() { printf '%s\n' "$*"; }
 bad() { say "✗ $*"; fail=$((fail+1)); }
 
+# python 解释器三平台探测（Windows runner 无裸 python3；py launcher 兜底）
+PY=python3
+command -v python3 >/dev/null 2>&1 || PY=python
+command -v "$PY" >/dev/null 2>&1 || PY=py
+
 # ① Markdown 相对内链存在性
-python3 - <<'PY'
+"$PY" - <<'PY'
 import pathlib, re, sys
 bad = []
 for md in pathlib.Path('.').rglob('*.md'):
@@ -31,8 +36,9 @@ python_exit=$?
 [ "$python_exit" -ne 0 ] && fail=$((fail+1))
 
 # ② 版本号四处同步
-v=$(python3 -c "import json;print(json.load(open('package.json'))['version'])")
-v2=$(python3 -c "import json;print(json.load(open('apps/desktop/src-tauri/tauri.conf.json'))['version'])")
+v=$("$PY" -c "import json;print(json.load(open('package.json'))['version'])")
+v2=$("$PY" -c "import json;print(json.load(open('apps/desktop/src-tauri/tauri.conf.json'))['version'])")
+[ -n "$v" ] || { echo "✗ 读不到 package.json 版本（无 python？）"; exit 1; }
 [ "$v" = "$v2" ] || bad "tauri.conf.json 版本 $v2 ≠ package.json $v"
 grep -q "version = \"$v\"" apps/desktop/src-tauri/Cargo.toml || bad "Cargo.toml 没有 version = \"$v\""
 if ! grep -A1 'name = "zerokit-desktop"' apps/desktop/src-tauri/Cargo.lock | grep -q "version = \"$v\""; then
