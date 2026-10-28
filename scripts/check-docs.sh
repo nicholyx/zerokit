@@ -2,6 +2,7 @@
 # 第四十六轮⑤：文档一致性巡检——内链存在性 + 版本号四处同步 + cookbook 与 README 命令漂移。
 # 与 CI 同源可本地跑：bash scripts/check-docs.sh
 set -uo pipefail
+trap 'say "trap: 脚本中止于 line $LINENO（rc=$?）——若非预期请看上方输出"' EXIT
 cd "$(dirname "$0")/.." || exit 1
 fail=0
 say() { printf '%s\n' "$*"; }
@@ -20,7 +21,7 @@ try:
     for md in pathlib.Path('.').rglob('*.md'):
         if any(part in ('node_modules', '.git', 'target', '.trellis', 'apps', '.claude', '.codex', '.agents') for part in md.parts):
             continue
-        for m in re.finditer(r'\[[^\]]*\]\(([^)#\s]+)(#[^)]*)?\)', md.read_text(encoding='utf-8')):
+        for m in re.finditer(r'\[[^\]]*\]\(([^)#\s]+)(#[^)]*)?\)', md.read_text(encoding='utf-8', errors='ignore')):
             t = m.group(1)
             if t.startswith(('http://', 'https://', 'mailto:')):
                 continue
