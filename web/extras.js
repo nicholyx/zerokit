@@ -2088,15 +2088,18 @@ export function emptyState(kind, q) {
   if (kind === 'first-run') return {
     title: '先装几个插件',
     hint: '插件是能力包。点右上「集市」浏览，或终端跑 plugin bundled 装自带的示例。',
+    art: 'box',   // 第五十九轮⑨：空态插画类型（CSS 画）
   };
   if (kind === 'no-plugins') return {
     title: '一个插件都没有',
     hint: '终端跑 plugin bundled 装自带示例，或去集市找。装完这里就有动作了。',
+    art: 'box',
   };
   // no-match
   return {
     title: `没有匹配「${q || ''}」的动作`,
     hint: '试试短一点的关键词（拼音也行）；或者 Esc 清空搜索回到全部。',
+    art: 'search',
   };
 }
 
