@@ -46,7 +46,7 @@ const { classifyError, batchSummary } = await import(pathToFileURL(path.join(REP
     { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'quick__ts2date', arguments: { ts: 'not-a-number' } } },
   ];
   const { spawn } = await import('node:child_process');
-  const cp = spawn(process.execPath, [path.join(REPO, 'src/cli.ts'), 'mcp', 'serve'], { stdio: ['pipe', 'pipe', 'ignore'] });
+  const cp = spawn(process.execPath, [path.join(REPO, 'src/cli.ts'), 'mcp', 'serve'], { stdio: ['pipe', 'pipe', 'ignore'], env: { ...process.env, ZEROKIT_HOME: HOME } });
   let out = '';
   cp.stdout.on('data', (b) => { out += b; });
   const writeLine = (obj) => cp.stdin.write(JSON.stringify(obj) + '\n');
