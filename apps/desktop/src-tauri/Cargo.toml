@@ -1,6 +1,6 @@
 [package]
 name = "zerokit-desktop"
-version = "0.58.0"
+version = "0.59.0"
 edition = "2021"
 rust-version = "1.77"
 description = "zerokit 桌面壳：全局热键 + 托盘 + 无边框窗口"
