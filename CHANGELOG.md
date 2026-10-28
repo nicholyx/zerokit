@@ -1,5 +1,14 @@
 ## [Unreleased]
 
+### Added
+
+- uTools 兼容层：`img` 唤起翻译为图片文件匹配（不再只警告）；`window` 唤起与多余正则落进搜索关键字并给健康警告。
+- uTools 运行时垫片：`db.put` 补全 `_rev` 冲突语义（重复 `_id` 不带 `_rev` 返回 conflict，防止数据被悄悄覆盖）；
+  `copyText` 支持 macOS（pbcopy）与 Linux（wl-copy/xclip/xsel）；`redirect` 降级为 no-op 并留提示；
+  `getWindowSize` 返回固定合理值。
+- 插件元数据新增 `logo` 字段（uTools logo 与 zerokit 清单通用，路径防穿越）；`platform` 白名单不匹配当前平台时给加载警告。
+- 新文档 `docs/reference/utools-compat.md`：逐 API 支持矩阵与移植指引。
+
 （下一版攒着）
 
 ## [0.64.0] - 2026-10-29

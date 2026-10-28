@@ -20,6 +20,21 @@ const { adaptUtoolsPlugin, looksLikeUtoolsPlugin } = await import('../src/core/u
 const { loadDir, listPlugins } = await import('../src/core/registry.ts');
 const { runAction } = await import('../src/core/runner.ts');
 
+
+// 第六十轮：跑一次垫片运行时（spawn node，等待退出，回 {stdout, stderr, code}）
+async function runRuntime(dir, dataDir) {
+  const { spawnSync } = await import('node:child_process');
+  // Windows 教训：new URL().pathname 在 Windows 上是 /D:/...（带前导斜杠），
+  // path.join 出来的路径加载不了——必须走 fileURLToPath（CONTRIBUTING 军规同款）
+  const { fileURLToPath } = await import('node:url');
+  const runtime = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'core', 'utools-runtime.mjs');
+  const entry = path.join(dir, 'p.js');
+  const r = spawnSync(process.execPath, [runtime, entry,
+    '--zkit-code', 'main', '--zkit-data', dataDir, '--zkit-plugin', 'runtime60',
+    '--zkit-payload='], { encoding: 'utf8', timeout: 15000 });
+  return { stdout: r.stdout ?? '', stderr: r.stderr ?? '', code: r.status };
+}
+
 const results = [];
 const check = (name, ok, detail = '') => {
   results.push([name, ok]);
@@ -98,12 +113,49 @@ const write = (dir, files) => {
     JSON.stringify(filesAction?.match));
 
   const windowAction = a.find((x) => x.id === 'by-window');
-  check('无法复刻的 window 类型不落 match（只留关键字）', windowAction?.match === undefined,
+  // 第六十轮②：window 不落 match，但窗口语义进关键字与警告
+  check('window 类型不落 match（OS 级能力不复刻）', windowAction?.match === undefined,
     JSON.stringify(windowAction?.match));
 
   const { warnings } = adaptUtoolsPlugin(dir);
   check('对翻不过去的能力给出了明确警告',
     warnings.some((w) => /活动窗口/.test(w)), warnings.join(' | '));
+  check('六轮②：window 的 label 并进 keywords（可搜索）',
+    (plugin?.keywords ?? []).some((k) => k.includes('窗口')), JSON.stringify(plugin?.keywords));
+
+  // ---------------- 第六十轮：img / 多正则 / logo / platform ----------------
+  const dir2 = path.join(TMP, 'demo60');
+  write(dir2, {
+    'plugin.json': JSON.stringify({
+      pluginName: '六轮演示',
+      version: '1.0.0',
+      logo: 'icon.png',
+      platform: [process.platform === 'win32' ? 'darwin' : 'win32'],
+      preload: 'p.js',
+      features: [
+        { code: 'img-in', explain: '图片输入', cmds: [{ type: 'img' }] },
+        { code: 'multi-re', explain: '多正则', cmds: ['regex:^\\d+$', 'regex:^[a-f]+$'] },
+      ],
+    }),
+    'p.js': '// x\n',
+    'icon.png': 'PNGDATA',
+  });
+  const r2 = adaptUtoolsPlugin(dir2);
+  check('六轮：img 类型翻成 files match + 图片扩展名',
+    r2.plugin?.actions.find((x) => x.id === 'img-in')?.match?.type === 'files'
+      && r2.plugin?.actions.find((x) => x.id === 'img-in')?.match?.extensions?.includes('png'),
+    JSON.stringify(r2.plugin?.actions.find((x) => x.id === 'img-in')?.match));
+  check('六轮：img 的关键字包含「图片」',
+    (r2.plugin?.keywords ?? []).includes('图片'), JSON.stringify(r2.plugin?.keywords));
+  const mr = r2.plugin?.actions.find((x) => x.id === 'multi-re');
+  check('六轮：第一条正则进 match',
+    mr?.match?.type === 'regex' && mr?.match?.pattern === '^\\d+$', JSON.stringify(mr?.match));
+  check('六轮：第二条正则并入关键字',
+    (r2.plugin?.keywords ?? []).includes('^[a-f]+$'), JSON.stringify(r2.plugin?.keywords));
+  check('六轮：logo 翻译进 plugin.logo',
+    r2.plugin?.logo === 'icon.png', String(r2.plugin?.logo));
+  check('六轮：platform 不含当前平台时警告',
+    r2.warnings.some((w) => /只支持/.test(w)), r2.warnings.join(' | '));
 
   check('关键字进了 keywords（供拼音/模糊搜索）',
     (plugin?.keywords ?? []).includes('hextorgb') && (plugin?.keywords ?? []).includes('颜色转换'),
@@ -249,6 +301,52 @@ globalThis.utools.onPluginEnter(() => {
     Boolean(listed?.plugin), JSON.stringify(listPlugins().map((e) => e.plugin?.id ?? e.errors)));
   check('它走的是原生插件同一条加载路径（具备 actions）',
     (listed?.plugin?.actions.length ?? 0) > 0, JSON.stringify(listed?.plugin?.actions?.length));
+}
+
+// ---------------- 第六十轮④⑤：运行时垫片 API ----------------
+{
+  const dir3 = path.join(TMP, 'runtime60');
+  const dataDir = path.join(dir3, 'data');
+  write(dir3, {
+    'plugin.json': JSON.stringify({
+      pluginName: '运行时六轮', version: '1.0.0', preload: 'p.js',
+      features: [{ code: 'main', explain: 'x', cmds: ['kw'] }],
+    }),
+    'p.js': `
+      utools.onPluginEnter(() => {
+        const r1 = utools.db.put({ _id: 'a', v: 1 });
+        const dup = utools.db.put({ _id: 'a', v: 2 });
+        const got = utools.db.get('a');
+        const upd = utools.db.put({ _id: 'a', v: 3, _rev: got._rev });
+        const after = utools.db.get('a');
+        const sz = utools.getWindowSize();
+        const rd = utools.redirect('other', 'cmd');
+        const bad = (() => { try { return utools.db.put({ noId: 1 }); } catch (e) { return 'threw'; } })();
+        console.log(JSON.stringify({ r1, dup, upd: upd.ok, v3: after.v, sz: sz.width === 800, rd: rd === false, bad }));
+      });
+    `,
+  });
+  const r = await runRuntime(dir3, dataDir);
+  if (process.env['ZK_DBG60']) console.error('DBG:', fs.readFileSync(path.join(dir3, 'p.js'), 'utf8').split('\n').filter((l) => l.includes('redirect') || l.includes('rd:')).join(' || '));
+  const jsonLine = r.stdout.trim().split('\n').filter((l) => l.trim().startsWith('{')).pop() ?? '';
+  // Windows 上子进程可能整个没输出（runtime 退出码非 0 或控制台编码问题）——
+  // 给出带 stdout/stderr 的可诊断失败，而不是 JSON.parse 裸崩（CI 教训：裸崩没有汇总行）
+  let j;
+  try {
+    j = JSON.parse(jsonLine);
+  } catch {
+    check('六轮④⑤：runtime 端到端有 JSON 输出', false,
+      `jsonLine="${jsonLine.slice(0, 120)}" code=${r.code} stdout=${r.stdout.slice(0, 200)} stderr=${r.stderr.slice(0, 300)}`);
+    j = {};
+  }
+  check('六轮⑤：首次 put 成功', j.r1?.ok === true, JSON.stringify(j.r1));
+  check('六轮⑤：不带 _rev 重复 put 报 conflict', j.dup?.ok === false && j.dup?.error === 'conflict', JSON.stringify(j.dup));
+  check('六轮⑤：带正确 _rev 可覆盖', j.upd === true, JSON.stringify(j.upd));
+  check('六轮⑤：覆盖后的值生效', j.v3 === 3, String(j.v3));
+  check('六轮④：getWindowSize 返回固定合理值', j.sz === true, JSON.stringify(j.sz));
+  // p.js 里序列化的是 rd: rd===false —— 字段为 true 才代表 redirect 确实返回了 false
+  check('六轮④：redirect 是 no-op 返回 false', j.rd === true, String(j.rd) + ' | stdout=' + r.stdout.slice(0, 300) + ' | stderr=' + r.stderr.slice(0, 200));
+  check('六轮⑤：缺 _id 抛可读错误', j.bad === 'threw', JSON.stringify(j.bad));
 }
 
 console.log('\n' + '='.repeat(60));

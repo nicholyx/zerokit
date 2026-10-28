@@ -191,6 +191,8 @@ export interface Plugin {
   author?: string;
   homepage?: string;
   license?: string;
+  /** 插件图标：插件目录内相对路径或 http(s)/data URL（uTools logo 与 zerokit 清单通用） */
+  logo?: string;
   /** 依赖声明，例如 { python = ">=3.10" }。缺失时给安装指引 */
   requires: Record<string, string>;
   /**

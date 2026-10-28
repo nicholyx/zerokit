@@ -118,7 +118,6 @@ const UNSUPPORTED = {
   removeBrowserView: '需要 uTools 的 Electron 视图',
   setBrowserView: '需要 uTools 的 Electron 视图',
   getCurrentWindow: '需要 uTools 的 Electron 窗口',
-  redirect: '需要 uTools 的窗口间跳转',
   readCurrentBrowserUrl: '需要 uTools 的浏览器插件',
   simulateKeyboardTap: '需要 uTools 的模拟键鼠能力',
   getCursorScreenPoint: '需要 uTools 的模拟键鼠能力',
@@ -126,9 +125,17 @@ const UNSUPPORTED = {
   createNativeImage: '需要 uTools 的 Electron 能力',
   setFeature: '需要 uTools 的动态功能注册',
   removeFeature: '需要 uTools 的动态功能注册',
-  getPath: null,   // 下面有实现，占位说明它不在不支持之列
+  getWindowType: '需要 uTools 的窗口体系',
+  isPinned: '需要 uTools 的窗口体系',
+  setExpendHeight: '需要 uTools 的主窗口',
+  findAllDocuments: '需要 uTools 的 OS 级文档枚举',
+  copyText: null,   // 下面有实现，占位说明它不在不支持之列
+  redirect: null,
+  getWindowSize: null,
 };
-delete UNSUPPORTED.getPath;
+delete UNSUPPORTED.copyText;
+delete UNSUPPORTED.redirect;
+delete UNSUPPORTED.getWindowSize;
 
 const PATHS = {
   home: () => process.env['USERPROFILE'] || process.env['HOME'] || process.cwd(),
@@ -167,6 +174,17 @@ const utools = {
   isDev() { return false; },
   getAppVersion() { return 'zerokit'; },
 
+  // 第六十轮④：高频 API 的无界面降级。
+  // redirect 在 uTools 里是"跳到另一个插件"；这里没有插件间跳转，但很多插件
+  // 拿它当"流程转发"用——no-op + 一行提示，让调用方知道跳转没发生而不是傻等。
+  redirect(plugin, code, payload) {
+    err(`utools-runtime: redirect(${plugin}${code ? ',' + code : ''}) 被调用——zerokit 没有插件间跳转，已跳过。`);
+    return false;
+  },
+  // getWindowSize：uTools 插件常拿它做布局。这里返回一个固定的合理值，
+  // 让"读尺寸-算布局"的逻辑走完（结果反正没界面可贴，但不会崩）。
+  getWindowSize() { return { width: 800, height: 600 }; },
+
   // --- 输出给用户 ---
   // 这是兼容层里最关键的映射：uTools 把结果"贴"到界面上，我们这里没有界面，
   // 所以把它变成 stdout——CLI 直接看到，启动器渲染成结果卡片，MCP 客户端拿到文本。
@@ -180,12 +198,25 @@ const utools = {
 
   // --- 剪贴板 / 打开东西 ---
   copyText(text) {
-    if (process.platform !== 'win32') return false;
-    const ps = 'Set-Clipboard -Value ([Console]::In.ReadToEnd())';
-    const r = spawnSync('powershell', ['-NoProfile', '-Command', ps], {
-      input: String(text ?? ''), encoding: 'utf8', windowsHide: true,
-    });
-    return r.status === 0;
+    // 第六十轮④：补跨平台写剪贴板——darwin 用 pbcopy，linux 依次试 wl-copy/xclip/xsel，
+    // 都没有时返回 false（插件可以降级成把文本打出来）。
+    const s = String(text ?? '');
+    if (process.platform === 'win32') {
+      const ps = 'Set-Clipboard -Value ([Console]::In.ReadToEnd())';
+      const r = spawnSync('powershell', ['-NoProfile', '-Command', ps], {
+        input: s, encoding: 'utf8', windowsHide: true,
+      });
+      return r.status === 0;
+    }
+    if (process.platform === 'darwin') {
+      const r = spawnSync('pbcopy', [], { input: s });
+      return r.status === 0;
+    }
+    for (const cmd of [['wl-copy'], ['xclip', '-selection', 'clipboard'], ['xsel', '--clipboard', '--input']]) {
+      const r = spawnSync(cmd[0], cmd.slice(1), { input: s });
+      if (!r.error) return r.status === 0;
+    }
+    return false;
   },
   shellOpenExternal(url) {
     openWith(url);
@@ -225,16 +256,31 @@ const utools = {
     },
   },
   // db 是文档式存储。这里用一份 JSON 文件近似实现：文档必须有 _id，和 uTools 一致。
+  // 第六十轮⑤：补全 uTools db 语义——重复 _id 默认报冲突（uTools 返回 {ok:false,error:'conflict'}），
+  // _rev 匹配才允许覆盖；这避免了两个动作先后 put 同一 _id 把数据悄悄盖掉。
   db: {
     put(doc) {
       if (!doc || typeof doc !== 'object' || !doc._id) {
         throw new Error('utools.db.put: 文档必须有 _id 字段');
       }
       const all = storeNow().__docs ?? {};
-      all[String(doc._id)] = doc;
+      const prev = all[String(doc._id)];
+      if (prev !== undefined) {
+        const revs = typeof prev._rev === 'string' ? prev._rev : '1-zkit';
+        if (doc._rev !== undefined && doc._rev !== revs) {
+          return { ok: false, id: doc._id, error: 'conflict' };
+        }
+        if (doc._rev === undefined) {
+          // 与 uTools 一致：不带 _rev 的 put 在已存在时是冲突
+          return { ok: false, id: doc._id, error: 'conflict' };
+        }
+      }
+      const revn = (parseInt(String(doc._rev ?? prev?._rev ?? '0').split('-')[0] || '0', 10) || 0) + 1;
+      const stored = { ...doc, _rev: `${revn}-zkit` };
+      all[String(doc._id)] = stored;
       storeNow().__docs = all;
       writeStore();
-      return { ok: true, id: doc._id, rev: '1-zkit' };
+      return { ok: true, id: stored._id, rev: stored._rev };
     },
     get(id) {
       return (storeNow().__docs ?? {})[String(id)] ?? null;
