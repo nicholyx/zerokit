@@ -97,6 +97,48 @@
         "性能"
       ],
       "source": "path:plugins/sysinfo"
+    },
+    {
+      "id": "demochain",
+      "name": "组合动作演示",
+      "summary": "演示链式组合动作：第一步取数，第二步用它的结果算",
+      "version": "0.1.0",
+      "tags": [
+        "组合",
+        "chain",
+        "演示",
+        "pipeline",
+        "示例"
+      ],
+      "source": "path:plugins/demochain"
+    },
+    {
+      "id": "demosettings",
+      "name": "设置项演示",
+      "summary": "演示用户设置与 secret：配置存本地、敏感值只走环境变量",
+      "version": "0.1.0",
+      "tags": [
+        "设置",
+        "setting",
+        "secret",
+        "演示",
+        "示例"
+      ],
+      "source": "path:plugins/demosettings"
+    },
+    {
+      "id": "demohttp",
+      "name": "HTTP 动作演示",
+      "summary": "演示 HTTP 动作：取本仓库信息（内核发请求、走代理）",
+      "version": "0.1.0",
+      "tags": [
+        "http",
+        "rest",
+        "api",
+        "演示",
+        "示例"
+      ],
+      "source": "path:plugins/demohttp"
     }
   ]
 }

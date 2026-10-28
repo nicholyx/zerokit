@@ -15,7 +15,7 @@ import {
   addFromDir, addFromGit, devLink, exportPlugin, findPlugin, importPlugin, installBundled,
   installBundledPlugin, listPlugins, loadDir, removePlugin, requirePlugin,
 } from './core/registry.ts';
-import { type ScaffoldRuntime, scaffoldPlugin } from './core/scaffold.ts';
+import { type ScaffoldExample, type ScaffoldRuntime, scaffoldPlugin } from './core/scaffold.ts';
 import { applyUpdate, checkUpdate, listUpdateStates } from './core/update.ts';
 import { checkRequires } from './core/resolve.ts';
 import { buildDoctorReport } from './core/doctor.ts';
@@ -688,7 +688,7 @@ async function cmdPlugin(args: string[]): Promise<number> {
     const rest = args.slice(1);
     const id = rest.find((a) => !a.startsWith('--'));
     if (!id) {
-      process.stderr.write('用法：zkit plugin new <id> [--name 名字] [--runtime node|python] [--web] [--dir 目录]\n');
+      process.stderr.write('用法：zkit plugin new <id> [--name 名字] [--runtime node|python] [--web] [--dir 目录] [--example chain|setting|http]\n');
       return 2;
     }
     const flag = (name: string): string | undefined => {
@@ -700,18 +700,25 @@ async function cmdPlugin(args: string[]): Promise<number> {
       process.stderr.write(c.red(`✗ --runtime 只支持 node 或 python，收到 "${runtime}"\n`));
       return 2;
     }
+    // 第三十六轮③：专题模板 --example chain|setting|http
+    const exampleFlag = flag('example');
+    if (exampleFlag && !['chain', 'setting', 'http'].includes(exampleFlag)) {
+      process.stderr.write(c.red(`✗ --example 只支持 chain / setting / http，收到 "${exampleFlag}"\n`));
+      return 2;
+    }
     const r = scaffoldPlugin(id, {
       name: flag('name'),
       runtime: runtime as ScaffoldRuntime | undefined,
       web: rest.includes('--web'),
       dir: flag('dir'),
+      example: exampleFlag as ScaffoldExample | undefined,
     });
     if (!r.ok || !r.dir || !r.load?.plugin) {
       process.stderr.write(c.red(`✗ ${r.message}\n`));
       return 1;
     }
     const p = r.load.plugin;
-    process.stdout.write(c.green(`✓ ${r.message}：${r.dir}（${runtime ?? 'node'} 模板）\n`));
+    process.stdout.write(c.green(`✓ ${r.message}：${r.dir}（${exampleFlag ? exampleFlag + ' 专题' : (runtime ?? 'node')} 模板）\n`));
     for (const f of r.files) process.stdout.write(c.dim(`  ${f}\n`));
     process.stdout.write(`\n清单校验通过，${p.name} 有 ${p.actions.length} 个动作：\n`);
     for (const a of p.actions) {

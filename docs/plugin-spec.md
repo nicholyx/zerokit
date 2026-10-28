@@ -4,6 +4,7 @@
 以及 Web 表单**。加一个参数，四个面同时多出来。
 
 - [从零开始：五分钟写一个插件](#从零开始五分钟写一个插件)
+- [新能力速查](#新能力速查)
 - [目录与发现](#目录与发现)
 - [\[plugin\] 段](#plugin-段)
 - [\[requires\] 段](#requires-段)
@@ -52,6 +53,23 @@ zkit plugin export mytool  # 或打包成 .toolpack 单文件分发
 
 > dev 会在开发目录写一个 `.zerokit-source.json`（zerokit 的来源记录），
 > 建议加进 `.gitignore`。
+
+---
+
+## 新能力速查
+
+每个专题：规范在哪节 + 仓库里的活示例（装了就能跑：`zkit plugin bundled`）。
+照抄做法见 [cookbook.md](cookbook.md)。
+
+| 想做什么 | 规范 | 活示例 |
+| --- | --- | --- |
+| 把几个动作拼成一个流水线 | [组合动作（type = "chain"）](#组合动作type--chain) | `plugins/demochain/`、`plugins/sysinfo/` 的 `brief` |
+| 让用户先配置（令牌/主机） | [\[\[setting\]\] 段](#setting-段可选插件级配置) | `plugins/demosettings/`、`plugins/ip/` |
+| 声明依赖别的插件 | [\[\requires\] 段](#requires-段) | `plugins/proxy/` |
+| 不写脚本只调 API | [\[\[action\]\] 段](#action-段) 的 `type = "http"` | `plugins/demohttp/`、`plugins/ip/` |
+| 长驻后台进程 | [\[\[service\]\] 段](#service-段可选) | `plugins/proxy/` |
+| 富交互结果页 | [输出与渲染](#输出与渲染) 的 `render = "web"` | `plugins/sysinfo/` 的 `overview` |
+| 敏感操作怎么标 | [风险等级](#风险等级) | 全部示例都有标注 |
 
 ---
 

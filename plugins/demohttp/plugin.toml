@@ -1,0 +1,29 @@
+# demo-http——HTTP 动作（type=http）的活示例。
+# 什么场景用：调 REST API，不用写脚本。请求由内核发（走系统代理
+# http_proxy/https_proxy/all_proxy 或 config.toml 的 [proxy] 段）。
+[plugin]
+id       = "demohttp"
+name     = "HTTP 动作演示"
+version  = "0.1.0"
+summary  = "演示 HTTP 动作：取本仓库信息（内核发请求、走代理）"
+keywords = ["http", "rest", "api", "演示"]
+
+[[action]]
+id      = "repo"
+title   = "取仓库信息"
+description = "GET GitHub API 拿 zerokit 仓库信息。HTTP 动作不需要脚本文件。"
+risk    = "read"
+
+type    = "http"
+output  = "json"
+render  = "keyvalue"
+method  = "GET"
+url     = "https://api.github.com/repos/nicholyx/zerokit"
+# 响应 JSON 自动成为结构化结果（output="json"）；render 决定启动器怎么画
+params  = [
+  { name = "ua", type = "string", description = "User-Agent（GitHub API 必需）", default = "zerokit-demo" },
+]
+
+# 请求头支持 {参数名} 占位符
+[headers]
+User-Agent = "{ua}"
