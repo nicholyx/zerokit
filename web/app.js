@@ -18,7 +18,7 @@ import { pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS } from './ext
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
-import { barsScale, sparkPoints, formatMs, paletteScore, p95Ms } from './extras.js';
+import { barsScale, sparkPoints, formatMs, paletteScore, p95Ms, runTrend, failureRate, durationStats } from './extras.js';
 import { filterRows, colStats, unitOf, isUnitColumn, convertUnitColumn, mergeTables, columnValues, toHtmlTable } from './extras.js';
 import { renderCopyTemplate, toJsonl, exportFilename, toMarkdownProps } from './extras.js';
 import { WATCH_INTERVALS, intervalLabel, cellDiff, sparkSeries, watchStopCondition, tabTitle, watchCsv } from './extras.js';
@@ -1360,6 +1360,40 @@ function openDetail(plugin, action, prefill) {
   // sparkline：这个动作近 20 次的耗时走势（成功点线、失败点红），有历史才画
   const key = actionKey(plugin.id, action.id);
   const runHist = (runStore[key] ?? []).slice(-20);
+  // 第四十九轮①②④⑤：历史分析卡——数值趋势 / 耗时分布 / 失败率警示 / 与上次对比
+  const numericFields = (() => {
+    const fields = new Set();
+    for (const r of runHist) {
+      if (r?.data && typeof r.data === 'object' && !Array.isArray(r.data)) {
+        for (const [k, v] of Object.entries(r.data)) {
+          if (typeof v === 'number'
+            || (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v.trim().match(/^-?\d+(?:\.\d+)?/)?.[0] ?? NaN)))) {
+            fields.add(k);
+          }
+        }
+      }
+    }
+    return [...fields];
+  })();
+  const trendHtml = numericFields.length
+    ? `<div class="hist-trend">${numericFields.map((f) => {
+        const t = runTrend(runHist, f);
+        if (!t) return '';
+        return `<span class="trend-chip" data-trend-field="${esc(f)}" title="最近 ${t.points.length} 次 ${esc(f)}：均值 ${t.avg.toFixed(1)} · 最好 ${t.best} · 最差 ${t.worst}">${esc(f)} <b>${t.points.at(-1).v}</b> <i>(${t.points.length}次 均值${t.avg.toFixed(1)})</i></span>`;
+      }).join('')}</div>`
+    : '';
+  const dur = durationStats(runHist.filter((r) => typeof r.ms === 'number').map((r) => r.ms));
+  const durHtml = dur
+    ? `<span class="dur-chip" title="耗时分布：最快 ${formatMs(dur.min)} · P50 ${formatMs(dur.p50)} · P95 ${formatMs(dur.p95)} · 最慢 ${formatMs(dur.max)}">⏱ P50 ${formatMs(dur.p50)} · P95 ${formatMs(dur.p95)}</span>`
+    : '';
+  const fr = failureRate(runHist, 10);
+  const frHtml = fr.total >= 3 && fr.rate > 0.3
+    ? `<div class="warn-chip" role="status">⚠ 最近 ${fr.total} 次里失败 ${fr.fails} 次（${Math.round(fr.rate * 100)}%）——这个动作最近不太稳，看看错误分类卡里的建议</div>`
+    : '';
+  const cmpBtn = runHist.length >= 2 ? '<button class="ghost mini" id="cmpLast" title="当前结果与上一次对比（第二十三轮 resultCompare）">⇄ 与上次对比</button>' : '';
+  const historyPanel = (trendHtml || durHtml || frHtml || cmpBtn)
+    ? `<div class="hist-panel">${frHtml}${trendHtml}<div class="hist-meta">${durHtml}${cmpBtn}</div></div>`
+    : '';
   const sparkline = runHist.length >= 3
     ? (() => {
         const pts = sparkPoints(runHist, 24);
@@ -1432,6 +1466,7 @@ function openDetail(plugin, action, prefill) {
         ${sparkline}
       </div>
       <div class="desc">${esc(action.description || '（这个动作没写说明）')}</div>
+      ${historyPanel}
       ${action.risk !== 'read' ? `<div class="risk-explain callout">⚠ 风险等级「${esc(riskText(action.risk))}」是什么意思：只读=只是看、不改任何东西；会改动=会修改文件/配置/服务，执行前想清楚；高风险=可能删除数据或不可逆，确认明白了再执行。</div>` : ''}
       ${note ? `<div class="detail-note">📌 ${esc(note)}</div>` : ''}
       <div class="detail-hotkey">
@@ -3369,6 +3404,16 @@ function downloadCsv(data) {
 
 // 第四十八轮③：失败卡重试/折叠——委托绑在 #result 容器（innerHTML 重建后仍有效）
 document.addEventListener('click', (e) => {
+  // 第四十九轮①：与上次对比——取当前结果 + runStore 里倒数第二次
+  const cmpBtn = e.target.closest?.('#cmpLast');
+  if (cmpBtn) {
+    e.preventDefault();
+    const runs = runStore[actionKey(detail?.plugin?.id ?? '', detail?.action?.id ?? '')] ?? [];
+    const cur = runs.at(-1), prev = runs.at(-2);
+    if (!cur || !prev) { el.count.textContent = '没有两次可对比的结果'; return; }
+    showCompareView({ res: cur }, { res: prev });
+    return;
+  }
   const retryBtn = e.target.closest?.('[data-fail-retry]');
   if (retryBtn) { e.preventDefault(); const rb = document.querySelector('#runBtn'); rb?.click(); return; }
   const foldBtn = e.target.closest?.('[data-fail-fold]');
@@ -4571,7 +4616,8 @@ async function renderLogs() {
     ${trimInfo}
     <div class="log-tools">
       <div class="chips">${chips}</div>
-      <input id="logQuery" class="log-query" placeholder="过滤：插件 / 动作 / 错误" value="${esc(logsQuery)}">
+      <input id="logQuery" class="log-query" placeholder="过滤：插件 / 动作 / 错误（支持 ms>100 这类数字比较）" value="${esc(logsQuery)}">
+      <button class="ghost" id="logCsv" title="把当前过滤结果导出 CSV（时间/插件/动作/决策/耗时/退出码）">⬇ CSV</button>
       <button class="ghost" id="logReload">刷新</button>
       <button class="ghost" id="logFile">${logsFile === 'audit' ? '看被拒记录' : '看全部记录'}</button>
     </div>
@@ -4582,6 +4628,28 @@ async function renderLogs() {
   });
   $('logQuery').addEventListener('change', () => { logsQuery = $('logQuery').value.trim(); logsPage = 1; renderLogs(); });
   $('logReload').addEventListener('click', renderLogs);
+  // 第四十九轮⑥：导出当前过滤视图为 CSV（只含元数据，不含输出正文——审计里可能有敏感串）
+  $('logCsv').addEventListener('click', async () => {
+    try {
+      const params = new URLSearchParams({ file: logsFile, limit: '200' });
+      if (logsDecision) params.set('decision', logsDecision);
+      if (logsQuery) params.set('q', logsQuery);
+      const d2 = await api(`/api/logs?${params}`);
+      const es = d2.entries ?? [];
+      if (!es.length) { el.count.textContent = '没有可导出的行'; return; }
+      const head = 'time,plugin,action,decision,ms,exitCode';
+      const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const csv = [head, ...es.map((e) => [
+        cell(e.ts), cell(e.plugin), cell(e.action), cell(e.decision), cell(e.ms), cell(e.exitCode),
+      ].join(','))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `zerokit-logs-${logsFile}-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click(); URL.revokeObjectURL(a.href);
+      el.count.textContent = `已导出 ${es.length} 条日志`;
+    } catch (err) { el.count.textContent = `导出失败：${err.message}`; }
+  });
   $('logFile').addEventListener('click', () => {
     logsFile = logsFile === 'audit' ? 'denied' : 'audit';
     logsPage = 1;
@@ -6354,6 +6422,7 @@ async function showSaved() {
             <span class="badge ${x.ok ? 'read' : 'destructive'}">${x.ok ? '成功' : '失败'}</span>
             ${x.ms != null ? `<span class="badge">${x.ms} ms</span>` : ''}
             <span class="plug-ops">
+              <button class="ghost mini" data-sel="${i}" title="选进对比槽（选两条同动作收藏后可对比）">选比</button>
               <button class="ghost" data-open="${i}">打开动作</button>
               <button class="ghost" data-del="${i}">移除</button>
             </span>
@@ -6363,6 +6432,30 @@ async function showSaved() {
         </div>`).join('')}
       <div class="actions"><button class="primary" id="savedBack">返回</button>
         <button class="ghost" id="savedClear">清空收藏</button></div>`;
+    // 第四十九轮⑧：收藏结果对比——选两条同动作的，逐键 diff（复用 resultCompare）
+    const selA = { v: null };
+    view.querySelectorAll('[data-sel]').forEach((b) => b.addEventListener('click', () => {
+      const x = savedList[Number(b.dataset.sel)];
+      if (selA.v === null) {
+        selA.v = Number(b.dataset.sel);
+        b.textContent = 'A✓'; b.classList.add('on');
+      } else if (selA.v === Number(b.dataset.sel)) {
+        selA.v = null; b.textContent = '选比'; b.classList.remove('on');
+      } else {
+        const a = savedList[selA.v], c = savedList[Number(b.dataset.sel)];
+        if (a.key !== c.key) { el.count.textContent = '只能对比同一个动作的两条结果'; return; }
+        const rows = resultCompare(a.data, c.data);
+        const html = rows.map((r2) => `<tr class="${r2.diff ? 'cmp-diff' : ''}"><td>${esc(r2.key)}</td><td>${esc(r2.a)}</td><td>${esc(r2.b)}</td></tr>`).join('');
+        const box = document.createElement('div');
+        box.className = 'cmp-view';
+        box.innerHTML = `<div class="ps-head"><h3>收藏对比：${esc(a.command)} ⇄ ${esc(c.command)}</h3>
+          <button class="ghost mini" id="cmpClose">关闭</button></div>
+          <table class="cmp-table"><thead><tr><th>键</th><th>较早</th><th>较晚</th></tr></thead><tbody>${html}</tbody></table>`;
+        view.prepend(box);
+        box.querySelector('#cmpClose').addEventListener('click', () => box.remove());
+        el.count.textContent = rows.length ? `对比出 ${rows.filter((r2) => r2.diff).length} 处差异` : '两条没有可比的键';
+      }
+    }));
     view.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => {
       const x = savedList[Number(b.dataset.open)];
       const dot = x.key.indexOf('.');

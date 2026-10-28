@@ -2171,3 +2171,53 @@ export function batchSummary(done, planned) {
   if (skipped) parts.push(`∅ 未跑 ${skipped}`);
   return parts.join(' · ');
 }
+
+
+// ============ 第四十九轮：结果对比与历史分析 ============
+
+/**
+ * 数值字段趋势：从动作历史里抽一个数值字段最近 N 次的序列。
+ * runs: runStore[key]（每项 {ts, ok, ms, data?}）；field: 字段名。
+ * 返回 null（无数据）或 { points: [{ts, v}], avg, best, worst }（best=min worst=max）。
+ */
+export function runTrend(runs, field, limit = 20) {
+  if (!Array.isArray(runs)) return null;
+  const points = [];
+  for (const r of runs.slice(-limit)) {
+    const v = r?.data?.[field];
+    let n = NaN;
+    if (typeof v === 'number') n = v;
+    else if (typeof v === 'string' && v.trim() !== '') {
+      n = Number(v);
+      if (!Number.isFinite(n)) {
+        const m = v.trim().match(/^-?\d+(?:\.\d+)?/);   // '120 MB' → 120（与 resultQuery 同语义）
+        if (m) n = Number(m[0]);
+      }
+    }
+    if (Number.isFinite(n)) points.push({ ts: r.ts, v: n });
+  }
+  if (points.length < 2) return null;
+  const vs = points.map((p) => p.v);
+  const avg = vs.reduce((a, b) => a + b, 0) / vs.length;
+  return { points, avg, best: Math.min(...vs), worst: Math.max(...vs) };
+}
+
+/**
+ * 失败率：runs 最近 limit 条里 ok=false 的占比。返回 { fails, total, rate }；空历史 rate=0。
+ */
+export function failureRate(runs, limit = 10) {
+  if (!Array.isArray(runs) || runs.length === 0) return { fails: 0, total: 0, rate: 0 };
+  const recent = runs.slice(-limit);
+  const fails = recent.filter((r) => r && r.ok === false).length;
+  return { fails, total: recent.length, rate: fails / recent.length };
+}
+
+/**
+ * 耗时分布：毫秒数组 → { p50, p95, min, max, count }。空数组返回 null。
+ */
+export function durationStats(msList) {
+  if (!Array.isArray(msList) || msList.length === 0) return null;
+  const a = [...msList].sort((x, y) => x - y);
+  const pick = (q) => a[Math.min(a.length - 1, Math.floor(q * a.length))];
+  return { p50: pick(0.5), p95: pick(0.95), min: a[0], max: a[a.length - 1], count: a.length };
+}
