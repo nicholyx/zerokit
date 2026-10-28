@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+（下一版攒着）
+
+## [0.61.0] - 2026-10-28
+
 ### Added
 
 - 文档体系重组：docs/ 四层目录（guide 上手 / 概念 / reference 参考 / deep 深入）+ 导航页；新增十分钟上手、术语表、FAQ 扩编、架构一页图、动作速查表（13 插件 52 动作，从清单自动生成）；README 瘦身 335→226 行；CHANGELOG 历史归档（49 版入 docs/reference/changelog-archive.md，主文件 918→319 行）；check-docs 加导航页四层断言
