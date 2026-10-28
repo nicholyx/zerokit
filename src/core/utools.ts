@@ -47,6 +47,8 @@ interface UtoolsJson {
   main?: string;
   preload?: string;
   features?: UtoolsFeature[];
+  /** 第六十轮⑦：uTools 的平台白名单，如 ["win32", "darwin", "linux"] */
+  platform?: string[];
 }
 
 /** 随内核分发的运行时垫片。插件代码里的 `utools.*` 由它提供 */
@@ -147,7 +149,10 @@ function mapCmds(cmds: Cmd[], explain: string | undefined): CmdMapping {
           if (!out.match) {
             out.match = { type: 'regex', pattern, fills: 'text', label: label ?? '正则匹配' };
           } else {
-            out.warnings.push('这个功能声明了多条可用正则，只保留了第一条');
+            // 第六十轮③：多条正则不再只留警告——后面的正则作为可搜索关键字保留，
+            // 用户搜 pattern 片段也能命中这个动作。
+            out.keywords.push(pattern);
+            out.warnings.push('这个功能声明了多条可用正则，第一条进了 match，其余已并入关键字');
           }
         } catch {
           out.warnings.push(`正则 ${pattern} 不是合法正则，已忽略`);
@@ -161,15 +166,31 @@ function mapCmds(cmds: Cmd[], explain: string | undefined): CmdMapping {
     const type = (cmd.type ?? '').toLowerCase();
     if (type === 'over') {
       out.match ??= { type: 'text', fills: 'text', label: cmd.label ?? '选中文本' };
-    } else if (type === 'files') {
-      const exts = FILE_TYPES[(cmd.fileType ?? 'file').toLowerCase()];
-      const match: ActionMatch = { type: 'files', fills: 'text', label: cmd.label ?? '文件' };
+    } else if (type === 'files' || type === 'img') {
+      // 第六十轮①：img 不再只警告——uTools 的 img = "选中图片唤起"，在 zerokit 里
+      // 语义完全等价于 files + 图片扩展名白名单（图片路径作为 text 参数进来）。
+      const key = type === 'img' ? 'image' : (cmd.fileType ?? 'file').toLowerCase();
+      const exts = FILE_TYPES[key];
+      const match: ActionMatch = {
+        type: 'files', fills: 'text',
+        label: cmd.label ?? (type === 'img' ? '选中图片' : '文件'),
+      };
       if (exts && exts.length > 0) match.extensions = exts;
-      out.match ??= match;
-    } else if (type === 'img') {
-      out.warnings.push('这个功能在 uTools 里靠"选中图片"唤起，zerokit 没有图片输入，已只保留关键字');
+      // 图片语义进关键字：搜「图片」能命中（match 只有一个坑位，关键字是兜底通道）
+      if (type === 'img') out.keywords.push('图片');
+      if (type === 'img' && out.match) {
+        out.warnings.push('img 唤起与前一个匹配源冲突，图片扩展名已并入关键字');
+      } else {
+        out.match ??= match;
+      }
     } else if (type === 'window') {
-      out.warnings.push('这个功能靠"活动窗口"唤起（uTools 的 OS 级能力），zerokit 无法复刻，已跳过');
+      // 第六十轮②：不假装支持，但也不静默丢——落进关键字与健康警告，
+      // 用户在 health/加载警告里能看到"这个功能依赖窗口选择"。
+      out.keywords.push(cmd.label ?? '窗口');
+      out.warnings.push(
+        '这个功能靠"活动窗口"唤起（uTools 的 OS 级能力），zerokit 无法复刻；'
+        + '已把窗口名并入搜索关键字，选中后请用 text 参数手动指定窗口标题',
+      );
     } else {
       out.warnings.push(`不认识的 cmds 类型 "${cmd.type ?? ''}"，已跳过`);
     }
@@ -217,6 +238,33 @@ export function adaptUtoolsPlugin(dir: string): LoadResult {
   const name = typeof raw.pluginName === 'string' && raw.pluginName.trim()
     ? raw.pluginName.trim()
     : path.basename(dir);
+
+  // 第六十轮⑦：平台白名单。声明了且不含当前平台 → 警告（不拒绝加载：
+  // 插件可能只是没顾及跨平台，动作本身也许还能跑；让 health 和用户自己判断）。
+  if (Array.isArray(raw.platform) && raw.platform.length > 0) {
+    const cur = process.platform === 'win32' ? 'win32'
+      : process.platform === 'darwin' ? 'darwin' : 'linux';
+    // uTools 生态里偶尔写 "windows"/"mac" 这类变体，做一次归一
+    const norm = raw.platform.map((p) => String(p).toLowerCase().replace('windows', 'win32').replace('mac', 'darwin').replace('macos', 'darwin'));
+    if (!norm.includes(cur)) {
+      warnings.push(`${name}：清单声明只支持 ${norm.join('/')}，当前是 ${cur}——动作可能行为异常`);
+    }
+  }
+
+  // 第六十轮⑥：logo 进插件元数据（启动器插件主页/集市卡片将来可直接用）。
+  // 只认插件目录内的相对路径，防穿越；url（http/data）原样保留。
+  let logo: string | undefined;
+  if (typeof raw.logo === 'string' && raw.logo) {
+    if (/^(https?:|data:)/.test(raw.logo)) logo = raw.logo;
+    else {
+      const logoAbs = path.resolve(dir, raw.logo);
+      if (logoAbs.startsWith(path.resolve(dir) + path.sep) && fs.existsSync(logoAbs)) {
+        logo = raw.logo;
+      } else {
+        warnings.push(`${name}：logo 路径 ${raw.logo} 不在插件目录内或不存在，已忽略`);
+      }
+    }
+  }
 
   const features = Array.isArray(raw.features) ? raw.features : [];
   const { entry, reason } = pickEntry(raw, dir);
@@ -320,6 +368,7 @@ export function adaptUtoolsPlugin(dir: string): LoadResult {
   if (typeof raw.description === 'string') plugin.description = raw.description;
   if (typeof raw.author === 'string') plugin.author = raw.author;
   if (typeof raw.homepage === 'string') plugin.homepage = raw.homepage;
+  if (logo) plugin.logo = logo;   // 第六十轮⑥：翻译进 zerokit 元数据
 
   return { plugin, errors, warnings };
 }

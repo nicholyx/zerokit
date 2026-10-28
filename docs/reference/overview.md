@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-10-28（第五十六轮，v0.60.0 文档重组）
+> 最后更新：2026-10-29（第六十轮，v0.65.0 uTools 兼容层）
 
 ## 性能基线（第五十八轮建立，2026-10-28，Apple M4 / Node 22）
 
@@ -208,8 +208,13 @@ host 保留模块缓存、不能读 stdin）。形态不匹配时自动退回子
 ### uTools 插件兼容层
 
 带 `plugin.json` 的存量插件**丢进插件目录即可用**，自动翻译 `features[].cmds`
-（关键字 / `regex:` / 划词 / 文件），翻译完就同时拿到 CLI + MCP + 启动器 + 工作台四个面。
-运行时垫片提供 `utools.*` 全局。
+（关键字 / `regex:` / 划词 / 文件 / **图片**，`window` 唤起与多条正则会落进关键字并给健康警告），
+翻译完就同时拿到 CLI + MCP + 启动器 + 工作台四个面。
+运行时垫片提供 `utools.*` 全局：`db` 带完整 `_rev` 冲突语义（不带 `_rev` 重复 put
+返回 `{ok:false,error:"conflict"}`）、`copyText` 三平台写剪贴板（pbcopy / wl-copy·xclip·xsel /
+Set-Clipboard）、`redirect` 为 no-op 返回 `false` 并留提示、`getWindowSize` 返回固定合理值、
+`logo` 进插件元数据（防路径穿越）、`platform` 白名单不匹配给警告。逐 API 的支持矩阵见
+[`docs/reference/utools-compat.md`](utools-compat.md)。
 
 **边界要说白**：复刻的是「无界面也能完成」的那部分（读输入、算、输出、存储、开外部程序）。
 uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠、粘贴进任意前台窗口）
@@ -223,7 +228,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 
 ### 质量
 
-- 28 个测试文件、**953 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
+- 38 个测试文件、**1212 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
 - `tsc --noEmit` 干净——**而且 CI 真的在跑它**（`typecheck` job）。
   曾经这里写着"干净"但没有任何地方执行这条命令，于是两个只有类型检查才看得见的
   错误在核心里躺了很久（`proxy.ts` 的 Buffer 泛型不兼容、`scaffold.ts` 的类型混用）。
@@ -288,6 +293,10 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 - 第四十九轮（v0.54.0）：结果对比与历史分析——详情页历史分析卡（数值趋势/耗时分布/失败率>30%警示）、⇄ 与上次对比（复用 resultCompare）、收藏结果两两对比、日志 CSV 导出（仅元数据）；hist49-smoke 13 项、全量 32 文件 1041/1041（Issue #188）
 - 第五十轮 v0.55.0：主题与视觉打磨——字号/间距/过渡阶梯、暗色对比度 AA、斑马纹、--danger、滚动条、打印样式（contrastRatio/typeScaleStep）
 - 第五十一轮 v0.56.0：搜索体验深化——丢词建议/组合记忆/搜索态折叠/desc 高亮/计数徽标/清空按钮/历史单条删（suggestNext/comboLabel）
+- 第六十轮（v0.65.0）uTools 兼容层补全：img 唤起→图片文件匹配、window/多正则→关键字+健康警告、db.put _rev 冲突语义、copyText 三平台、redirect/getWindowSize 降级、logo/platform 元数据、docs/reference/utools-compat.md 支持矩阵、utools-smoke 37→44、全量 1212/1212（Issue #222）
+- 第五十九轮（v0.64.0）设计师走查十项：执行分层主按钮+⋯菜单、视图/浮层动效、列表 stagger、顶栏状态胶囊、risk-dot 排版、执行反馈动画、暗色三层、空态插画、窄屏 sticky、webui-smoke 93→113、全量 1198/1198（Issue #219）
+- 第五十八轮（v0.63.0）性能压舱石：bench.mjs 冷启动+RSS 测量、性能预算（--help<300ms/list<500ms/RSS<150MB）、10k 大输入防护、release-prep 重复版本守卫、全量 1178/1178（Issue #215）
+- 第五十七轮（v0.62.0）测试体系深化：假绿修复（extras-smoke 中段崩溃被汇总掩盖 21 项没跑）、--shuffle、失败摘要+最慢 top5、CONTRIBUTING 十条军规、全量 1174/1174（Issue #212）
 - 第五十二轮 v0.57.0：键盘流与无鼠标操作——F 收藏/T 标签/Y·E 结果键/Alt+↑↓ 篮内移位/速查浮层合流（keyHelpList）
 - 第五十三轮 v0.58.0：结果区信息密度——空值 —/长文截断/密度三档/元信息钉底/等宽数字（cellDisplay/tableDensity/kvCollapsed）
 - 第五十四轮 v0.59.0：时间线与执行复盘——#/timeline 页（timelineDays/groupByHour/weekCompare/topActionsFlat）
