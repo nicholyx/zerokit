@@ -131,3 +131,20 @@ Rust `target/`。
 [GitHub Security Advisories](https://github.com/nicholyx/zerokit/security/advisories/new)
 私下报告，不要开公开 Issue。项目的安全边界（插件会真实执行命令、
 MCP 副作用动作默认拒绝）见 [`SECURITY.md`](SECURITY.md)。
+
+---
+
+## 写测试的十条军规（本仓 55+ 轮迭代踩坑精华）
+
+1. **临时文件一律 `path.join(os.tmpdir(), ...)`**——`/tmp` 在 Windows 上不存在（mkdtempSync ENOENT -4058 曾在 CI 上炸过）。
+2. **动态 import 本地路径必须 `pathToFileURL()`**——盘符路径直接给 import() 报 ERR_UNSUPPORTED_ESM_URL_SCHEME（踩过两次：第三十四、四十五轮）。
+3. **「今天」不能用 `now - 3600_000` 造假**——CI 在 UTC 午夜后跑会跨天（本地过、CI 挂）。锚定到当天零点 `+1h/+2h`。
+4. **周一锚定的周对比测试，样例日期要算准星期几**——`new Date(2026,9,26).getDay()` 先验证再写死（第五十四轮踩过）。
+5. **断言不匹配状态词本身**——`out.includes('成功')` 会把「不成功」也判过；匹配带图标或数值的具体行。
+6. **测试不得依赖本机状态**——已装插件、`~/.zerokit/` 数据都不许依赖；`ZEROKIT_HOME` 指临时目录 + `plugin bundled` 预装，结束清理。
+7. **平台分流断言写「成功或带指引的失败」**——Linux CI 没显示器，截图工具 ENOENT 是合法路径，断言两种都收。
+8. **超时测试用 deadline 循环而不是 sleep 死等**——`while (Date.now() < deadline)` 加早退，快机器不白等慢机器不误杀。
+9. **外部工具不可用要优雅跳过**——`spawnSync` 的 `error.code === 'ENOENT'` 判「没这工具」，与「工具报错」分开处理。
+10. **改断言前先问「是产品错了还是测试过期了」**——语义放宽（如第五十五轮中文 key）要同步改测试并注明轮次，不是把断言删了完事。
+
+顺带一提：`node scripts/test-all.mjs --shuffle` 用随机顺序跑全量，用于暴露测试间的隐式顺序依赖——理论上每个测试都该自包含。

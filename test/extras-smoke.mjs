@@ -714,7 +714,6 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
   })());
   check('emptySearchSuggestions: 非数组兜底空表', emptySearchSuggestions(null).length === 0);
 
-const failed = results.filter(([, ok]) => !ok);
 // ---------------- 第二十三轮：结果工作台 ----------------
 check('COMMAND_LIST: 至少 10 个命令且字段齐全', (() => {
   return COMMAND_LIST.length >= 10
@@ -935,7 +934,10 @@ check('highlightSegmentsCaseKept: 大小写保真', (() => {
 check('parseHistoryHash: 合法/非法', (() => {
   return parseHistoryHash('#/history/sysinfo.overview') === 'sysinfo.overview'
     && parseHistoryHash('#/history/a.b.c') === 'a.b.c'
-    && parseHistoryHash('#/history/no-dot') === null
+    // 第五十五轮⑨放宽：中文插件名合法；真正拒绝的是编码斜杠（防跨段）
+    && parseHistoryHash('#/history/no-dot') === 'no-dot'
+    && parseHistoryHash('#/history/%E4%B8%AD%E6%96%87.list') === '中文.list'
+    && parseHistoryHash('#/history/a%2Fb') === null
     && parseHistoryHash('#/logs') === null
     && parseHistoryHash('') === null;
 })());
@@ -1089,8 +1091,7 @@ console.log('\n' + '='.repeat(60));
   check(favArr.includes('a.b'), 'diff: original untouched');
 }
 
-console.log(`通过 ${results.length - failed.length} / ${results.length}`);
-if (failed.length) process.exitCode = 1;
+
 
 // ===================== 第三十七轮：AI 协作面 =====================
 {
@@ -1126,7 +1127,8 @@ if (failed.length) process.exitCode = 1;
 
 // ======================= 第四十七轮：信息架构纯函数 =======================
 {
-  const eq = (a, b, m) => { if (JSON.stringify(a) === JSON.stringify(b)) pass++; else { fail++; console.error(`FAIL: ${m}`); } };
+  const { navGroups, emptyState, skeletonRows, resultHeightTier, viewportMode } = await import('../web/extras.js');
+  const eq = (a, b, m) => results.push([m, JSON.stringify(a) === JSON.stringify(b)]);
   // navGroups 三分类 + 未知归 manage
   const g = navGroups([
     { kind: 'exec', id: 'a' }, { kind: 'observe', id: 'b' }, { kind: 'manage', id: 'c' }, { id: 'd' },
@@ -1137,21 +1139,24 @@ if (failed.length) process.exitCode = 1;
   eq(navGroups(null).manage, [], 'navGroups 空表安全');
 
   // emptyState 三档
-  const fr = emptyState('first-run');
-  if (fr.title.includes('插件') && fr.hint.length > 10) pass++; else fail++;
-  const np = emptyState('no-plugins');
-  if (np.title.includes('没有')) pass++; else fail++;
-  const nm = emptyState('no-match', '内存');
-  if (nm.title.includes('内存') && nm.hint.length > 5) pass++; else fail++;
+  results.push(['emptyState first-run', emptyState('first-run').title.includes('插件') && emptyState('first-run').hint.length > 10]);
+  results.push(['emptyState no-plugins', emptyState('no-plugins').title.includes('没有')]);
+  results.push(['emptyState no-match 带搜索词', (() => { const nm = emptyState('no-match', '内存'); return nm.title.includes('内存') && nm.hint.length > 5; })()]);
 
   // skeletonRows 边界
-  if (skeletonRows(6).length === 6 && skeletonRows(0).length === 1 && skeletonRows(99).length === 12) pass++; else fail++;
+  results.push(['skeletonRows 6/0/99', skeletonRows(6).length === 6 && skeletonRows(0).length === 1 && skeletonRows(99).length === 12]);
 
   // resultHeightTier
-  if (resultHeightTier(3) === 'compact' && resultHeightTier(20) === 'normal'
-    && resultHeightTier(100) === 'scroll' && resultHeightTier(NaN) === 'normal') pass++; else fail++;
+  results.push(['resultHeightTier 三档+NaN', resultHeightTier(3) === 'compact' && resultHeightTier(20) === 'normal'
+    && resultHeightTier(100) === 'scroll' && resultHeightTier(NaN) === 'normal']);
 
   // viewportMode
-  if (viewportMode(375) === 'narrow' && viewportMode(720) === 'narrow'
-    && viewportMode(721) === 'desktop' && viewportMode(0) === 'desktop') pass++; else fail++;
+  results.push(['viewportMode 断点', viewportMode(375) === 'narrow' && viewportMode(720) === 'narrow'
+    && viewportMode(721) === 'desktop' && viewportMode(0) === 'desktop']);
 }
+
+// ======================= 汇总（必须在所有块之后） =======================
+const failed = results.filter((r) => !r[1]);
+for (const [name] of failed) console.error('FAIL  ' + name);
+console.log(`通过 ${results.length - failed.length} / ${results.length}`);
+if (failed.length) process.exitCode = 1;
