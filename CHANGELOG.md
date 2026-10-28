@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+（下一版攒着）
+
+## [0.63.0] - 2026-10-29
+
 ### Added
 
 - `scripts/bench.mjs` 扩充 CLI 冷启动（path/--help/list 各 10 次中位）与峰值 RSS 测量；性能基线表与预算（--help <300ms、list <500ms、RSS <150MB）写入项目账本，超预算回归算缺陷
