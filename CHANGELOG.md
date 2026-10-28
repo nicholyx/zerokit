@@ -1,5 +1,18 @@
 ## [Unreleased]
 
+### Added
+
+- CLI 输出格式四选一：`zkit run ... --out table|json|yaml|csv`（table 给人看、其余给下游管道；中文列宽不歪）
+- `--quiet`：只输出结果单行 JSON，头部装饰全免（脚本管道用）
+- `--copy`：执行成功后把结果 JSON 复制到剪贴板（无剪贴板环境降级提示）
+- `--watch N`：执行后每 N 秒轮询重跑，只打印逐键变化行（Ctrl-C 退出；间隔收敛 5~300 秒）
+- `zkit last`：重跑最近一条成功命令；`--show` 只看不跑
+- `zkit history [N]`：最近命令带时间戳；`--rerun N` 重跑第 N 条（历史落 `history.json`，上限 200 条，控制旗标不进重放参数面）
+- `zkit im`：终端交互模式（↑↓ 选插件/动作、回车执行、/ 过滤、q 退出）；裸 `zkit` 在 TTY 下直达
+- `zkit run <p> <a> --interactive`：参数逐项提示输入（必填标注、secret 掩码回显、默认值回车即用）
+- `zkit list --health`：一屏插件健康状态（非零退出码=有异常）；`--json` 机读
+
+
 ## [0.49.0] - 2026-10-28
 
 ### Added
