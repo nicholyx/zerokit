@@ -2330,3 +2330,69 @@ export function kvCollapsed(stored, key, isCollapsed) {
   if (isCollapsed) set.add(key); else set.delete(key);
   return [...set];
 }
+
+/** 第五十四轮⑨：执行记录按天分组（倒序），每天含汇总。 */
+export function timelineDays(runs) {
+  const byDay = new Map();
+  for (const r of runs ?? []) {
+    if (!r || typeof r.ts !== 'number') continue;
+    const d = new Date(r.ts);
+    const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (!byDay.has(day)) byDay.set(day, { day, total: 0, fails: 0, msSum: 0, items: [] });
+    const g = byDay.get(day);
+    g.total += 1;
+    if (!r.ok) g.fails += 1;
+    g.msSum += (typeof r.ms === 'number' ? r.ms : 0);
+    g.items.push(r);
+  }
+  return [...byDay.values()].sort((a, b) => (a.day < b.day ? 1 : -1));
+}
+
+/** 第五十四轮⑨：0–23 时分布（柱状数据）。 */
+export function groupByHour(runs) {
+  const hours = Array.from({ length: 24 }, () => 0);
+  for (const r of runs ?? []) {
+    if (!r || typeof r.ts !== 'number') continue;
+    hours[new Date(r.ts).getHours()] += 1;
+  }
+  return hours;
+}
+
+/** 第五十四轮⑨：本周 vs 上周对比（周一为界）。 */
+export function weekCompare(runs, now = Date.now()) {
+  const d = new Date(now);
+  const dow = (d.getDay() + 6) % 7; // 周一=0
+  const weekStart = new Date(d.getFullYear(), d.getMonth(), d.getDate() - dow).getTime();
+  const lastStart = weekStart - 7 * 86400000;
+  const pick = (from, to) => {
+    const rs = (runs ?? []).filter((r) => r && typeof r.ts === 'number' && r.ts >= from && r.ts < to);
+    const fails = rs.filter((r) => !r.ok).length;
+    const ms = rs.filter((r) => typeof r.ms === 'number').map((r) => r.ms);
+    return {
+      total: rs.length,
+      failRate: rs.length ? fails / rs.length : 0,
+      avgMs: ms.length ? ms.reduce((a, b) => a + b, 0) / ms.length : 0,
+    };
+  };
+  const cur = pick(weekStart, now + 1);
+  const prev = pick(lastStart, weekStart);
+  const delta = (a, b) => (b === 0 ? (a === 0 ? 0 : null) : (a - b) / b);
+  return {
+    cur, prev,
+    totalDelta: delta(cur.total, prev.total),
+    failDelta: prev.failRate === 0 ? (cur.failRate === 0 ? 0 : null) : (cur.failRate - prev.failRate),
+    avgDelta: delta(cur.avgMs, prev.avgMs),
+  };
+}
+
+/** 第五十四轮⑨：时间段内最常跑的动作 Top N（扁平 runs 列表版；与第 200 行旧 topActions(runStore) 签名不同，改名避撞）。 */
+export function topActionsFlat(runs, limit = 5) {
+  const cnt = new Map();
+  for (const r of runs ?? []) {
+    if (!r) continue;
+    const label = `${r.plugin ?? ''}·${r.action ?? ''}`;
+    if (!label.trim() || label === '·') continue;
+    cnt.set(label, (cnt.get(label) ?? 0) + 1);
+  }
+  return [...cnt.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([label, n]) => ({ label, count: n }));
+}

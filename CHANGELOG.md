@@ -5,6 +5,8 @@
 ## [0.58.0] - 2026-10-28
 
 ### Added
+- 时间线与执行复盘页 #/timeline：按天分组（成败点状条/每天汇总/折叠记忆）、周对比卡（总数/失败率/耗时 vs 上周）、0–23 时段分布柱、Top 动作榜、空态引导
+- 新纯函数 timelineDays / groupByHour / weekCompare / topActionsFlat（第五十四轮，issue #203）
 
 - 结果区信息密度：KV 空值灰 —、长文本截断（点击复制全文）、表格密度三档（紧凑/标准/宽松，记忆）、结果元信息（耗时/退出码/时间）钉底、列超 30 提示、数字列等宽右对齐
 - 新纯函数 cellDisplay / tableDensity / kvCollapsed（第五十三轮，issue #200）
