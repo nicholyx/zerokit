@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-10-28（第四十轮，v0.45.0）
+> 最后更新：2026-10-28（第四十一轮，v0.46.0）
 
 ---
 
@@ -206,7 +206,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 
 ### 质量
 
-- 26 个测试文件、**883 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
+- 27 个测试文件、**920 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
 - `tsc --noEmit` 干净——**而且 CI 真的在跑它**（`typecheck` job）。
   曾经这里写着"干净"但没有任何地方执行这条命令，于是两个只有类型检查才看得见的
   错误在核心里躺了很久（`proxy.ts` 的 Buffer 泛型不兼容、`scaffold.ts` 的类型混用）。
@@ -261,6 +261,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 - 第三十四轮（v0.39.0）：插件市场与分发——`plugin pack/unpack` zip 打包安装（零依赖 zip 实现+穿越防线）、`publish-ready` 上架检查、`market lint` 登记表校验、`plugin info/recommend`、`market add` 源健康检查（Issue #143）
 - 第三十五轮（v0.40.0）：错误预防与自愈——命令/动作模糊建议（编辑距离+前缀加权）、参数缺失附参数表、失败输出「下一步」自诊断（五类 stderr 关键词）、`doctor --fix` 清半安装残留、异平台路径提前点破（Issue #146）
 - 第三十九轮（v0.44.0）：结果呈现最后一公里——首列冻结/横滚阴影/行 JSON 详情/行号/时间戳人性化/空结果归因/小屏断点/MD 目录/打印样式、extras-smoke +10（223/223）、全量 883/883（Issue #158）
+- 第四十一轮（v0.46.0）：安全审计与权限收口——`zkit allow list/add/remove`（TTL 30 天默认、过期清理、插件级撤回连带提示）/ `audit --denied` / `audit --since 1h|30m|3d|2w` / 高危动作 7 天未执行警示、新 test/audit-smoke.mjs 37 项、全量 27 文件 920/920（Issue #164）
 - 第四十轮（v0.45.0）：插件开发体验闭环——`plugin lint` 十级体检（L01–L10、error/warn/info、CI 退出码、--json）/ `plugin doc` 文档生成（Markdown + --json 机读）/ 六内置插件零 error 零 warn 示范 / plugin-spec.md 体检规则对照表、新 test/lintdoc-smoke.mjs 29 项、全量 26 文件 883/883（Issue #161）
 - 第三十八轮（v0.43.0）：定时与调度——新建弹窗（档位快捷+执行窗口）、错过补跑（一次不风暴）、暂停/恢复、每任务最近 10 次历史、下次触发相对时间、现在跑一次、失败通知带摘要、导出/导入 JSON、hashchange 补 #/timers 路由、extras-smoke +14（213/213）、全量 844/844（Issue #155）
 - 第三十七轮（v0.42.0）：AI 协作面——结果「给 AI」Markdown 复制、AI 上下文打包、调用方式弹窗 MCP 配置段（mcpServers 一键复制）、执行历史 curl 等价命令（token 占位符）、LLM 评测 JSONL 导出、命令面板 copy-mcp/copy-ctx、监控趋势 MD、外观面板 AI 辅助隐私开关（no-ai 全隐藏）、webui-smoke +9（82/82）、extras-smoke +8（199/199）、全量 830/830（Issue #152）

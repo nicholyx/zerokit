@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+### Added
+
+- CLI 显式授权 `zkit allow list/add/remove`：带 TTL 与过期清理
+- `zkit audit --denied` 被拒记录 / `--since` 时间过滤
+- 高危动作久未执行警示
+
 ## [0.45.0] - 2026-10-28
 
 ### Added
