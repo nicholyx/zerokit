@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 面向人的一手入口是 [`START-HERE.md`](START-HERE.md)（怎么跑起来）和
-[`docs/overview.md`](docs/overview.md)（项目账本：初衷 / 已完成 / 待办）。
+[`docs/reference/overview.md`](docs/reference/overview.md)（项目账本：初衷 / 已完成 / 待办）。
 本文件只写 AI 助手干活时最常需要的事实。
 
 ## 项目结构

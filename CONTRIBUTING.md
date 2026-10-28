@@ -86,7 +86,7 @@ For user-visible changes, add an entry to the `Unreleased` section of
 ## Writing plugins
 
 Plugins don't require kernel changes — a `plugin.toml` manifest is all it
-takes. See [`docs/plugin-spec.md`](docs/plugin-spec.md) for the full spec.
+takes. See [`docs/reference/plugin-spec.md`](docs/reference/plugin-spec.md) for the full spec.
 The six bundled examples live in [`plugins/`](plugins/): `ip` is
 zero-code, `proxy` wraps an existing tool.
 

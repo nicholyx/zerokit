@@ -41,9 +41,11 @@ const sh = (cmd, args, opts = {}) => { try { return { code: 0, out: execFileSync
   const lock = fs.readFileSync(path.join(tmp, 'apps/desktop/src-tauri/Cargo.lock'), 'utf8');
   const m = /name = "zerokit-desktop"\nversion = "([^"]+)"/.exec(lock);
   ok(m && m[1] === '9.9.9' && !lock.includes(`"9.9.9"\"`), '④Cargo.lock 结构化编辑（无拼接残留）');
-  // 真仓库当前 [Unreleased] 已是空壳（本工具自己归档的）——干跑应拒绝而不是报别的错
-  const r4 = sh('node', ['scripts/release-prep.mjs', '0.0.1']);
-  ok(r4.code !== 0 && r4.out.includes('拒绝'), '①真仓库空 Unreleased 拒绝（幂等安全）');
+  // 真仓库空壳态检验改在临时树上做（真仓库的 [Unreleased] 在开发期可能有条目，
+  // 不能断言它恒为空——第五十六轮文档重组后就往里写了条目导致这里挂）
+  fs.writeFileSync(path.join(tmp, 'CHANGELOG.md'), fs.readFileSync(path.join(REPO, 'CHANGELOG.md'), 'utf8').replace(/## \[Unreleased\]\n\n### Added\n\n(?:- [^\n]*\n)+/, '## [Unreleased]\n\n（下一版攒着）\n'));
+  const r4 = sh('node', [path.join(tmp, 'scripts/release-prep.mjs'), '9.9.8'], { cwd: tmp });
+  ok(r4.code !== 0 && r4.out.includes('拒绝'), '①空壳 Unreleased 再次执行拒绝（幂等安全）');
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
