@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 
 let pass = 0; let fail = 0;
 const ok = (cond, label, extra = '') => { if (cond) pass++; else { fail++; console.error(`FAIL: ${label} ${extra}`); } };
@@ -15,7 +16,8 @@ const cli = (args) => spawnSync(process.execPath, [path.join(REPO, 'src/cli.ts')
   encoding: 'utf8', env: { ...process.env, ZEROKIT_HOME: HOME },
 });
 
-const cliX = await import(path.join(REPO, 'src/core/cliX.ts'));
+// Windows 盘符路径动态 import 必须走 file:// URL（ERR_UNSUPPORTED_ESM_URL_SCHEME）
+const cliX = await import(pathToFileURL(path.join(REPO, 'src/core/cliX.ts')).href);
 
 cli(['plugin', 'bundled']);
 
