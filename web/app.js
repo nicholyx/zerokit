@@ -21,6 +21,7 @@ import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFi
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
 import { cellDisplay, tableDensity, kvCollapsed } from './extras.js';
+import { timelineDays, groupByHour, weekCompare, topActionsFlat } from './extras.js';
 import { barsScale, sparkPoints, formatMs, paletteScore, p95Ms, runTrend, failureRate, durationStats } from './extras.js';
 import { filterRows, colStats, unitOf, isUnitColumn, convertUnitColumn, mergeTables, columnValues, toHtmlTable } from './extras.js';
 import { renderCopyTemplate, toJsonl, exportFilename, toMarkdownProps } from './extras.js';
@@ -2128,6 +2129,61 @@ async function checkPluginUpdate(p) {
 }
 
 /** 第十轮⑤：每日简报——今天跑了多少、成败、最常用 top3、平均耗时。 */
+/** 第五十四轮：#/timeline 时间线与执行复盘页。 */
+function showTimeline() {
+  hidePanels();
+  mode = 'timeline';
+  el.modeLabel.textContent = '时间线';
+  el.listView.classList.add('hidden');
+  el.detailView.classList.add('hidden');
+  if (location.hash !== '#/timeline') history.replaceState(null, '', '#/timeline');
+  // runStore 是 {actionKey: [runs]}——摊平成带 plugin/action 的列表
+  const flat = [];
+  for (const [key, list] of Object.entries(runStore)) {
+    for (const r of list ?? []) flat.push({ ...r, key });
+  }
+  flat.sort((a, b) => b.ts - a.ts);
+  const days = timelineDays(flat);
+  const wc = weekCompare(flat);
+  const hours = groupByHour(flat);
+  const tops = topActionsFlat(flat, 5);
+  const maxH = Math.max(1, ...hours);
+  const collapsed = readJson('zerokit.timeline-collapsed', []) ?? [];
+  const dayHtml = days.length ? days.map((g) => {
+    const isCollapsed = collapsed.includes(g.day);
+    const okN = g.total - g.fails;
+    const dots = `<span class="tl-bar"><span style="width:${Math.round((okN / g.total) * 100)}%" class="tl-ok"></span><span style="width:${Math.round((g.fails / g.total) * 100)}%" class="tl-fail"></span></span>`;
+    const rows = g.items.map((r) => `<div class="tl-row"><span class="${r.ok ? 'ok' : 'bad'}">${r.ok ? '✓' : '✗'}</span><span class="tl-when">${new Date(r.ts).toLocaleTimeString()}</span><span class="tl-name">${esc(`${r.plugin ?? ''} · ${r.action ?? ''}`)}</span><span class="tl-ms">${typeof r.ms === 'number' ? formatMs(r.ms) : ''}</span></div>`).join('');
+    return `<div class="tl-day" data-day="${g.day}">
+      <div class="tl-head" data-tlday="${g.day}" role="button" tabindex="0"><span class="tl-caret">${isCollapsed ? '▸' : '▾'}</span><b>${g.day}</b> ${dots} <span class="sub">${g.total} 次 · ${g.fails} 失败 · 均 ${g.total ? formatMs(g.msSum / g.total) : '—'}</span></div>
+      ${isCollapsed ? '' : `<div class="tl-rows">${rows}</div>`}
+    </div>`;
+  }).join('') : `<div class="help">还没有执行记录——回到列表随便跑一个动作，时间线就会在这里长出来（只保存在本机）。</div>`;
+  const fmtDelta = (d, unit = '') => d === null ? '—' : `${d >= 0 ? '+' : ''}${Math.round(d * 100)}%${unit}`;
+  el.allowView.innerHTML = `
+    <h2 class="ps-title">时间线</h2>
+    <div class="tl-week-card card">
+      <div class="tl-wc-cell">本周<b>${wc.cur.total}</b> 次 <span class="sub">${fmtDelta(wc.totalDelta)} vs 上周 ${wc.prev.total}</span></div>
+      <div class="tl-wc-cell">失败率<b>${Math.round(wc.cur.failRate * 100)}%</b> <span class="sub">${fmtDelta(wc.failDelta)} vs 上周 ${Math.round(wc.prev.failRate * 100)}%</span></div>
+      <div class="tl-wc-cell">平均耗时<b>${wc.cur.avgMs ? formatMs(wc.cur.avgMs) : '—'}</b> <span class="sub">${fmtDelta(wc.avgDelta)} vs 上周 ${wc.prev.avgMs ? formatMs(wc.prev.avgMs) : '—'}</span></div>
+    </div>
+    <div class="tl-hours card">
+      <h3>时段分布</h3>
+      <div class="tl-hbars">${hours.map((n, h) => `<div class="tl-hbar" title="${h} 时 · ${n} 次"><span class="sub">${h}</span><div class="tl-htrack"><div class="tl-hfill" style="height:${Math.round((n / maxH) * 100)}%"></div></div><span class="sub">${n || ''}</span></div>`).join('')}</div>
+    </div>
+    ${tops.length ? `<div class="tl-tops card"><h3>最常跑</h3>${tops.map((x, i) => `<div class="tl-top"><span class="sub">#${i + 1}</span> ${esc(x.label)} <b>${x.count}</b> 次</div>`).join('')}</div>` : ''}
+    <div class="tl-days">${dayHtml}</div>`;
+  el.allowView.classList.remove('hidden');
+  el.allowView.querySelectorAll('[data-tlday]').forEach((h) => {
+    h.addEventListener('click', () => {
+      const day = h.dataset.tlday;
+      const cur = readJson('zerokit.timeline-collapsed', []) ?? [];
+      localStorage.setItem('zerokit.timeline-collapsed', JSON.stringify(cur.includes(day) ? cur.filter((x) => x !== day) : [...cur, day]));
+      showTimeline();
+    });
+  });
+}
+
 function showBrief() {
   hidePanels();
   mode = 'brief';
@@ -6701,6 +6757,7 @@ function showPalette() {
     { icon: '⏱', label: '定时任务', hint: '管理界面内定时器', act: () => { location.hash = '#/timers'; } },
     { icon: '👁', label: '监控面板', hint: '自动重跑的监控聚合', act: () => { location.hash = '#/watch'; } },
     { icon: '📰', label: '今日简报', hint: '跑了多少 / 成败 / 最常用', act: () => { location.hash = '#/brief'; } },
+    { icon: '🗓', label: '时间线', hint: '按天复盘执行 + 周对比 + 时段分布', act: () => { location.hash = '#/timeline'; } },
     { icon: '📌', label: '收藏结果', hint: '钉住的重要输出', act: () => { location.hash = '#/saved'; } },
     { icon: '◐', label: '深色 / 浅色', hint: '一键切换主题（Ctrl+Shift+D）', act: () => toggleLightDark() },
     { icon: '☰', label: '设置抽屉', hint: '主题/语言/配置档/备份统一入口', act: () => openDrawer() },
@@ -7258,6 +7315,8 @@ function applyHash() {
   if ((location.hash || '') === '#/watch') { showWatchPanel(); return; }
   // #/brief 每日简报
   if ((location.hash || '') === '#/brief') { showBrief(); return; }
+  // 第五十四轮：#/timeline 时间线与复盘
+  if ((location.hash || '') === '#/timeline') { showTimeline(); return; }
 
   // #/ps  直接打开「运行中」
   if ((location.hash || '') === '#/ps') {

@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-10-28（第五十三轮，v0.58.0）
+> 最后更新：2026-10-28（第五十四轮，v0.59.0）
 
 ---
 
@@ -273,6 +273,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 - 第五十一轮 v0.56.0：搜索体验深化——丢词建议/组合记忆/搜索态折叠/desc 高亮/计数徽标/清空按钮/历史单条删（suggestNext/comboLabel）
 - 第五十二轮 v0.57.0：键盘流与无鼠标操作——F 收藏/T 标签/Y·E 结果键/Alt+↑↓ 篮内移位/速查浮层合流（keyHelpList）
 - 第五十三轮 v0.58.0：结果区信息密度——空值 —/长文截断/密度三档/元信息钉底/等宽数字（cellDisplay/tableDensity/kvCollapsed）
+- 第五十四轮 v0.59.0：时间线与执行复盘——#/timeline 页（timelineDays/groupByHour/weekCompare/topActionsFlat）
 - 第四十六轮 v0.51.0（CLI 收口与开发者体验）：shell 补全三件套、man 命令参考、--version 短旗标、stats --since 时间窗、audit --follow 跟读、退出码细分（用法=2/失败=1）、check-docs.sh 文档巡检、README 快速开始矩阵（issue #179）
 - 第四十一轮（v0.46.0）：安全审计与权限收口——`zkit allow list/add/remove`（TTL 30 天默认、过期清理、插件级撤回连带提示）/ `audit --denied` / `audit --since 1h|30m|3d|2w` / 高危动作 7 天未执行警示、新 test/audit-smoke.mjs 37 项、全量 27 文件 920/920（Issue #164）
 - 第四十轮（v0.45.0）：插件开发体验闭环——`plugin lint` 十级体检（L01–L10、error/warn/info、CI 退出码、--json）/ `plugin doc` 文档生成（Markdown + --json 机读）/ 六内置插件零 error 零 warn 示范 / plugin-spec.md 体检规则对照表、新 test/lintdoc-smoke.mjs 29 项、全量 26 文件 883/883（Issue #161）
