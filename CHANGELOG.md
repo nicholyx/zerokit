@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [0.49.0] - 2026-10-28
+
 ### Added
 
 - 桥外观跟随：`render = "web"` 的页面在 context 里收到宿主外观（`dark` / `accent` / `fontScale` / `lang`），桥自动写 `--zk-accent` 变量与 `data-zk-dark` 标记，页面零配置跟上宿主皮肤
