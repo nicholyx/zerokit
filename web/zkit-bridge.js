@@ -16,6 +16,7 @@
   var pending = {};      // callId -> { resolve, reject }
   var context = null;    // 最近一次收到的执行上下文
   var readyCallbacks = [];
+  var navCallbacks = {}; // url -> resolve（受控跳转的放行回执）
   var hosted = false;
   var callSeq = 0;
 
@@ -30,6 +31,7 @@
     if (!msg || msg.__zkit !== true) return;
     if (msg.type === 'context') {
       context = msg.payload || null;
+      if (context && context.appearance) applyAppearance(context.appearance);
       var cbs = readyCallbacks;
       readyCallbacks = [];
       cbs.forEach(function (cb) { try { cb(context); } catch (e) { /* 页面自己的回调挂了不关桥的事 */ } });
@@ -40,7 +42,28 @@
       var payload = msg.payload || {};
       if (payload.ok) p.resolve(payload);
       else p.reject(new Error(payload.error || '执行失败'));
+    } else if (msg.type === 'nav:allowed') {
+      var cb = navCallbacks[msg.url];
+      if (cb) { delete navCallbacks[msg.url]; cb(); }
     }
+  }
+
+  // ---------------- 外观跟随（第四十四轮）----------------
+  // 宿主在 context 里带 appearance（dark/accent/fontScale/lang）。
+  // 页面不用任何配置就能跟上宿主皮肤：桥把 CSS 变量写到根元素上，
+  // 页面样式里用 var(--zk-accent) / [data-zk-dark] 即可；不感兴趣也完全无感。
+
+  function applyAppearance(ap) {
+    try {
+      var root = document.documentElement;
+      root.style.setProperty('--zk-accent', String(ap.accent || '#2271f0'));
+      root.setAttribute('data-zk-dark', ap.dark ? '1' : '0');
+      root.setAttribute('data-zk-font', String(ap.fontScale || 'm'));
+      root.setAttribute('data-zk-lang', String(ap.lang || 'system'));
+      // 字号：宿主是小/中/大三档，映射成根 font-size 比例
+      var scale = { s: '90%', m: '100%', l: '115%' }[ap.fontScale] || '100%';
+      root.style.fontSize = scale;
+    } catch (e) { /* 页面环境异常时静默降级——外观是锦上添花，不能砸了页面 */ }
   }
 
   window.addEventListener('message', onMessage);
@@ -96,6 +119,36 @@
       if (!hosted) return;
       var n = Math.max(0, Math.round(Number(px) || 0));
       send({ type: 'resize', height: n });
+    },
+    /**
+     * 受控跳转（第四十四轮）：sandbox iframe 里 target=_blank 本来就开不了，
+     * 走这里宿主确认后替页面开系统浏览器。宿主只放行 http(s)，
+     * 并弹确认（防钓鱼：用户看得见要开哪）。确认后回调触发。
+     */
+    openLink: function (url) {
+      if (!hosted) return notHosted();
+      return new Promise(function (resolve, reject) {
+        var u = String(url);
+        if (!/^https?:\/\//i.test(u)) { reject(new Error('openLink 只接受 http(s) 链接')); return; }
+        navCallbacks[u] = resolve;
+        send({ type: 'nav', url: u });
+        setTimeout(function () {
+          if (navCallbacks[u]) { delete navCallbacks[u]; reject(new Error('宿主没有放行这次跳转')); }
+        }, 60 * 1000);
+      });
+    },
+    /**
+     * 宿主外观（dark/accent/fontScale/lang）。context 到达前是 null；
+     * 变化时如果宿主重发 context 会自动更新。
+     */
+    get appearance() { return (context && context.appearance) || null; },
+    /**
+     * 页面把致命错误报给宿主（第四十四轮）：宿主在状态行显示，
+     * 用户至少知道页面为什么白屏，而不是静默挂掉。
+     */
+    reportError: function (e) {
+      if (!hosted) return;
+      send({ type: 'error', error: String((e && e.message) || e).slice(0, 200) });
     },
   };
 

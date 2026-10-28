@@ -1,0 +1,31 @@
+[plugin]
+id       = "demoweb"
+name     = "网页桥演示"
+summary  = "演示 web 动作消息协议全家桶：上下文、外观跟随、深链执行、受控跳转、自适应高度、错误上报"
+keywords = ["演示", "web", "桥", "iframe", "bridge", "demo"]
+version  = "0.1.0"
+
+[[action]]
+id       = "board"
+title    = "桥能力演示板"
+description = "一页演示 zkit 桥的全部能力：执行上下文、宿主外观跟随、深链调本插件动作、受控开外部链接、自适应高度、错误上报。开发自己的 web 动作前先看它。"
+run      = ["{node}", "demoweb.mjs", "board"]
+output   = "json"
+render   = "web"
+risk     = "read"
+
+[[action]]
+id       = "now"
+title    = "当前时间"
+description = "给演示板深链调用的只读动作：返回 ISO 时间戳。"
+run      = ["{node}", "demoweb.mjs", "now"]
+output   = "json"
+risk     = "read"
+
+[[action]]
+id       = "ping"
+title    = "写动作演示"
+description = "演示写动作经桥调用时照常弹确认（页面代替不了用户点头）。"
+run      = ["{node}", "demoweb.mjs", "ping"]
+output   = "json"
+risk     = "mutate"

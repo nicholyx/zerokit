@@ -478,6 +478,49 @@ risk        = "read"
   const before = zkit.context;
   fakeWindow.emit('message', { data: { type: 'context', payload: '毒' } });
   check('桥：不带 __zkit 标记的消息被忽略', zkit.context === before, '被非桥消息改写了状态');
+
+  // ---- 第四十四轮：桥能力扩展（外观跟随/受控跳转/错误上报/宿主端接线） ----
+  // 未知 type 忽略（协议收紧）
+  const ctxBefore = zkit.context;
+  fakeWindow.emit('message', { data: { __zkit: true, type: 'mystery', payload: 'x' } });
+  check('44桥-1 未知 type 的桥消息被忽略', zkit.context === ctxBefore && toParent.every((m) => m.type !== 'mystery:ack'));
+
+  // appearance：context 带 appearance 后 zkit.appearance 可读
+  fakeWindow.emit('message', { data: { __zkit: true, type: 'context', payload: {
+    appearance: { dark: true, accent: '#ff8800', fontScale: 'l', lang: 'zh' },
+  } } });
+  check('44桥-2 zkit.appearance 暴露宿主外观',
+    zkit.appearance?.dark === true && zkit.appearance?.accent === '#ff8800',
+    JSON.stringify(zkit.appearance));
+
+  // openLink：非 http(s) 直接 reject，不产生 nav 消息
+  const navBad = await zkit.openLink('file:///etc/passwd').then(() => 'resolved', (e) => e.message);
+  check('44桥-3 openLink 拒绝非 http(s)', /只接受 http/.test(navBad) && !toParent.some((m) => m.type === 'nav'), navBad);
+
+  // openLink：合法链接发 nav 消息，宿主放行（nav:allowed）后 resolve
+  const navP = zkit.openLink('https://github.com/nicholyx/zerokit');
+  const navMsg = toParent.find((m) => m.type === 'nav');
+  check('44桥-4 openLink 发出受控跳转消息', navMsg?.url === 'https://github.com/nicholyx/zerokit', JSON.stringify(navMsg));
+  fakeWindow.emit('message', { data: { __zkit: true, type: 'nav:allowed', url: navMsg.url } });
+  check('44桥-5 nav:allowed 后 promise resolve', (await navP) === undefined);
+
+  // reportError：错误进通道
+  zkit.reportError(new Error('页面炸了'));
+  const errMsg = toParent.filter((m) => m.type === 'error').at(-1);
+  check('44桥-6 reportError 上报给宿主', errMsg?.error === '页面炸了', JSON.stringify(errMsg));
+
+  // 宿主端静态接线：context 带 appearance / nav 处理 / error 状态行
+  const appSrc = fs.readFileSync(path.join(PKG_ROOT, 'web/app.js'), 'utf8');
+  check('44宿-1 sendContext 带 appearance', /appearance: \{[\s\S]*?dark:[\s\S]*?accent:[\s\S]*?fontScale:[\s\S]*?lang:/.test(appSrc));
+  check('44宿-2 宿主处理 nav 消息（确认后 window.open）', appSrc.includes("msg.type === 'nav'") && appSrc.includes('bridgeNav'));
+  check('44宿-3 宿主处理 error 消息（状态行提示）', appSrc.includes("msg.type === 'error'") && appSrc.includes('插件页面报错'));
+
+  // demoweb 插件：桥能力活样例存在且登记
+  const demoHtml = fs.readFileSync(path.join(PKG_ROOT, 'plugins/demoweb/web/index.html'), 'utf8');
+  check('44demo-1 demoweb 页面用了六项桥能力',
+    ['zkit.ready', 'zkit.run', 'zkit.openLink', 'zkit.setHeight', 'zkit.reportError', '--zk-accent'].every((s) => demoHtml.includes(s)));
+  const market = JSON.parse(fs.readFileSync(path.join(PKG_ROOT, 'market.json'), 'utf8'));
+  check('44demo-2 demoweb 进 market.json', market.plugins.some((e) => e.id === 'demoweb'));
 }
 
 close();

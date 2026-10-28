@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<!-- demoweb 的演示板：zkit 桥能力全家桶的活样例。
+     桥脚本由内核注入，这里只用 window.zkit。 -->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>桥能力演示板</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font: 13px/1.6 -apple-system, "Segoe UI", "PingFang SC", sans-serif;
+    background: #14171c; color: #e6e9ef; padding: 14px;
+  }
+  /* 外观跟随：宿主 context 到达后桥会设置这些，页面零配置跟上皮肤 */
+  [data-zk-dark="0"] body { background: #f6f7f9; color: #22262e; }
+  .card { border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
+          background: rgba(128,128,128,.12); border: 1px solid rgba(128,128,128,.25); }
+  .card h4 { font-size: 12.5px; margin-bottom: 4px; color: var(--zk-accent, #2271f0); }
+  .hint { font-size: 12px; opacity: .75; }
+  .val { font-family: ui-monospace, Menlo, monospace; font-size: 12px; word-break: break-all; }
+  button { font: inherit; padding: 5px 12px; border-radius: 8px; cursor: pointer;
+           background: var(--zk-accent, #2271f0); color: #fff; border: 0; margin: 2px 6px 2px 0; }
+  button.ghost { background: transparent; border: 1px solid rgba(128,128,128,.4); color: inherit; }
+  .state { font-size: 12px; opacity: .8; margin-top: 6px; }
+  .err { color: #ff8f8f; }
+</style>
+</head>
+<body>
+<h3 style="margin-bottom:10px">zkit 桥能力演示板</h3>
+<div id="ctxCard" class="card"><h4>① 执行上下文</h4><div class="hint">等 zkit.ready…</div></div>
+<div class="card"><h4>② 外观跟随</h4><div class="hint" id="ap">等 context…</div></div>
+<div class="card"><h4>③ 深链执行</h4>
+  <button id="runNow">调 now（只读，直跑）</button>
+  <button id="runPing" class="ghost">调 ping（写，走确认）</button>
+  <div class="state" id="runState"></div></div>
+<div class="card"><h4>④ 受控跳转</h4>
+  <button id="navBtn" class="ghost">打开 zerokit 仓库首页</button>
+  <div class="state" id="navState"></div></div>
+<div class="card"><h4>⑤ 自适应高度</h4>
+  <button id="growBtn" class="ghost">加长内容再报高度</button>
+  <div class="state" id="growState">初始高度已上报</div>
+  <div id="growZone"></div></div>
+<div class="card"><h4>⑥ 错误上报</h4>
+  <button id="errBtn" class="ghost">人为抛错并上报</button>
+  <div class="state" id="errState"></div></div>
+
+<script>
+(function () {
+  'use strict';
+  function report() {
+    zkit.setHeight(document.documentElement.scrollHeight);
+  }
+
+  zkit.ready(function (ctx) {
+    // ① 上下文
+    var c = document.getElementById('ctxCard');
+    c.innerHTML = '<h4>① 执行上下文</h4>'
+      + '<div class="val">' + JSON.stringify({
+        plugin: ctx.plugin.id, action: ctx.action.id,
+        ok: ctx.result.ok, keys: ctx.result.data ? Object.keys(ctx.result.data) : [],
+      }) + '</div>';
+    // ② 外观
+    var ap = zkit.appearance || {};
+    document.getElementById('ap').innerHTML =
+      '<span class="val">' + JSON.stringify(ap) + '</span>'
+      + '<div class="hint">这张卡片的配色就来自 var(--zk-accent) 与 [data-zk-dark]——不是页面写死的</div>';
+    report();
+  });
+
+  // ③ 深链
+  document.getElementById('runNow').onclick = function () {
+    document.getElementById('runState').textContent = '执行中…';
+    zkit.run('now', {}).then(function (r) {
+      document.getElementById('runState').textContent = 'now → ' + JSON.stringify(r.data);
+    }, function (e) {
+      document.getElementById('runState').textContent = '失败：' + e.message;
+    });
+  };
+  document.getElementById('runPing').onclick = function () {
+    document.getElementById('runState').textContent = '等确认…（写动作宿主照常弹框）';
+    zkit.run('ping', {}).then(function (r) {
+      document.getElementById('runState').textContent = 'ping → ' + JSON.stringify(r.data);
+    }, function (e) {
+      document.getElementById('runState').textContent = '失败：' + e.message;
+    });
+  };
+
+  // ④ 受控跳转
+  document.getElementById('navBtn').onclick = function () {
+    document.getElementById('navState').textContent = '已请求，等宿主确认…';
+    zkit.openLink('https://github.com/nicholyx/zerokit').then(function () {
+      document.getElementById('navState').textContent = '已放行（系统浏览器）';
+    }, function (e) {
+      document.getElementById('navState').textContent = '未放行：' + e.message;
+    });
+  };
+
+  // ⑤ 自适应高度
+  var grown = 0;
+  document.getElementById('growBtn').onclick = function () {
+    grown += 3;
+    var zone = document.getElementById('growZone');
+    for (var i = 0; i < 3; i++) {
+      var p = document.createElement('div');
+      p.className = 'hint'; p.textContent = '（追加行 ' + (grown - 3 + i + 1) + '：宿主 iframe 高度应该跟着长）';
+      zone.appendChild(p);
+    }
+    report();
+    document.getElementById('growState').textContent = '已上报新高度（+' + (grown) + ' 行）';
+  };
+
+  // ⑥ 错误上报
+  document.getElementById('errBtn').onclick = function () {
+    try {
+      JSON.parse('{故意的坏 JSON');
+    } catch (e) {
+      zkit.reportError(e);
+      document.getElementById('errState').textContent = '已上报，看启动器状态行提示';
+      document.getElementById('errState').className = 'state err';
+    }
+  };
+
+  window.addEventListener('load', report);
+})();
+</script>
+</body>
+</html>

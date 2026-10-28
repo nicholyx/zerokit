@@ -1,14 +1,12 @@
 ## [Unreleased]
 
-
-## [Unreleased]
-
 ### Added
 
-### Changed
-
-### Fixed
-
+- 桥外观跟随：`render = "web"` 的页面在 context 里收到宿主外观（`dark` / `accent` / `fontScale` / `lang`），桥自动写 `--zk-accent` 变量与 `data-zk-dark` 标记，页面零配置跟上宿主皮肤
+- 桥受控跳转：`zkit.openLink(url)` 只接受 http(s)，宿主弹确认后在系统浏览器打开——sandbox iframe 里本就开不了 `_blank`，现在有一条宿主把关的正路
+- 桥错误上报：`zkit.reportError(err)` 把页面致命错误打到宿主状态行，白屏也看得见原因
+- 消息协议收紧：宿主对未知 `type` 一律忽略不回执；协议全文（消息表 + 四条安全边界）进 `docs/plugin-spec.md` 的「web 动作消息协议」一节
+- 演示插件 `demoweb`：一页演示桥的全部六项能力（上下文/外观/深链/受控跳转/自适应高度/错误上报），已进 `market.json`
 
 ## [0.48.0] - 2026-10-28
 
