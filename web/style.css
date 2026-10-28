@@ -1471,3 +1471,16 @@ pre.out.numbered .ln::before {
 .watch-stoplog { margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 8px; }
 .watch-stoprow { font-size: 12px; margin: 3px 0; }
 #result pre.out { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; max-height: 40vh; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+
+/* ============ 第四十九轮：历史分析卡 ============ */
+.hist-panel { margin: 6px 0 4px; display: flex; flex-direction: column; gap: 6px; }
+.hist-trend { display: flex; flex-wrap: wrap; gap: 6px; }
+.trend-chip { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--bg-soft, rgba(127,127,127,.12)); cursor: default; }
+.trend-chip i { opacity: .7; font-style: normal; font-size: 11px; }
+.hist-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.dur-chip { font-size: 12px; opacity: .85; }
+.warn-chip { font-size: 12px; padding: 4px 10px; border-radius: 6px; background: var(--warn, #e8b13a) / 22% ; background: color-mix(in srgb, var(--warn, #e8b13a) 22%, transparent); color: var(--fg); }
+.cmp-view { border: 1px solid var(--line, rgba(127,127,127,.25)); border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; }
+.cmp-view .cmp-table { width: 100%; font-size: 13px; border-collapse: collapse; }
+.cmp-view td, .cmp-view th { padding: 3px 8px; border-bottom: 1px solid var(--line, rgba(127,127,127,.15)); text-align: left; }
+[data-sel].on { background: var(--accent, #5aa9ff); color: #fff; }
