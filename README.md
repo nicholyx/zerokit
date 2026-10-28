@@ -27,6 +27,9 @@ uTools 的插件是 JS 调 `utools.*` 私有 API，DeepSeek Harness 的插件是
 
 ## 快速开始
 
+要求：**Node ≥ 22.18**（直接跑 TS 源码，无构建步骤）；三平台均可（macOS / Linux / Windows）。
+Windows 上建议 Git Bash 或 WSL；PowerShell 也能跑，但示例命令按 bash 写。
+
 ```bash
 git clone <this-repo> && cd zerokit
 npm install
@@ -38,7 +41,11 @@ node src/cli.ts doctor                 # 环境自检（依赖、插件清单）
 node src/cli.ts run sysinfo overview   # 跑一个动作
 node src/cli.ts ui --open              # 打开启动器：顶部「集市」标签可直接浏览、预览、安装
                                        # （工作台在搜索框打 ? 开头）
+eval "$(node src/cli.ts completion bash)"   # 顺手开 shell 补全（也有 zsh / fish）
 ```
+
+装不上 / 跑不起来先看 [START-HERE 的常见问题](START-HERE.md#六常见问题)；
+完整命令参考终端里 `node src/cli.ts man`。
 
 装好之后可以把 `zkit` 链接到全局：
 
@@ -241,6 +248,7 @@ mcp-allow.json      已授权给 AI 调用的有副作用动作
 - [x] **第四十三轮（v0.48.0）· 插件生态第二波**
 - [x] **第四十四轮（v0.49.0）· web 插件面进阶**
 - [x] **第四十五轮（v0.50.0）· CLI 人体工学**——--out 四格式/--quiet/--copy/--watch 轮询/last/history/im 交互/--interactive 参数提示/list --health（#176）——桥协议成文+外观跟随+受控跳转+错误上报+demoweb 演示（#173）——新示例插件 convert（八转换+组合流水线）/ snap（系统工具截图）/ typist（片段写剪贴板）；插件共享代码层 plugins/_vendor/（#170）
+- [x] **第四十六轮 v0.51.0（CLI 收口与开发者体验）**：`completion bash/zsh/fish` 补全、`man` 命令参考、`--version`、`stats --since`、`audit --follow` 跟读、退出码细分（用法=2）、`check-docs.sh` 文档巡检（issue #179）
 - [x] **定时与调度（第三十八轮，v0.43.0）**——间隔档位 / 执行窗口 / 错过补跑 / 暂停恢复 / 执行历史 / 导出导入
 - [x] **AI 协作面（第三十七轮，v0.42.0）**——给 AI 复制 / AI 上下文打包 / MCP 配置一键复制 / curl 等价命令 / LLM 评测 JSONL / AI 辅助隐私开关
 - [x] **文档与示例体系（第三十六轮，v0.41.0）**——chain/setting/http 三个 demo 插件、cookbook 十篇照抄做法、规范「新能力速查」索引
