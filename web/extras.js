@@ -1886,3 +1886,87 @@ export function toCurl({ plugin, action, values = {}, port = 28970 } = {}) {
   const body = JSON.stringify({ plugin, action, values });
   return `curl -X POST http://127.0.0.1:${port}/api/run \\\n  -H 'Content-Type: application/json' \\\n  -H 'x-zerokit-token: <启动器页面里的令牌>' \\\n  -d '${body}'`;
 }
+
+/* ===================== 第三十八轮：定时与调度 ===================== */
+
+/** ①新建定时任务的间隔档位：快捷选择不必手填。分钟归一，非法兜底 null。 */
+export const TIMER_PRESETS = [
+  { label: '每 1 分钟', sec: 60 },
+  { label: '每 5 分钟', sec: 300 },
+  { label: '每 10 分钟', sec: 600 },
+  { label: '每 30 分钟', sec: 1800 },
+  { label: '每 1 小时', sec: 3600 },
+];
+
+/** ②执行窗口判定：'09:00-18:00' 形式。窗口外返回 false（调用方记 skipped）。
+ * 无窗口/空串/格式错 = 永远在窗口内（fail-open 于「限制」而不是「执行」——
+ * 窗口写错不该把任务变成 7×24 全天跑？不：格式错视为无窗口并提示，见 validWindow）。 */
+export function inWindow(now, win) {
+  if (!win) return true;
+  const m = /^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/.exec(String(win).trim());
+  if (!m) return true;
+  const mins = (h, mi) => Number(h) * 60 + Number(mi);
+  const cur = now.getHours() * 60 + now.getMinutes();
+  const a = mins(m[1], m[2]); const b = mins(m[3], m[4]);
+  if (a <= b) return cur >= a && cur < b;
+  return cur >= a || cur < b;   // 跨午夜（22:00-06:00）
+}
+
+/** 窗口格式校验：给表单即时反馈用，与 inWindow 同一正则。 */
+export function validWindow(win) {
+  return !win || /^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/.test(String(win).trim());
+}
+
+/** ⑥下次触发时间（相对）：now 与 at 都是 ms 时间戳。 */
+export function nextRunLabel(at, now = Date.now()) {
+  const d = at - now;
+  if (d <= 0) return '马上';
+  if (d < 60_000) return `${Math.ceil(d / 1000)} 秒后`;
+  if (d < 3_600_000) return `${Math.ceil(d / 60_000)} 分钟后`;
+  if (d < 86_400_000) return `${Math.ceil(d / 3_600_000)} 小时后`;
+  return `${Math.ceil(d / 86_400_000)} 天后`;
+}
+
+/** ③错过补跑判定：上一次应触发时间（lastDue）比 now 早超过一个间隔，
+ * 且该次未被执行（lastRanAt < lastDue），则补跑一次。最多一次：补跑后
+ * lastRanAt 前移，不再连环补（不做风暴）。 */
+export function shouldCatchUp(t, now = Date.now()) {
+  if (!t || !t.interval || t.interval <= 0) return false;
+  if (t.paused) return false;
+  const lastDue = t.lastRanAt ?? t.createdAt ?? now;
+  // 从 lastDue 起该触发而没触发的时刻
+  const missed = now - lastDue >= t.interval * 1000 * 2;   // 宽一个间隔（页面切换的间隙不算错过）
+  return missed && (t.lastRanAt ?? 0) < lastDue + t.interval * 1000;
+}
+
+/** ⑨导出/导入：定时任务配置序列化（运行态字段剥掉，只剩可迁移的配置）。 */
+export function exportTimers(reg) {
+  const out = {};
+  for (const [k, t] of Object.entries(reg ?? {})) {
+    out[k] = {
+      title: t.title, interval: t.interval, win: t.win ?? '',
+      createdAt: t.createdAt ?? null, paused: !!t.paused,
+    };
+  }
+  return { app: 'zerokit', kind: 'timers', version: 1, exportedAt: new Date().toISOString(), timers: out };
+}
+
+export function parseTimersPack(text) {
+  try {
+    const p = JSON.parse(String(text));
+    if (!p || p.app !== 'zerokit' || p.kind !== 'timers' || !p.timers) {
+      return { ok: false, error: '不是 zerokit 定时任务导出文件（缺 app/kind/timers 标记）' };
+    }
+    const bad = Object.values(p.timers).some((t) => !t.interval || t.interval <= 0);
+    if (bad) return { ok: false, error: '有任务的间隔不合法（须为正整数秒）' };
+    return { ok: true, pack: p };
+  } catch {
+    return { ok: false, error: '不是合法的 JSON 文件' };
+  }
+}
+
+/** ⑤执行历史裁剪：每任务只留最近 N 条（默认 10）。 */
+export function trimHistory(list, n = 10) {
+  if (!Array.isArray(list)) return [];
+  return list.slice(-n);
+}

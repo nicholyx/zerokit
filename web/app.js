@@ -18,6 +18,7 @@ import { BACKUP_GROUPS, classifyKey, collectBackup, parseBackup, mergeBackup, ba
 import { HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions } from './extras.js';
 import { profileList, validProfileName, upsertProfile, deleteProfile, renameProfile } from './extras.js';
 import { resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader } from './extras.js';
+import { TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory } from './extras.js';
 import { COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory } from './extras.js';
 import { chainFill, batchDedup, chunkWindows, parseBatchList } from './extras.js';
 import { toAiMarkdown, packContext, toMcpConfig, toCurl, toLlmJsonl, watchTrendMarkdown } from './extras.js';
@@ -1634,22 +1635,9 @@ function openDetail(plugin, action, prefill) {
       el.count.textContent = '只有只读动作能定时执行（有副作用的自动跑风险太大）';
       return;
     }
-    const sec = Number(prompt('每多少秒自动执行一次？（界面开着才会执行；输 0 取消）', '60'));
-    if (!Number.isFinite(sec)) return;
-    if (sec <= 0) { el.count.textContent = '已取消定时执行'; return; }
-    // 第十轮②：定时任务统一进注册表（#/timers 面板可查看/停止）
-    const reg = timerRegistry();
-    const key = actionKey(plugin.id, action.id);
-    if (reg[key]) { clearInterval(reg[key].id); delete reg[key]; }
-    reg[key] = {
-      id: setInterval(() => {
-        // 静默跑：不抢焦点，只更新计数提示
-        submit(false).then(() => {}).catch(() => {});
-      }, sec * 1000),
-      interval: sec,
-      title: `${plugin.name} · ${action.title}`,
-    };
-    el.count.textContent = `已开启定时执行：每 ${sec} 秒一次（#/timers 可管理）`;
+    // 第三十八轮①②③④：定时任务升级——档位选择 + 执行窗口 + 暂停 + 历史。
+    // 旧 prompt 只能填秒数，窗口/暂停这些维度表达不了，改模态表单。
+    openTimerDialog(plugin, action);
   });
 
   // 第十八轮①–⑨：监控模式——自动重跑 + 变更追踪 + 停止条件 + 聚合面板。
@@ -2363,6 +2351,115 @@ function showHelpPanel() {
 }
 
 /** 第二十二轮②：快捷键速查表增强——帮助页入口（原 helpBtn 已指向这里升级为双入口） */
+
+/* ===================== 第三十八轮：定时与调度 ===================== */
+
+/** 定时任务引擎：interval 驱动 + 窗口判定 + 补跑 + 历史裁剪。
+ * 与监控（watchRegistry）的分工：定时只管「到点跑」，监控管采样/diff/趋势。 */
+function startTimerTick(key) {
+  const reg = timerRegistry();
+  const t = reg[key];
+  if (!t || t.id) return;
+  t.id = setInterval(() => fireTimer(key, 'auto'), t.interval * 1000);
+  t.nextAt = Date.now() + t.interval * 1000;
+}
+
+async function fireTimer(key, why) {
+  const reg = timerRegistry();
+  const t = reg[key];
+  if (!t || t.paused) return;
+  // ②执行窗口：窗口外跳过并记 skipped（不重置节奏）
+  const now = new Date();
+  if (!inWindow(now, t.win)) {
+    t.history = trimHistory([...(t.history ?? []), { ts: Date.now(), ok: null, why: 'skipped:窗口外' }]);
+    t.nextAt = Date.now() + t.interval * 1000;
+    return;
+  }
+  t.lastRanAt = Date.now();
+  t.nextAt = Date.now() + t.interval * 1000;
+  try {
+    // 找到动作并静默执行（不抢焦点）
+    const e = entries.find((x) => actionKey(x.plugin.id, x.action.id) === key);
+    if (!e) throw new Error('动作不在了（插件被卸载？）');
+    const res = await runActionQuiet(e.plugin, e.action, t.values ?? {});
+    t.history = trimHistory([...(t.history ?? []), { ts: Date.now(), ok: res.ok === true, why: res.ok === true ? '' : String(res.error ?? '').slice(0, 80) }]);
+    // ⑧失败通知带错误摘要（granted 时）
+    if (res.ok !== true) {
+      try {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('zerokit 定时任务失败', { body: `${t.title}：${String(res.error ?? '').slice(0, 120)}`, tag: 'zerokit-timer' });
+        }
+      } catch { /* 通知是增强 */ }
+    }
+  } catch (err) {
+    t.history = trimHistory([...(t.history ?? []), { ts: Date.now(), ok: false, why: String(err.message ?? err).slice(0, 80) }]);
+  }
+}
+
+/** 静默执行：走 fetch /api/run，不碰界面焦点（submit 会写结果区抢走视图）。 */
+async function runActionQuiet(plugin, action, values) {
+  try {
+    const r = await fetch('/api/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-zerokit-token': TOKEN },
+      body: JSON.stringify({ plugin: plugin.id, action: action.id, values }),
+    });
+    return await r.json();
+  } catch (e) {
+    return { ok: false, error: String(e.message ?? e) };
+  }
+}
+
+/** ①②模态：档位快捷 + 自定义秒 + 执行窗口。 */
+function openTimerDialog(plugin, action) {
+  const key = actionKey(plugin.id, action.id);
+  const reg = timerRegistry();
+  const ex = reg[key];
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.id = 'timerDlg';
+  const presets = TIMER_PRESETS.map((p) =>
+    `<button type="button" class="ghost mini t-preset" data-sec="${p.sec}">${p.label}</button>`).join(' ');
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>定时执行：${esc(action.title)}</h3>
+      <div class="help">界面开着才会跑。只读动作才允许定时（有副作用的自动跑风险太大）。</div>
+      <div class="field"><label>间隔（秒）</label><input id="tSec" type="number" min="10" step="1" value="${ex?.interval ?? 60}"></div>
+      <div class="field"><label>快捷档位</label><div class="chip-row">${presets}</div></div>
+      <div class="field"><label>执行窗口（可空，如 09:00-18:00，窗口外跳过）</label>
+        <input id="tWin" type="text" placeholder="09:00-18:00" value="${esc(ex?.win ?? '')}"></div>
+      <div class="field"><label>用当前表单值作为定时参数</label>
+        <input id="tVals" type="checkbox" ${ex?.values ? '' : 'checked'}></div>
+      <div class="modal-actions">
+        <button class="ghost" id="tCancel">取消</button>
+        <button class="primary" id="tSave">${ex ? '更新' : '开始'}定时</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelectorAll('.t-preset').forEach((b) => b.addEventListener('click', () => {
+    overlay.querySelector('#tSec').value = b.dataset.sec;
+  }));
+  overlay.querySelector('#tCancel').addEventListener('click', () => overlay.remove());
+  overlay.querySelector('#tSave').addEventListener('click', () => {
+    const sec = Number(overlay.querySelector('#tSec').value);
+    const win = overlay.querySelector('#tWin').value.trim();
+    const useVals = overlay.querySelector('#tVals').checked;
+    if (!Number.isFinite(sec) || sec < 10) { el.count.textContent = '间隔至少 10 秒'; return; }
+    if (!validWindow(win)) { el.count.textContent = '窗口格式应为 HH:MM-HH:MM'; return; }
+    if (reg[key]) { clearInterval(reg[key].id); delete reg[key]; }
+    reg[key] = {
+      id: null, interval: sec, win,
+      title: `${plugin.name} · ${action.title}`,
+      values: useVals ? collectValues(action) : {},
+      createdAt: Date.now(), lastRanAt: Date.now(),
+      history: [], paused: false, nextAt: 0,
+    };
+    startTimerTick(key);
+    overlay.remove();
+    el.count.textContent = `已开启定时执行：每 ${sec} 秒一次${win ? `（窗口 ${win}）` : ''}（#/timers 可管理）`;
+  });
+}
+
 function showTimers() {
   hidePanels();
   mode = 'timers';
@@ -2371,22 +2468,107 @@ function showTimers() {
   el.detailView.classList.add('hidden');
   if (location.hash !== '#/timers') history.replaceState(null, '', '#/timers');
   const reg = timerRegistry();
-  const rows = Object.entries(reg).map(([k, t]) => `
-    <div class="run-row">
-      <span class="badge">⏱</span>
-      <span class="run-when">${esc(t.title)}（每 ${esc(String(t.interval))} 秒）</span>
-      <button class="ghost mini" data-stop="${esc(k)}">停止</button>
-    </div>`).join('');
+  // ③补跑：打开面板时对错过的任务各补一次（shouldCatchUp 保证只一次）
+  for (const k of Object.keys(reg)) {
+    if (shouldCatchUp(reg[k])) fireTimer(k, 'catchup').then(() => renderTimersRows()).catch(() => {});
+  }
   el.allowView.innerHTML = `
     <h2 class="ps-title">定时任务</h2>
     <div class="help">界面开着才会跑（关掉页面即停）。在只读动作详情页点「定时」添加。</div>
-    ${rows || '<div class="ps-empty" role="status">没有在跑的定时任务。</div>'}`;
+    <div class="timers-actions">
+      <button class="ghost mini" id="timersExport" data-ai="1">导出 JSON</button>
+      <button class="ghost mini" id="timersImport">导入 JSON</button>
+      <input type="file" id="timersFile" accept=".json" class="hidden">
+    </div>
+    <div id="timersRows"></div>`;
   el.allowView.classList.remove('hidden');
-  el.allowView.querySelectorAll('[data-stop]').forEach((b) => b.addEventListener('click', () => {
+  renderTimersRows();
+  // ⑨导出/导入
+  el.allowView.querySelector('#timersExport')?.addEventListener('click', async (ev) => {
+    const pack = exportTimers(timerRegistry());
+    const name = exportFilename('timers', 'json');
+    const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    ev.currentTarget.textContent = '已导出';
+    setTimeout(() => { ev.currentTarget.textContent = '导出 JSON'; }, 1200);
+  });
+  const fileBtn = el.allowView.querySelector('#timersFile');
+  el.allowView.querySelector('#timersImport')?.addEventListener('click', () => fileBtn?.click());
+  fileBtn?.addEventListener('change', async () => {
+    const f = fileBtn.files?.[0];
+    if (!f) return;
+    const r = parseTimersPack(await f.text());
+    if (!r.ok) { el.count.textContent = `导入失败：${r.error}`; return; }
+    const reg2 = timerRegistry();
+    let added = 0;
+    for (const [k, cfg] of Object.entries(r.pack.timers)) {
+      if (reg2[k]) continue;   // 已有的不覆盖（本机配置优先）
+      reg2[k] = { id: null, interval: cfg.interval, win: cfg.win ?? '', title: cfg.title ?? k,
+        values: {}, createdAt: Date.now(), lastRanAt: Date.now(), history: [], paused: !!cfg.paused, nextAt: 0 };
+      if (!cfg.paused) startTimerTick(k);
+      added++;
+    }
+    el.count.textContent = `导入完成：新增 ${added} 个定时任务`;
+    renderTimersRows();
+  });
+}
+
+/** 面板行渲染：独立函数以便执行后局部刷新（不整页重画）。 */
+function renderTimersRows() {
+  const host = document.getElementById('timersRows');
+  if (!host) return;
+  const reg = timerRegistry();
+  const rows = Object.entries(reg).map(([k, tm]) => {
+    const hist = tm.history ?? [];
+    const last = hist[hist.length - 1];
+    const lastTxt = !last ? '还没跑过'
+      : last.ok === null ? `跳过（${esc(last.why ?? '')}）`
+      : last.ok ? `✓ ${new Date(last.ts).toLocaleTimeString()}`
+      : `✗ ${new Date(last.ts).toLocaleTimeString()} ${esc(last.why ?? '')}`;
+    return `
+    <div class="run-row timer-row" data-tk="${esc(k)}">
+      <span class="badge">⏱</span>
+      <span class="run-when">${esc(tm.title)}（每 ${esc(String(tm.interval))} 秒${tm.win ? ` · 窗口 ${esc(tm.win)}` : ''}${tm.paused ? ' · 已暂停' : ''}）</span>
+      <span class="timer-next" title="下次触发">${tm.paused ? '—' : nextRunLabel(tm.nextAt ?? Date.now())}</span>
+      <span class="timer-last" title="最近一次">${lastTxt}</span>
+      <button class="ghost mini" data-trun="${esc(k)}" title="立即跑一次，不影响节奏">现在跑</button>
+      <button class="ghost mini" data-tpause="${esc(k)}">${tm.paused ? '恢复' : '暂停'}</button>
+      <button class="ghost mini" data-thist="${esc(k)}" title="最近 10 次">历史</button>
+      <button class="ghost mini" data-stop="${esc(k)}">停止</button>
+    </div>`;
+  }).join('');
+  host.innerHTML = rows || '<div class="ps-empty" role="status">没有定时任务。在只读动作详情页点「定时」添加。</div>';
+  host.querySelectorAll('[data-trun]').forEach((b) => b.addEventListener('click', () => {
+    fireTimer(b.dataset.trun, 'manual').then(() => renderTimersRows());
+  }));
+  host.querySelectorAll('[data-tpause]').forEach((b) => b.addEventListener('click', () => {
+    const tm = timerRegistry()[b.dataset.tpause];
+    if (!tm) return;
+    tm.paused = !tm.paused;
+    if (tm.paused && tm.id) { clearInterval(tm.id); tm.id = null; }
+    else if (!tm.paused) startTimerTick(b.dataset.tpause);
+    renderTimersRows();
+  }));
+  host.querySelectorAll('[data-thist]').forEach((b) => b.addEventListener('click', () => {
+    const tm = timerRegistry()[b.dataset.thist];
+    if (!tm) return;
+    const lines = (tm.history ?? []).slice().reverse().map((h) =>
+      `<div class="timer-hist-line">${h.ok === null ? '⏭' : h.ok ? '✓' : '✗'} ${new Date(h.ts).toLocaleString()} ${esc(h.why ?? '')}</div>`).join('');
+    const row = b.closest('.timer-row');
+    const old = row?.querySelector('.timer-hist');
+    if (old) { old.remove(); return; }
+    const div = document.createElement('div');
+    div.className = 'timer-hist';
+    div.innerHTML = lines || '<div class="timer-hist-line">还没有记录</div>';
+    row?.appendChild(div);
+  }));
+  host.querySelectorAll('[data-stop]').forEach((b) => b.addEventListener('click', () => {
     const k = b.dataset.stop;
-    const t = timerRegistry()[k];
-    if (t) { clearInterval(t.id); delete timerRegistry()[k]; }
-    showTimers();
+    const tm = timerRegistry()[k];
+    if (tm) { if (tm.id) clearInterval(tm.id); delete timerRegistry()[k]; }
+    renderTimersRows();
   }));
 }
 
@@ -6792,6 +6974,8 @@ function applyHash() {
 }
 
 window.addEventListener('hashchange', () => {
+  // 第三十八轮：#/timers 面板路由（applyHash 有同样分支，hashchange 也要）
+  if ((location.hash || '') === '#/timers') { showTimers(); return; }
   // 第十八轮⑥：#/watch 是面板路由——监控继续跑（面板就是聚合它们的），只切视图
   if ((location.hash || '') === '#/watch') {
     showWatchPanel();

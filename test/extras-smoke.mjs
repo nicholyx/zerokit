@@ -2,7 +2,7 @@
 //
 // 这些函数都在 web/extras.js 里，不碰 DOM / localStorage / fetch，
 // 所以可以直接在 Node 里跑。界面接线另由 webui-smoke 断言。
-import { THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref, OVERFLOW_ROWS, PAGE_ROWS, toAiMarkdown, packContext, toMcpConfig, toLlmJsonl, toCurl, watchTrendMarkdown } from '../web/extras.js';
+import { THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref, OVERFLOW_ROWS, PAGE_ROWS, toAiMarkdown, packContext, toMcpConfig, toLlmJsonl, toCurl, watchTrendMarkdown, TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory } from '../web/extras.js';
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -1009,6 +1009,46 @@ check('大表首屏窗口：500+ 行只画 200', (() => {
   const viewRows = bigTable ? rows.slice(0, PAGE_ROWS) : rows;
   return bigTable && viewRows.length === 200 && rows.length === 800;
 })());
+
+
+// ===================== 第三十八轮：定时与调度 =====================
+{
+  // ① 档位
+  check('38①五个快捷档位且秒数递增', TIMER_PRESETS.length === 5
+    && TIMER_PRESETS.every((p, i, a) => i === 0 || p.sec > a[i - 1].sec), '');
+  // ② 窗口
+  const d = (h, m) => new Date(2026, 9, 28, h, m);
+  check('38②窗口内命中', inWindow(d(12, 0), '09:00-18:00') === true, '');
+  check('38②窗口外跳过', inWindow(d(20, 0), '09:00-18:00') === false, '');
+  check('38②跨午夜窗口', inWindow(d(23, 30), '22:00-06:00') === true && inWindow(d(3, 0), '22:00-06:00') === true && inWindow(d(12, 0), '22:00-06:00') === false, '');
+  check('38②无窗口=永远可跑', inWindow(d(3, 0), '') === true, '');
+  check('38②格式校验', validWindow('') === true && validWindow('09:00-18:00') === true && validWindow('9-18') === false, '');
+  // ⑥ 下次触发
+  check('38⑥相对时间四档', nextRunLabel(Date.now() + 5_000) === '5 秒后'
+    && nextRunLabel(Date.now() + 90_000) === '2 分钟后'
+    && nextRunLabel(Date.now() + 7_200_000) === '2 小时后'
+    && nextRunLabel(Date.now() - 1) === '马上', '');
+  // ③ 补跑
+  const now = Date.now();
+  check('38③错过两个间隔要补跑', shouldCatchUp({ interval: 60, lastRanAt: now - 180_000, createdAt: now - 180_000 }, now) === true, '');
+  check('38③刚跑过不补', shouldCatchUp({ interval: 60, lastRanAt: now - 30_000, createdAt: now - 300_000 }, now) === false, '');
+  check('38③暂停不补', shouldCatchUp({ interval: 60, paused: true, lastRanAt: now - 180_000 }, now) === false, '');
+  check('38③页面切换间隙不算错过', shouldCatchUp({ interval: 60, lastRanAt: now - 90_000 }, now) === false, '');
+  // ⑨ 导出/导入
+  const pack = exportTimers({ 'a.b': { title: 'T', interval: 60, win: '09:00-18:00', createdAt: 1, extraRuntime: 'runtime-only' } });
+  check('38⑨导出剥运行态字段', pack.app === 'zerokit' && pack.kind === 'timers'
+    && pack.timers['a.b'].interval === 60 && !('extraRuntime' in pack.timers['a.b'])
+    && !('id' in pack.timers['a.b']), '');
+  const okImp = parseTimersPack(JSON.stringify(pack));
+  const bad1 = parseTimersPack('not json');
+  const bad2 = parseTimersPack(JSON.stringify({ app: 'other' }));
+  const bad3 = parseTimersPack(JSON.stringify({ app: 'zerokit', kind: 'timers', timers: { x: { interval: 0 } } }));
+  check('38⑨导入四态', okImp.ok === true && bad1.ok === false && bad2.ok === false && bad3.ok === false, '');
+  // ⑤ 历史裁剪
+  check('38⑤历史只留最近 10 条', trimHistory(Array.from({ length: 15 }, (_, i) => i)).length === 10
+    && trimHistory(Array.from({ length: 15 }, (_, i) => i))[9] === 14
+    && trimHistory(null).length === 0, '');
+}
 
 console.log('\n' + '='.repeat(60));
 console.log(`通过 ${results.length - failed.length} / ${results.length}`);
