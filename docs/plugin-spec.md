@@ -703,6 +703,33 @@ zerokit 的清单（只读，不写你的目录）。丢进插件目录即可，
 - `{setting.x}` 引用了没声明的设置项（拼错名字不该等到运行时才变成空串）
 - `[requires] plugins` 不是数组、写了非法的插件 id、或依赖了自己
 
+## 体检规则（zkit plugin lint）
+
+加载校验管「过不过」，体检管「过得了但欠不欠佳」。发布前跑一次：
+
+```bash
+zkit plugin lint .            # 当前目录（作者视角）
+zkit plugin lint <id>         # 已装的
+zkit plugin lint <id> --json  # 机读（errorCount > 0 时退出码非零，可直接进 CI）
+```
+
+分级：**error**（拒绝级，退出码 1）/ **warn**（能跑但欠佳）/ **info**（建议，零退出码）。
+
+| 规则 | 级别 | 检查什么 |
+| --- | --- | --- |
+| L01 | warn / info | summary 太短（<8 字）；或没写长 description（info） |
+| L02 | warn | 没有 keywords（拼音与模糊搜索都吃它） |
+| L03 | warn | 动作 description 太短（它同时是 AI 工具描述） |
+| L04 | info | 有参数但没写 `[action.match]`（启动器「试一试」预填靠它） |
+| L05 | error | `match.fills` 引用了参数表里不存在的参数 |
+| L06 | warn | 标题/描述像有副作用（写入/删除/重启等），risk 却声明 read |
+| L07 | error | chain 步骤 `use = "self.x"` 引用了本插件不存在的动作 |
+| L08 | info | secret 参数无默认值且必填（装机时用户得现场提供，确认是故意的） |
+| L09 | info | 设置项 description 太短（它就是配置界面的说明文字） |
+| L10 | error | 插件没有任何动作 |
+
+配套：`zkit plugin doc <id|目录>` 从清单生成 Markdown 动作参考（可直接当 README 核心段），`--json` 出机读版。
+
 ## 完整示例
 
 ```toml

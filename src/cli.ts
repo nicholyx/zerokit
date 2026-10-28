@@ -9,6 +9,7 @@ import { HOME, LOG_DIR, PLUGINS_DIR } from './core/paths.ts';
 import { actionStats, gcAudit, readAudit, readAuditDetailed, recentErrors, SLOW_MS } from './core/ops.ts';
 import { packPlugin, publishReady, unpackPlugin } from './core/distro.ts';
 import * as distroNs from './core/distro.ts';
+import { lintPlugin, docPlugin, docPluginJson } from './core/lintdoc.ts';
 import { needsConfirm, rememberApproval } from './core/approvals.ts';
 import type { ConfirmPolicy } from './core/runner.ts';
 import {
@@ -897,10 +898,77 @@ async function cmdPlugin(args: string[]): Promise<number> {
   if (sub === 'unpack') return cmdPluginUnpack(args.slice(1));
   if (sub === 'info') return cmdPluginInfo(args.slice(1));
   if (sub === 'recommend') return cmdPluginRecommend(args.slice(1));
+  if (sub === 'lint') return cmdPluginLint(args.slice(1));
+  if (sub === 'doc') return cmdPluginDoc(args.slice(1));
   if (sub === 'publish-ready') return cmdPublishReady(args.slice(1));
-  process.stderr.write('用法：zkit plugin <new|dev|validate|install|add|update|remove|bundled|export|import|pack|unpack|info|recommend|publish-ready>\n');
+  process.stderr.write('用法：zkit plugin <new|dev|validate|install|add|update|remove|bundled|export|import|pack|unpack|info|recommend|lint|doc|publish-ready>\n');
   return 2;
 }
+
+/** ①⑤⑥zkit plugin lint <id|目录>：清单体检。error 非零退出（CI 可用），warn/info 不影响。 */
+function cmdPluginLint(args: string[]): number {
+  const rest = args.filter((a) => !a.startsWith('-'));
+  const target = rest[0];
+  if (!target) { process.stderr.write('用法：zkit plugin lint <id|目录> [--json]\n'); return 2; }
+  let dir: string | null = null;
+  if (fs.existsSync(path.join(target, 'plugin.toml'))) dir = path.resolve(target);
+  else {
+    const guess = path.join(PLUGINS_DIR, target);
+    if (fs.existsSync(path.join(guess, 'plugin.toml'))) dir = guess;
+  }
+  if (!dir) { process.stderr.write(c.red(`✗ 没找到插件 "${target}"（既不是含 plugin.toml 的目录，也不在已装列表里）\n`)); return 1; }
+  const { loadPlugin } = loadPluginRef;
+  const res = loadPlugin(dir);
+  if (res.errors.length > 0 || !res.plugin) {
+    process.stdout.write(c.bold(`体检报告：${target}\n`));
+    for (const e of res.errors) process.stdout.write(c.red(`  ✗ error  ${e}\n`));
+    process.stdout.write(c.dim('  清单本身加载失败，先修上面的错误再体检。\n'));
+    return 1;
+  }
+  const findings = lintPlugin(res.plugin);
+  if (args.includes('--json')) {
+    process.stdout.write(JSON.stringify({ id: res.plugin.id, findings, errorCount: findings.filter((f) => f.severity === 'error').length }, null, 2) + '\n');
+    return findings.some((f) => f.severity === 'error') ? 1 : 0;
+  }
+  process.stdout.write(c.bold(`体检报告：${res.plugin.name}（${res.plugin.id}）\n`));
+  if (findings.length === 0) {
+    process.stdout.write(c.green('  ✓ 全部通过，零发现\n'));
+    return 0;
+  }
+  const icon: Record<string, string> = { error: c.red('✗ error'), warn: c.yellow('! warn '), info: c.dim('· info ') };
+  for (const f of findings) process.stdout.write(`  ${icon[f.severity]}  ${c.dim(f.rule)} ${f.target}：${f.message}\n`);
+  const errs = findings.filter((f) => f.severity === 'error').length;
+  const warns = findings.filter((f) => f.severity === 'warn').length;
+  process.stdout.write(c.dim(`  共 ${findings.length} 项（error ${errs} / warn ${warns} / info ${findings.length - errs - warns}）\n`));
+  return errs > 0 ? 1 : 0;
+}
+
+/** ②④zkit plugin doc <id|目录> [--json]：从清单生成参考文档。 */
+function cmdPluginDoc(args: string[]): number {
+  const rest = args.filter((a) => !a.startsWith('-'));
+  const target = rest[0];
+  if (!target) { process.stderr.write('用法：zkit plugin doc <id|目录> [--json]\n'); return 2; }
+  let plugin: Plugin;
+  try { plugin = requirePlugin(target); } catch (e) {
+    // 装好的找不到时，回退读目录（作者在源码目录里就能生成）
+    const dir = path.resolve(target);
+    if (!fs.existsSync(path.join(dir, 'plugin.toml'))) {
+      process.stderr.write(c.red(`✗ ${(e as Error).message}\n`)); return 1;
+    }
+    const res = loadPluginRef.loadPlugin(dir);
+    if (!res.plugin) { process.stderr.write(c.red(`✗ ${res.errors.join('; ')}\n`)); return 1; }
+    plugin = res.plugin;
+  }
+  if (args.includes('--json')) {
+    process.stdout.write(JSON.stringify(docPluginJson(plugin), null, 2) + '\n');
+  } else {
+    process.stdout.write(docPlugin(plugin) + '\n');
+  }
+  return 0;
+}
+
+/** 惰性拿 loadPlugin（避免顶层 import 抖动到无关路径）。 */
+const loadPluginRef = await import('./core/manifest.ts');
 
 /** ①③zkit plugin pack <id> [--out 目录] [--list-only]：打包/清单。 */
 function cmdPluginPack(args: string[]): number {
