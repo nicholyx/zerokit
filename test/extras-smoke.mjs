@@ -2,7 +2,7 @@
 //
 // 这些函数都在 web/extras.js 里，不碰 DOM / localStorage / fetch，
 // 所以可以直接在 Node 里跑。界面接线另由 webui-smoke 断言。
-import { THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref, OVERFLOW_ROWS, PAGE_ROWS } from '../web/extras.js';
+import { THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref, OVERFLOW_ROWS, PAGE_ROWS, toAiMarkdown, packContext, toMcpConfig, toLlmJsonl, toCurl, watchTrendMarkdown } from '../web/extras.js';
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -1013,3 +1013,35 @@ check('大表首屏窗口：500+ 行只画 200', (() => {
 console.log('\n' + '='.repeat(60));
 console.log(`通过 ${results.length - failed.length} / ${results.length}`);
 if (failed.length) process.exitCode = 1;
+
+// ===================== 第三十七轮：AI 协作面 =====================
+{
+  const n = (name, cond) => results.push([name, cond]);
+  // ① 表格 → MD 表（转义竖线、50 行截断提示）
+  const mdTbl = toAiMarkdown({ data: [{ a: 1, b: 'x|y' }, { a: 2, b: 'ok' }] }, { name: '测试', ts: 0 });
+  n('37①表格出 MD 表+表头+转义', mdTbl.includes('| a | b |') && mdTbl.includes('x\\|y') && mdTbl.includes('## 测试'));
+  const big = toAiMarkdown({ data: Array.from({ length: 60 }, (_, i) => ({ i })) });
+  n('37①50 行截断+总数提示', big.includes('仅列前 50 行') && big.includes('共 60 行'));
+  const mdObj = toAiMarkdown({ data: { host: 'mac', mem: 24 } });
+  n('37①对象出属性行', mdObj.includes('**host**: mac') && mdObj.includes('**mem**: 24'));
+  // ② 上下文打包
+  const ctx = packContext({ current: { res: { data: { ok: 1 } }, name: 'p.a', ts: 0 }, runs: [{ plugin: 'p', action: 'a', ok: true, ts: 1 }, { plugin: 'p', action: 'b', ok: false, ts: 2 }, { plugin: 'p', action: 'c', ok: true, ts: 3 }], plugins: [{ id: 'p', name: '插件', actions: [{ id: 'a', title: 'A' }] }] });
+  n('37②上下文三段式（结果/最近执行/插件）', ctx.includes('# zerokit 上下文') && ctx.includes('## 刚执行的结果') && ctx.includes('成功') && ctx.includes('**p**（插件）：a'));
+  n('37②runs 截前 3 条', packContext({ runs: [{ plugin: 'x', action: 'y', ok: true, ts: 0 }] }).includes('x.y'));
+  // ③ MCP 配置
+  const cfg = JSON.parse(toMcpConfig('node', '/p/mcp.ts'));
+  n('37③mcpServers JSON 可解析且含 serve', cfg.mcpServers.zerokit.command === 'node' && cfg.mcpServers.zerokit.args.includes('serve'));
+  // ④ LLM JSONL
+  const jl = toLlmJsonl([{ a: 1 }, { a: 2 }]);
+  const parsed = jl.split('\n').map((l) => JSON.parse(l));
+  n('37④每行 {input,expected:null}', parsed.length === 2 && parsed[0].input.a === 1 && parsed[0].expected === null);
+  n('37④非数组返回空串', toLlmJsonl(null) === '' && toLlmJsonl('x') === '');
+  // ⑥ 趋势表
+  const tr = watchTrendMarkdown([{ ts: 1, value: 100 }, { ts: 2, value: 150 }]);
+  n('37⑥趋势表含表头与变化文本', tr.includes('| 时间 | 值 | 变化 |') && tr.includes('↑ 150'));
+  n('37⑥空样本空串', watchTrendMarkdown([]) === '');
+  // ⑦ curl
+  const cu = toCurl({ plugin: 'p', action: 'a', values: { x: 1 }, port: 1234 });
+  n('37⑦curl 带端口与 token 占位符', cu.includes('http://127.0.0.1:1234/api/run') && cu.includes('<启动器页面里的令牌>') && cu.includes('"plugin":"p"'));
+}
+

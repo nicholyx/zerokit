@@ -495,6 +495,23 @@ close();
   check('R30-7 页签备注 ✎ 显式按钮（双击的触屏等价）', js.includes('data-rn=') && css.includes('.rtab-note'));
 }
 
+// ---------------- 第三十七轮：AI 协作面（静态源码断言）
+{
+  const app = fs.readFileSync(path.join(PKG_ROOT, 'web/app.js'), 'utf8');
+  const extras = fs.readFileSync(path.join(PKG_ROOT, 'web/extras.js'), 'utf8');
+  const css = fs.readFileSync(path.join(PKG_ROOT, 'web/style.css'), 'utf8');
+  const ok = (name, cond) => results.push([name, cond]);
+  ok('37①给AI按钮：aiRes + toAiMarkdown 接线', app.includes('id="aiRes"') && app.includes('toAiMarkdown(res'));
+  ok('37②AI上下文：ctxRes + packContext（runs+plugins）', app.includes('id="ctxRes"') && app.includes('packContext({'));
+  ok('37③MCP配置段：invokeBox 内 toMcpConfig', app.includes('copyMcpCfg') && app.includes('toMcpConfig('));
+  ok('37④LLM JSONL：toLlmJsonl 按钮与导出', app.includes('id="llmRes"') && app.includes('toLlmJsonl(res.data)'));
+  ok('37⑤命令面板：copy-mcp / copy-ctx 两个命令', extras.includes("go: 'copy-mcp'") && extras.includes("go: 'copy-ctx'") && app.includes("c.go === 'copy-mcp'"));
+  ok('37⑥趋势MD：data-wmd + watchTrendMarkdown', app.includes('data-wmd=') && app.includes('watchTrendMarkdown(w.samples'));
+  ok('37⑦curl 按钮：data-curl + toCurl（token 占位符）', app.includes('data-curl=') && extras.includes('<启动器页面里的令牌>'));
+  ok('37⑧隐私开关：no-ai class + data-ai-toggle + CSS 隐藏规则', app.includes("ai-assist") && css.includes('body.no-ai [data-ai="1"]'));
+  ok('37⑨纯函数可导入：五个新导出都在', ['toAiMarkdown','packContext','toMcpConfig','toLlmJsonl','toCurl','watchTrendMarkdown'].every((n) => extras.includes('export function ' + n)));
+}
+
 // ---------------------------------------------------------------- 收尾
 
 const failed = results.filter(([, ok]) => !ok);

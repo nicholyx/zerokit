@@ -1517,6 +1517,8 @@ export const COMMAND_LIST = [
   { icon: '◐', name: '外观', hint: '主题与外观设置（打开外观面板）', go: 'theme' },
   { icon: '📰', name: '简报', hint: '今日简报 #/brief', go: '#/brief' },
   { icon: '⌘', name: '工作台', hint: 'AI 工作台', go: 'workbench' },
+  { icon: '🤖', name: 'MCP 配置', hint: '复制 mcpServers JSON 片段', go: 'copy-mcp' },
+  { icon: '🧠', name: 'AI 上下文', hint: '打包最近执行与插件清单给 AI', go: 'copy-ctx' },
 ];
 
 /** ③快速执行语法：`;插件.动作` → {plugin, action}；不匹配返回 null */
@@ -1792,4 +1794,95 @@ export function parseHistoryHash(hash) {
 export function recencyBoost(rank, base = 12) {
   if (!Number.isFinite(rank) || rank < 0) return 0;
   return Math.max(0, base - rank);
+}
+
+/* ===================== 第三十七轮：AI 协作面 ===================== */
+
+/**
+ * ① 结果 → LLM 友好的 Markdown：表格数据出 MD 表，对象出属性行，
+ *   其它原样 String。带动作名与时间头的完整粘贴块。
+ */
+export function toAiMarkdown(res, opts = {}) {
+  const name = opts.name || '结果';
+  const at = opts.ts ? new Date(opts.ts).toLocaleString() : new Date().toLocaleString();
+  const head = `## ${name}（${at}）\n\n`;
+  const data = res && typeof res === 'object' && 'data' in res ? res.data : res;
+  if (Array.isArray(data) && data.length > 0 && data.every((r) => r && typeof r === 'object' && !Array.isArray(r))) {
+    const cols = [...new Set(data.flatMap((r) => Object.keys(r)))];
+    const esc = (v) => String(v ?? '').replace(/\|/g, '\\|').replace(/\n/g, ' ');
+    const table = [
+      `| ${cols.join(' | ')} |`,
+      `| ${cols.map(() => '---').join(' | ')} |`,
+      ...data.slice(0, 50).map((r) => `| ${cols.map((c) => esc(r[c])).join(' | ')} |`),
+    ].join('\n');
+    const more = data.length > 50 ? `\n\n（共 ${data.length} 行，仅列前 50 行）` : '';
+    return head + table + more;
+  }
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    const props = toMarkdownProps(data);
+    return head + (props || '（空对象）');
+  }
+  return head + '```\n' + String(data ?? '') + '\n```';
+}
+
+/**
+ * ② 上下文打包：当前结果 + 最近执行 + 插件摘要 → 单段可粘贴 prompt。
+ *   runs 是 runStore 数组（最新在前），plugins 是 [{id,name,actions:[{id,title}]}]。
+ */
+export function packContext({ current, runs = [], plugins = [], maxRuns = 3 } = {}) {
+  const lines = ['# zerokit 上下文', ''];
+  if (current) {
+    lines.push('## 刚执行的结果', '', toAiMarkdown(current.res, { name: current.name, ts: current.ts }), '');
+  }
+  if (runs.length > 0) {
+    lines.push('## 最近执行', '');
+    for (const r of runs.slice(0, maxRuns)) {
+      lines.push(`- ${r.plugin}.${r.action}（${r.ok ? '成功' : '失败'}，${new Date(r.ts).toLocaleString()}）`);
+    }
+    lines.push('');
+  }
+  if (plugins.length > 0) {
+    lines.push('## 可用插件', '');
+    for (const p of plugins) {
+      const acts = (p.actions || []).map((a) => a.id).join(', ');
+      lines.push(`- **${p.id}**（${p.name}）：${acts || '（无动作）'}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+/**
+ * ③ MCP 配置片段：mcpServers JSON（含 command/args），可直接贴进客户端配置。
+ */
+export function toMcpConfig(cmd = 'node', script = '/path/to/zerokit/src/mcp.ts') {
+  return JSON.stringify({ mcpServers: { zerokit: { command: cmd, args: [script, 'serve'] } } }, null, 2);
+}
+
+/**
+ * ④ LLM 批处理 JSONL：rows 每行 → {input: 行对象, expected: null} 对（用户补期望值）。
+ */
+export function toLlmJsonl(rows) {
+  if (!Array.isArray(rows)) return '';
+  return rows.map((r) => JSON.stringify({ input: r, expected: null })).join('\n');
+}
+
+/**
+ * ⑥ 监控样本 → Markdown 趋势表：时间/值/环比变化（cellDiff 文本）。
+ */
+export function watchTrendMarkdown(samples, valueOf = (s) => s?.value) {
+  if (!Array.isArray(samples) || samples.length === 0) return '';
+  const rows = samples.map((s, i) => {
+    const prev = i > 0 ? valueOf(samples[i - 1]) : null;
+    const d = prev === null ? '' : (cellDiff(prev, valueOf(s)) ?? '—');
+    return `| ${new Date(s.ts).toLocaleTimeString()} | ${String(valueOf(s) ?? '')} | ${d} |`;
+  });
+  return ['| 时间 | 值 | 变化 |', '| --- | --- | --- |', ...rows].join('\n');
+}
+
+/**
+ * ⑦ 执行历史单条 → curl 命令（API 形状）。token 用占位符——真令牌永远不出现在剪贴板。
+ */
+export function toCurl({ plugin, action, values = {}, port = 28970 } = {}) {
+  const body = JSON.stringify({ plugin, action, values });
+  return `curl -X POST http://127.0.0.1:${port}/api/run \\\n  -H 'Content-Type: application/json' \\\n  -H 'x-zerokit-token: <启动器页面里的令牌>' \\\n  -d '${body}'`;
 }
