@@ -171,8 +171,8 @@ async function get(p, raw = false) {
 
   // 十项体验增强的入口：主题切换 / 快捷键浮层
   const index = await get('/');
-  check('外壳：主题切换与快捷键入口都在页面上',
-    index.text.includes('id="themeBtn"') && index.text.includes('id="helpBtn"'),
+  check('外壳：设置抽屉与快捷键入口都在页面上',
+    index.text.includes('id="drawerBtn"') && index.text.includes('id="helpBtn"'),
     index.text.slice(0, 160));
   const extras = await get('/extras.js');
   check('静态：extras.js 可加载（收藏/记忆/历史/健康的纯函数）',
@@ -206,9 +206,9 @@ async function get(p, raw = false) {
   check('a11y：星标按钮带 aria-label',
     appJs.text.includes("aria-label=\"${fav ? '取消收藏' : '收藏这个动作'}\""),
     '星标 aria-label 缺失');
-  check('a11y：主题一键切换按钮带 aria-label',
-    indexHtml.includes('id="themeFast"') && /themeFast[^>]*aria-label/.test(indexHtml),
-    'themeFast aria-label 缺失');
+  check('a11y：抽屉开合按钮带 aria-label',
+    /id="drawerBtn"[^>]*aria-label/.test(indexHtml) || /aria-label[^>]*id="drawerBtn"/.test(indexHtml),
+    'drawerBtn aria-label 缺失');
   check('a11y：空态容器 role=status（18 处 ps-empty + 主空态）',
     (appJs.text.match(/class="ps-empty" role="status"/g) || []).length >= 15
       && indexHtml.includes('id="empty" class="empty" role="status"'),

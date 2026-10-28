@@ -1559,6 +1559,8 @@ export const COMMAND_LIST = [
   { icon: '⌘', name: '工作台', hint: 'AI 工作台', go: 'workbench' },
   { icon: '🤖', name: 'MCP 配置', hint: '复制 mcpServers JSON 片段', go: 'copy-mcp' },
   { icon: '🧠', name: 'AI 上下文', hint: '打包最近执行与插件清单给 AI', go: 'copy-ctx' },
+  // 第四十七轮④：抽屉里的管理入口也在面板可达（键盘用户不必找 ☰）
+  { icon: '☰', name: '设置抽屉', hint: '主题/语言/配置档/备份/日志/自检的统一入口', go: 'drawer' },
 ];
 
 /** ③快速执行语法：`;插件.动作` → {plugin, action}；不匹配返回 null */
@@ -2057,4 +2059,65 @@ export function tocFromMd(md) {
     if (m) out.push({ level: m[1].length, text: m[2].trim() });
   }
   return out.length > 3 ? out : [];
+}
+
+/* ======================= 第四十七轮：信息架构与首屏 ======================= */
+
+/**
+ * ①入口三分类：执行（高频直达）/ 观察（看状态）/ 管理（低频，收抽屉）。
+ * 返回 { exec:[], observe:[], manage:[] }——没归类的进 manage（宁可收起也不平铺）。
+ */
+export function navGroups(entries) {
+  const g = { exec: [], observe: [], manage: [] };
+  for (const e of entries ?? []) {
+    if (g[e.kind] && Array.isArray(g[e.kind])) g[e.kind].push(e);
+    else g.manage.push(e);
+  }
+  return g;
+}
+
+/**
+ * ⑥空态文案分级：三种情境不同指引。
+ * 返回 { title, hint }；调用方渲染。kind: first-run | no-plugins | no-match。
+ */
+export function emptyState(kind, q) {
+  if (kind === 'first-run') return {
+    title: '先装几个插件',
+    hint: '插件是能力包。点右上「集市」浏览，或终端跑 plugin bundled 装自带的示例。',
+  };
+  if (kind === 'no-plugins') return {
+    title: '一个插件都没有',
+    hint: '终端跑 plugin bundled 装自带示例，或去集市找。装完这里就有动作了。',
+  };
+  // no-match
+  return {
+    title: `没有匹配「${q || ''}」的动作`,
+    hint: '试试短一点的关键词（拼音也行）；或者 Esc 清空搜索回到全部。',
+  };
+}
+
+/**
+ * ⑨骨架屏行：首屏列表渲染前先画 N 行占位（避免白屏一闪）。
+ */
+export function skeletonRows(n = 6) {
+  return Array.from({ length: Math.max(1, Math.min(n, 12)) }, (_, i) => i);
+}
+
+/**
+ * ⑦结果区高度档位：按行数选 compact | normal | scroll。
+ * ≤4 行紧凑、≤30 行常规、更多出滚动（调用方只管挂类名）。
+ */
+export function resultHeightTier(rowCount) {
+  const n = Number(rowCount);
+  if (!Number.isFinite(n)) return 'normal';
+  if (n <= 4) return 'compact';
+  if (n <= 30) return 'normal';
+  return 'scroll';
+}
+
+/**
+ * ⑧窄屏断点：给定视口宽，返回布局模式 desktop | narrow。
+ */
+export function viewportMode(width) {
+  return Number(width) > 0 && Number(width) <= 720 ? 'narrow' : 'desktop';
 }

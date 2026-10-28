@@ -22,14 +22,30 @@
       <button class="ghost run-chip" id="plugBtn" title="管理插件：查看来源与版本、安装、更新、卸载">插件 <b id="plugCount">0</b></button>
       <button class="ghost run-chip" id="psBtn" title="查看正在运行的进程与服务">运行中 <b id="psCount">0</b></button>
       <button class="ghost run-chip" id="marketBtn" title="浏览集市：装插件不用记地址">集市 <b id="marketCount">0</b></button>
+      <button class="ghost" id="drawerBtn" title="设置与管理：主题、语言、配置档、备份、自检、日志都在抽屉里" aria-label="打开设置抽屉">☰ 设置</button>
       <button class="ghost" id="reloadBtn" title="重新读取插件" data-i18n="reload">重新加载</button>
-      <button class="ghost theme-btn" id="themeBtn" title="切换主题：跟随系统 → 深色 → 浅色">◐ 跟随系统</button>
-      <button class="ghost theme-btn" id="themeFast" title="深色 / 浅色一键切换（Ctrl+Shift+D）" aria-label="深色 / 浅色一键切换">☀</button>
-      <button class="ghost" id="langBtn" title="Switch language / 切换语言">中/EN</button>
     </div>
   </header>
 
-  <div id="themePop" class="theme-pop hidden"></div>
+  <!-- 第四十七轮②：管理入口统一抽屉（原顶栏主题/语言按钮收进来，顶栏只留执行类） -->
+  <div id="drawerMask" class="drawer-mask hidden"></div>
+  <aside id="drawer" class="drawer hidden" aria-label="设置与管理">
+    <div class="drawer-head">
+      <span>设置与管理</span>
+      <button class="ghost" id="drawerClose" aria-label="关闭抽屉">✕</button>
+    </div>
+    <div id="themePop" class="theme-pop drawer-section"></div>
+    <div class="drawer-links">
+      <button class="drawer-link" id="dlLang" title="Switch language / 切换语言">中/EN 语言</button>
+      <button class="drawer-link" id="dlLogs" title="审计日志：每次执行、被拒、失败都记着">日志</button>
+      <button class="drawer-link" id="dlDoctor" title="环境自检：解释器、插件依赖、必填配置">自检</button>
+      <button class="drawer-link" id="dlSaved" title="收藏的结果：钉住重要的输出">收藏</button>
+      <button class="drawer-link" id="dlTimers" title="定时任务：界面开着才跑的自动执行">定时</button>
+      <button class="drawer-link" id="dlBrief" title="今日简报：跑了多少、成败、最常用">简报</button>
+      <button class="drawer-link" id="dlHelp" title="使用指南">使用指南</button>
+      <button class="drawer-link" id="dlWatch" title="监控面板：盯着的动作都在这">监控面板</button>
+    </div>
+  </aside>
 
   <div class="search-row" id="searchRow">
     <input id="q" type="text" autocomplete="off" spellcheck="false"

@@ -31,6 +31,7 @@ import { TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, expo
 import { COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory } from './extras.js';
 import { chainFill, batchDedup, chunkWindows, parseBatchList } from './extras.js';
 import { toAiMarkdown, packContext, toMcpConfig, toCurl, toLlmJsonl, watchTrendMarkdown } from './extras.js';
+import { navGroups, emptyState, skeletonRows, resultHeightTier, viewportMode } from './extras.js';
 import { pluginCompare as plugCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags as pluginTagChips, pluginStatCards, installedList, installCommand } from './extras.js';
 import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport, virtualWindow, pageSlice, breadcrumb, listStateQuery, parseListState, digitPick } from './extras.js';
 
@@ -192,13 +193,7 @@ function applyTheme() {
   const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true;
   const resolved = resolveTheme(choice, prefersDark);
   document.documentElement.dataset.theme = resolved;
-  const btn = $('themeBtn');
-  if (btn) {
-    const label = choice === 'system' ? `跟随系统 · ${resolved === 'dark' ? '深色' : '浅色'}`
-      : choice === 'dark' ? '深色' : '浅色';
-    btn.textContent = `${resolved === 'dark' ? '◐' : '◑'} ${label}`;
-    btn.title = '外观：主题与强调色';
-  }
+  // 第四十七轮：主题按钮收进抽屉（openThemePop 渲染时带当前档位），顶栏不再有 themeBtn
 }
 
 /** 面板里展示的档名：落盘档 + 隐式默认档（「默认」没落盘过也要能看见、能切） */
@@ -220,10 +215,7 @@ function applyAiAssist() {
 function openThemePop() {
   const pop = $('themePop');
   if (!pop) return;
-  if (!pop.classList.contains('hidden')) {
-    pop.classList.add('hidden');
-    return;
-  }
+  // 第四十七轮：themePop 常驻抽屉（drawer 内非 hidden），改为纯渲染不再做开合切换
   const choice = normalizeTheme(localStorage.getItem(PREF.theme));
   pop.innerHTML = `
     <div class="tp-head">主题</div>
@@ -996,14 +988,19 @@ function renderListInner() {
       suggestions.push(`<button class="link" data-sug="market">还没有插件——去集市装一个</button>`);
       suggestions.push(`<button class="link" data-sug="doctor">检查环境哪里没配好</button>`);
     }
+    // 第四十七轮⑥：空态文案分级——首访/无插件/无匹配三种情境不同指引
+    const firstRun = !localStorage.getItem('zerokit.firstrun');
+    const es = q.trim() ? emptyState('no-match', q.trim())
+      : (!plugins.length ? (firstRun ? emptyState('first-run') : emptyState('no-plugins')) : null);
     el.empty.innerHTML = suggestions.length
       ? `<div class="empty-art" aria-hidden="true">${q.trim() ? '🔍' : '🌱'}</div>
-         <div class="empty-title">${q.trim() ? `没有匹配「${esc(q.trim())}」的动作` : '这里还空着'}</div>
+         <div class="empty-title">${es ? esc(es.title) : '这里还空着'}</div>
          <div class="empty-why">${q.trim()
            ? '可能是词太具体，也可能这个能力还没装进来。'
            : '装上第一个插件，启动器就会开始认识你的电脑。'}</div>
          <div class="empty-sugs">${suggestions.join('')}</div>`
-      : t('noResult');
+      : `<div class="e-title">${esc(es ? es.title : t('noResult'))}</div>
+         <div class="e-hint">${esc(es ? es.hint : '试试短一点的关键词。')}</div>`;
     el.empty.classList.remove('hidden');
     el.empty.querySelectorAll('[data-sug]').forEach((b) => b.addEventListener('click', () => {
       const act2 = b.dataset.sug;
@@ -3360,12 +3357,19 @@ function downloadCsv(data) {
 }
 
 function renderResult(res) {
+  // 第四十七轮⑦：结果区高度自适应——行数决定紧凑/常规/滚动
+  const rc = Array.isArray(res?.data) ? res.data.length
+    : (res?.data && typeof res.data === 'object' ? Object.keys(res.data).length : 1);
+  const tier = resultHeightTier(rc);
   const isRepaint = res === currentResult;   // 先判再赋值（第二十九轮⑤：重画沿用 tableId）
   currentResult = res;
   if (res && (res.data !== undefined || res.stdout !== undefined || res.error)) lastResult = res;   // 第十九轮④：脱敏切换重画用
   lastExport = null;  // 第十七轮④⑥：每次新结果清掉旧导出记录
   const box = $('result');
   if (!box) return;
+  // 第四十七轮⑦：挂高度档位类（compact/normal/scroll）
+  box.classList.remove('height-compact', 'height-normal', 'height-scroll');
+  box.classList.add(`height-${tier}`);
   const head = res.ok
     ? `<span class="ok">✓ 成功</span><span class="sr-only" role="status">动作完成，${res.ms !== undefined ? `耗时 ${formatMs(res.ms)}` : '无耗时数据'}</span>`
     : `<span class="bad">✗ 失败</span><span class="sr-only" role="status">动作失败${res.error ? '：' + esc(String(res.error).slice(0, 80)) : ''}</span>`;
@@ -6487,6 +6491,7 @@ function showPalette() {
     { icon: '📰', label: '今日简报', hint: '跑了多少 / 成败 / 最常用', act: () => { location.hash = '#/brief'; } },
     { icon: '📌', label: '收藏结果', hint: '钉住的重要输出', act: () => { location.hash = '#/saved'; } },
     { icon: '◐', label: '深色 / 浅色', hint: '一键切换主题（Ctrl+Shift+D）', act: () => toggleLightDark() },
+    { icon: '☰', label: '设置抽屉', hint: '主题/语言/配置档/备份统一入口', act: () => openDrawer() },
   ];
   overlay.innerHTML = `
     <div class="modal palette">
@@ -6561,7 +6566,8 @@ function showPalette() {
     exitPalette();
     if (c.go.startsWith('#')) location.hash = c.go;
     else if (c.go === 'batch') { if (detail) backToList(); el.count.textContent = batch.length ? `批量篮里已有 ${batch.length} 项，Alt+点击列表项继续加` : '批量模式：按住 Alt 点击列表项加入批量篮'; }
-    else if (c.go === 'theme') openThemePop?.();
+    else if (c.go === 'theme') openDrawer();
+    else if (c.go === 'drawer') openDrawer();
     else if (c.go === 'workbench') showWorkbench('');
     // 第三十七轮⑤：两个 AI 命令直接进剪贴板（不弹面板——复制类动作要一步到位）
     else if (c.go === 'copy-mcp') {
@@ -6932,6 +6938,10 @@ function buildEntries(list) {
 }
 
 async function load(notify) {
+  // 第四十七轮⑤：首屏骨架屏——列表还空着时先画占位行，拉到数据后 renderList 覆盖
+  if (!el.list.childElementCount && el.listView && !el.listView.classList.contains('hidden')) {
+    el.list.innerHTML = skeletonRows(6).map(() => '<li class="skel-row" aria-hidden="true"></li>').join('');
+  }
   try {
     const data = await api('/api/plugins');
     plugins = data.plugins || [];
@@ -7295,6 +7305,39 @@ function refreshModeLabel() {
   if (v !== key) el.modeLabel.textContent = v;
 }
 $('themeFast')?.addEventListener('click', toggleLightDark);
+  // 第四十七轮①：设置抽屉——管理类入口统一收纳
+function openDrawer() {
+  $('drawer')?.classList.remove('hidden');
+  $('drawerMask')?.classList.remove('hidden');
+  openThemePop();   // 主题区常驻抽屉
+}
+function closeDrawer() {
+  $('drawer')?.classList.add('hidden');
+  $('drawerMask')?.classList.add('hidden');
+}
+$('drawerBtn')?.addEventListener('click', () => {
+  const d = $('drawer');
+  if (d?.classList.contains('hidden')) openDrawer(); else closeDrawer();
+});
+$('drawerClose')?.addEventListener('click', closeDrawer);
+$('drawerMask')?.addEventListener('click', closeDrawer);
+
+// 第四十七轮：抽屉链接转发到既有入口（语言三档循环内联——langBtn 已移出顶栏）
+$('dlLang')?.addEventListener('click', () => {
+  langPref = langPref === 'system' ? 'zh' : (langPref === 'zh' ? 'en' : 'system');
+  try { localStorage.setItem('zerokit.lang', langPref); } catch { /* 隐私模式 */ }
+  lang = pickLang(langPref, navigator.language);
+  t = makeT(lang);
+  applyLang(true);
+});
+$('dlLogs')?.addEventListener('click', () => { closeDrawer(); $('logsBtn')?.click(); });
+$('dlDoctor')?.addEventListener('click', () => { closeDrawer(); $('doctorBtn')?.click(); });
+$('dlSaved')?.addEventListener('click', () => { closeDrawer(); $('savedBtn')?.click(); });
+$('dlTimers')?.addEventListener('click', () => { closeDrawer(); $('timersBtn')?.click(); });
+$('dlBrief')?.addEventListener('click', () => { closeDrawer(); $('briefBtn')?.click(); });
+$('dlHelp')?.addEventListener('click', () => { closeDrawer(); $('guideBtn')?.click(); });
+$('dlWatch')?.addEventListener('click', () => { closeDrawer(); location.hash = '#/watch'; });
+// 第四十七轮：抽屉内的主题区入口（themePop 现在常驻抽屉，由 drawerBtn 打开时渲染）
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'd' || e.key === 'D')) {
     e.preventDefault();
@@ -7308,11 +7351,11 @@ applyLang();
 applyTheme();
 applyAccent();
 window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
-$('themeBtn')?.addEventListener('click', openThemePop);
+// 第四十七轮：themeBtn 已收进抽屉（drawerBtn 打开即渲染主题区），此处不再绑定顶栏按钮
 document.addEventListener('click', (e) => {
   const pop = $('themePop');
   if (!pop || pop.classList.contains('hidden')) return;
-  if (pop.contains(e.target) || e.target.closest('#themeBtn')) return;
+  if (pop.contains(e.target) || e.target.closest('#drawerBtn') || e.target.closest('#drawer')) return;
   pop.classList.add('hidden');
 });
 $('logsBtn')?.addEventListener('click', showLogs);
