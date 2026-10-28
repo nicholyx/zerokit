@@ -2275,3 +2275,26 @@ export function comboLabel(q, filter) {
   if (qq && ff && ff !== 'all') return `${qq} [${ff}]`;
   return qq || '';
 }
+
+/** 第五十二轮⑨：键位表数据（? 浮层与帮助页共用）。 */
+export function keyHelpList() {
+  return [
+    { key: '↑ ↓', what: '在结果间移动（roving focus 跟随）' },
+    { key: 'PgUp / PgDn', what: '翻页跳转（长列表按视口跳）' },
+    { key: 'Home / End', what: '跳到第一条 / 最后一条' },
+    { key: '1–9', what: '快选第 N 条（选中后回车打开）' },
+    { key: 'Alt+1–9', what: '直开第 N 条' },
+    { key: 'Enter', what: '打开选中项' },
+    { key: 'Ctrl+Enter', what: '打开并直接执行' },
+    { key: 'Esc', what: '清空搜索 / 逐层关闭浮层' },
+    { key: 'F', what: '收藏 / 取消收藏当前项' },
+    { key: 'T', what: '给当前项打标签（数字键选已有标签）' },
+    { key: 'Y / E', what: '结果区：复制 / 导出' },
+    { key: '?', what: '显示本键位表' },
+    { key: 'Ctrl+P / Ctrl+K', what: '命令面板' },
+    { key: 'Ctrl+/', what: '快捷键速查' },
+    { key: 'Ctrl+Shift+D', what: '深色 / 浅色一键切换' },
+    { key: 'Alt+点击', what: '把动作放进批量篮' },
+    { key: 'Alt+↑ / Alt+↓', what: '批量篮内移动项的位置' },
+  ];
+}

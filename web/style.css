@@ -1528,3 +1528,13 @@ button, .item, .card, .chip { transition: color var(--tr-fast) ease, background 
 .q-clear { padding: 2px 8px; }
 .group-head.collapsed .g-arrow { transform: rotate(-90deg); }
 .group-head.collapsed + li.item, .group-head.collapsed ~ li.item { display: none; }
+
+/* ---------------- 第五十二轮：键盘流 ---------------- */
+.tag-panel { position: fixed; top: 20%; left: 50%; transform: translateX(-50%); z-index: 90;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px;
+  max-width: 480px; width: 90%; box-shadow: 0 14px 40px rgba(0,0,0,.3); }
+.tag-panel .chip { margin: 2px; }
+.kh-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.kh-table td { padding: 4px 10px; border-bottom: 1px solid var(--line); }
+.kh-table kbd { font-family: var(--mono); background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 4px; padding: 1px 6px; font-size: var(--fs-sm); }
