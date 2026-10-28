@@ -10,6 +10,7 @@ import { actionStats, gcAudit, readAudit, readAuditDetailed, recentErrors, SLOW_
 import { packPlugin, publishReady, unpackPlugin } from './core/distro.ts';
 import * as distroNs from './core/distro.ts';
 import { lintPlugin, docPlugin, docPluginJson } from './core/lintdoc.ts';
+import * as auditNs from './core/audit.ts';
 import { needsConfirm, rememberApproval } from './core/approvals.ts';
 import type { ConfirmPolicy } from './core/runner.ts';
 import {
@@ -162,6 +163,13 @@ async function confirmRun(plugin: Plugin, actionId: string, policy: string, comm
   }
   process.stderr.write(`\n${c.yellow('即将执行：')} ${c.bold(command)}\n`);
   process.stderr.write(c.dim(`插件 ${plugin.name} / 动作 ${actionId} / 风险 ${RISK_LABEL[actionRisk(plugin, actionId)]}\n`));
+  // 第四十一轮⑤：高危动作距上次执行太久时先给个清醒提示（久未用的危险操作更容易手滑）
+  if (actionRisk(plugin, actionId) !== 'read') {
+    const last = auditNs.lastRunOf(readAudit().map((r) => ({ ts: r.ts ?? '', key: `${r.plugin}.${r.action}` })), `${plugin.id}.${actionId}`);
+    if (auditNs.isLongGap(last)) {
+      process.stderr.write(c.yellow(`⚠ 距上次执行已超过 7 天（${last?.slice(0, 19) ?? ''}）——确认参数没变再继续\n`));
+    }
+  }
   if (policy === 'first-time') {
     process.stderr.write(c.dim('确认后会被记住；高风险动作每次都会问。\n'));
   }
@@ -1329,9 +1337,41 @@ function cmdHealth(): number {
 
 /** ⑤zkit audit --last N：最近 N 条审计记录表格式输出。 */
 function cmdAudit(args: string[]): number {
-    const lastIdx = args.indexOf('--last');
+  // ③拒绝记录视图
+  if (args.includes('--denied')) {
+    const { records: denied, badLines } = auditNs.readDenied();
+    if (denied.length === 0 && badLines === 0) {
+      process.stdout.write(c.dim('还没有被拒记录（干干净净）。\n'));
+      return 0;
+    }
+    if (args.includes('--json')) {
+      process.stdout.write(JSON.stringify({ records: denied, badLines }, null, 2) + '\n');
+      return 0;
+    }
+    process.stdout.write(`被拒记录（最近 ${Math.min(denied.length, 50)} 条）：
+`);
+    for (const d of denied.slice(-50)) {
+      process.stdout.write(`${c.red('✗')} ${c.dim(d.ts.slice(0, 19))} ${pad(d.key, 36)}${c.yellow(d.reason.slice(0, 60))}
+`);
+    }
+    return 0;
+  }
+  // ⑥时间过滤（--since 1h/3d/1w）
+  let all = readAudit();
+  const sinceIdx = args.indexOf('--since');
+  if (sinceIdx >= 0) {
+    const span = auditNs.parseSince(String(args[sinceIdx + 1] ?? ''));
+    if (span === null) {
+      process.stderr.write(c.red(`✗ --since 格式：1h / 30m / 3d / 2w / 45s（收到 "${args[sinceIdx + 1]}"）
+`));
+      return 2;
+    }
+    const cutoff = Date.now() - span;
+    all = all.filter((r) => Date.parse(r.ts ?? '') >= cutoff);
+  }
+  const lastIdx = args.indexOf('--last');
   const n = lastIdx >= 0 ? Number(args[lastIdx + 1] ?? 20) : 20;
-  const records = readAudit().slice(-n);
+  const records = all.slice(-n);
   if (records.length === 0) {
     process.stdout.write(c.dim('还没有审计记录。\n'));
     return 0;
@@ -1351,6 +1391,61 @@ function cmdAudit(args: string[]): number {
     );
   }
   return 0;
+}
+
+/** 第四十一轮②④⑧：CLI 高危动作显式授权（与 approvals.json 的「确认过就记住」分层：
+ * approvals 是交互确认的记忆；allow 是主动授予的权限，带 TTL，可撤回。 */
+function cmdAllow(args: string[]): number {
+  const sub = args[0];
+  const entries = auditNs.loadAllow();
+  const pruned = auditNs.pruneAllow(entries);
+  if (pruned.expired.length > 0) {
+    process.stdout.write(c.yellow(`有 ${pruned.expired.length} 条授权已过期并自动移除：${pruned.expired.map((e) => e.key).join('、')}\n`));
+    auditNs.saveAllow(pruned.alive);
+  }
+  const list = pruned.alive;
+  if (sub === 'list' || sub === undefined) {
+    if (list.length === 0) {
+      process.stdout.write(c.dim('还没有任何显式授权。加：zkit allow add <插件.动作> [ttl天数]\n'));
+      return 0;
+    }
+    for (const e of list) {
+      const ttl = e.ttlDays === -1 ? '永久' : `${e.ttlDays} 天`;
+      const until = e.ttlDays === -1 ? '' : `（至 ${new Date(Date.parse(e.at) + e.ttlDays * 86400000).toISOString().slice(0, 10)}）`;
+      process.stdout.write(`✓ ${pad(e.key, 36)}${ttl}${until} ${c.dim('授于 ' + e.at.slice(0, 10))}\n`);
+    }
+    return 0;
+  }
+  if (sub === 'add') {
+    const key = args[1];
+    if (!key || !key.includes('.')) {
+      process.stderr.write(c.red('用法：zkit allow add <插件.动作> [ttl天数（默认 30，-1 永久）]\n'));
+      return 2;
+    }
+    const ttl = args[2] !== undefined ? Number(args[2]) : auditNs.DEFAULT_TTL_DAYS;
+    if (!Number.isFinite(ttl) || ttl < -1) {
+      process.stderr.write(c.red(`✗ ttl 必须是不小于 -1 的数字（收到 "${args[2]}"）\n`));
+      return 2;
+    }
+    auditNs.saveAllow(auditNs.upsertAllow(list, key, ttl));
+    process.stdout.write(c.green(`✓ 已授权 ${key}（${ttl === -1 ? '永久' : ttl + ' 天'}）\n`));
+    return 0;
+  }
+  if (sub === 'remove') {
+    const key = args[1];
+    if (!key) { process.stderr.write(c.red('用法：zkit allow remove <插件.动作 | 插件id>\n')); return 2; }
+    // ⑧插件级撤回：连带提示受影响动作数
+    const affected = auditNs.affectedByRemove(list, key);
+    if (affected.length === 0) {
+      process.stderr.write(c.red(`✗ 没有匹配 "${key}" 的授权\n`));
+      return 1;
+    }
+    auditNs.saveAllow(list.filter((e) => !affected.includes(e)));
+    process.stdout.write(c.green(`✓ 已撤回 ${affected.length} 条：${affected.map((e) => e.key).join('、')}\n`));
+    return 0;
+  }
+  process.stderr.write('用法：zkit allow <list|add|remove>\n');
+  return 2;
 }
 
 /** ⑧zkit gc：清 30 天前的审计数据（默认 dry-run，--apply 执行）。 */
@@ -1715,7 +1810,7 @@ async function cmdWeb(args: string[]): Promise<number> {
   });
 }
 
-const KNOWN_COMMANDS = ['audit', 'config', 'desktop', 'doctor', 'gc', 'health', 'help', 'kill', 'list', 'logs', 'ls', 'market', 'mcp', 'path', 'plugin', 'ps', 'run', 'show', 'stats', 'ui', 'web'];
+const KNOWN_COMMANDS = ['allow', 'audit', 'config', 'desktop', 'doctor', 'gc', 'health', 'help', 'kill', 'list', 'logs', 'ls', 'market', 'mcp', 'path', 'plugin', 'ps', 'run', 'show', 'stats', 'ui', 'web'];
 
 async function main(): Promise<number> {
   const [, , cmd, ...rest] = process.argv;
@@ -1753,6 +1848,8 @@ async function main(): Promise<number> {
       return cmdHealth();
     case 'audit':
       return cmdAudit(rest);
+    case 'allow':
+      return cmdAllow(rest);
     case 'gc':
       return cmdGc(rest);
     case 'path':
