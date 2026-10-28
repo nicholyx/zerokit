@@ -1538,3 +1538,20 @@ button, .item, .card, .chip { transition: color var(--tr-fast) ease, background 
 .kh-table td { padding: 4px 10px; border-bottom: 1px solid var(--line); }
 .kh-table kbd { font-family: var(--mono); background: var(--panel-2); border: 1px solid var(--line);
   border-radius: 4px; padding: 1px 6px; font-size: var(--fs-sm); }
+
+/* ===== 第五十三轮：结果区信息密度 ===== */
+/* ⑦数字列等宽数字 + 右对齐（防跳动） */
+table.grid td.num, table.kv td.num { font-variant-numeric: tabular-nums; text-align: right; }
+/* ⑧空值灰 — */
+td.empty-cell { color: var(--fg-dim, #8b93a1); text-align: center; }
+/* ②KV 长文本截断（复用 cell-clip，补 cursor） */
+td.kv-clip { cursor: copy; }
+/* ③密度三档：行高/内边距/字号走 CSS 变量（renderTable 内联注入） */
+.tbl-wrap.density-compact table.grid td, .tbl-wrap.density-compact table.grid th { padding: var(--tbl-pad, 3px 8px); font-size: var(--tbl-fs, 12px); height: var(--tbl-row-h, 30px); }
+.tbl-wrap table.grid td, .tbl-wrap table.grid th { padding: var(--tbl-pad, 6px 10px); }
+/* ⑤结果元信息行钉底 */
+.rmeta { padding: 4px 12px 8px; border-top: 1px dashed color-mix(in srgb, var(--fg) 15%, transparent); text-align: right; }
+/* ⑥超限提示 */
+.warn-note { color: var(--warn, #e8b13a); margin: 0 6px; }
+/* 密度按钮组 */
+.dens-btn.on { border-color: var(--accent); color: var(--accent); }
