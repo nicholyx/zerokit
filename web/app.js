@@ -20,6 +20,7 @@ import { profileList, validProfileName, upsertProfile, deleteProfile, renameProf
 import { resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader } from './extras.js';
 import { COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory } from './extras.js';
 import { chainFill, batchDedup, chunkWindows, parseBatchList } from './extras.js';
+import { toAiMarkdown, packContext, toMcpConfig, toCurl, toLlmJsonl, watchTrendMarkdown } from './extras.js';
 import { pluginCompare as plugCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags as pluginTagChips, pluginStatCards, installedList, installCommand } from './extras.js';
 import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport, virtualWindow, pageSlice, breadcrumb, listStateQuery, parseListState, digitPick } from './extras.js';
 
@@ -197,6 +198,14 @@ function panelProfileNames() {
   return list;
 }
 
+/** 第三十七轮⑧：AI 辅助开关（隐私偏好）。关掉后 data-ai 按钮全部隐藏。 */
+function aiAssistOn() {
+  return localStorage.getItem('zerokit.ai-assist') !== 'off';
+}
+function applyAiAssist() {
+  document.body.classList.toggle('no-ai', !aiAssistOn());
+}
+
 /** 外观面板：主题三档 + 六个强调色。以前只能循环切换，想回上一档要再点两轮。 */
 function openThemePop() {
   const pop = $('themePop');
@@ -226,6 +235,10 @@ function openThemePop() {
     <div class="tp-row">
       ${[['system', t('langSystem')], ['zh', t('langZh')], ['en', t('langEn')]].map(([id, label]) => `
         <button data-lang-choice="${id}" class="${langPref === id ? 'on' : ''}">${label}</button>`).join('')}
+    </div>
+    <div class="tp-head">AI 辅助</div>
+    <div class="tp-row">
+      <button data-ai-toggle="${aiAssistOn() ? 'on' : 'off'}" class="${aiAssistOn() ? 'on' : ''}" title="关闭后隐藏所有 AI 相关按钮（给 AI / AI 上下文 / curl / MCP 配置）——本机不留 AI 使用痕迹于界面">${aiAssistOn() ? '已开启' : '已关闭'}</button>
     </div>
     <div class="tp-head">数据</div>
     <div class="tp-row tp-backup">
@@ -257,6 +270,11 @@ function openThemePop() {
   });
   // 语言三档：点选即存偏好并全界面生效。openThemePop 重开刷新面板自身文案——
   // 此时已不在被点按钮的事件链内（click 已返回），重建安全。
+  pop.querySelectorAll('[data-ai-toggle]').forEach((b) => b.addEventListener('click', () => {
+    localStorage.setItem('zerokit.ai-assist', aiAssistOn() ? 'off' : 'on');
+    applyAiAssist();
+    openThemePop();
+  }));
   pop.querySelectorAll('[data-lang-choice]').forEach((b) => {
     b.addEventListener('click', () => {
       langPref = validLangPref(b.dataset.langChoice) ? b.dataset.langChoice : 'system';
@@ -1740,11 +1758,25 @@ function openDetail(plugin, action, prefill) {
     $('previewBox').innerHTML = '';
     const deepLink = `${location.origin}${location.pathname}#/${plugin.id}/${action.id}`;
     const text = invocationText(plugin, action, deepLink);
+    // 第三十七轮③：调用方式弹窗追加 MCP 配置段——AI 客户端接入一步到位
+    const mcpCfg = toMcpConfig('node', '/path/to/zerokit/src/mcp.ts');
     $('invokeBox').innerHTML = `<div class="cmd-box">
       <div class="cmd-box-head">三种调用方式</div>
       <pre>${esc(text)}</pre>
       <button class="ghost" id="copyInvoke">复制</button>
+    </div>
+    <div class="cmd-box" data-ai="1">
+      <div class="cmd-box-head">MCP 配置（贴进 Claude Desktop / Cursor 等客户端）</div>
+      <pre>${esc(mcpCfg)}</pre>
+      <button class="ghost" id="copyMcpCfg">复制 mcpServers</button>
     </div>`;
+    $('copyMcpCfg').addEventListener('click', async (ev) => {
+      try {
+        await navigator.clipboard.writeText(mcpCfg);
+        ev.currentTarget.textContent = '已复制';
+      } catch { ev.currentTarget.textContent = '复制失败'; }
+      setTimeout(() => { ev.currentTarget.textContent = '复制 mcpServers'; }, 1500);
+    });
     $('copyInvoke').addEventListener('click', async (ev) => {
       try {
         await navigator.clipboard.writeText(text);
@@ -2263,6 +2295,7 @@ function showWatchPanel() {
       <span class="watch-summary">${esc(summary)}</span>
       <button class="ghost mini" data-wstop="${esc(k)}">停止</button>
       <button class="ghost mini" data-wcsv="${esc(k)}">导出 CSV</button>
+      <button class="ghost mini" data-wmd="${esc(k)}" data-ai="1" title="把采样导出成 Markdown 趋势表（时间/值/变化），贴给 AI 或进文档">趋势 MD</button>
     </div>`;
   }).join('');
   el.allowView.innerHTML = `
@@ -2285,6 +2318,15 @@ function showWatchPanel() {
     a.click();
     URL.revokeObjectURL(a.href);
     el.count.textContent = `已导出 ${w.samples.length} 次采样 CSV`;
+  }));
+  // 第三十七轮⑥：采样 → Markdown 趋势表（数值列环比用 cellDiff 文本）
+  el.allowView.querySelectorAll('[data-wmd]').forEach((b) => b.addEventListener('click', () => {
+    const w = watchRegistry()[b.dataset.wmd];
+    if (!w || !w.samples.length) { el.count.textContent = '还没有采样，导出啥呀'; return; }
+    const firstNum = w.samples.map((smp) => smp?.data).find((d) => d && typeof d === 'object' && !Array.isArray(d));
+    const key = firstNum ? Object.keys(firstNum).find((k2) => typeof firstNum[k2] === 'number') : undefined;
+    const md = watchTrendMarkdown(w.samples, (smp) => (key !== undefined ? smp?.data?.[key] : JSON.stringify(smp?.data)?.slice(0, 40)));
+    navigator.clipboard.writeText(md).then(() => { el.count.textContent = `已复制 ${w.samples.length} 次采样趋势表（列 ${key ?? '摘要'}）`; }, () => { el.count.textContent = '复制失败（剪贴板被拒）'; });
   }));
 }
 
@@ -2664,9 +2706,16 @@ function renderRunHistory(plugin, action) {
       ${r.values ? `<button class="ghost" data-rerunp="${i}" title="用这次的历史参数回填表单再跑">用这些参数重跑</button>` : ''}${list.length >= 2 ? `
       <button class="ghost" data-diff="${i}" ${i === 0 ? 'disabled title="这就是最新一次，选更早的一条来对比"' : 'title="和最新一次的结果逐格对比"'}>与最新对比</button>` : ''}
       <button class="ghost mini" data-pick="${i}" title="选进 A/B 对比槽">选比</button>
+      <button class="ghost mini" data-curl="${i}" data-ai="1" title="复制这条执行的 curl 等价命令（token 用占位符，真令牌不进剪贴板）">curl</button>
     </div>`).join('')}
     <div class="help" id="diffPickHint" style="margin-top:4px"></div>`;
   box.querySelectorAll('[data-rerun]').forEach((b) => b.addEventListener('click', () => submit(false)));
+  // 第三十七轮⑦：单条执行 → curl 等价命令（API 形状；令牌只给占位符）
+  box.querySelectorAll('[data-curl]').forEach((b) => b.addEventListener('click', () => {
+    const r = list[Number(b.dataset.curl)];
+    const cmd = toCurl({ plugin: plugin.id, action: action.id, values: r?.values ?? {}, port: Number(location.port) || 28970 });
+    navigator.clipboard.writeText(cmd).then(() => { b.textContent = '已复制'; setTimeout(() => { b.textContent = 'curl'; }, 1500); }, () => { el.count.textContent = '复制失败（剪贴板被拒）'; });
+  }));
   // 第二十五轮⑨：一键回填历史参数再跑
   box.querySelectorAll('[data-rerunp]').forEach((b) => b.addEventListener('click', () => {
     const r = list[Number(b.dataset.rerunp)];
@@ -3260,10 +3309,13 @@ function renderResult(res) {
         <button class="ghost" id="mdRes" title="导出成 Markdown（表格/代码块），方便贴进文档或 Issue">导出 Markdown</button>
         ${res.data !== undefined ? `<button class="ghost" id="csvRes" title="导出成 CSV，Excel / Numbers 直接打开">导出 CSV</button>
         <button class="ghost" id="jsonRes" title="导出成 JSON，给脚本接着处理">导出 JSON</button>
-        ${toJsonl(res.data) ? `<button class="ghost" id="jsonlRes" title="导出 JSONL（每行一个 JSON，jq / ndjson 友好）">导出 JSONL</button>` : ''}` : ''}
+        ${toJsonl(res.data) ? `<button class="ghost" id="jsonlRes" title="导出 JSONL（每行一个 JSON，jq / ndjson 友好）">导出 JSONL</button>
+        <button class="ghost" id="llmRes" data-ai="1" title="导出 LLM 批处理 JSONL（每行 {input,expected}，补上期望值就是评测集）">LLM JSONL</button>` : ''}` : ''}
         ${Array.isArray(res.data) && res.data.length && typeof res.data[0] === 'object' ? `<button class="ghost" id="mdTableRes" title="复制为 Markdown 表格（数字列右对齐）">复制 MD 表</button>
         <button class="ghost" id="tsvRes" title="复制为 TSV（Excel/Numbers 直接粘贴）">复制 TSV</button>
         <button class="ghost" id="htmlRes" title="复制为 HTML 表格（贴进邮件/文档带格式）">复制 HTML 表</button>` : ''}
+        <button class="ghost" id="aiRes" data-ai="1" title="复制为 LLM 友好的 Markdown（表格/属性行+动作名+时间）——直接粘进 AI 对话">给 AI</button>
+        <button class="ghost" id="ctxRes" data-ai="1" title="打包当前结果+最近执行+插件清单成一段上下文，粘给 AI 免得重新描述">AI 上下文</button>
         <button class="ghost" id="termRes" title="终端模式查看：等宽字体、自动滚到底（进入后 w=换行开关 t=顶 b=底）">终端</button>
         <button class="ghost" id="editRes" title="把结果文本丢给外部编辑器（ZEROKIT_EDITOR 环境变量，没配用系统默认）">编辑器打开</button>
         <button class="ghost" id="againRes" title="用同样的参数再跑一次">再跑一次</button>
@@ -3548,6 +3600,8 @@ function renderResult(res) {
     // 第十七轮③：JSONL 导出（每行一个对象，jq / ndjson 友好）
     const jsonl = toJsonl(res.data);
     if (jsonl) exportAs('jsonlRes', jsonl, 'application/x-ndjson', 'jsonl');
+    // 第三十七轮④：LLM 批处理形状 {input, expected:null}——用户补 expected 就是评测集
+    if (Array.isArray(res.data)) exportAs('llmRes', toLlmJsonl(res.data) + '\n', 'application/x-ndjson', 'jsonl');
   }
   // 第十六轮⑧：复制 HTML 表格——贴进邮件/文档带格式（writeText 写纯 HTML 源，富文本粘贴由目标应用解析）
   $('htmlRes')?.addEventListener('click', async (ev) => {
@@ -3558,6 +3612,33 @@ function renderResult(res) {
       ev.currentTarget.textContent = '已复制';
     } catch { ev.currentTarget.textContent = '复制失败'; }
     setTimeout(() => { const b = $('htmlRes'); if (b) b.textContent = '复制 HTML 表'; }, 1500);
+  });
+
+  // 第三十七轮①：给 AI——LLM 友好 Markdown 一键复制（隐私开关 aiAssist 关时按钮不渲染，双保险）
+  $('aiRes')?.addEventListener('click', async (ev) => {
+    const md = toAiMarkdown(res, { name: detail ? `${detail.plugin.name} · ${detail.action.title}` : '结果', ts: Date.now() });
+    try {
+      await navigator.clipboard.writeText(md);
+      ev.currentTarget.textContent = '已复制';
+    } catch { ev.currentTarget.textContent = '复制失败'; }
+    setTimeout(() => { const b = $('aiRes'); if (b) b.textContent = '给 AI'; }, 1500);
+  });
+  // ②：AI 上下文——当前结果 + 最近 3 次执行 + 已装插件摘要，粘进对话免得重新描述
+  $('ctxRes')?.addEventListener('click', async (ev) => {
+    const runs = Object.values(runStore).flat().sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 3);
+    const plugins = (window.__zkPlugins || plugins).map((pl) => ({
+      id: pl.id, name: pl.name,
+      actions: (pl.actions || []).map((a) => ({ id: a.id, title: a.title })),
+    }));
+    const ctx = packContext({
+      current: { res, name: detail ? `${detail.plugin.id}.${detail.action.id}` : '结果', ts: Date.now() },
+      runs, plugins,
+    });
+    try {
+      await navigator.clipboard.writeText(ctx);
+      ev.currentTarget.textContent = '已复制';
+    } catch { ev.currentTarget.textContent = '复制失败'; }
+    setTimeout(() => { const b = $('ctxRes'); if (b) b.textContent = 'AI 上下文'; }, 1500);
   });
 
   // web 面的 iframe 加载完就发执行上下文（页面里的 hello 握手是双保险）
@@ -6163,6 +6244,15 @@ function showPalette() {
     else if (c.go === 'batch') { if (detail) backToList(); el.count.textContent = batch.length ? `批量篮里已有 ${batch.length} 项，Alt+点击列表项继续加` : '批量模式：按住 Alt 点击列表项加入批量篮'; }
     else if (c.go === 'theme') openThemePop?.();
     else if (c.go === 'workbench') showWorkbench('');
+    // 第三十七轮⑤：两个 AI 命令直接进剪贴板（不弹面板——复制类动作要一步到位）
+    else if (c.go === 'copy-mcp') {
+      const cfg = toMcpConfig('node', '/path/to/zerokit/src/mcp.ts');
+      navigator.clipboard.writeText(cfg).then(() => { el.count.textContent = '已复制 MCP 配置（mcpServers JSON）'; }, () => { el.count.textContent = '复制失败（剪贴板被拒）'; });
+    } else if (c.go === 'copy-ctx') {
+      const runs = Object.values(runStore).flat().sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 3);
+      const ctx = packContext({ runs, plugins: plugins.map((pl) => ({ id: pl.id, name: pl.name, actions: (pl.actions || []).map((a) => ({ id: a.id, title: a.title })) })) });
+      navigator.clipboard.writeText(ctx).then(() => { el.count.textContent = '已复制 AI 上下文（最近执行+插件清单）'; }, () => { el.count.textContent = '复制失败（剪贴板被拒）'; });
+    }
   };
   const exitPalette = () => { paletteMode = false; overlay.remove(); };
 
@@ -6884,6 +6974,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 loadPrefs();
+applyAiAssist();
 applyLang();
 applyTheme();
 applyAccent();

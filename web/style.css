@@ -1355,3 +1355,7 @@ kbd {
 .tbl-wrap table.grid { min-width: 420px; }   /* 列多时保下限，触发横向滚动而不是压扁 */
 .rtab-note { opacity: .55; font-size: 11px; padding: 0 2px; }
 .rtab-note:hover { opacity: 1; color: var(--accent, #5aa9ff); }
+
+/* ===================== 第三十七轮：AI 协作面 ===================== */
+/* 隐私开关：关闭 AI 辅助后，所有 data-ai 按钮与段落隐藏 */
+body.no-ai [data-ai="1"] { display: none !important; }

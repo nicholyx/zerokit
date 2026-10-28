@@ -1,5 +1,16 @@
 ## [Unreleased]
 
+### Added
+
+- 结果区「给 AI」按钮：复制为 LLM 友好的 Markdown（表格/属性行 + 动作名 + 时间），直接粘进 AI 对话
+- 「AI 上下文」按钮：打包当前结果 + 最近执行 + 插件清单成一段上下文，免去向 AI 重新描述环境
+- 调用方式弹窗新增 MCP 配置段：mcpServers JSON 一键复制，贴进 Claude Desktop / Cursor 即接入
+- 执行历史单条 curl 等价命令（token 用占位符，真令牌不进剪贴板）
+- LLM 批处理 JSONL 导出：每行 {input, expected:null}，补上期望值即评测集
+- 命令面板两个新命令：`> MCP 配置` / `> AI 上下文`
+- 监控面板「趋势 MD」：采样序列导出 Markdown 趋势表（时间/值/变化）
+- 外观面板「AI 辅助」隐私开关：关掉后所有 AI 相关按钮隐藏（本机界面不留 AI 痕迹）
+
 ## [0.41.0] - 2026-10-28
 
 ### Added
