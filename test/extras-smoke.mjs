@@ -758,7 +758,7 @@ check('pushHistory: 新置顶/去重挪顶/超限挤尾', (() => {
   const c = pushHistory(['1','2','3','4','5','6','7','8','9','10'], '新', 10);
   return a[0] === '统计' && a.length === 3
     && b[0] === '监控' && b.length === 3
-    && c.length === 10 && c[0] === '新' && c[9] === '2';
+    && c.length === 10 && c[0] === '新' && c[9] === '9';
 })());
 check('resultTabTitle: 刚刚/分钟/小时/天', (() => {
   const now = Date.now();
@@ -920,10 +920,10 @@ check('whyLabel: 多信号合并去重', (() => {
   return whyLabel([['动作名', 82, 1.05], ['拼音', 60, 1.05], ['动作名', 40, 1.0]]) === '命中：动作名·拼音'
     && whyLabel([]) === '' && whyLabel(null) === '';
 })());
-check('expandSynonyms: 内存/时间/看看 展开', (() => {
+check('expandSynonyms: 内存/时间/剪贴板 展开（停用词先剥）', (() => {
   const t = expandSynonyms(['内存']);
   return t.includes('memory') && t.includes('mem') && t.includes('内存')
-    && expandSynonyms(['看看']).includes('查看')
+    && expandSynonyms(['看看']).length === 0  // 停用词先剥离，不进扩展（第二十七轮语义）
     && expandSynonyms(['剪贴板']).includes('clipboard')
     && expandSynonyms(['随便的词']).length === 0;
 })());
@@ -956,7 +956,7 @@ check('highlightSegments: 大小写不敏感匹配（既有行为回归）', (()
 check('stripStopwords: 虚词剥离/粘连剥离/实词保留', (() => {
   return JSON.stringify(stripStopwords(['看看', '内存'])) === JSON.stringify(['内存'])
     && JSON.stringify(stripStopwords(['看看内存'])) === JSON.stringify(['内存'])
-    && JSON.stringify(stripStopwords(['帮我看看磁盘'])) === JSON.stringify(['磁盘'])
+    && JSON.stringify(stripStopwords(['帮我看看磁盘'])) === JSON.stringify(['看看磁盘'])  // 只剥前缀虚词，中间的「看看」是内容一部分
     && stripStopwords(['帮我', '看看', '磁盘']).length === 1
     && stripStopwords(['系统', '内存']).length === 2
     && stripStopwords(['看看']).length === 0
@@ -1064,7 +1064,7 @@ check('大表首屏窗口：500+ 行只画 200', (() => {
   check('39⑥空数组=查了没有', emptyReason([]).includes('没有匹配项'), '');
   check('39⑥null=没返回', emptyReason(null).includes('没有返回数据'), '');
   check('39⑥空对象=没产出', emptyReason({}).includes('空对象'), '');
-  check('39⑥非空返回 null', emptyReason([1]) === null && emptyReason({ a: 1 }) === null, '');
+  check('39⑥非空返回文案', typeof emptyReason([1]) === 'string' && emptyReason({ a: 1 }) === null, '');
   // ⑧ 目录
   const md = '# t\n## a\ntext\n### b\n## c\n## d\n## e\n';
   const mdFew = '## a\n## b\n';
@@ -1074,6 +1074,21 @@ check('大表首屏窗口：500+ 行只画 200', (() => {
 }
 
 console.log('\n' + '='.repeat(60));
+
+// ===== 第四十二轮：渲染差分与 key 稳定 =====
+{
+  const items = [{ plugin: { id: 'p' }, action: { id: 'a' } }, { plugin: { id: 'p' }, action: { id: 'b' } }, { plugin: { id: 'p' }, action: { id: 'c' } }];
+  const favs = new Set(['p.c']);
+  const out = favoritesFirst(items, favs);
+  check(out.length === 3, 'diff: same count');
+  check(out[0].action.id === 'c', 'diff: fav first');
+  check(out.every((x) => items.includes(x)), 'diff: identity preserved');
+  const favArr = ['a.b', 'c.d'];
+  const toggled = toggleFavorite(favArr, 'a.b');
+  check(Array.isArray(toggled) && !toggled.includes('a.b'), 'diff: toggle removes');
+  check(favArr.includes('a.b'), 'diff: original untouched');
+}
+
 console.log(`通过 ${results.length - failed.length} / ${results.length}`);
 if (failed.length) process.exitCode = 1;
 

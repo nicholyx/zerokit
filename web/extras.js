@@ -5,6 +5,10 @@
 // 出错时不会有报错，只会悄悄让人用得不顺手，所以值得钉住。
 // 本文件不碰 DOM、localStorage、fetch。
 
+
+// ==================================================================
+// ===== 外观与主题 =====
+// ==================================================================
 export const THEMES = ['system', 'dark', 'light'];
 
 /** 把存储里的任意值收敛成合法主题；坏值等于没设置 */
@@ -19,6 +23,10 @@ export function resolveTheme(choice, prefersDark) {
   return prefersDark ? 'dark' : 'light';
 }
 
+
+// ==================================================================
+// ===== 文本高亮与快捷键 =====
+// ==================================================================
 export const SHORTCUTS = [
   { keys: ['↑', '↓'], what: '在结果里上下选择' },
   { keys: ['Enter'], what: '打开动作 / 执行' },
@@ -59,6 +67,10 @@ export function highlightHtml(text, query, esc) {
 }
 
 /** 收藏键：插件 id + 动作 id。插件里 id 不允许点号冲突，所以扁平拼起来是安全的 */
+
+// ==================================================================
+// ===== 收藏与动作键 =====
+// ==================================================================
 export function actionKey(pluginId, actionId) {
   return `${pluginId}.${actionId}`;
 }
@@ -442,6 +454,10 @@ export const I18N = {
  * 非中文系统给 en）。任何非法值兜底 'zh'。返回值域恒为 'zh'|'en'，makeT/备份分类
  * 不受影响（第二十八轮：三档「跟随系统/中文/英文」的解析层）。
  */
+
+// ==================================================================
+// ===== 语言与格式化 =====
+// ==================================================================
 export function pickLang(v, navLang = '') {
   if (v === 'en') return 'en';
   if (v === 'system' || v == null || v === '') {
@@ -709,6 +725,10 @@ export function p95Ms(values) {
 // ---------------------------------------------------------------- 第十四轮：表单与输入体验
 
 /** 表单校验：必填空值收集成 {name, reason} 数列；数字字段顺带验 min/max。空数组 = 通过。 */
+
+// ==================================================================
+// ===== 表单与参数 =====
+// ==================================================================
 export function validateFields(fields, values) {
   const errs = [];
   for (const f of fields ?? []) {
@@ -779,6 +799,10 @@ export function recentParamSets(history, limit = 3) {
  * 返回渲染区间 [start, end)（end 不含）与上下撑高的 spacer 高度。
  * overscan 是缓冲行数，快速滚动时不闪白。
  */
+
+// ==================================================================
+// ===== 列表与虚拟滚动 =====
+// ==================================================================
 export function virtualWindow(total, scrollTop, rowH, viewH, overscan = 6) {
   if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(rowH) || rowH <= 0) {
     return { start: 0, end: 0, padTop: 0, padBottom: 0 };
@@ -841,6 +865,10 @@ export function digitPick(key, n) {
 /** ---------- 第十六轮：数据与结果的二次加工 ---------- */
 
 /** 表格筛选：按各列子串过滤行（每个词都要在某列命中；空词组返回原表）。 */
+
+// ==================================================================
+// ===== 表格加工 =====
+// ==================================================================
 export function filterRows(rows, terms) {
   const qs = (Array.isArray(terms) ? terms : []).map((t) => String(t ?? '').trim().toLowerCase()).filter(Boolean);
   if (!qs.length) return rows;
@@ -1004,6 +1032,10 @@ export function toMarkdownProps(data, indent = '') {
  * ① 间隔选项标签：秒数 ↔ 人话标签。输入秒数返回标签；输 null 返回默认档位表。
  *   档位是写死的（关/5/10/30/60/300）——自由输入秒数看似灵活，实际没人填 47 秒。
  */
+
+// ==================================================================
+// ===== 监控与定时 =====
+// ==================================================================
 export const WATCH_INTERVALS = [
   { sec: 0, label: '关' },
   { sec: 5, label: '5 秒' },
@@ -1183,6 +1215,10 @@ export function actionRiskCard(runs, risk) {
 
 /** 备份里的固定键前缀 → 展示分组。动态前缀（colvis./colw.）单列。
  * 顺序就是导入预览里的展示顺序。 */
+
+// ==================================================================
+// ===== 备份与配置档 =====
+// ==================================================================
 export const BACKUP_GROUPS = [
   { match: ['zerokit.favorites', 'zerokit.plugin-tags', 'zerokit.action-tags', 'zerokit.nicknames', 'zerokit.aliases', 'zerokit.action-hotkeys'], label: '收藏与标记' },
   { match: ['zerokit.runs', 'zerokit.params', 'zerokit.searches', 'zerokit.recent', 'zerokit.saved-results', 'zerokit.run-notes'], label: '历史与参数' },
@@ -1407,6 +1443,10 @@ export function emptySearchSuggestions(entries, limit = 5) {
 // ---------------- 第二十三轮：结果工作台 ----------------
 
 /** ②结果页签标题：动作名 + 相对时间（紧凑；区别于第十八轮的标签页标题 tabTitle） */
+
+// ==================================================================
+// ===== 结果工作台 =====
+// ==================================================================
 export function resultTabTitle(name, ts, now = Date.now(), lg = 'zh') {
   const L = lg === 'en'
     ? { fallback: 'Result', now: 'just now', sec: (n) => `${n}s ago`, min: (n) => `${n}m ago`, hour: (n) => `${n}h ago`, day: (n) => `${n}d ago` }
@@ -1974,6 +2014,10 @@ export function trimHistory(list, n = 10) {
 /* ===================== 第三十九轮：结果呈现最后一公里 ===================== */
 
 /** ⑤时间戳识别：10 位秒级/13 位毫秒级数字（含数字串），且落在 2001–2099 年。 */
+
+// ==================================================================
+// ===== 结果呈现 =====
+// ==================================================================
 export function looksLikeTimestamp(v) {
   if (v === null || v === undefined) return false;
   const s = typeof v === 'number' ? String(v) : String(v).trim();
