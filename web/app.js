@@ -18,7 +18,7 @@ import { BACKUP_GROUPS, classifyKey, collectBackup, parseBackup, mergeBackup, ba
 import { HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions } from './extras.js';
 import { profileList, validProfileName, upsertProfile, deleteProfile, renameProfile } from './extras.js';
 import { resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader } from './extras.js';
-import { TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory } from './extras.js';
+import { TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory, looksLikeTimestamp, humanTs, emptyReason, tocFromMd } from './extras.js';
 import { COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory } from './extras.js';
 import { chainFill, batchDedup, chunkWindows, parseBatchList } from './extras.js';
 import { toAiMarkdown, packContext, toMcpConfig, toCurl, toLlmJsonl, watchTrendMarkdown } from './extras.js';
@@ -3366,12 +3366,12 @@ function renderResult(res) {
       const shown = lines.slice(0, 60).join('\n');
       const rest = lines.slice(60).join('\n');
       const id = `fold${++resultSeq}`;
-      body += `<pre class="out">${esc(masked(shown))}`
+      body += `${renderPreNumbered(masked(shown))}`
         + `<span class="fold-hint">… 还有 ${lines.length - 60} 行</span>`
         + `<button class="fold-btn" data-fold="${id}">展开全部</button>`
         + `<span class="fold-rest hidden" id="${id}">${esc(masked(rest))}</span></pre>`;
     } else {
-      body += `<pre class="out">${esc(masked(res.stdout))}</pre>`;
+      body += renderPreNumbered(masked(res.stdout));
     }
   }
   if (res.truncated && res.artifactPath) {
@@ -3382,7 +3382,14 @@ function renderResult(res) {
   }
   if (!body) body = `<div class="help">（没有输出）</div>`;
   // 第十六轮⑤：合并视图等场景的来源说明（顶在结果卡里，让人知道这张表从哪来）
-  const srcNote = res.note ? `<div class="detail-note">📌 ${esc(res.note)}</div>` : '';
+  // 第三十九轮⑧：备注是长 Markdown（>3 个标题）时配目录，点击跳到对应标题
+  let srcNote = '';
+  if (res.note) {
+    const toc = tocFromMd(res.note);
+    const tocHtml = toc.length ? `<nav class="md-toc" aria-label="目录">${toc.map((h) =>
+      `<a href="javascript:void 0" class="md-toc-l${h.level}" data-toc="${esc(h.text)}">${esc(h.text)}</a>`).join('')}</nav>` : '';
+    srcNote = `<div class="detail-note">📌 ${esc(res.note)}${tocHtml}</div>`;
+  }
 
   // 第十八轮③④：监控模式下的变更 diff 高亮 + 数值 sparkline。
   // 与前次采样对比：表格逐格（data-key 定位）、键值逐项（data-k 定位）。
@@ -3833,6 +3840,26 @@ function renderResult(res) {
   }));
   bindTableSorts(box);
   bindResultMenu(box, res);
+  // 第三十九轮③②：行点击展开 JSON 详情 + 横滚阴影
+  box.querySelectorAll('table.grid tbody tr[data-rowjson]').forEach((tr) => {
+    tr.addEventListener('click', (ev) => {
+      if (ev.target.closest('button, input, a')) return;   // 别拦按钮/输入
+      const exist = tr.nextElementSibling?.classList?.contains('det-row');
+      if (exist) { tr.nextElementSibling.remove(); return; }
+      const det = document.createElement('tr');
+      det.className = 'det-row';
+      det.innerHTML = `<td colspan="${tr.children.length}"><pre>${esc(tr.dataset.rowjson)}</pre></td>`;
+      tr.after(det);
+    });
+  });
+  box.querySelectorAll('.tbl-wrap').forEach((wrap) => {
+    const upd = () => {
+      wrap.classList.toggle('can-r', wrap.scrollWidth - wrap.clientWidth - wrap.scrollLeft > 8);
+      wrap.classList.toggle('can-l', wrap.scrollLeft > 8);
+    };
+    wrap.addEventListener('scroll', upd, { passive: true });
+    upd();
+  });
 }
 
 /** 两次结果逐格对比：只对对象 / 对象数组有意义，标量给一句话 */
@@ -3999,9 +4026,10 @@ function renderData(data, render, tableId = '') {
     // 数据形状不对时降级成默认渲染，不把用户晾在空卡片前
   }
   if (Array.isArray(data)) {
-    if (data.length === 0) return `<div class="help">（空结果）</div>`;
+    // 第三十九轮⑥：空结果要归因——「查了没有」和「没返回」是两回事
+    if (data.length === 0) return `<div class="ps-empty" role="status">${esc(emptyReason(data) ?? '空结果')}</div>`;
     if (typeof data[0] === 'object' && data[0] !== null) return renderTable(data, tableId);
-    return `<pre class="out">${esc(data.join('\n'))}</pre>`;
+    return renderPreNumbered(data.join('\n'));
   }
   if (data && typeof data === 'object') {
     if (render === 'json') {
@@ -4019,7 +4047,17 @@ function renderData(data, render, tableId = '') {
     }
     return renderKV(data);
   }
+  // 第三十九轮⑥：null/undefined 也不是一句"完成"就完了
+  if (data === null || data === undefined) {
+    return `<div class="ps-empty" role="status">${esc(emptyReason(data))}</div>`;
+  }
   return `<pre class="out">${esc(String(data))}</pre>`;
+}
+
+/** 第三十九轮④：代码块行号——每行一个 span，CSS counter 计数（复制不带行号）。 */
+function renderPreNumbered(text) {
+  const lines = String(text).split('\n');
+  return `<pre class="out numbered"><code>${lines.map((l) => `<span class="ln">${esc(l)}</span>`).join('')}</code></pre>`;
 }
 
 function renderKV(obj) {
@@ -4059,7 +4097,12 @@ function renderTable(rows0, tableId = '') {
   // 列显示/隐藏（按 tableId 记忆）：默认全显
   const colVis = readJson(`zerokit.colvis.${tableId || 't'}`, null) ?? Object.fromEntries(cols.map((c) => [c, true]));
   const visCols = cols.filter((c) => colVis[c] !== false);
-  const numeric = Object.fromEntries(cols.map((c) => [c, isNumericColumn(rows.map((r) => r[c]))]));
+  // 第三十九轮⑤：时间戳列优先于数字判定——10/13 位纯数字列其实是时间，不该千分位
+  const tsCols = new Set(cols.filter((c) => {
+    const vals = rows.map((r) => r[c]).filter((v) => v !== null && v !== undefined && v !== '');
+    return vals.length > 0 && vals.filter((v) => looksLikeTimestamp(v)).length >= Math.max(1, Math.floor(vals.length * 0.8));
+  }));
+  const numeric = Object.fromEntries(cols.map((c) => [c, !tsCols.has(c) && isNumericColumn(rows.map((r) => r[c]))]));
   // 第十六轮③：表格筛选行——空格分词，每词都要在某列命中
   const fterms = tableFilterTerms[tableId] ?? [];
   const frows = filterRows(rows, fterms);
@@ -4069,16 +4112,21 @@ function renderTable(rows0, tableId = '') {
   const state = tableState[tableId] ?? { col: null, dir: 1 };
   const view = state.col ? sortRows(qrows, state.col, state.dir) : qrows;
   const arrow = (c) => state.col === c ? (state.dir === 1 ? ' ▲' : ' ▼') : '';
+  // 第三十九轮⑤：时间戳列头标 ⏱（提示已人性化显示）
   const head = visCols.map((c) =>
-    `<th class="sortable${numeric[c] ? ' num' : ''}" data-col="${esc(c)}">${esc(c)}${arrow(c)}</th>`).join('');
+    `<th class="sortable${numeric[c] ? ' num' : ''}" data-col="${esc(c)}">${esc(c)}${tsCols.has(c) ? ' <span class="ts-mark" title="时间戳已转本地时间">⏱</span>' : ''}${arrow(c)}</th>`).join('');
   // 第二十九轮⑦：大表只画首屏 200 行 + 「加载全部」按钮——
   // >500 行全画 DOM 会冻 UI 数秒；200 行覆盖绝大多数真实结果，其余按需展开
   const bigTable = view.length > OVERFLOW_ROWS && !tableFullLoad.has(tableId || 't');
   const viewRows = bigTable ? view.slice(0, PAGE_ROWS) : view;
-  const body = viewRows.map((row) => `<tr>${visCols.map((c) => {
+  // 第三十九轮③：行点击就地展开该行 JSON（tr.det-row 跟在后面，再点收起）
+  const body = viewRows.map((row) => `<tr data-rowjson="${esc(JSON.stringify(row))}">${visCols.map((c) => {
     const v = row[c];
     const val = (v && typeof v === 'object') ? JSON.stringify(v) : String(v ?? '');
-    const shown = numeric[c] && val !== '' && Number.isFinite(Number(val)) ? formatNumber(val) : val;
+    // 第三十九轮⑤：时间戳列自动人性化（10/13 位数字 → 本地时间），列头加⏱标注
+    const isTs = !numeric[c] && looksLikeTimestamp(v);
+    const shown = isTs ? humanTs(v)
+      : numeric[c] && val !== '' && Number.isFinite(Number(val)) ? formatNumber(val) : val;
     // 长单元格省略 + 点击展开：长路径/长 JSON 不再撑破表格
     const clip = !numeric[c] && shown.length > 48;
     // 第十八轮③：主键+列名的格级锚点（监控 diff 高亮定位用）
@@ -7027,6 +7075,8 @@ window.addEventListener('keydown', (e) => {
 
 // 把内部状态挂出来，便于排查，也方便以后用 CDP 做界面自动化测试
 window.__zerokit = {
+  // 第三十九轮：结果区直渲（截图脚本与自动化验证用）
+  __zerokitRenderResult: (res) => renderResult(res),
   // 第二十一轮：配置档（截图脚本与深度自动化用）
   get __zerokitProfileNames() { return profileList(loadProfiles()); },
   __zerokitCreateProfile: createProfileFromCurrent,

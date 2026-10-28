@@ -1370,3 +1370,51 @@ body.no-ai [data-ai="1"] { display: none !important; }
 .timer-hist-line { font-size: 12px; line-height: 1.8; color: var(--fg, #888); }
 #timerDlg .field { margin: 10px 0; }
 #timerDlg .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ===================== 第三十九轮：结果呈现最后一公里 ===================== */
+/* ①首列冻结：宽表横滚时关键字段不丢（sticky 在 tbl-wrap 滚动容器内生效） */
+.tbl-wrap td:first-child, .tbl-wrap th:first-child {
+  position: sticky; left: 0;
+  background: var(--bg, #fff);
+  z-index: 1;
+}
+.tbl-wrap th:first-child { z-index: 2; }
+/* ②横滚阴影：还有内容可滚时右侧提示（JS 加 .can-r/.can-l 类） */
+.tbl-wrap { position: relative; }
+.tbl-wrap.can-r::after, .tbl-wrap.can-l::before {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 14px; pointer-events: none; z-index: 3;
+}
+.tbl-wrap.can-r::after { right: 0; background: linear-gradient(to left, var(--bg-soft, rgba(0,0,0,.08)), transparent); }
+.tbl-wrap.can-l::before { left: 0; background: linear-gradient(to right, var(--bg-soft, rgba(0,0,0,.08)), transparent); }
+/* ③行详情展开 */
+tr.det-row > td { background: var(--bg-soft, rgba(127,127,127,.06)); padding: 6px 10px; }
+tr.det-row pre { margin: 0; white-space: pre-wrap; word-break: break-all; font-size: 12px; }
+/* ④行号：CSS counter，复制不带行号 */
+pre.out.numbered code { counter-reset: ln; display: block; }
+pre.out.numbered .ln { counter-increment: ln; display: block; }
+pre.out.numbered .ln::before {
+  content: counter(ln); display: inline-block; width: 3.2em; margin-right: 10px;
+  text-align: right; color: var(--fg-dim, #888); user-select: none; font-size: .9em;
+}
+/* ⑤时间戳列标注 */
+.ts-mark { opacity: .6; font-size: .85em; }
+/* ⑧Markdown 目录 */
+.md-toc { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; padding: 6px 10px;
+  border-left: 2px solid var(--accent, #4a9); font-size: 12px; }
+.md-toc a { color: var(--fg-dim, #888); text-decoration: none; }
+.md-toc a:hover { color: var(--accent, #4a9); }
+.md-toc-l3 { padding-left: 14px; }
+/* ⑦小屏断点：<760px 结果卡单列、字号降档 */
+@media (max-width: 760px) {
+  #detailView .card-body { font-size: 13px; }
+  #detailView .actions { flex-direction: column; align-items: stretch; }
+  #detailView .actions button { width: 100%; }
+  .rtabs { flex-wrap: wrap; }
+  .rquery input { width: 100%; }
+}
+/* ⑨打印：只打结果卡 */
+@media print {
+  body > * { display: none !important; }
+  #detailView, #detailView * { display: revert !important; }
+  #detailView { position: absolute; inset: 0; overflow: visible; }
+}
