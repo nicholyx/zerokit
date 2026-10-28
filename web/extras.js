@@ -2298,3 +2298,35 @@ export function keyHelpList() {
     { key: 'Alt+↑ / Alt+↓', what: '批量篮内移动项的位置' },
   ];
 }
+
+/** 第五十三轮⑨：单元格展示策略——空值灰 —、长文本截断长度、数字右对齐判定。 */
+export function cellDisplay(v) {
+  if (v === null || v === undefined || v === '') return { kind: 'empty', text: '—' };
+  const raw = (v && typeof v === 'object') ? JSON.stringify(v) : String(v);
+  const numeric = typeof v === 'number' || /^-?[\d.,\s%]+$/.test(raw);
+  const clipAt = 48;
+  const clip = !numeric && raw.length > clipAt;
+  return {
+    kind: clip ? 'clip' : (numeric ? 'num' : 'text'),
+    text: clip ? `${raw.slice(0, clipAt - 3)}…` : raw,
+    full: clip ? raw : null,
+    numeric,
+  };
+}
+
+/** 第五十三轮⑨：表格密度档（紧凑/标准/宽松）——行高与内边距的档位表。 */
+export function tableDensity(pref) {
+  const table = {
+    compact: { row: '30px', pad: '3px 8px', fs: '12px' },
+    normal: { row: '38px', pad: '6px 10px', fs: '13px' },
+    relaxed: { row: '48px', pad: '10px 12px', fs: '14px' },
+  };
+  return table[pref] ?? table.normal;
+}
+
+/** 第五十三轮⑨：KV 折叠状态——折叠键集合存 localStorage，展开时子键也要记得。 */
+export function kvCollapsed(stored, key, isCollapsed) {
+  const set = new Set(Array.isArray(stored) ? stored : []);
+  if (isCollapsed) set.add(key); else set.delete(key);
+  return [...set];
+}

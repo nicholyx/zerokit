@@ -532,7 +532,7 @@ close();
   check('R30-1 触屏常显：pointer: coarse 媒体查询把工具按钮 opacity 拉满', /@media \(pointer: coarse\)[\s\S]*?\.colvis-btn, \.rtab-x, \.rtab-note \{ opacity: 1/.test(css));
   check('R30-2 窄屏 720px：#stage 纵向堆叠', /@media \(max-width: 720px\)[\s\S]*?#stage \{ flex-direction: column/.test(css));
   check('R30-3 页签栏窄屏横滚', /\.rtabs \{ flex-wrap: nowrap; overflow-x: auto/.test(css));
-  check('R30-4 结果表滚动容器 .tbl-wrap', css.includes('.tbl-wrap { overflow-x: auto') && js.includes('<div class="tbl-wrap"><table'));
+  check('R30-4 结果表滚动容器 .tbl-wrap', css.includes('.tbl-wrap { overflow-x: auto') && js.includes('class="tbl-wrap density-'));
   check('R30-5 长按合成 contextmenu（触屏右键等价）', js.includes('bindLongPressContextmenu') && js.includes("new MouseEvent('contextmenu'"));
   check('R30-6 触屏拖列宽：th touchstart 热区', js.includes("th.addEventListener('touchstart'"));
   check('R30-7 页签备注 ✎ 显式按钮（双击的触屏等价）', js.includes('data-rn=') && css.includes('.rtab-note'));

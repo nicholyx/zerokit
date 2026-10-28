@@ -20,6 +20,7 @@ import { pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS } from './ext
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
+import { cellDisplay, tableDensity, kvCollapsed } from './extras.js';
 import { barsScale, sparkPoints, formatMs, paletteScore, p95Ms, runTrend, failureRate, durationStats } from './extras.js';
 import { filterRows, colStats, unitOf, isUnitColumn, convertUnitColumn, mergeTables, columnValues, toHtmlTable } from './extras.js';
 import { renderCopyTemplate, toJsonl, exportFilename, toMarkdownProps } from './extras.js';
@@ -3703,6 +3704,7 @@ function renderResult(res) {
         <input id="noteInput" type="text" placeholder="备注：这次执行有什么值得记的？（存本机）" autocomplete="off">
         <button class="primary" id="noteSave">保存</button>
       </div>
+      <div class="rmeta sub" role="contentinfo">${res.ms !== undefined ? `耗时 ${formatMs(res.ms)}` : ''}${res.code !== undefined && res.code !== 0 ? ` · 退出码 ${res.code}` : ''}${res.at ? ` · ${new Date(res.at).toLocaleTimeString()}` : ''}</div>
     </div>`;
 
   $('copyRes')?.addEventListener('click', async (ev) => {
@@ -4289,12 +4291,18 @@ function renderPreNumbered(text) {
 
 function renderKV(obj) {
   const rows = Object.entries(obj).map(([k, v]) => {
+    // 第五十三轮⑧：空值灰 —（不占注意力）
+    if (v === null || v === undefined || v === '') {
+      return `<tr><td>${esc(k)}</td><td class="empty-cell">—</td></tr>`;
+    }
     // 第十九轮④：字符串值默认脱敏（长 hex / token 形态打码；结构化对象先 JSON 化）
     const raw = (v && typeof v === 'object') ? JSON.stringify(v) : String(v);
     const val = (maskState() && typeof v === 'string') ? maskSecrets(raw) : raw;
     const num = typeof v === 'number' || /^[\d.,\s%]+$/.test(val) ? ' class="num"' : '';
+    // 第五十三轮②：长文本截断 + title 全文 + 点击复制全文
+    const isClip = !num && val.length > 48;
     // 第十八轮③④：键级锚点（监控 diff 高亮 / sparkline 挂载用）
-    return `<tr><td>${esc(k)}</td><td${num} data-dkv="${esc(k)}">${esc(val)}</td></tr>`;
+    return `<tr><td>${esc(k)}</td><td${num} data-dkv="${esc(k)}"${isClip ? ` class="cell-clip kv-clip" title="点击复制全文" data-full="${esc(val)}"` : ` title="${esc(val)}"`}>${esc(isClip ? `${val.slice(0, 45)}…` : val)}</td></tr>`;
   }).join('');
   return `<table class="kv">${rows}</table>`;
 }
@@ -4380,9 +4388,16 @@ function renderTable(rows0, tableId = '') {
   // 第十六轮③：筛选输入行（thead 第二行）
   const fRow = `<tr class="tfilter">${visCols.map((c) => `<th><input data-tf="${esc(c)}" placeholder="筛…" value="${esc((fterms[0] && tableFilterTerms[tableId]?.join(' ')) || '')}" autocomplete="off" spellcheck="false"></th>`).join('')}</tr>`;
   const gear = `<span class="colvis-btn" data-colvis="${esc(tableId || 't')}" title="显示/隐藏列" role="button" tabindex="0">⚙</span>`;
+  // 第五十三轮③：表格密度三档（记忆进 zerokit.tdensity）
+  const dpref = localStorage.getItem('zerokit.tdensity') || 'normal';
+  const dens = tableDensity(dpref);
+  const densBtns = ['compact', 'normal', 'relaxed'].map((d) =>
+    `<button class="ghost mini dens-btn${d === dpref ? ' on' : ''}" data-dens="${d}" title="${{ compact: '紧凑', normal: '标准', relaxed: '宽松' }[d]}行高">${{ compact: '⇕紧', normal: '⇕标', relaxed: '⇕宽' }[d]}</button>`).join('');
+  // 第五十三轮⑥：字段/行数上限提示
+  const overFields = cols.length > 30 ? `<span class="sub warn-note">列已超 30（${cols.length}），可在 ⚙ 隐藏不看的</span>` : '';
   // 第二十三轮⑤⑥：查询框（与第十六轮筛选行不同：这是整表查询，支持 > < = 数字比较）
   const qbar = `<div class="rquery"><input data-rq="${esc(tableId || 't')}" placeholder="查询：词 或 size>100 …" value="${esc(resultQueryTerms[tableId] ?? '')}" autocomplete="off" spellcheck="false"><span class="sub" data-rqc="${esc(tableId || 't')}">${rq ? `${qrows.length} / ${frows.length} 行` : ''}</span></div>`;
-  return `${unitBtns ? `<div class="unit-bar">${unitBtns}</div>` : ''}${gear}${qbar}<div class="tbl-wrap"><table class="grid" data-table="${esc(tableId)}"><thead><tr>${head}</tr>${fRow}</tr></thead><tbody>${body}</tbody><tfoot><tr>${foot}</tr></tfoot></table></div>
+  return `${unitBtns ? `<div class="unit-bar">${unitBtns}</div>` : ''}${gear}${densBtns}${overFields}${qbar}<div class="tbl-wrap density-${dpref}"><table class="grid" data-table="${esc(tableId)}" style="--tbl-row-h:${dens.row};--tbl-pad:${dens.pad};--tbl-fs:${dens.fs}"><thead><tr>${head}</tr>${fRow}</tr></thead><tbody>${body}</tbody><tfoot><tr>${foot}</tr></tfoot></table></div>
   ${bigTable ? `<div class="tcount"><span class="sub">${viewRows.length} / ${view.length} 行（大表只画前 ${PAGE_ROWS} 行保流畅）</span> <button class="ghost mini" data-loadall="${esc(tableId || 't')}">加载全部 ${view.length} 行</button></div>` : `<div class="tcount sub">${view.length === rows.length ? `共 ${rows.length} 行` : `${view.length} / ${rows.length} 行（筛选中）`}</div>`}`;
 }
 
@@ -4504,6 +4519,13 @@ function bindTableSorts(scope) {
         el.count.textContent = `已复制列「${col}」${ev.altKey ? '（去重后' : '（'}${vals.length} 行）`;
       }).catch(() => {});
     }));
+  });
+  // 第五十三轮③：密度三档——点按钮即切（记忆 localStorage），refreshResult 重画
+  scope.querySelectorAll('[data-dens]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      localStorage.setItem('zerokit.tdensity', btn.dataset.dens);
+      refreshResult();
+    });
   });
   // 列显示/隐藏面板（⚙）：点击表格外右上角齿轮
   scope.querySelectorAll('[data-colvis]').forEach((gear) => {
