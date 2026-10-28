@@ -57,6 +57,7 @@ ${c.bold('用法')}  zkit <命令> [参数]
 
 ${c.bold('基本')}
   list, ls                列出已安装插件与动作（--json --brief 精简机读输出）
+                          list --health 一屏健康状态（--json 机读；非零退出码=有异常）
   show <插件> [动作]      查看详情（含生成的 MCP 工具名与 JSON Schema）
   run <插件> <动作> [..]  执行一个动作
   doctor                  自检：环境、依赖、插件清单是否有问题（--json 机读输出）
@@ -103,6 +104,14 @@ ${c.bold('AI 对接')}
 ${c.bold('其他')}
   logs [--tail N]         看审计日志
   path                    打印数据目录
+  last [--show]           重跑最近一条成功命令（--show 只看不跑）
+  history [N]             最近 N 条命令；--rerun N 重跑第 N 条
+
+run 进阶
+  --out table|json|yaml|csv   输出格式（table 人看，其余给管道）
+  --copy                      成功后把结果 JSON 复制到剪贴板
+  --quiet                     只输出结果 JSON 单行（脚本管道用）
+  --watch N                   每 N 秒轮询重跑，只打印变化（Ctrl-C 退出）
 
 ${c.bold('示例')}
   zkit run proxy status
@@ -199,6 +208,23 @@ function readLine(): Promise<string> {
 
 function cmdList(): number {
   const entries = listPlugins();
+  // 第四十五轮⑨：plugin list --health 列健康状态列（--json 时机器可读）
+  if (process.argv.includes('--health')) {
+    const rows = entries.map((e) => e.plugin
+      ? { id: e.plugin.id, health: missingDeps(e.plugin).length === 0 && resolveSettings(e.plugin).missing.length === 0 ? 'ok'
+          : [missingDeps(e.plugin).length ? `缺依赖 ${missingDeps(e.plugin).join('+')}` : '', resolveSettings(e.plugin).missing.length ? `缺设置 ${resolveSettings(e.plugin).missing.length}` : ''].filter(Boolean).join('，'), actions: e.plugin.actions.length }
+      : { id: path.basename(e.dir), health: '清单损坏', errors: e.errors.slice(0, 2) });
+    if (process.argv.includes('--json')) {
+      process.stdout.write(JSON.stringify(rows, null, 2) + '\n');
+    } else {
+      process.stdout.write(c.bold('插件健康：\n'));
+      for (const r of rows) {
+        const tag = r.health === 'ok' ? c.green('✓ ok') : c.yellow(r.health);
+        process.stdout.write(`  ${pad(r.id, 16)} ${tag}\n`);
+      }
+    }
+    return rows.some((r) => r.health !== 'ok') ? 1 : 0;
+  }
   // 第二十九轮④：--brief 给脚本消费的精简 JSON——id/name/version/健康四字段，
   // 不带颜色码、不带动作明细；缺参照常全量人类可读输出
   const briefIdx = process.argv.indexOf('--brief');
@@ -518,7 +544,22 @@ async function cmdRun(args: string[]): Promise<number> {
 
   const yes = rest.includes('--yes') || rest.includes('-y');
   const asJson = rest.includes('--json');
-  const argv = rest.filter((a) => !['--yes', '-y', '--json'].includes(a));
+  // 第四十五轮：新控制旗标——out/copy/quiet/watch
+  const outIdx = rest.indexOf('--out');
+  const outFmt = outIdx >= 0 && rest[outIdx + 1] ? rest[outIdx + 1] : undefined;
+  const doCopy = rest.includes('--copy');
+  const quiet = rest.includes('--quiet');
+  const watchIdx = rest.indexOf('--watch');
+  const watchSec = watchIdx >= 0 && rest[watchIdx + 1] ? rest[watchIdx + 1] : undefined;
+  // 剥控制旗标（含其后随值），只留动作参数
+  const argv: string[] = [];
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i]!;
+    if (a === '--out' || a === '--watch') { i++; continue; }
+    if (a.startsWith('--out=') || a.startsWith('--watch=')) continue;
+    if (['--yes', '-y', '--json', '--copy', '--quiet'].includes(a)) continue;
+    argv.push(a);
+  }
   const parsed = parseArgv(action, argv);
   if (parsed.help) {
     process.stdout.write(`zkit run ${pluginId} ${actionId}\n  ${action.description}\n\n`);
@@ -585,7 +626,51 @@ async function cmdRun(args: string[]): Promise<number> {
   }
 
   const result = await runAction(plugin, action, { caller: 'cli', values: withDefaults.values });
-  printRunResult(action, result, asJson);
+  // 第四十五轮⑤：成功执行进历史（重放要干净的参数面）
+  if (result.ok) {
+    const cliX = await import('./core/cliX.ts');
+    cliX.appendHistory({
+      ts: new Date().toISOString(), plugin: plugin.id, action: action.id,
+      argv: cliX.stripControlFlags(argv), exitCode: result.ok ? 0 : 1,
+    });
+  }
+  // 第四十五轮③④⑦：输出格式 / 复制 / 安静模式
+  const cliX = await import('./core/cliX.ts');
+  if (outFmt === 'yaml') {
+    process.stdout.write(cliX.renderYaml(result.data));
+  } else if (outFmt === 'csv') {
+    process.stdout.write(cliX.renderCsv(cliX.toRows(result.data)));
+  } else if (outFmt === 'table') {
+    process.stdout.write(cliX.renderTable(cliX.toRows(result.data)));
+  } else {
+    if (quiet) {
+      // 第四十五轮⑦：--quiet 只出结果 JSON 单行，头部装饰全免
+      process.stdout.write(JSON.stringify({ ok: result.ok, data: result.data, error: result.error }) + '\n');
+    } else {
+      printRunResult(action, result, asJson);
+    }
+  }
+  if (doCopy && result.ok) {
+    // @ts-expect-error 插件侧 .mjs 无类型声明（运行时存在；类型层留白是刻意的——插件代码不该被内核类型卡住）
+    const { clipboardIO } = await import('../plugins/clipboard/clipio.mjs');
+    const r = clipboardIO().write(JSON.stringify(result.data ?? result.stdout, null, 2));
+    if (!quiet) process.stdout.write(r.ok ? c.green('✓ 已复制到剪贴板\n') : c.yellow(`! 复制失败：${String(r.error).slice(0, 80)}\n`));
+  }
+  // 第四十五轮⑧：--watch N 进入轮询，只打印 diff，Ctrl-C 退出
+  if (watchSec && result.ok) {
+    const sec = cliX.normalizeWatchSec(watchSec);
+    if (!quiet) process.stderr.write(c.dim(`（每 ${sec}s 轮询一次，Ctrl-C 退出）\n`));
+    let prev: unknown = result.data;
+    for (;;) {
+      await new Promise((r) => setTimeout(r, sec * 1000));
+      const cur = await runAction(plugin, action, { caller: 'cli', values: withDefaults.values });
+      if (!cur.ok) { process.stdout.write(c.red(`✗ ${new Date().toLocaleTimeString()} 轮询失败：${cur.error}\n`)); prev = undefined; continue; }
+      for (const line of cliX.diffTopLevel(prev, cur.data)) {
+        process.stdout.write(`${c.dim(new Date().toLocaleTimeString())} ${line}\n`);
+      }
+      prev = cur.data;
+    }
+  }
   if (!result.ok && !asJson) {
     // 第三十五轮⑤⑥：失败输出自诊断——error 与 stderr 都扫，认不出就不添乱
     const d = diagnose(String((result as { error?: string }).error ?? '') + '\n' + String(result.stderr ?? ''));
@@ -1232,6 +1317,153 @@ async function cmdDoctor(): Promise<number> {
   return errors === 0 ? 0 : 1;
 }
 
+/** 第四十五轮⑤：zkit last——重跑最近一条（--show 只看不跑）。 */
+async function cmdLast(args: string[]): Promise<number> {
+  const cliX = await import('./core/cliX.ts');
+  const list = cliX.readHistory().filter((e) => e.exitCode === 0);
+  const last = list.at(-1);
+  if (!last) {
+    process.stderr.write('还没有成功执行过的命令。先跑一个：zkit run <插件> <动作>\n');
+    return 1;
+  }
+  const argv = cliX.historyToArgv(last);
+  if (args.includes('--show')) {
+    process.stdout.write(`zkit ${argv.join(' ')}${c.dim(`  （${last.ts}）`)}\n`);
+    return 0;
+  }
+  process.stdout.write(c.dim(`重跑：zkit ${argv.join(' ')}\n`));
+  return cmdRun(argv.slice(1));
+}
+
+/** 第四十五轮⑥：zkit history [N]——最近 N 条；--rerun N 重跑第 N 条。 */
+async function cmdHistory(args: string[]): Promise<number> {
+  const cliX = await import('./core/cliX.ts');
+  const list = cliX.readHistory().filter((e) => e.exitCode === 0).slice(-30).reverse();
+  const rerunIdx = args.indexOf('--rerun');
+  if (rerunIdx >= 0 && args[rerunIdx + 1]) {
+    const n = Number(args[rerunIdx + 1]);
+    const e = list.find((_, i) => i + 1 === n);
+    if (!e) {
+      process.stderr.write(`没有第 ${n} 条（共 ${list.length} 条）。\n`);
+      return 1;
+    }
+    const argv = cliX.historyToArgv(e);
+    process.stdout.write(c.dim(`重跑：zkit ${argv.join(' ')}\n`));
+    return cmdRun(argv.slice(1));
+  }
+  if (list.length === 0) {
+    process.stdout.write('历史为空。先跑一个：zkit run <插件> <动作>\n');
+    return 0;
+  }
+  const n = Math.min(Number(args[0]) || 10, list.length);
+  process.stdout.write(c.bold(`最近 ${n} 条（zkit history --rerun N 可重跑）：\n`));
+  for (let i = 0; i < n; i++) {
+    const e = list[i];
+    if (!e) continue;
+    process.stdout.write(`  ${String(i + 1).padStart(3)}  ${c.dim(e.ts.slice(5, 19))}  zkit run ${e.plugin} ${e.action} ${e.argv.join(' ')}\n`);
+  }
+  return 0;
+}
+
+/** 第四十五轮①：交互模式——方向键选插件→选动作→（--interactive 则逐参提问）执行。 */
+async function cmdInteractive(args: string[]): Promise<number> {
+  if (!process.stdin.isTTY) {
+    process.stderr.write('交互模式需要终端（TTY）。非交互环境用 zkit run <插件> <动作>。\n');
+    return 2;
+  }
+  const entries = listPlugins().filter((e) => e.plugin);
+  if (entries.length === 0) {
+    process.stdout.write('还没有装插件。zkit plugin bundled 先装示例。\n');
+    return 0;
+  }
+  const stepInteractive = args.includes('--interactive') || args.includes('-i');
+  const pick = async (title: string, lines: string[]): Promise<number> => {
+    const cliX = await import('./core/cliX.ts');
+    return new Promise((resolve) => {
+      let sel = 0; let filter = ''; let filtering = false;
+      const redraw = (): void => {
+        process.stdout.write('\x1b[2J\x1b[H');
+        process.stdout.write(c.bold(title) + c.dim('（↑↓ 选 / 回车定 / q 退 / / 过滤）\n'));
+        process.stdout.write(cliX.renderMenu(lines, sel, filter, filtering) + '\n');
+      };
+      const onKey = (buf: Buffer): void => {
+        const key = buf.toString('utf8');
+        if (!filtering && (key === '\x1b' || key === 'q' || key === '\x03')) {
+          process.stdin.removeListener('data', onKey);
+          process.stdin.setRawMode(false);
+          resolve(-1);
+          return;
+        }
+        const vis = lines.map((_, i) => i).filter((i) => !filtering || !filter || lines[i]!.toLowerCase().includes(filter.toLowerCase()));
+        if (filtering) {
+          if (key === '\r') { filtering = false; if (vis.length > 0) { sel = vis[0]!; done(); return; } }
+          else if (key === '\x7f') filter = filter.slice(0, -1);
+          else if (key >= ' ' && key <= '~') filter += key;
+          redraw();
+          return;
+        }
+        if (key === '/') { filtering = true; filter = ''; redraw(); return; }
+        if (key === '\x1b[A') { const at = vis.indexOf(sel); sel = vis[Math.max(0, at - 1)] ?? vis[0] ?? 0; redraw(); return; }
+        if (key === '\x1b[B') { const at = vis.indexOf(sel); sel = vis[Math.min(vis.length - 1, at + 1)] ?? sel; redraw(); return; }
+        if (key === '\r' || key === '\n') { if (vis.includes(sel)) { done(); return; } }
+      };
+      const done = (): void => {
+        process.stdin.removeListener('data', onKey);
+        process.stdin.setRawMode(false);
+        resolve(sel);
+      };
+      process.stdin.setRawMode(true);
+      process.stdin.on('data', onKey);
+      redraw();
+    });
+  };
+  const pluginLines = entries.map((e) => `${e.plugin!.name}（${e.plugin!.id}，${e.plugin!.actions.length} 个动作）`);
+  const pi = await pick('选插件', pluginLines);
+  if (pi < 0) { process.stdout.write('已退出。\n'); return 0; }
+  const plugin = entries[pi]!.plugin!;
+  const actionLines = plugin.actions.map((a) => `${a.id} · ${a.title} · ${RISK_LABEL[a.risk] ?? a.risk}`);
+  const ai = await pick(`选动作 — ${plugin.name}`, actionLines);
+  if (ai < 0) { process.stdout.write('已退出。\n'); return 0; }
+  const action = plugin.actions[ai]!;
+  // 第四十五轮②：--interactive 逐参提示（必填校验/secret 掩码/默认回车）
+  const runArgs = ['run', plugin.id, action.id];
+  if (stepInteractive && action.params.length > 0) {
+    const cliX = await import('./core/cliX.ts');
+    const plan = cliX.promptPlan(action.params.map((p) => ({
+      name: p.name, title: (p.description ?? p.name).split(/[。；（]/)[0]!.slice(0, 14), required: p.required, secret: p.secret, default: p.default,
+    })));
+    process.stdout.write(`\n${c.bold(`${plugin.id} ${action.id}`)} 的参数（回车用默认，留空跳过可选项）：\n`);
+    for (const q of plan) {
+      if (q.isSecret) {
+        process.stdout.write(`  ${q.label}: `);
+        process.stdin.setRawMode(true);
+        const secret = await new Promise<string>((resolve) => {
+          let buf = '';
+          const onData = (d: Buffer): void => {
+            const k = d.toString('utf8');
+            if (k === '\r' || k === '\n') { process.stdin.removeListener('data', onData); process.stdin.setRawMode(false); process.stdout.write('\n'); resolve(buf); return; }
+            if (k === '\x7f') { buf = buf.slice(0, -1); process.stdout.write('\b \b'); return; }
+            if (k === '\x03') { process.stdin.removeListener('data', onData); process.stdin.setRawMode(false); resolve('\x03'); return; }
+            if (k >= ' ' && k <= '~') { buf += k; process.stdout.write('*'); }
+          };
+          process.stdin.on('data', onData);
+        });
+        if (secret === '\x03') { process.stdout.write('已取消。\n'); return 1; }
+        if (secret) runArgs.push(`--${q.name}`, secret);
+      } else {
+        process.stdout.write(`  ${q.label}: `);
+        const line = await new Promise<string>((resolve) => {
+          process.stdin.once('data', (d) => resolve(String(d).trim()));
+        });
+        if (line) runArgs.push(`--${q.name}`, line);
+        else if (q.fallback) runArgs.push(`--${q.name}`, q.fallback);
+      }
+    }
+  }
+  process.stdout.write(c.dim(`\n执行：zkit ${runArgs.join(' ')}\n\n`));
+  return cmdRun(runArgs.slice(1));
+}
+
 function cmdPath(): number {
   process.stdout.write(HOME + '\n');
   return 0;
@@ -1810,12 +2042,19 @@ async function cmdWeb(args: string[]): Promise<number> {
   });
 }
 
-const KNOWN_COMMANDS = ['allow', 'audit', 'config', 'desktop', 'doctor', 'gc', 'health', 'help', 'kill', 'list', 'logs', 'ls', 'market', 'mcp', 'path', 'plugin', 'ps', 'run', 'show', 'stats', 'ui', 'web'];
+const KNOWN_COMMANDS = ['allow', 'audit', 'config', 'desktop', 'doctor', 'gc', 'health', 'history', 'help', 'kill', 'last', 'list', 'logs', 'ls', 'market', 'mcp', 'path', 'plugin', 'ps', 'run', 'show', 'stats', 'ui', 'web'];
 
 async function main(): Promise<number> {
   const [, , cmd, ...rest] = process.argv;
   switch (cmd) {
+    case 'interactive':
+    case 'im':
+      return cmdInteractive(rest);
     case undefined:
+      // 第四十五轮①：裸 zkit 在 TTY 下进交互模式；管道/CI 仍是帮助
+      if (process.stdin.isTTY && !process.argv.includes('--help')) return cmdInteractive(rest);
+      process.stdout.write(HELP);
+      return 0;
     case 'help':
     case '-h':
     case '--help':
@@ -1854,6 +2093,10 @@ async function main(): Promise<number> {
       return cmdGc(rest);
     case 'path':
       return cmdPath();
+    case 'last':
+      return cmdLast(rest);
+    case 'history':
+      return cmdHistory(rest);
     case 'logs':
       return cmdLogs(rest);
     case 'mcp': {
