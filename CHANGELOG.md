@@ -1,5 +1,6 @@
 ## [Unreleased]
 
+## [0.50.0] - 2026-10-28
 ### Added
 
 - CLI 输出格式四选一：`zkit run ... --out table|json|yaml|csv`（table 给人看、其余给下游管道；中文列宽不歪）
@@ -11,7 +12,6 @@
 - `zkit im`：终端交互模式（↑↓ 选插件/动作、回车执行、/ 过滤、q 退出）；裸 `zkit` 在 TTY 下直达
 - `zkit run <p> <a> --interactive`：参数逐项提示输入（必填标注、secret 掩码回显、默认值回车即用）
 - `zkit list --health`：一屏插件健康状态（非零退出码=有异常）；`--json` 机读
-
 
 ## [0.49.0] - 2026-10-28
 
