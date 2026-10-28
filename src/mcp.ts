@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import { diagnose } from './core/suggest.ts';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -359,6 +360,11 @@ export async function serve(): Promise<number> {
       blocks.push({ type: 'text', text: result.stdout });
     }
     if (result.error) {
+      // 第四十八轮⑦：失败先给分类标题（与 CLI/web 共用一套知识库语义；
+      // diagnose 认不出的常见「非零退出」也要给分类，兜底一条）
+      const dia = diagnose(`${result.error}\n${result.stderr}`)
+        ?? { kind: 'exit-nonzero', headline: '程序报错退出', nextSteps: ['看 stderr 原文定位报错行', '同参数重试一次排除偶发'] };
+      blocks.push({ type: 'text', text: `分类：${dia.headline}（${dia.kind}）\n→ ${dia.nextSteps.join('\n→ ')}` });
       blocks.push({ type: 'text', text: `错误：${result.error}` });
       // ④补救提示：AI 拿到结构化建议而不是裸错误
       const hints = remediationHints(result.error, result.stderr);

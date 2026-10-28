@@ -31,7 +31,7 @@ import { TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, expo
 import { COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory } from './extras.js';
 import { chainFill, batchDedup, chunkWindows, parseBatchList } from './extras.js';
 import { toAiMarkdown, packContext, toMcpConfig, toCurl, toLlmJsonl, watchTrendMarkdown } from './extras.js';
-import { navGroups, emptyState, skeletonRows, resultHeightTier, viewportMode } from './extras.js';
+import { navGroups, emptyState, skeletonRows, resultHeightTier, viewportMode, classifyError, batchSummary } from './extras.js';
 import { pluginCompare as plugCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags as pluginTagChips, pluginStatCards, installedList, installCommand } from './extras.js';
 import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport, virtualWindow, pageSlice, breadcrumb, listStateQuery, parseListState, digitPick } from './extras.js';
 
@@ -801,16 +801,16 @@ async function runBatch(retryItems) {
   const ok = results.filter((r) => r.ok).length;
   const failed = results.length - ok;
   const totalMs = results.reduce((s, r) => s + (r.ms || 0), 0);
+  // 第四十八轮⑤：汇总行改走共享 batchSummary（成功/失败/未跑三段式）
   const sum = document.createElement('div');
   sum.id = 'batchSummary';
   sum.className = 'batch-summary';
   sum.innerHTML = `
     <b>${retryItems ? '失败项重跑完成' : '批量执行完成'}（并发 ${conc}）</b>
-    <span class="${ok ? 'ok' : ''}">✓ ${ok}</span>
-    ${failed ? `<span class="bad">✗ ${failed}</span>` : ''}
+    <span>${esc(batchSummary(results.map((r) => ({ ok: r.ok })), ordered.length))}</span>
     <span class="sub">总耗时 ${formatMs(totalMs)}</span>
     ${failed ? `<ul class="batch-fails">${results.filter((r) => !r.ok).map((r, i) => `
-      <li data-fail="${i}" title="${esc(r.error || '失败')}">✗ ${esc(r.entry.action.title)}（${esc(r.entry.plugin.name)}）</li>`).join('')}</ul>
+      <li data-fail="${i}" title="${esc(classifyError(r.error || '失败').title + '：' + String(r.error || '失败').slice(0, 120))}">✗ ${esc(r.entry.action.title)}（${esc(r.entry.plugin.name)}）</li>`).join('')}</ul>
       <button class="ghost mini" id="batchRetry">只重跑失败的（${failed} 项）</button>` : ''}
     <button class="ghost mini" id="batchSumClose">关闭</button>`;
   el.listView.insertBefore(sum, el.list);
@@ -2201,7 +2201,7 @@ function scheduleWatch(key, sec) {
       w.changes += 1;
       notifyWatchChange(w, prev, now);
     }
-    w.samples.push({ ts: Date.now(), ok: now?.ok === true, data: now?.data });
+    w.samples.push({ ts: Date.now(), ok: now?.ok === true, data: now?.data, err: now?.ok === true ? undefined : String(now?.error ?? '') });
     if (w.samples.length > 30) w.samples.shift();
     // ⑤ 停止条件
     const stop = watchStopCondition(
@@ -2211,9 +2211,16 @@ function scheduleWatch(key, sec) {
     if (stop) {
       stopWatch(key);
       renderWatchBar();
-      el.count.textContent = stop === 'stop-fail'
-        ? `监控已自动停：连续 ${w.failStreak} 次失败`
-        : '监控已自动停：结果命中了停止串';
+      // 第四十八轮⑧：自动停带失败原因摘要——最近一次失败给分类，不只「已停」
+      const lastBad = [...w.samples].reverse().find((sm) => !sm.ok);
+      const why = stop === 'stop-fail'
+        ? (lastBad ? `（最近失败：${classifyError(lastBad.err ?? '').title}）` : '')
+        : `（命中停止串「${w.matchStr}」）`;
+      w.stopReason = `监控已自动停：${stop === 'stop-fail' ? `连续 ${w.failStreak} 次失败` : '结果命中了停止串'}${why}`;
+      watchStopLog.push(w.stopReason);
+      if (watchStopLog.length > 5) watchStopLog.shift();
+      el.count.textContent = w.stopReason;
+      if (mode === 'watch') showWatchPanel();   // 正看着面板就刷新摘要
       return;
     }
     w.deadline = Date.now() + sec * 1000;
@@ -2320,15 +2327,18 @@ function showWatchPanel() {
       <span class="run-when">${esc(w.title)}（每 ${esc(intervalLabel(w.interval))}）</span>
       <span class="sub">${w.runs} 次采样 · ${w.changes} 次变更</span>
       <span class="watch-summary">${esc(summary)}</span>
+      ${w.stopReason ? `<span class="bad">${esc(w.stopReason)}</span>` : ''}
       <button class="ghost mini" data-wstop="${esc(k)}">停止</button>
       <button class="ghost mini" data-wcsv="${esc(k)}">导出 CSV</button>
       <button class="ghost mini" data-wmd="${esc(k)}" data-ai="1" title="把采样导出成 Markdown 趋势表（时间/值/变化），贴给 AI 或进文档">趋势 MD</button>
     </div>`;
   }).join('');
+  const stopLog = watchStopLog.slice(-5).reverse();
   el.allowView.innerHTML = `
     <h2 class="ps-title">监控面板</h2>
     <div class="help">界面开着才会跑；翻到别的动作自动停。在只读动作详情页点「监控」添加。</div>
-    ${rows || '<div class="ps-empty" role="status">没有在跑的监控。</div>'}`;
+    ${rows || '<div class="ps-empty" role="status">没有在跑的监控。</div>'}
+    ${stopLog.length ? `<div class="watch-stoplog"><div class="sub">最近自动停止：</div>${stopLog.map((l) => `<div class="watch-stoprow bad">${esc(l)}</div>`).join('')}</div>` : ''}`;
   el.allowView.classList.remove('hidden');
   el.allowView.querySelectorAll('[data-wstop]').forEach((b) => b.addEventListener('click', () => {
     stopWatch(b.dataset.wstop);
@@ -3356,6 +3366,19 @@ function downloadCsv(data) {
   URL.revokeObjectURL(url);
 }
 
+
+// 第四十八轮③：失败卡重试/折叠——委托绑在 #result 容器（innerHTML 重建后仍有效）
+document.addEventListener('click', (e) => {
+  const retryBtn = e.target.closest?.('[data-fail-retry]');
+  if (retryBtn) { e.preventDefault(); const rb = document.querySelector('#runBtn'); rb?.click(); return; }
+  const foldBtn = e.target.closest?.('[data-fail-fold]');
+  if (foldBtn) {
+    const t = document.getElementById(foldBtn.dataset.failFold ?? '');
+    if (t) t.classList.toggle('hidden');
+    foldBtn.textContent = t?.classList.contains('hidden')
+      ? foldBtn.textContent.replace('收起', '展开') : foldBtn.textContent.replace('展开', '收起');
+  }
+});
 function renderResult(res) {
   // 第四十七轮⑦：结果区高度自适应——行数决定紧凑/常规/滚动
   const rc = Array.isArray(res?.data) ? res.data.length
@@ -3390,7 +3413,21 @@ function renderResult(res) {
   // 第十九轮④：文本输出默认脱敏（token/Bearer/长 hex 打码；开关在 actions 区 🕶）
   const masked = (t) => (maskState() ? maskSecrets(t) : String(t ?? ''));
   if (res.error) {
-    body += `<pre class="out" style="color:var(--bad)">${esc(masked(res.error))}</pre>`;
+    // 第四十八轮②③：失败卡片——分类标题 + 建议步骤 + 同参数重试 + 原文折叠
+    const cls = classifyError(`${res.error}\n${res.stderr ?? ''}`);
+    const errId = `errfold${++resultSeq}`;
+    const rawLen = String(res.error).length;
+    body += `<div class="fail-card" data-fail-kind="${esc(cls.kind)}">
+      <div class="fail-title">✗ ${esc(cls.title)}</div>
+      <div class="fail-steps">${cls.steps.map((st) => `<div class="fail-step">→ ${esc(st)}</div>`).join('')}</div>
+      <div class="fail-actions">
+        <button class="ghost" data-fail-retry="1">↻ 同参数重试</button>
+        ${rawLen > 200
+          ? `<button class="ghost" data-fail-fold="${errId}">展开原始错误（${rawLen} 字符）</button>`
+          : ''}
+      </div>
+      <pre class="out fail-raw ${rawLen > 200 ? 'hidden' : ''}" id="${errId}" style="color:var(--bad)">${esc(masked(res.error))}</pre>
+    </div>`;
   }
   if (res.render === 'web' && detail) {
     // 插件自己的页面渲染结果：沙箱 iframe，无 allow-same-origin——
@@ -6429,6 +6466,7 @@ function exitMcpAllow() {
 // ---------------------------------------------------------------- 全局命令面板（Ctrl+P）
 
 let paletteMode = false;
+const watchStopLog = [];   // 第四十八轮⑧：最近 5 条自动停止原因
 let gotoArmedAt = 0;   // 第二十四轮⑤：g 键按下时间（600ms 内按 l/h/s/m 生效）
 
 /** 第二十四轮⑧：键盘速查浮层——分组列出全部快捷键，Esc/点遮罩关闭 */

@@ -2121,3 +2121,53 @@ export function resultHeightTier(rowCount) {
 export function viewportMode(width) {
   return Number(width) > 0 && Number(width) <= 720 ? 'narrow' : 'desktop';
 }
+
+// ======================= 第四十八轮：错误知识库与失败体验 =======================
+
+/**
+ * ①④常见错误知识库：UI 与 CLI 共用一份分类。
+ * kind 与 src/core/suggest.ts 的 DIAG_RULES 对齐（UI 侧补两类：非零退出/解析失败）。
+ */
+export const ERROR_BOOK = [
+  { kind: 'timeout', test: /timed? ?out|ETIMEDOUT|超时/i,
+    title: '执行超时',
+    steps: ['等一会再试；插件清单里可用 timeout 声明更长超时', '网络类动作先确认代理环境变量'] },
+  { kind: 'not-found', test: /ENOENT|no such file|找不到文件/i,
+    title: '文件或目录不存在',
+    steps: ['检查路径拼写；插件的工作目录是它自己的安装目录', '辅助文件路径写进清单 cwd 或参数'] },
+  { kind: 'permission', test: /permission denied|EACCES|EPERM/i,
+    title: '没有权限',
+    steps: ['chmod +x <脚本>（Windows：icacls）', '确认 ~/.zerokit 归当前用户'] },
+  { kind: 'not-executable', test: /ENOEXEC|not executable|不是可执行文件/i,
+    title: '文件在但跑不起来',
+    steps: ['脚本缺执行位：chmod +x', '跨平台插件用 {python} 或自带 .bat'] },
+  { kind: 'command-not-found', test: /command not found|is not recognized as|无法将.+识别为/i,
+    title: '依赖的程序没装',
+    steps: ['zkit doctor 列出各插件缺的运行时', '装完重跑 doctor 确认'] },
+  { kind: 'exit-nonzero', test: /exit(ed)? (with )?(code )?[1-9]\d*/i,
+    title: '程序报错退出（非零退出码）',
+    steps: ['看下方原始输出定位报错行', '同参数重试一次排除偶发'] },
+  { kind: 'parse-fail', test: /JSON|parse|解析/i,
+    title: '输出解析失败',
+    steps: ['插件声明了 output="json" 但实际没吐合法 JSON', '用 zkit run --out json 看原始 stdout'] },
+];
+
+/** ①把错误文本（stderr/error message）映射到知识库条目；认不出给通用兜底。 */
+export function classifyError(text) {
+  const raw = String(text ?? '');
+  for (const e of ERROR_BOOK) {
+    if (e.test.test(raw)) return { kind: e.kind, title: e.title, steps: e.steps };
+  }
+  return { kind: 'unknown', title: '执行失败', steps: ['看下方原始输出；重试一次排除偶发', '反复失败用 zkit doctor 自检'] };
+}
+
+/** ⑤批量执行汇总行：成功 N / 失败 M / 未跑 K（K=planned-已跑数；缺省无未跑段）。 */
+export function batchSummary(done, planned) {
+  const ok = done.filter((d) => d.ok).length;
+  const bad = done.length - ok;
+  const skipped = planned !== undefined ? Math.max(0, planned - done.length) : 0;
+  const parts = [`✓ 成功 ${ok}`];
+  if (bad) parts.push(`✗ 失败 ${bad}`);
+  if (skipped) parts.push(`∅ 未跑 ${skipped}`);
+  return parts.join(' · ');
+}
