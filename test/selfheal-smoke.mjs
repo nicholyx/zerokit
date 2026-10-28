@@ -66,7 +66,7 @@ run(['plugin', 'bundled']);
   else fail('①dctor 建议');
   // ②动作建议
   const r3 = run(['run', 'quick', 'ts2dat']);
-  if (r3.status === 1 && r3.stderr.includes('「ts2date」')) pass('②打错动作给建议（ts2dat→ts2date）');
+  if (r3.status === 2 && r3.stderr.includes('「ts2date」')) pass('②打错动作给建议（ts2dat→ts2date；第四十六轮起用法错误=2）');
   else fail('②动作建议');
   // ③参数缺失附参数表
   const r4 = run(['run', 'quick', 'b64']);

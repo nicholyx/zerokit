@@ -1,4 +1,14 @@
 ## [Unreleased]
+### Added
+
+- `zkit completion bash|zsh|fish`：三 shell 补全脚本（子命令 + 常用旗标 + run 的插件名补全）
+- `zkit man`：终端命令参考全量文本（不引依赖；`man zkit` 可外部包一层）
+- `zkit --version` / `-V` 短旗标（读 package.json 单一事实源）
+- `zkit stats --since 7d`：时间窗过滤（与 audit 同一套格式 1h/30m/3d/2w）
+- `zkit audit --follow`：跟读模式——新审计行实时打印（2s 轮询追加文件，Ctrl-C 退出）
+- 退出码细分：用法错误（插件/动作不存在、参数不合法）= 2，执行失败 = 1——脚本好分流
+- `scripts/check-docs.sh` 文档一致性巡检：内链存在性 + 版本号四处同步 + cookbook 命令漂移
+- README 快速开始补三平台说明与 FAQ 链接
 
 ## [0.50.0] - 2026-10-28
 ### Added

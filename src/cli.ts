@@ -106,6 +106,9 @@ ${c.bold('其他')}
   path                    打印数据目录
   last [--show]           重跑最近一条成功命令（--show 只看不跑）
   history [N]             最近 N 条命令；--rerun N 重跑第 N 条
+  completion bash|zsh|fish  shell 补全脚本（eval "$(zkit completion bash)"）
+  man                     完整命令参考（比本屏详细）
+  --version / -V          版本号
 
 run 进阶
   --out table|json|yaml|csv   输出格式（table 人看，其余给管道）
@@ -530,7 +533,7 @@ async function cmdRun(args: string[]): Promise<number> {
     plugin = requirePlugin(pluginId);
   } catch (e) {
     process.stderr.write(c.red(`✗ ${(e as Error).message}`) + '\n');
-    return 1;
+    return 2;  // 第四十六轮⑥：用法错误（插件/动作不存在）=2，执行失败才是 1
   }
   const action = plugin.actions.find((a) => a.id === actionId);
   if (!action) {
@@ -539,7 +542,7 @@ async function cmdRun(args: string[]): Promise<number> {
     const hint = suggestLine(actionId, plugin.actions.map((a) => a.id));
     if (hint) process.stderr.write(c.yellow(`  ${hint}\n`));
     process.stderr.write(c.dim(`  可用：${plugin.actions.map((a) => a.id).join(' / ')}\n`));
-    return 1;
+    return 2;  // 用法错误
   }
 
   const yes = rest.includes('--yes') || rest.includes('-y');
@@ -1521,7 +1524,19 @@ function cmdLogs(args: string[]): number {
 
 /** ①②zkit stats：动作级耗时统计（来自审计日志，不另设记录器）。 */
 function cmdStats(args: string[]): number {
-    const stats = actionStats(readAudit());
+    let all = readAudit();
+  // 第四十六轮⑧：--since 7d/1h 时间窗过滤（与 audit 同一套 parseSince）
+  const sinceIdx = args.indexOf('--since');
+  if (sinceIdx >= 0) {
+    const span = auditNs.parseSince(String(args[sinceIdx + 1] ?? ''));
+    if (span === null) {
+      process.stderr.write(c.red(`✗ --since 格式：1h / 30m / 3d / 2w（收到 "${args[sinceIdx + 1]}"）\n`));
+      return 2;
+    }
+    const cutoff = Date.now() - span;
+    all = all.filter((r) => Date.parse(r.ts ?? '') >= cutoff);
+  }
+  const stats = actionStats(all);
   if (stats.length === 0) {
     process.stdout.write(c.dim('还没有执行记录（跑几个动作再来看）。\n'));
     return 0;
@@ -1568,7 +1583,7 @@ function cmdHealth(): number {
 }
 
 /** ⑤zkit audit --last N：最近 N 条审计记录表格式输出。 */
-function cmdAudit(args: string[]): number {
+async function cmdAudit(args: string[]): Promise<number> {
   // ③拒绝记录视图
   if (args.includes('--denied')) {
     const { records: denied, badLines } = auditNs.readDenied();
@@ -1621,6 +1636,25 @@ function cmdAudit(args: string[]): number {
       `${mark} ${c.dim(r.ts?.slice(0, 19) ?? '')} ${pad(r.caller ?? '', 8)}${pad(`${r.plugin}.${r.action}`, 36)}`
       + `${ms}${slow}${r.error ? ' ' + c.red(String(r.error).slice(0, 60)) : ''}\n`,
     );
+  }
+  // 第四十六轮⑦：--follow 跟读——新审计行实时打印，Ctrl-C 退出。
+  // 实现取巧：不做 inotify/fs.watch，固定 2s 轮询文件尾行数增长（审计是纯追加 JSONL，
+  // 轮询对这种低频日志完全够用，还天然跨平台）。
+  if (args.includes('--follow')) {
+    const file = path.join(HOME, 'logs', 'audit.log');
+    let seen = readAudit().length;
+    process.stderr.write(c.dim('（跟读中，Ctrl-C 退出）\n'));
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const now = readAudit();
+      if (now.length > seen) {
+        for (const r of now.slice(seen)) {
+          const mark = r.decision === 'allow' ? '✓' : '✗';
+          process.stdout.write(`${mark} ${r.ts?.slice(11, 19) ?? ''} ${r.caller ?? ''} ${r.plugin}.${r.action}${r.error ? ' ' + String(r.error).slice(0, 60) : ''}\n`);
+        }
+        seen = now.length;
+      }
+    }
   }
   return 0;
 }
@@ -2019,6 +2053,7 @@ async function cmdWeb(args: string[]): Promise<number> {
   }
   const plugin = listPlugins().find((e) => e.plugin?.id === id)?.plugin;
   if (!plugin) {
+    // 第四十六轮⑥：用法错误统一退出码 2（执行失败才是 1）——脚本好分流
     process.stderr.write(c.red(`✗ 没有插件 ${id}`) + '\n');
     process.stderr.write(c.dim('  先看看装了什么：zkit list\n'));
     return 1;
@@ -2042,11 +2077,121 @@ async function cmdWeb(args: string[]): Promise<number> {
   });
 }
 
-const KNOWN_COMMANDS = ['allow', 'audit', 'config', 'desktop', 'doctor', 'gc', 'health', 'history', 'help', 'kill', 'last', 'list', 'logs', 'ls', 'market', 'mcp', 'path', 'plugin', 'ps', 'run', 'show', 'stats', 'ui', 'web'];
+const KNOWN_COMMANDS = ['allow', 'audit', 'completion', 'config', 'desktop', 'doctor', 'gc', 'health', 'history', 'help', 'kill', 'last', 'list', 'logs', 'ls', 'man', 'market', 'mcp', 'path', 'plugin', 'ps', 'run', 'show', 'stats', 'ui', 'web'];
+
+// 第四十六轮②：man——不引依赖的终端命令参考（stdout 全量文本，man zkit 可外部包一层）
+const MAN_PAGE = `zkit(1) -- zerokit 命令行参考
+
+概述
+  zkit <命令> [参数]     一份 plugin.toml 派生 CLI/启动器/MCP/AI 四个面
+
+日常
+  zkit / zkit im          交互菜单（插件 → 动作，↑↓ 选择、/ 过滤）
+  zkit run <插件> <动作> [--k v...] [--out table|json|yaml|csv] [--quiet] [--copy]
+                           [--watch N] [--interactive] [--yes]
+  zkit last [--show]      重放最近一次执行（--show 只看不跑）
+  zkit history [N]        历史倒序（--rerun N 重跑第 N 条）
+  zkit list [--json|--brief|--health]   插件清单 / 健康一屏
+  zkit show <插件> [动作] 动作参数与风险说明
+  zkit stats [--since 7d] 使用统计
+  zkit logs [N]           服务日志（zkit logs denied 拒绝记录）
+
+插件
+  zkit plugin new|dev|validate|install|add|update|remove|bundled|export|import|
+              pack|unpack|info|recommend|lint|doc|publish-ready
+  zkit market list|add|remove   插件集市
+
+安全与运维
+  zkit doctor [--json|--fix]  环境自检（--fix 顺手修）
+  zkit health / audit [N] [--follow] / allow / gc [--apply]
+  zkit ps / kill            托管进程
+
+面
+  zkit ui [--open|--port N]  启动器
+  zkit web <插件id>          插件富交互页面
+  zkit mcp                   MCP 服务（AI 客户端接入）
+  zkit desktop               Tauri 原生壳
+
+其他
+  zkit completion bash|zsh|fish   shell 补全脚本
+  zkit path                   数据目录位置
+  zkit --version / -V         版本
+
+退出码
+  0 成功 · 1 执行失败 · 2 用法错误
+`;
+
+/** ①zkit completion bash|zsh|fish：三 shell 补全脚本。 */
+function cmdCompletion(args: string[]): number {
+  const shell = args[0];
+  const subs = KNOWN_COMMANDS.join(' ');
+  const notFound = (): number => {
+    process.stderr.write('用法：zkit completion bash|zsh|fish\n');
+    return 2;
+  };
+  if (shell === 'bash') {
+    process.stdout.write(`# zkit bash 补全：eval "$(zkit completion bash)"
+_zkit() {
+  local cur prev
+  cur="\${COMP_WORDS[COMP_CWORD]}"
+  prev="\${COMP_WORDS[COMP_CWORD-1]}"
+  case "\$prev" in
+    run) COMPREPLY=( \$(compgen -W "$(subsRunPlugins)" -- "\$cur") ); return;;
+  esac
+  if [[ "\$cur" == -* ]]; then COMPREPLY=( \$(compgen -W "--json --brief --health --yes --quiet --copy --interactive --help --version" -- "\$cur") ); return; fi
+  COMPREPLY=( \$(compgen -W "${subs}" -- "\$cur") )
+}
+complete -F _zkit zkit
+`);
+    return 0;
+  }
+  if (shell === 'zsh') {
+    process.stdout.write(`#compdef zkit
+# zkit zsh 补全：zkit completion zsh > ~/.zfunc/_zkit
+_zkit() {
+  local -a cmds
+  cmds=(${subs.split(' ').join(' ')})
+  _arguments '1: :($cmds)' '*::arg:->args'
+  case $words[1] in
+    run) _values '插件' $(zkit list --brief 2>/dev/null | python3 -c 'import json,sys;[print(p["id"]) for p in json.load(sys.stdin)]' 2>/dev/null) ;;
+  esac
+}
+_zkit "$@"
+`);
+    return 0;
+  }
+  if (shell === 'fish') {
+    process.stdout.write(`# zkit fish 补全：zkit completion fish > ~/.config/fish/completions/zkit.fish
+complete -c zkit -n '__fish_use_subcommand' -a "${subs}"
+complete -c zkit -n '__fish_seen_subcommand_from run' -a '(zkit list --brief 2>/dev/null | python3 -c "import json,sys;[print(p[\\"id\\"]) for p in json.load(sys.stdin)]" 2>/dev/null)' -d '插件'
+complete -c zkit -s h -l help -d '帮助'
+complete -c zkit -s V -l version -d '版本'
+`);
+    return 0;
+  }
+  return notFound();
+}
+
+/** run 子命令的插件名补全词表（装了什么补什么）。 */
+function subsRunPlugins(): string {
+  try {
+    return listPlugins().map((e) => e.plugin?.id ?? '').filter(Boolean).join(' ');
+  } catch { return ''; }
+}
 
 async function main(): Promise<number> {
   const [, , cmd, ...rest] = process.argv;
   switch (cmd) {
+    case '--version':
+    case '-V':
+      // 第四十六轮③：--version 短旗标（读 package.json 单一事实源）
+      process.stdout.write(JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '..', 'package.json'), 'utf8')).version + '\n');
+      return 0;
+    case 'completion':
+      return cmdCompletion(rest);
+    case 'man':
+      process.stdout.write(MAN_PAGE);
+      return 0;
     case 'interactive':
     case 'im':
       return cmdInteractive(rest);
@@ -2086,7 +2231,7 @@ async function main(): Promise<number> {
     case 'health':
       return cmdHealth();
     case 'audit':
-      return cmdAudit(rest);
+      return await cmdAudit(rest);
     case 'allow':
       return cmdAllow(rest);
     case 'gc':
