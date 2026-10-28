@@ -1,4 +1,8 @@
 ## [Unreleased]
+
+（下一版攒着）
+
+## [0.51.0] - 2026-10-28
 ### Added
 
 - `zkit completion bash|zsh|fish`：三 shell 补全脚本（子命令 + 常用旗标 + run 的插件名补全）
