@@ -1,4 +1,5 @@
 let qClearBound = false;
+let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点项
 // zerokit 启动器前端。
 // 纯静态、无构建步骤，所以浏览器和 Tauri 壳用的是同一份代码。
 // 所有来自插件的文本都经过 esc() 转义再插入 DOM——插件内容属于不可信输入。
@@ -34,7 +35,7 @@ import { chainFill, batchDedup, chunkWindows, parseBatchList } from './extras.js
 import { toAiMarkdown, packContext, toMcpConfig, toCurl, toLlmJsonl, watchTrendMarkdown } from './extras.js';
 import { navGroups, emptyState, skeletonRows, resultHeightTier, viewportMode, classifyError, batchSummary } from './extras.js';
 import { pluginCompare as plugCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags as pluginTagChips, pluginStatCards, installedList, installCommand } from './extras.js';
-import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport, virtualWindow, pageSlice, breadcrumb, listStateQuery, parseListState, digitPick, suggestNext, comboLabel } from './extras.js';
+import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport, virtualWindow, pageSlice, breadcrumb, listStateQuery, parseListState, digitPick, suggestNext, comboLabel, keyHelpList } from './extras.js';
 
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
 const $ = (id) => document.getElementById(id);
@@ -903,6 +904,7 @@ function renderListInner() {
       const i = Number(btn2.dataset.bdown);
       if (i < batch.length - 1) { [batch[i + 1], batch[i]] = [batch[i], batch[i + 1]]; renderList(); }
     }));
+    bar.querySelectorAll('.batch-items li').forEach((li, i) => li.addEventListener('click', () => { batchFocus = i; }));
     bar.querySelectorAll('[data-bdel]').forEach((btn2) => btn2.addEventListener('click', () => {
       batch.splice(Number(btn2.dataset.bdel), 1); renderList();
     }));
@@ -6640,9 +6642,16 @@ function showHotkeyCheat() {
         </ul></div>
         <div><h4>列表 / 结果</h4><ul>
           <li><kbd>↑↓</kbd> 移动 · <kbd>1–9</kbd> 快选 · <kbd>Alt+1–9</kbd> 直开</li>
+          <li><kbd>PgUp/PgDn</kbd> 翻页 · <kbd>Home/End</kbd> 首尾</li>
           <li><kbd>j / k</kbd> 表格行选中</li>
           <li><kbd>[ / ]</kbd> 切换结果页签</li>
           <li><kbd>Ctrl/⌘+Enter</kbd> 执行当前动作</li>
+        </ul></div>
+        <div><h4>键盘流（新）</h4><ul>
+          <li><kbd>F</kbd> 收藏/取消当前项</li>
+          <li><kbd>T</kbd> 给当前项打标签（数字选）</li>
+          <li><kbd>Y / E</kbd> 结果区复制/导出</li>
+          <li><kbd>Alt+↑↓</kbd> 批量篮内移位</li>
         </ul></div>
       </div>
       <div class="palette-foot">Esc 关闭</div>
@@ -6920,7 +6929,13 @@ document.addEventListener('keydown', (e) => {
     showPalette();
     return;
   }
-  if (e.key === 'ArrowDown') {
+  if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && batch.length) {
+    // 第五十二轮⑥：Alt+↑↓ 移动批量篮内当前项（与鼠标 ↑↓ 等价；操作对象 = 最近点过的篮内项）
+    e.preventDefault();
+    const i = batchFocus >= 0 && batchFocus < batch.length ? batchFocus : batch.length - 1;
+    const j = e.key === 'ArrowDown' ? Math.min(i + 1, batch.length - 1) : Math.max(i - 1, 0);
+    if (i !== j) { [batch[i], batch[j]] = [batch[j], batch[i]]; batchFocus = j; renderList(); }
+  } else if (e.key === 'ArrowDown') {
     e.preventDefault();
     if (filtered.length) { active = Math.min(active + 1, filtered.length - 1); paintActive(); }
   } else if (e.key === 'ArrowUp') {
@@ -6947,6 +6962,26 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     const nth = Number(e.code.slice(5)) - 1;
     if (filtered[nth]) { active = nth; openActive(); }
+  } else if ((e.key === 'f' || e.key === 'F') && filtered.length && document.activeElement === el.q && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    // 第五十二轮④：F 键切换当前激活项收藏（与点星标等价）
+    e.preventDefault();
+    const key = actionKey(filtered[active].plugin.id, filtered[active].action.id);
+    favorites = toggleFavorite(favorites, key);
+    writeJson(PREF.favorites, favorites);
+    patchItemFav(key);
+    el.count.textContent = favorites.includes(key) ? `已收藏：${filtered[active].action.title}` : `已取消收藏：${filtered[active].action.title}`;
+  } else if ((e.key === 't' || e.key === 'T') && filtered.length && document.activeElement === el.q && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    // 第五十二轮⑤：T 键给当前项打标签（弹小面板，数字选）
+    e.preventDefault();
+    showTagPanel(active);
+  } else if ((e.key === 'y' || e.key === 'Y') && document.activeElement === document.body && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    // 第五十二轮③：结果可见时 Y=复制（与点复制按钮等价）
+    const btn = document.querySelector('#result [data-copy], #result .copy-btn');
+    if (btn) { e.preventDefault(); btn.click(); }
+  } else if ((e.key === 'e' || e.key === 'E') && document.activeElement === document.body && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    // 第五十二轮③：E=导出（结果区第一个导出按钮）
+    const btn = document.querySelector('#result [data-exp], #result #csvBtn, #result [data-exp-csv]');
+    if (btn) { e.preventDefault(); btn.click(); }
   } else if (/^[1-9]$/.test(e.key) && filtered.length > 0 && document.activeElement === el.q) {
     // 纯数字键 1-9 = 选中第 N 条（不直接打开——选中后回车才开，防误触）。
     // 与 Alt+数字 的差别：那是「直开」，这是「快选」，配合 roving tabindex。
@@ -7573,3 +7608,66 @@ window.addEventListener('beforeunload', (e) => {
 load();
 setupVirtualScroll();
 el.q.focus();
+/** 第五十二轮⑤：T 键标签小面板——当前项打/选标签，数字快捷选已有标签。 */
+function showTagPanel(i) {
+  const entry = filtered[i];
+  if (!entry) return;
+  const key = actionKey(entry.plugin.id, entry.action.id);
+  const existing = Object.values(actionTags).flat().filter((x, idx, a) => a.indexOf(x) === idx).slice(0, 9);
+  const cur = actionTags[key] ?? [];
+  const panel = document.createElement('div');
+  panel.className = 'tag-panel overlay-panel';
+  panel.id = 'tagPanel';
+  panel.innerHTML = `<div class="ps-head"><h3>标签：${esc(entry.action.title)}</h3>
+      <button class="ghost mini" id="tagClose">✕</button></div>
+    <input id="tagInput" placeholder="新标签，回车添加（逗号分隔可多个）" style="width:100%">
+    ${existing.length ? `<div class="empty-sug-title">已有标签（点选/数字键）：</div>
+      ${existing.map((t, j) => `<button class="chip${cur.includes(t) ? ' on' : ''}" data-tg="${esc(t)}">${j + 1} ${esc(t)}${cur.includes(t) ? ' ✓' : ''}</button>`).join(' ')}` : ''}
+    <div class="sub">当前：${cur.length ? cur.map((t) => `#${esc(t)}`).join(' ') : '无'}</div>`;
+  document.body.appendChild(panel);
+  const close = () => panel.remove();
+  panel.querySelector('#tagClose').addEventListener('click', close);
+  panel.querySelectorAll('[data-tg]').forEach((b) => b.addEventListener('click', () => {
+    const t = b.dataset.tg;
+    const list = actionTags[key] ?? [];
+    const at = list.indexOf(t);
+    at >= 0 ? list.splice(at, 1) : list.push(t);
+    if (list.length) actionTags[key] = list; else delete actionTags[key];
+    writeJson(PREF.tags, actionTags);
+    renderList(); showTagPanel(i);   // 重开刷新勾选
+  }));
+  panel.querySelector('#tagInput').addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') {
+      const raw = ev.target.value.trim();
+      if (!raw) return;
+      for (const t of raw.split(/[,，]/).map((x) => x.trim()).filter(Boolean)) {
+        (actionTags[key] ??= []).push(t);
+      }
+      writeJson(PREF.tags, actionTags);
+      renderList(); close();
+      el.count.textContent = `已打标签：${(actionTags[key] ?? []).map((t) => '#' + t).join(' ')}`;
+    } else if (ev.key === 'Escape') close();
+    else if (/^[1-9]$/.test(ev.key)) {
+      const b = panel.querySelectorAll('[data-tg]')[Number(ev.key) - 1];
+      if (b) b.click();
+    }
+  });
+  panel.querySelector('#tagInput').focus();
+}
+
+/** 第五十二轮⑧：? 键位帮助浮层。 */
+function showKeyHelp() {
+  showHotkeyCheat();
+  return;
+  const rows = keyHelpList(); /* eslint-disable-line no-unreachable */
+  const panel = document.createElement('div');
+  panel.className = 'tag-panel overlay-panel';
+  panel.id = 'keyHelp';
+  panel.innerHTML = `<div class="ps-head"><h3>键盘流</h3><button class="ghost mini" id="khClose">✕</button></div>
+    <table class="kh-table"><tbody>${rows.map((r) => `<tr><td><kbd>${esc(r.key)}</kbd></td><td>${esc(r.what)}</td></tr>`).join('')}</tbody></table>`;
+  document.body.appendChild(panel);
+  const close = () => panel.remove();
+  panel.querySelector('#khClose').addEventListener('click', close);
+  panel.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' || ev.key === '?' ) close(); });
+  panel.tabIndex = -1; panel.focus();
+}
