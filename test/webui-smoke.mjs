@@ -555,6 +555,43 @@ close();
   ok('37⑨纯函数可导入：五个新导出都在', ['toAiMarkdown','packContext','toMcpConfig','toLlmJsonl','toCurl','watchTrendMarkdown'].every((n) => extras.includes('export function ' + n)));
 }
 
+  const appJs = fs.readFileSync(path.join(PKG_ROOT, 'web/app.js'), 'utf8');
+  const css = fs.readFileSync(path.join(PKG_ROOT, 'web/style.css'), 'utf8');
+  const html = fs.readFileSync(path.join(PKG_ROOT, 'web/index.html'), 'utf8');
+  const assert = (name, cond) => check('五九:' + name, cond);
+
+  // ① 执行分层：主按钮 + ⋯ 更多菜单收纳次要操作
+  assert('run-main 主按钮', appJs.includes('class="primary run-main"'));
+  assert('更多菜单容器', appJs.includes('id="moreWrap"') && appJs.includes('id="morePop"'));
+  assert('菜单项挂 role=menuitem', (appJs.match(/role="menuitem"/g) ?? []).length >= 10);
+  assert('更多菜单点外关闭', appJs.includes("closest('#moreWrap')"));
+  // ② 视图动效
+  assert('showPanelAnimated 存在', appJs.includes('function showPanelAnimated'));
+  assert('view-anim 类', css.includes('.view-anim') && css.includes('zk-view-in'));
+  // ③ 浮层动效
+  assert('zk-pop-in 动画', css.includes('zk-pop-in') && css.includes('.drawer-pop'));
+  assert('抽屉挂 drawer-pop', html.includes('drawer drawer-pop'));
+  // ④ 列表 stagger
+  assert('stagger 类与上限', appJs.includes('zk-stagger') && appJs.includes('animation-delay') && css.includes('li.item.zk-stagger'));
+  // ⑤ 状态胶囊
+  assert('statusPill 挂载', html.includes('id="statusPill"') && appJs.includes('function updateStatusPill'));
+  assert('呼吸灯', css.includes('zk-breathe') && css.includes('pill-live'));
+  // ⑥ 列表排版
+  assert('风险圆点', appJs.includes('risk-dot') && css.includes('.risk-dot'));
+  assert('单行截断', css.includes('.item-desc1'));
+  // ⑦ 执行反馈
+  assert('run-main.running', css.includes('.run-main.running') && appJs.includes("classList.add('running')"));
+  assert('结果滑入', css.includes('zk-result-in') && appJs.includes('result-anim'));
+  // ⑧ 暗色深度
+  assert('暗色三层', css.includes('[data-theme="dark"] .cmd-box'));
+  // ⑨ 空态插画
+  assert('empty-art', css.includes('.empty-art') && appJs.includes('empty-art'));
+  // ⑩ 窄屏
+  assert('sticky 操作栏', css.includes('.action-tier') && css.includes('position: sticky'));
+  assert('顶栏折叠', css.includes('#plugBtn::before'));
+  // 动效总闸
+  assert('reduced-motion 总闸', css.includes('prefers-reduced-motion') && css.includes('.view-anim, .drawer-pop'));
+
 // ---------------------------------------------------------------- 收尾
 
 const failed = results.filter(([, ok]) => !ok);

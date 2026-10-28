@@ -51,6 +51,7 @@ const el = {
   plugView: $('plugView'), plugBtn: $('plugBtn'), plugCount: $('plugCount'),
   marketView: $('marketView'), marketBtn: $('marketBtn'), marketCount: $('marketCount'),
   modeLabel: $('modeLabel'), modeDot: $('modeDot'), reload: $('reloadBtn'),
+  statusPill: $('statusPill'), pillText: $('pillText'),
 };
 
 let plugins = [];
@@ -689,20 +690,22 @@ function itemHtml(entry, i, showPlugin, query = '') {
   const fav = isFavorite(favorites, key);
   // 搜索态跨插件，条目里带上插件名；浏览态有分组头就不重复了
   const who = showPlugin ? `<span class="plugin">${highlightHtml(p.name, query, esc)}</span>` : '';
-  return `<li class="item${i === active ? ' active' : ''}${smart ? ' smart' : ''}${fav ? ' fav' : ''}" data-i="${i}" data-key="${esc(key)}" role="option"
+  return `<li class="item${i === active ? ' active' : ''}${smart ? ' smart' : ''}${fav ? ' fav' : ''}${i < 10 ? ' zk-stagger' : ''}" data-i="${i}" data-key="${esc(key)}" role="option"
+    style="${i < 10 ? `animation-delay:${i * 18}ms` : ''}"
     aria-selected="${i === active ? 'true' : 'false'}" tabindex="${i === active ? 0 : -1}">
+    <span class="risk-dot" data-risk="${esc(a.risk)}" title="${esc(riskText(a.risk))}"></span>
     ${who}
     <span class="title">
-      <span class="name">${highlightHtml(a.title, query, esc)}${nicknames[key] ? `<i class="nick">（${esc(nicknames[key])}）</i>` : ''}</span>
-      <span class="desc">${smart ? `内容看起来是${esc(smart)}，可以直接用` : highlightHtml(a.description || p.summary || '', query, esc)}</span>
+      <span class="item-line1"><span class="item-name name">${highlightHtml(a.title, query, esc)}${nicknames[key] ? `<i class="nick">（${esc(nicknames[key])}）</i>` : ''}</span>
+      ${(actionTags[key] ?? []).map((tg) => `<span class="badge tag">#${esc(tg)}</span>`).join(' ')}
+      ${a.steps?.length ? `<span class="badge">组合 ${a.steps.length} 步</span>` : ''}
+      ${smart ? `<span class="badge smart-badge">智能匹配</span>` : ''}
+      ${!smart && entry.lastWhy?.length ? `<span class="badge why-badge" title="${esc(whyLabel(entry.lastWhy))}">${esc(whyLabel(entry.lastWhy))}</span>` : ''}
+      ${dep}</span>
+      <span class="item-desc1 desc">${smart ? `内容看起来是${esc(smart)}，可以直接用` : highlightHtml(a.description || p.summary || '', query, esc)}</span>
     </span>
     <button class="star${fav ? ' on' : ''}" data-fav="${esc(key)}" title="${fav ? '取消收藏' : '收藏这个动作'}" aria-label="${fav ? '取消收藏' : '收藏这个动作'}">${fav ? '★' : '☆'}</button>
     <span class="aid">${esc(a.id)}</span>
-    ${(actionTags[key] ?? []).map((tg) => `<span class="badge tag">#${esc(tg)}</span>`).join(' ')}
-    ${a.steps?.length ? `<span class="badge">组合 ${a.steps.length} 步</span>` : ''}
-    ${smart ? `<span class="badge smart-badge">智能匹配</span>` : ''}
-    ${!smart && entry.lastWhy?.length ? `<span class="badge why-badge" title="${esc(whyLabel(entry.lastWhy))}">${esc(whyLabel(entry.lastWhy))}</span>` : ''}
-    ${dep}
     <span class="badge ${esc(a.risk)}">${esc(riskText(a.risk))}</span>
   </li>`;
 }
@@ -711,7 +714,16 @@ function hidePanels() {
   for (const v of [el.listView, el.detailView, el.workbench, el.psView,
     el.plugView, el.marketView, el.logsView, el.doctorView, el.allowView]) {
     v.classList.add('hidden');
+    // 第五十九轮②：每次面板重新显示时重放视图动效（先移除类，显示方再加回）
+    v.classList.remove('view-anim');
   }
+}
+/** 第五十九轮②：显示一个面板并播放入场动效（200ms 淡入上移）。 */
+function showPanelAnimated(v) {
+  v.classList.remove('hidden');
+  // 强制 reflow 重启动画
+  void v.offsetWidth;
+  v.classList.add('view-anim');
 }
 
 function rememberSearch(query) {
@@ -975,8 +987,8 @@ function renderListInner() {
   el.marketView.classList.add('hidden');
   el.logsView.classList.add('hidden');
   el.doctorView.classList.add('hidden');
-  el.listView.classList.remove('hidden');
-  if (detail) el.detailView.classList.remove('hidden');
+  showPanelAnimated(el.listView);
+  if (detail) showPanelAnimated(el.detailView);
 
   const tS = performance.now();
   const results = search(q);
@@ -1038,7 +1050,8 @@ function renderListInner() {
            ? '可能是词太具体，也可能这个能力还没装进来。'
            : '装上第一个插件，启动器就会开始认识你的电脑。'}</div>
          <div class="empty-sugs">${suggestions.join('')}</div>`
-      : `<div class="e-title">${esc(es ? es.title : t('noResult'))}</div>
+      : `<div class="empty-art" aria-hidden="true"></div>
+         <div class="e-title">${esc(es ? es.title : t('noResult'))}</div>
          <div class="e-hint">${esc(es ? es.hint : '试试短一点的关键词。')}</div>`;
     el.empty.classList.remove('hidden');
     el.empty.querySelectorAll('[data-sug]').forEach((b) => b.addEventListener('click', () => {
@@ -1340,7 +1353,7 @@ function openDetail(plugin, action, prefill) {
   if (location.hash !== wantedHash) history.pushState(null, '', wantedHash);
   el.listView.classList.add('hidden');
   el.workbench.classList.add('hidden');
-  el.detailView.classList.remove('hidden');
+  showPanelAnimated(el.detailView);
 
   const depWarn = plugin.requiresOk ? '' : `
     <div class="cmd-line" style="color:var(--bad)">
@@ -1540,21 +1553,26 @@ function openDetail(plugin, action, prefill) {
     ${fields}
     <div id="riskCard" class="risk-card"></div>
     <div id="runHistory" class="run-history"></div>
-    <div class="actions">
-      <button class="primary" id="runBtn">执行</button>
+    <div class="actions action-tier">
+      <button class="primary run-main" id="runBtn">▶ 执行</button>
       <button class="ghost" id="previewBtn" title="先看真正会执行的命令行（密钥打码），再决定跑不跑">预览命令</button>
-      <button class="ghost" id="invokeBtn" title="这个动作在 CLI / MCP / 深链里怎么调">调用方式</button>
-      ${plugin.settings?.length ? '<button class="ghost" id="cfgBtn" title="这个插件的长期配置（端点、密钥等），保存后立即生效">配置插件</button>' : ''}
-      <button class="ghost" id="qrBtn" title="生成深链二维码，手机扫码直达这个动作">二维码</button>
-      <button class="ghost" id="shareBtn" title="复制带当前参数的完整深链">分享</button>
-      <button class="ghost" id="timerBtn" title="只读动作按间隔自动执行（界面开着才跑）">定时</button>
-      <button class="ghost" id="watchBtn" title="监控模式：自动重跑+变更追踪+倒计时环（#/watch 聚合面板）">监控</button>
-      <button class="ghost" id="maskBtn" title="结果里的 token/密钥/长十六进制串默认打码——切换显示明文">🕶 脱敏中</button>
-      <button class="ghost" id="purgeBtn" title="清除当前结果与本地运行历史（含参数记忆），审计日志不动">🧹 清除痕迹</button>
-      <button class="ghost" id="shareCardBtn" title="把这次结果生成一张摘要卡（复制到剪贴板）">分享卡</button>
-      <button class="ghost" id="copyJsonBtn" title="复制动作定义 JSON（写文档 / 分享给他人用）">复制 JSON</button>
-      <button class="ghost" id="resetBtn" title="把所有参数清回清单默认值">恢复默认</button>
       <button class="ghost" id="backBtn">返回</button>
+      <div class="more-wrap" id="moreWrap">
+        <button class="ghost" id="moreBtn" title="更多操作：调用方式 / 配置 / 分享 / 定时 / 监控 / 结果处理" aria-haspopup="menu" aria-expanded="false">⋯ 更多</button>
+        <div class="more-pop hidden" id="morePop" role="menu">
+          <button class="ghost more-item" id="invokeBtn" role="menuitem" title="这个动作在 CLI / MCP / 深链里怎么调">⌨ 调用方式</button>
+          ${plugin.settings?.length ? '<button class="ghost more-item" id="cfgBtn" role="menuitem" title="这个插件的长期配置（端点、密钥等），保存后立即生效">⚙ 配置插件</button>' : ''}
+          <button class="ghost more-item" id="qrBtn" role="menuitem" title="生成深链二维码，手机扫码直达这个动作">▦ 二维码</button>
+          <button class="ghost more-item" id="shareBtn" role="menuitem" title="复制带当前参数的完整深链">🔗 分享深链</button>
+          <button class="ghost more-item" id="timerBtn" role="menuitem" title="只读动作按间隔自动执行（界面开着才跑）">⏲ 定时</button>
+          <button class="ghost more-item" id="watchBtn" role="menuitem" title="监控模式：自动重跑+变更追踪+倒计时环（#/watch 聚合面板）">◎ 监控</button>
+          <button class="ghost more-item" id="maskBtn" role="menuitem" title="结果里的 token/密钥/长十六进制串默认打码——切换显示明文">🕶 脱敏切换</button>
+          <button class="ghost more-item" id="purgeBtn" role="menuitem" title="清除当前结果与本地运行历史（含参数记忆），审计日志不动">🧹 清除痕迹</button>
+          <button class="ghost more-item" id="shareCardBtn" role="menuitem" title="把这次结果生成一张摘要卡（复制到剪贴板）">🪪 分享卡</button>
+          <button class="ghost more-item" id="copyJsonBtn" role="menuitem" title="复制动作定义 JSON（写文档 / 分享给他人用）">📋 复制 JSON</button>
+          <button class="ghost more-item" id="resetBtn" role="menuitem" title="把所有参数清回清单默认值">↺ 恢复默认</button>
+        </div>
+      </div>
     </div>
     <div id="queueState" class="queue-note hidden"></div>
     <div id="watchBar" class="watch-bar hidden"></div>
@@ -1638,6 +1656,26 @@ function openDetail(plugin, action, prefill) {
     ta.addEventListener('input', grow);
     grow();
   });
+  // 第五十九轮①：⋯ 更多菜单——次要操作收纳（点开/关闭/点外关/Esc 关；菜单项点击后收起）
+  {
+    const moreBtn = $('moreBtn'); const morePop = $('morePop');
+    if (moreBtn && morePop) {
+      const closeMore = () => { morePop.classList.add('hidden'); moreBtn.setAttribute('aria-expanded', 'false'); };
+      moreBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const open = morePop.classList.toggle('hidden');
+        moreBtn.setAttribute('aria-expanded', String(!open));
+      });
+      morePop.addEventListener('click', (e) => {
+        // 菜单项点击后收起；容器空白点击不关（避免误触）
+        if (e.target.closest('button')) closeMore();
+      });
+      document.addEventListener('click', (e) => {
+        if (!morePop.classList.contains('hidden') && !e.target.closest('#moreWrap')) closeMore();
+      }, { capture: true });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMore(); }, { capture: true });
+    }
+  }
   // 恢复默认：清回清单默认值（含 select/checkbox）
   $('resetBtn')?.addEventListener('click', () => {
     for (const f of action.fields) {
@@ -2012,7 +2050,7 @@ function backToList() {
     // history.back 是异步的：同步先把界面切回列表，hashchange 到来时幂等
     el.detailView.classList.add('hidden');
     el.detailView.innerHTML = '';
-    el.listView.classList.remove('hidden');
+    showPanelAnimated(el.listView);
     renderList();
     el.q.focus();
     return;
@@ -2020,7 +2058,7 @@ function backToList() {
   history.replaceState(null, '', location.pathname);
   el.detailView.classList.add('hidden');
   el.detailView.innerHTML = '';
-  el.listView.classList.remove('hidden');
+  showPanelAnimated(el.listView);
   renderList();
   el.q.focus();
 }
@@ -2176,7 +2214,7 @@ function showTimeline() {
     </div>
     ${tops.length ? `<div class="tl-tops card"><h3>最常跑</h3>${tops.map((x, i) => `<div class="tl-top"><span class="sub">#${i + 1}</span> ${esc(x.label)} <b>${x.count}</b> 次</div>`).join('')}</div>` : ''}
     <div class="tl-days">${dayHtml}</div>`;
-  el.allowView.classList.remove('hidden');
+  showPanelAnimated(el.allowView);
   el.allowView.querySelectorAll('[data-tlday]').forEach((h) => {
     h.addEventListener('click', () => {
       const day = h.dataset.tlday;
@@ -2208,7 +2246,7 @@ function showBrief() {
       <div class="usage-block">${b.top.map(([k, n]) => `
         <div class="run-row"><span class="run-when">${esc(names[k] ?? k)}</span><span class="badge">${n} 次</span></div>`).join('')}
       </div>` : '<div class="ps-empty" role="status">今天还没有执行记录——跑一个动作，这里就会有数据。</div>'}`;
-  el.allowView.classList.remove('hidden');
+  showPanelAnimated(el.allowView);
 }
 
 /** 第十轮④：顶栏快速访问条——前 5 个收藏一键直达。 */
@@ -2486,7 +2524,7 @@ function showWatchPanel() {
     <div class="help">界面开着才会跑；翻到别的动作自动停。在只读动作详情页点「监控」添加。</div>
     ${rows || '<div class="ps-empty" role="status">没有在跑的监控。</div>'}
     ${stopLog.length ? `<div class="watch-stoplog"><div class="sub">最近自动停止：</div>${stopLog.map((l) => `<div class="watch-stoprow bad">${esc(l)}</div>`).join('')}</div>` : ''}`;
-  el.allowView.classList.remove('hidden');
+  showPanelAnimated(el.allowView);
   el.allowView.querySelectorAll('[data-wstop]').forEach((b) => b.addEventListener('click', () => {
     stopWatch(b.dataset.wstop);
     showWatchPanel();
@@ -2532,7 +2570,7 @@ function showHelpPanel() {
     <h2 class="ps-title">使用指南</h2>
     <div class="help">启动器能做什么、怎么上手，都在这一页。每段都有「去试用」直达。</div>
     ${sections}`;
-  el.allowView.classList.remove('hidden');
+  showPanelAnimated(el.allowView);
   el.allowView.querySelectorAll('[data-try]').forEach((b) => {
     b.addEventListener('click', () => {
       const h = b.dataset.try || '#/';
@@ -2677,7 +2715,7 @@ function showTimers() {
       <input type="file" id="timersFile" accept=".json" class="hidden">
     </div>
     <div id="timersRows"></div>`;
-  el.allowView.classList.remove('hidden');
+  showPanelAnimated(el.allowView);
   renderTimersRows();
   // ⑨导出/导入
   el.allowView.querySelector('#timersExport')?.addEventListener('click', async (ev) => {
@@ -2814,7 +2852,7 @@ async function submitInner(remember) {
   if (!detail) return;
   const { plugin, action } = detail;
   const btn = $('runBtn');
-  if (btn) { btn.disabled = true; btn.textContent = '执行中…'; }
+  if (btn) { btn.disabled = true; btn.textContent = '执行中…'; btn.classList.add('running'); }
   try {
     $('previewBox').innerHTML = '';
     $('invokeBox').innerHTML = '';
@@ -2882,7 +2920,7 @@ async function submitInner(remember) {
     renderResult({ ok: false, error: e.message, render: 'text' });
   } finally {
     const b = $('runBtn');
-    if (b) { b.disabled = false; b.textContent = '执行'; }
+    if (b) { b.disabled = false; b.textContent = '▶ 执行'; b.classList.remove('running'); }
   }
 }
 
@@ -2959,7 +2997,7 @@ function maskState() { return document.body.dataset.zkMask !== 'off'; }
 function toggleMask() {
   document.body.dataset.zkMask = maskState() ? 'off' : 'on';
   const btn = $('maskBtn');
-  if (btn) btn.textContent = maskState() ? '🕶 脱敏中' : '👁 已显示明文';
+  if (btn) btn.textContent = maskState() ? '🕶 脱敏切换（当前：打码中）' : '👁 脱敏切换（当前：明文）';
   // 当前结果重画一遍（历史记录里存的是原始 data，重画走同一脱敏管线）
   if (lastResult) renderResult(lastResult);
 }
@@ -3550,6 +3588,12 @@ function renderResult(res) {
   // 第四十七轮⑦：挂高度档位类（compact/normal/scroll）
   box.classList.remove('height-compact', 'height-normal', 'height-scroll');
   box.classList.add(`height-${tier}`);
+  // 第五十九轮⑦：新结果滑入动画（重画/脱敏切换不重放）
+  if (!isRepaint) {
+    box.classList.remove('result-anim');
+    void box.offsetWidth;
+    box.classList.add('result-anim');
+  }
   const head = res.ok
     ? `<span class="ok">✓ 成功</span><span class="sr-only" role="status">动作完成，${res.ms !== undefined ? `耗时 ${formatMs(res.ms)}` : '无耗时数据'}</span>`
     : `<span class="bad">✗ 失败</span><span class="sr-only" role="status">动作失败${res.error ? '：' + esc(String(res.error).slice(0, 80)) : ''}</span>`;
@@ -4668,7 +4712,7 @@ async function showMarket() {
   el.plugView.classList.add('hidden');
   el.psView.classList.add('hidden');
   el.workbench.classList.add('hidden');
-  el.marketView.classList.remove('hidden');
+  showPanelAnimated(el.marketView);
   if (location.hash !== '#/market') history.replaceState(null, '', '#/market');
   await renderMarket();
 }
@@ -4678,7 +4722,7 @@ function exitMarket() {
   marketPreview = null;
   el.marketView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
-  el.listView.classList.remove('hidden');
+  showPanelAnimated(el.listView);
   el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
   renderList();
@@ -4697,7 +4741,7 @@ async function showLogs() {
   el.modeLabel.textContent = t('modeLogs');
   el.searchRow.classList.add('hidden');
   hidePanels();
-  el.logsView.classList.remove('hidden');
+  showPanelAnimated(el.logsView);
   if (location.hash !== '#/logs') history.replaceState(null, '', '#/logs');
   await renderLogs();
 }
@@ -4706,7 +4750,7 @@ function exitLogs() {
   mode = 'command';
   el.logsView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
-  el.listView.classList.remove('hidden');
+  showPanelAnimated(el.listView);
   el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
   renderList();
@@ -4831,7 +4875,7 @@ async function showDoctor() {
   el.modeLabel.textContent = t('modeDoctor');
   el.searchRow.classList.add('hidden');
   hidePanels();
-  el.doctorView.classList.remove('hidden');
+  showPanelAnimated(el.doctorView);
   if (location.hash !== '#/doctor') history.replaceState(null, '', '#/doctor');
   await renderDoctor();
 }
@@ -4840,7 +4884,7 @@ function exitDoctor() {
   mode = 'command';
   el.doctorView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
-  el.listView.classList.remove('hidden');
+  showPanelAnimated(el.listView);
   el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
   renderList();
@@ -5147,7 +5191,7 @@ function exitPlugins() {
   mode = 'command';
   el.plugView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
-  el.listView.classList.remove('hidden');
+  showPanelAnimated(el.listView);
   el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
   renderList();
@@ -5163,7 +5207,7 @@ async function showPlugins() {
   el.detailView.classList.add('hidden');
   el.workbench.classList.add('hidden');
   el.psView.classList.add('hidden');
-  el.plugView.classList.remove('hidden');
+  showPanelAnimated(el.plugView);
   if (location.hash !== '#/plugins') history.replaceState(null, '', '#/plugins');
   await renderPlugins();
 }
@@ -5179,7 +5223,7 @@ async function showPluginHome(id) {
   el.workbench.classList.add('hidden');
   el.psView.classList.add('hidden');
   el.marketView.classList.add('hidden');
-  el.plugView.classList.remove('hidden');
+  showPanelAnimated(el.plugView);
   if (location.hash !== `#/plugins/${id}`) history.replaceState(null, '', `#/plugins/${id}`);
 
   let p = plugins.find((x) => x.id === id);
@@ -5884,7 +5928,7 @@ async function showPs() {
   el.detailView.classList.add('hidden');
   el.workbench.classList.add('hidden');
   el.plugView.classList.add('hidden');
-  el.psView.classList.remove('hidden');
+  showPanelAnimated(el.psView);
   if (location.hash !== '#/ps') history.replaceState(null, '', '#/ps');
 
   await renderPs();
@@ -5899,11 +5943,26 @@ function exitPs() {
   mode = 'command';
   el.psView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
-  el.listView.classList.remove('hidden');
+  showPanelAnimated(el.listView);
   el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
   renderList();
   el.q.focus();
+}
+
+/** 第五十九轮⑤：顶栏状态胶囊——时间问候 + 在跑计数；有东西在跑时呼吸灯。
+ *  数据源复用 fetchPs（2s 一跳），时间显示分钟级精度即可（秒级跳动反而闹心）。 */
+function updateStatusPill(running) {
+  if (!el.statusPill || !el.pillText) return;
+  const h = new Date().getHours();
+  const greet = h < 5 ? '夜深了' : h < 11 ? '早上好' : h < 14 ? '午安' : h < 19 ? '下午好' : '晚上好';
+  const watches = Object.keys(watchRegistry()).length;
+  const bits = [greet];
+  if (running > 0) bits.push(`${running} 个在跑`);
+  if (watches > 0) bits.push(`⏱${watches} 监控`);
+  el.pillText.textContent = bits.join(' · ');
+  el.statusPill.classList.toggle('pill-live', running > 0);
+  el.statusPill.classList.toggle('pill-warn', running === 0 && watches > 0);
 }
 
 async function renderPs() {
@@ -5918,6 +5977,7 @@ async function renderPs() {
   const idleServices = services.filter((s) => !s.running);
   const runningProcs = procs.filter((p) => p.running);
   const total = runningProcs.length + runningServices.length;
+  updateStatusPill(total);
 
   const procHtml = runningProcs.map((p) => `
     <div class="ps-item">
@@ -6014,7 +6074,7 @@ function exitWorkbench() {
   el.modeLabel.textContent = t('modeCommand');
   el.modeDot.classList.remove('workbench');
   el.searchRow.classList.remove('hidden');
-  el.listView.classList.remove('hidden');
+  showPanelAnimated(el.listView);
   el.q.value = '';
   renderList();
   el.q.focus();
@@ -6292,7 +6352,7 @@ function showStats() {
   el.modeLabel.textContent = t('modeStats');
   el.searchRow.classList.add('hidden');
   hidePanels();
-  el.allowView.classList.remove('hidden');
+  showPanelAnimated(el.allowView);
   const view = el.allowView;
   if (location.hash !== '#/stats') history.replaceState(null, '', '#/stats');
 
@@ -6518,7 +6578,7 @@ function exitStats() {
   mode = 'command';
   el.allowView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
-  el.listView.classList.remove('hidden');
+  showPanelAnimated(el.listView);
   el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
   renderList();
@@ -6614,7 +6674,7 @@ function exitSaved() {
   mode = 'command';
   el.allowView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
-  el.listView.classList.remove('hidden');
+  showPanelAnimated(el.listView);
   el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
   renderList();
@@ -6629,7 +6689,7 @@ async function showMcpAllow() {
   el.modeLabel.textContent = t('modeMcp');
   el.searchRow.classList.add('hidden');
   hidePanels();
-  el.allowView.classList.remove('hidden');
+  showPanelAnimated(el.allowView);
   const view = el.allowView;
   if (location.hash !== '#/mcp') history.replaceState(null, '', '#/mcp');
 
@@ -6682,7 +6742,7 @@ function exitMcpAllow() {
   mode = 'command';
   el.allowView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
-  el.listView.classList.remove('hidden');
+  showPanelAnimated(el.listView);
   el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
   renderList();
@@ -6949,7 +7009,7 @@ document.addEventListener('keydown', (e) => {
         // goto 目标是 hash 路由：先清掉详情态（同步置空 detail，别走 backToList 的
         // history.back 弹栈——那是异步的，会跟下一行 location.hash 赋值竞速，导致
         // 最终落在上一个详情深链而不是目标面板）。
-        if (detail) { detail = null; el.detailView.classList.add('hidden'); el.listView.classList.remove('hidden'); }
+        if (detail) { detail = null; el.detailView.classList.add('hidden'); showPanelAnimated(el.listView); }
         location.hash = t;
         return;
       }
@@ -7442,6 +7502,10 @@ window.addEventListener('hashchange', () => {
     showHelpPanel();
     return;
   }
+  // #/logs 等面板路由：hashchange 直达（applyHash 有同款分支，hash 導航也要）
+  if ((location.hash || '') === '#/logs') { showLogs(); return; }
+  if ((location.hash || '') === '#/stats') { showStats(); return; }
+  if ((location.hash || '') === '#/doctor') { showDoctor(); return; }
   // 第二十九轮⑧：#/perf 性能页——列表/搜索耗时三指标卡，改代码前后各看一眼
   if ((location.hash || '') === '#/perf') {
     showPerfPanel();
@@ -7452,7 +7516,7 @@ window.addEventListener('hashchange', () => {
     detail = null;
     el.detailView.classList.add('hidden');
     el.detailView.innerHTML = '';
-    el.listView.classList.remove('hidden');
+    showPanelAnimated(el.listView);
     const st = parseListState(location.hash);
     if (st.q) { el.q.value = st.q; }
     renderList();
@@ -7465,7 +7529,7 @@ window.addEventListener('hashchange', () => {
     mode = 'detail';
     el.modeLabel.textContent = t('modeDetail');
     el.listView.classList.add('hidden');
-    el.detailView.classList.remove('hidden');
+    showPanelAnimated(el.detailView);
     return;
   }
   if (!detail) applyHash();
