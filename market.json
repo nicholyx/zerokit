@@ -157,6 +157,17 @@
       "name": "文本片段台",
       "source": "path:plugins/typist",
       "description": ""
+    },
+    {
+      "id": "demoweb",
+      "name": "网页桥演示",
+      "summary": "web 动作消息协议全家桶演示：上下文/外观/深链/受控跳转/高度/错误上报",
+      "tags": [
+        "demo",
+        "web",
+        "bridge"
+      ],
+      "source": "path:plugins/demoweb"
     }
   ]
 }

@@ -3980,6 +3980,9 @@ let lastResult = null; // 最近一次执行的结果
 
 function sendContext(frame) {
   if (!frame.contentWindow || !detail || !lastResult) return;
+  // 第四十四轮⑤：外观上下文一并下发——插件页面跟随宿主主题/暗色/字号/语言，
+  // 不用页面自己猜。都是非敏感的展示信息。
+  const cs = getComputedStyle(document.documentElement);
   frame.contentWindow.postMessage({
     __zkit: true,
     type: 'context',
@@ -3990,6 +3993,12 @@ function sendContext(frame) {
       result: {
         ok: lastResult.ok, data: lastResult.data, stdout: lastResult.stdout,
         stderr: lastResult.stderr, error: lastResult.error, ms: lastResult.ms,
+      },
+      appearance: {
+        dark: document.documentElement.dataset.theme === 'dark',
+        accent: cs.getPropertyValue('--accent').trim() || '#2271f0',
+        fontScale: localStorage.getItem('zerokit.font-scale') || 'm',
+        lang: localStorage.getItem('zerokit.lang') || 'system',
       },
     },
   }, '*');   // targetOrigin 用 '*'：sandbox 页面是 opaque origin，没有具体源可写（消息不含敏感内容）
@@ -4034,8 +4043,46 @@ window.addEventListener('message', (ev) => {
     frame.style.height = `${h}px`;
   } else if (msg.type === 'run') {
     bridgeRun(frame, msg);
+  } else if (msg.type === 'nav') {
+    bridgeNav(frame, msg);
+  } else if (msg.type === 'error') {
+    // 页面自己报错：打进来给用户看见，而不是静默白屏
+    console.warn('[zk-bridge] 页面报错：', msg.error);
+    el.count.textContent = `插件页面报错：${String(msg.error ?? '').slice(0, 80)}`;
   }
+  // 未知 type 一律忽略（协议收紧：多出来的消息不解释不转发）
 });
+
+/** 第四十四轮③：受控跳转——页面请求开外部链接，宿主弹确认后替它开 */
+function bridgeNav(frame, msg) {
+  const url = String(msg.url ?? '');
+  const reply = () => frame.contentWindow.postMessage({
+    __zkit: true, type: 'nav:allowed', url,
+  }, '*');
+  if (!/^https?:\/\//i.test(url)) { reply(); return; }
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>打开外部链接</h3>
+      <div class="risk-note">插件页面请求在系统浏览器打开：</div>
+      <div class="cmd-line">${esc(url)}</div>
+      <div class="actions">
+        <button class="ghost" id="navCancel">取消</button>
+        <button class="primary" id="navOk">打开</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector('#navCancel').addEventListener('click', () => { close(); reply(); });
+  overlay.querySelector('#navOk').addEventListener('click', () => {
+    close();
+    window.open(url, '_blank', 'noopener');
+    reply();
+  });
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) { close(); reply(); } });
+  overlay.querySelector('#navOk').focus();
+}
 
 let resultSeq = 0;
 function barsData(data) {

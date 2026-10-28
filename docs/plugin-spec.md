@@ -630,7 +630,7 @@ risk   = "read"
 页面里直接用 `window.zkit`，不用（也不能）引任何宿主文件：
 
 ```js
-// 页面加载后拿执行上下文：{ plugin, action, params, result }
+// 页面加载后拿执行上下文：{ plugin, action, params, result, appearance }
 zkit.ready((ctx) => render(ctx.result.data));
 
 // 反向调用本插件的另一个动作（有副作用的照常弹确认，页面绕不过）
@@ -638,7 +638,41 @@ const res = await zkit.run('top', { limit: 8 });
 
 // 报告内容高度，宿主据此调整 iframe
 zkit.setHeight(document.body.scrollHeight);
+
+// 受控跳转：宿主弹确认后在系统浏览器打开（只接受 http(s)）
+await zkit.openLink('https://example.com');
+
+// 宿主外观：{ dark, accent, fontScale, lang }——桥自动写 var(--zk-accent)
+// 和 [data-zk-dark]，页面样式跟上宿主皮肤不用任何配置
+zkit.appearance;
+
+// 页面致命错误上报：宿主状态行显示，白屏也看得见原因
+zkit.reportError(err);
 ```
+
+### web 动作消息协议（完整参考）
+
+双向消息都带 `__zkit: true` 标记（防与页面上别的 postMessage 混线）：
+
+| 方向 | type | 载荷 | 说明 |
+| --- | --- | --- | --- |
+| 页面→宿主 | `hello` | — | 页面就绪握手，宿主回 `context` |
+| 页面→宿主 | `run` | `{ callId, action, values }` | 请求执行本插件动作 |
+| 页面→宿主 | `resize` | `{ height }` | 报告内容高度（宿主限幅 80~720） |
+| 页面→宿主 | `nav` | `{ url }` | 请求开外部链接（仅 http(s)） |
+| 页面→宿主 | `error` | `{ error }` | 页面自报致命错误 |
+| 宿主→页面 | `context` | `{ plugin, action, params, result, appearance }` | 执行上下文 + 外观 |
+| 宿主→页面 | `run:result` | `{ callId, payload }` | run 的应答（按 callId 配对） |
+| 宿主→页面 | `nav:allowed` | `{ url }` | 跳转放行回执 |
+
+安全边界（这四条是硬的，别试图绕）：
+
+1. **令牌永不进桥**——页面是 opaque origin，拿不到会话令牌、fetch 不了宿主 API。
+2. **宿主只认自己的 iframe**——入站消息校验来源（`ev.source` 必须是当前结果区的 web-frame），别人的 iframe 冒充不了。
+3. **未知 type 一律忽略**——协议外的消息不解释、不转发、不回执。
+4. **写动作照常弹确认**——`zkit.run` 转发执行，确认弹窗在宿主侧，页面代替不了用户点头；`zkit.openLink` 同理，跳哪个链接用户看得见。
+
+`window.zkit` 完整 API：`hosted`（是否在启动器里）、`context`、`ready(cb)`、`run(action, values)`、`setHeight(px)`、`openLink(url)`、`appearance`、`reportError(e)`。活样例：`plugins/demoweb/`（六项能力一页演示）。
 
 安全模型：页面跑在 `sandbox="allow-scripts"` 的 iframe 里（opaque origin），
 **拿不到会话令牌、fetch 不了宿主 API**——执行只能经 postMessage 桥由宿主转发，
