@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-10-29（第六十三轮，v0.68.0 定时任务持久化）
+> 最后更新：2026-10-29（第六十四轮，v0.69.0 剪贴板工作流）
 
 ## 性能基线（第五十八轮建立，2026-10-28，Apple M4 / Node 22）
 
@@ -228,7 +228,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 
 ### 质量
 
-- 40 个测试文件、**1257 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
+- 41 个测试文件、**1281 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
 - `tsc --noEmit` 干净——**而且 CI 真的在跑它**（`typecheck` job）。
   曾经这里写着"干净"但没有任何地方执行这条命令，于是两个只有类型检查才看得见的
   错误在核心里躺了很久（`proxy.ts` 的 Buffer 泛型不兼容、`scaffold.ts` 的类型混用）。
@@ -291,6 +291,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 - 第四十九轮（v0.54.0）：结果对比与历史分析——详情页历史分析卡（数值趋势/耗时分布/失败率>30%警示）、⇄ 与上次对比（复用 resultCompare）、收藏结果两两对比、日志 CSV 导出（仅元数据）；hist49-smoke 13 项、全量 32 文件 1041/1041（Issue #188）
 - 第五十轮 v0.55.0：主题与视觉打磨——字号/间距/过渡阶梯、暗色对比度 AA、斑马纹、--danger、滚动条、打印样式（contrastRatio/typeScaleStep）
 - 第五十一轮 v0.56.0：搜索体验深化——丢词建议/组合记忆/搜索态折叠/desc 高亮/计数徽标/清空按钮/历史单条删（suggestNext/comboLabel）
+- 第六十四轮（v0.69.0）剪贴板工作流：#/clip 历史面板（20 条去重/截断/写回/清空）、classifyClip 七类识别、Ctrl+Shift+V 贴入即搜+建议卡直达预填、clip64-smoke 24 项、全量 1281/1281（Issue #234）
 - 第六十三轮（v0.68.0）定时任务持久化：timers.json 原子写+UI 恢复、zkit timers list/pause/resume/remove/run、nextFireTime 窗口推算（跨午夜/不连环补）、doctor 孤儿检测、/api/timers 桥、timers-smoke 22 项、全量 1257/1257（Issue #231）
 - 第六十二轮（v0.67.0）插件包完整性：MANIFEST.sha256 逐文件清单+包级总哈希、unpack 装前校验（--no-verify 兜底）、.zk-integrity.json 装时快照、plugin verify 装后复验、集市 integrity 字段、signing-smoke 18 项、全量 1235/1235（Issue #228）
 - 第六十一轮（v0.66.0）「能力类型」进清单：ui/ui_height/ui_min_height/ui_summary 四键、L11 lint 规则、doc 界面说明段、doctor 联网提示、uTools window→ui、utools-smoke 44→45+lintdoc-smoke 29→33、全量 1217/1217（Issue #225）

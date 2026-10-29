@@ -1701,3 +1701,31 @@ li.item .item-desc1 { color: var(--fg-dim); font-size: 12px;
   #reloadBtn::before { content: '↻'; font-size: 15px; }
   .status-pill { display: none; }   /* 窄屏空间留给内容 */
 }
+
+/* ============ 第六十四轮：剪贴板工作流 ============ */
+.clip-suggest {
+  position: fixed; top: 88px; left: 50%; transform: translateX(-50%);
+  width: min(640px, calc(100vw - 32px)); z-index: 320;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px 16px; box-shadow: 0 12px 40px rgba(0,0,0,.28);
+}
+.clip-suggest .cs-head { font-weight: 600; display: flex; gap: 10px; align-items: baseline; }
+.clip-suggest .cs-why { font-size: 12px; color: var(--fg-dim); font-weight: 400; }
+.clip-suggest .cs-text {
+  margin: 8px 0; padding: 8px 10px; border-radius: 8px;
+  background: var(--bg-soft); font-family: var(--mono, monospace);
+  font-size: 12px; word-break: break-all; max-height: 90px; overflow: auto;
+}
+.clip-suggest .cs-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.clip-suggest .cs-none { color: var(--fg-dim); font-size: 12px; align-self: center; }
+.clip-rows { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.clip-row {
+  display: flex; gap: 10px; align-items: center; padding: 8px 10px;
+  border-radius: 8px; background: var(--bg-soft);
+}
+.clip-kind {
+  flex: none; font-size: 11px; padding: 2px 8px; border-radius: 99px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent);
+}
+.clip-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.clip-at { flex: none; font-size: 11px; color: var(--fg-dim); }
