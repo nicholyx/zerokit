@@ -34,6 +34,7 @@ import { resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader } 
 import { TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory, looksLikeTimestamp, humanTs, emptyReason, tocFromMd } from './extras.js';
 import { COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory } from './extras.js';
 import { chainFill, batchDedup, chunkWindows, parseBatchList } from './extras.js';
+import { classifyClip, pushClipHistory, clipSuggestions } from './extras.js';
 import { toAiMarkdown, packContext, toMcpConfig, toCurl, toLlmJsonl, watchTrendMarkdown } from './extras.js';
 import { navGroups, emptyState, skeletonRows, resultHeightTier, viewportMode, classifyError, batchSummary } from './extras.js';
 import { pluginCompare as plugCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags as pluginTagChips, pluginStatCards, installedList, installCommand } from './extras.js';
@@ -2697,6 +2698,120 @@ function openTimerDialog(plugin, action) {
       values: reg[key].values ?? {},
     } } }).catch(() => {});
   });
+}
+
+
+// ============================================================
+// 第六十四轮：剪贴板工作流——历史留痕、识别建议、Ctrl+Shift+V 贴入即搜
+// ============================================================
+let clipHist = [];
+function loadClipHist() {
+  try { clipHist = JSON.parse(localStorage.getItem('zerokit.clip-hist') || '[]'); } catch { clipHist = []; }
+}
+function saveClipHist() {
+  try { localStorage.setItem('zerokit.clip-hist', JSON.stringify(clipHist)); } catch { /* 满/禁用就算了 */ }
+}
+loadClipHist();
+
+/** 识别结果建议卡：识别说明 + 推荐动作按钮（点击直达详情）。 */
+function showClipSuggest(text) {
+  const { kind, why } = classifyClip(text);
+  const recs = clipSuggestions(kind)
+    .map((k) => {
+      const e = entries.find((x) => x.key === k || `${x.plugin}.${x.action}` === k);
+      return e ? { key: k, name: e.name, pluginId: e.plugin, actionId: e.action } : null;
+    })
+    .filter(Boolean);
+  const overlay = document.createElement('div');
+  overlay.className = 'clip-suggest zk-pop-in';
+  overlay.setAttribute('role', 'dialog');
+  const shown = text.length > 120 ? text.slice(0, 120) + '…' : esc(text);
+  overlay.innerHTML = `
+    <div class="cs-head">📋 剪贴板识别：${kind.toUpperCase()}<span class="cs-why">${esc(why)}</span></div>
+    <div class="cs-text">${shown}${text.length > 500 ? `（共 ${text.length} 字符，已截断保存）` : ''}</div>
+    <div class="cs-actions">
+      ${recs.length
+        ? recs.map((r) => `<button class="cs-go primary" data-go="${esc(r.pluginId)}/${esc(r.actionId)}">▶ ${esc(r.name)}</button>`).join('')
+        : '<span class="cs-none">没有专门动作——去列表搜</span>'}
+      <button class="ghost" data-search>当作搜索词</button>
+      <button class="ghost" data-close>关闭</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', (ev) => {
+    const go = ev.target.closest('[data-go]');
+    if (go) {
+      overlay.remove();
+      openDetail(go.dataset.go.split('/')[0], go.dataset.go.split('/')[1], { text });
+      return;
+    }
+    if (ev.target.closest('[data-search]')) {
+      overlay.remove();
+      el.q.value = text.trim().slice(0, 200);
+      active = 0;
+      renderList();
+      el.q.focus();
+      return;
+    }
+    if (ev.target.closest('[data-close]') || ev.target === overlay) overlay.remove();
+  });
+}
+
+/** Ctrl+Shift+V：读剪贴板并弹建议卡（不写搜索框——和 clipBtn 的搜索行为互补）。 */
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'V' || e.key === 'v')) {
+    e.preventDefault();
+    el.clipBtn.click();
+  }
+});
+
+/** #/clip 剪贴板历史面板：可回写、单条删、清空。 */
+function showClipPanel() {
+  hidePanels();
+  mode = 'clip';
+  el.listView.classList.add('hidden');
+  let panel = document.getElementById('clipPanel');
+  if (!panel) {
+    panel = document.createElement('section');
+    panel.id = 'clipPanel';
+    panel.className = 'view';
+    el.app.insertBefore(panel, el.app.firstChild);
+  }
+  const rows = clipHist.length
+    ? clipHist.map((c, i) => `
+      <div class="clip-row" data-i="${i}">
+        <span class="clip-kind">${classifyClip(c.text).kind}</span>
+        <span class="clip-text" title="${esc(c.text.slice(0, 200))}">${esc(c.text.slice(0, 80))}${c.full > 500 ? ` …（${c.full} 字符）` : ''}</span>
+        <span class="clip-at">${new Date(c.at).toLocaleTimeString()}</span>
+        <button class="ghost" data-write="${i}" title="写回剪贴板">↩</button>
+        <button class="ghost" data-del="${i}" title="删除这条">✕</button>
+      </div>`).join('')
+    : '<div class="empty" role="status">还没有剪贴板历史——复制点东西再点 📋 按钮</div>';
+  panel.innerHTML = `
+    <div class="panel-head">
+      <h2>📋 剪贴板历史</h2>
+      <div class="panel-tools">
+        <span class="dim">本地保留最近 ${clipHist.length}/20 条 · 不上报</span>
+        <button class="ghost" id="clipClear">清空历史</button>
+        <button class="ghost" id="clipBack">返回</button>
+      </div>
+    </div>
+    <div class="clip-rows">${rows}</div>`;
+  panel.querySelector('#clipBack').addEventListener('click', () => { location.hash = '#/'; });
+  panel.querySelector('#clipClear').addEventListener('click', () => {
+    clipHist = [];
+    saveClipHist();
+    showClipPanel();
+  });
+  panel.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => {
+    clipHist.splice(Number(b.dataset.del), 1);
+    saveClipHist();
+    showClipPanel();
+  }));
+  panel.querySelectorAll('[data-write]').forEach((b) => b.addEventListener('click', async () => {
+    const c = clipHist[Number(b.dataset.write)];
+    try { await navigator.clipboard.writeText(c.text); el.count.textContent = '已写回剪贴板'; }
+    catch { el.count.textContent = '写剪贴板被浏览器拒绝'; }
+  }));
 }
 
 function showTimers() {
@@ -6826,6 +6941,7 @@ function showPalette() {
     { icon: '🔑', label: 'MCP 授权', hint: '哪些动作允许 AI 调用', act: () => showMcpAllow() },
     { icon: '📈', label: '使用统计', hint: '总执行数 / 成功率 / 趋势', act: () => showStats() },
     { icon: '⏱', label: '定时任务', hint: '管理界面内定时器', act: () => { location.hash = '#/timers'; } },
+    { icon: '📋', label: '剪贴板历史', hint: '最近复制的内容与识别', act: () => { location.hash = '#/clip'; } },
     { icon: '👁', label: '监控面板', hint: '自动重跑的监控聚合', act: () => { location.hash = '#/watch'; } },
     { icon: '📰', label: '今日简报', hint: '跑了多少 / 成败 / 最常用', act: () => { location.hash = '#/brief'; } },
     { icon: '🗓', label: '时间线', hint: '按天复盘执行 + 周对比 + 时段分布', act: () => { location.hash = '#/timeline'; } },
@@ -7152,6 +7268,10 @@ el.clipBtn.addEventListener('click', async () => {
       el.count.textContent = '剪贴板是空的';
       return;
     }
+    // 第六十四轮①②：留痕 + 识别建议
+    clipHist = pushClipHistory(clipHist, text);
+    saveClipHist();
+    showClipSuggest(text);
     el.q.value = text.trim();
     active = 0;
     renderList();
@@ -7399,6 +7519,8 @@ function showFirstRunGuide() {
 function applyHash() {
   // #/timers 定时任务面板
   if ((location.hash || '') === '#/timers') { showTimers(); return; }
+  // 第六十四轮：#/clip 剪贴板历史面板
+  if ((location.hash || '') === '#/clip') { showClipPanel(); return; }
   // #/watch 监控聚合面板（第十八轮⑥）
   if ((location.hash || '') === '#/watch') { showWatchPanel(); return; }
   // #/brief 每日简报
@@ -7517,6 +7639,8 @@ function applyHash() {
 window.addEventListener('hashchange', () => {
   // 第三十八轮：#/timers 面板路由（applyHash 有同样分支，hashchange 也要）
   if ((location.hash || '') === '#/timers') { showTimers(); return; }
+  // 第六十四轮：#/clip 剪贴板历史面板
+  if ((location.hash || '') === '#/clip') { showClipPanel(); return; }
   // 第十八轮⑥：#/watch 是面板路由——监控继续跑（面板就是聚合它们的），只切视图
   if ((location.hash || '') === '#/watch') {
     showWatchPanel();

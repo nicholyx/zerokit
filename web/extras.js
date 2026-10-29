@@ -2403,3 +2403,63 @@ export function topActionsFlat(runs, limit = 5) {
   }
   return [...cnt.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([label, n]) => ({ label, count: n }));
 }
+
+// ============================================================
+// 第六十四轮：剪贴板工作流——内容识别、历史留痕、动作推荐
+// ============================================================
+
+/** 识别剪贴板文本类型（纯函数，不碰 navigator）。返回 kind + 置信依据。 */
+export function classifyClip(text) {
+  const s = (text ?? '').trim();
+  if (!s) return { kind: 'empty', why: '空' };
+  // 纯 10 位数字（秒级 ts）或 13 位（毫秒级）
+  if (/^\d{10}$/.test(s)) return { kind: 'ts', why: '10 位数字（Unix 秒）' };
+  if (/^\d{13}$/.test(s)) return { kind: 'ts', why: '13 位数字（Unix 毫秒）' };
+  // URL（http/https）
+  if (/^https?:\/\/\S+$/i.test(s)) return { kind: 'url', why: '以 http(s):// 开头' };
+  // IP（v4）
+  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(s)) {
+    const ok = s.split('.').every((p) => Number(p) <= 255);
+    if (ok) return { kind: 'ip', why: '点分四段且每段 ≤255' };
+  }
+  // JSON（对象或数组开头结尾配对 + 能被 parse）
+  if ((s.startsWith('{') && s.endsWith('}')) || (s.startsWith('[') && s.endsWith(']'))) {
+    try { JSON.parse(s); return { kind: 'json', why: '合法 JSON' }; } catch { /* 不是 */ }
+  }
+  // 文件路径（POSIX 绝对 / Windows 盘符 / ~/ 开头）
+  if (/^(\/|\.{1,2}\/|~\/|[A-Za-z]:[\\/])\S+/.test(s) && !s.includes('\n')) {
+    return { kind: 'path', why: '以 / ~/ 盘符开头且无换行' };
+  }
+  // Base64（≥16 字符、合法字符集、长度 4 的倍数；排除纯十六进制误报）
+  if (/^[A-Za-z0-9+/]+={0,2}$/.test(s) && s.length >= 16 && s.length % 4 === 0 && !/^[0-9a-f]+$/i.test(s)) {
+    return { kind: 'base64', why: 'Base64 字符集且长度对齐' };
+  }
+  // 纯数字（非 ts 长度）
+  if (/^\d+(\.\d+)?$/.test(s)) return { kind: 'number', why: '纯数字' };
+  return { kind: 'text', why: '普通文本' };
+}
+
+/** 剪贴板历史去重入库：同内容只留最新（时间戳更新、挪到队首）。上限 max 条。 */
+export function pushClipHistory(list, text, now = Date.now(), max = 20) {
+  const t = String(text ?? '');
+  if (!t.trim()) return list;
+  const rest = list.filter((x) => x.text !== t);
+  const item = { text: t.length > 500 ? t.slice(0, 500) : t, full: t.length, at: now };
+  return [item, ...rest].slice(0, max);
+}
+
+/** 识别结果 → 推荐动作（actionKey 列表；命中不到给空数组，UI 自己兜底「全部动作」）。 */
+export function clipSuggestions(kind) {
+  const map = {
+    ts: ['quick.ts2date'],
+    url: ['convert.url-decode', 'convert.url-encode'],
+    ip: ['ip.public'],
+    json: ['convert.json-pretty', 'convert.json-min'],
+    base64: ['convert.b64'],
+    path: [],
+    number: ['convert.digits'],
+    text: [],
+    empty: [],
+  };
+  return map[kind] ?? [];
+}
