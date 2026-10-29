@@ -203,14 +203,14 @@ mcp-allow.json      已授权给 AI 调用的有副作用动作
 > **[docs/reference/overview.md](docs/reference/overview.md)**；每一版改了什么看
 > [CHANGELOG](CHANGELOG.md)；全部现成动作看[动作速查表](docs/reference/actions-reference.md)。
 
-核心能力（均已实测通过，v0.2.0 → v0.60.0 共五十五轮迭代）：
+核心能力（均已实测通过，v0.2.0 → v0.78.0 共七十三轮迭代）：
 
 - 内核 + 四个面（CLI / MCP / 启动器 / 桌面壳）+ 插件集市 + AI 工作台
-- 启动器 60+ 项体验（拼音搜索、键盘流、监控、备份、配置档、双语……）
+- 启动器 70+ 项体验（拼音搜索、键盘流、监控、备份、配置档、双语、视觉微交互……）
 - 插件开发闭环（脚手架 / lint 十级体检 / 文档生成 / pack 分发）
 - 发布工具化（release-prep 自检归档）与三平台 CI
 
-测试：`node scripts/test-all.mjs`（38 个文件 1149 项断言，不联网、不花钱）。
+测试：`node scripts/test-all.mjs`（46 个文件 1409 项断言，不联网、不花钱）。
 基准：`node scripts/bench.mjs`。
 
 还没有的：OS 级能力（读活动窗口/模拟键鼠）、插件签名与来源校验——详见账本「待办」。

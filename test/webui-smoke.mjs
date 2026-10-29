@@ -592,6 +592,20 @@ close();
   // 动效总闸
   assert('reduced-motion 总闸', css.includes('prefers-reduced-motion') && css.includes('.view-anim, .drawer-pop'));
 
+  // 第七十三轮：视觉与微交互（静态源码断言）
+  {
+    const assert = (name, cond) => check('七三:' + name, cond);
+    assert('①暗色焦点环光晕', css.includes('[data-theme="dark"] :focus-visible') && css.includes('box-shadow: 0 0 0 3px'));
+    assert('②表格行悬停', css.includes('#result table tbody tr:hover td'));
+    assert('③页签栏横向滚动', css.includes('.rtabs { flex-wrap: nowrap') && css.includes('white-space: nowrap'));
+    assert('④按钮按压反馈', css.includes(':not(:disabled):active') && css.includes('scale(.985)'));
+    assert('④reduced-motion 停 transform', /prefers-reduced-motion[\s\S]*transform: none/.test(css));
+    assert('⑤暗色滚动条', css.includes('[data-theme="dark"] ::-webkit-scrollbar-thumb'));
+    assert('⑥链接降噪', css.includes('.detail-note a') && css.includes('text-decoration: none'));
+    assert('⑦选中文本跟 accent', css.includes('::selection') && css.includes('var(--accent'));
+    assert('⑧空态插画暗色', css.includes('[data-theme="dark"] .empty-art'));
+  }
+
 // ---------------------------------------------------------------- 收尾
 
 const failed = results.filter(([, ok]) => !ok);
