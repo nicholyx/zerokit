@@ -36,16 +36,22 @@ const write = (f, s) => fs.writeFileSync(path.join(REPO, f), s);
 const cl = read('CHANGELOG.md');
 // 第五十七轮⑥：目标版本段已存在 = 双段事故的前兆（第五十四轮 tag 打错重发时几乎踩到）——直接拒绝
 if (cl.includes(`## [${ver}] - `)) die(`版本 [${ver}] 的段已存在于 CHANGELOG（重复发布或版本号写错）`);
+// 第六十六轮教训：[Unreleased] 可能含 Added/Fixed 等多段，归档要整段搬走（正则只抓
+// Added 会把 Fixed 留在原地，落进新版本段外——自检计数 6≠3 就是这么来的）。
 const mUnrel = /## \[Unreleased\]\n\n### Added\n\n((?:- [^\n]*\n)+)/.exec(cl);
 if (!mUnrel) die('[Unreleased] 段没有 ### Added 条目——没有可归档的内容，拒绝执行');
-const entries = mUnrel[1];
-const entryCount = (entries.match(/^- /gm) || []).length;
-if (entryCount === 0) die('[Unreleased] ### Added 条目数为 0');
+const unrelStart = cl.indexOf('## [Unreleased]');
+const unrelEndRaw = cl.indexOf('\n## [', unrelStart + 5);
+const unrelEnd = unrelEndRaw === -1 ? cl.length : unrelEndRaw;
+const unrelBody = cl.slice(unrelStart, unrelEnd);           // 含 ### Added 与后续 ### Fixed 等全部段
+const entryCount = (unrelBody.match(/^- /gm) || []).length;
+if (entryCount === 0) die('[Unreleased] 条目数为 0');
+const entries = unrelBody.replace(/^## \[Unreleased\]\n+/, '').replace(/\n+$/, '');
 
 const today = new Date();
 const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-const oldBlock = mUnrel[0];
-const newBlock = `## [Unreleased]\n\n（下一版攒着）\n\n## [${ver}] - ${date}\n\n### Added\n\n${entries}`;
+const oldBlock = unrelBody.replace(/\n+$/, '');
+const newBlock = `## [Unreleased]\n\n（下一版攒着）\n\n## [${ver}] - ${date}\n\n${entries}`;
 let cl2 = cl.replace(oldBlock, newBlock);
 // 教训（v0.60.0 首用即踩）：条目正则 (?:- [^\n]*\n)+ 之后紧跟的空行+占位行会被 newBlock 意外带上——
 // 归档后把新段内的「（下一版攒着）」清掉
