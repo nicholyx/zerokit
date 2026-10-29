@@ -203,7 +203,7 @@ mcp-allow.json      已授权给 AI 调用的有副作用动作
 > **[docs/reference/overview.md](docs/reference/overview.md)**；每一版改了什么看
 > [CHANGELOG](CHANGELOG.md)；全部现成动作看[动作速查表](docs/reference/actions-reference.md)。
 
-核心能力（均已实测通过，v0.2.0 → v0.89.0 共八十四轮迭代）：
+核心能力（均已实测通过，v0.2.0 → v0.90.0 共八十五轮迭代）：
 
 - 内核 + 四个面（CLI / MCP / 启动器 / 桌面壳）+ 插件集市 + AI 工作台
 - 启动器 70+ 项体验（拼音搜索、键盘流、监控、备份、配置档、双语、视觉微交互……）
