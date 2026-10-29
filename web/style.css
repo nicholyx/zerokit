@@ -1811,3 +1811,17 @@ input.dirty, textarea.dirty { border-left: 2px solid var(--accent); }
 .param-summary { margin: 6px 0; font-size: 12px; }
 .param-summary summary { cursor: pointer; color: var(--fg-dim); }
 .param-summary .cmp-table { margin-top: 4px; }
+
+/* ---- 第八十四轮：体检面分级汇总与趋势 ---- */
+.doc-summary {
+  font-size: 15px; font-weight: 600; padding: 8px 12px; margin: 8px 0 4px;
+  border-radius: 8px; background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.doc-trend { display: flex; gap: 6px; align-items: center; padding: 0 12px 6px; flex-wrap: wrap; }
+.doc-trend-item {
+  font-size: 12px; padding: 2px 8px; border-radius: 6px;
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+.trend-arrow { opacity: 0.5; font-size: 11px; }
+.persist-tag { color: var(--danger, #d9534f); font-size: 12px; font-weight: 600; }

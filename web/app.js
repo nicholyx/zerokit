@@ -5401,6 +5401,13 @@ async function renderDoctor() {
     $('docBody').innerHTML = `<div class="ps-empty" role="status">自检失败：${esc(e.message)}</div>`;
     return;
   }
+  // 第八十四轮①④：三级汇总行 + 最近体检趋势（数据来自 server 的 --json 同源接口）
+  const sumLine = r.summaryLine ?? '';
+  const hist = r.history ?? [];
+  const trendHtml = hist.length >= 2
+    ? `<div class="doc-trend">${hist.slice(0, 5).map((e) => `<span class="doc-trend-item">✗${e.errors}/⚠${e.warnings}</span>`).join('<span class="trend-arrow">→</span>')}</div>`
+    : '';
+  const sumHtml = sumLine ? `<div class="doc-summary" role="status">${esc(sumLine)}</div>${trendHtml}` : '';
   const toolRows = (r.tools ?? []).map((t) => `<div class="doc-line ${t.ok ? '' : 'bad'}">
       <span class="doc-mark">${t.ok ? '✓' : '!'}</span>
       <span class="doc-name">${esc(t.name)}</span>
@@ -5409,8 +5416,14 @@ async function renderDoctor() {
   const pluginRows = (r.plugins ?? []).map((p) => {
     const bad = (p.problems ?? []).some((x) => x.level === 'error');
     const warn = (p.problems ?? []).some((x) => x.level === 'warning');
+    const persistTag = (text) => {
+      const clip = text.length > 120 ? text.slice(0, 117) + '…' : text;
+      let n = 0;
+      for (const e of hist) { if ((e.failed ?? []).includes(clip) || (e.warn ?? []).includes(clip)) n++; else break; }
+      return n >= 2 ? ` <span class="persist-tag">⚠ 持续 ${n} 次</span>` : '';
+    };
     const problems = (p.problems ?? []).map((x) => `<div class="doc-problem ${x.level}">
-        <span>${esc(x.text)}</span>
+        <span>${esc(x.text)}${persistTag(x.text)}</span>
         ${x.hint ? `<pre class="doc-hint">${esc(x.hint)}</pre>` : ''}
       </div>`).join('');
     return `<div class="doc-plugin">
@@ -5423,6 +5436,7 @@ async function renderDoctor() {
     </div>`;
   }).join('');
   $('docBody').innerHTML = `
+    ${sumHtml}
     <div class="doc-grid">
       <div class="doc-card"><b>${esc(String(r.summary?.plugins ?? 0))}</b><span>插件</span></div>
       <div class="doc-card"><b>${esc(String(r.summary?.actions ?? 0))}</b><span>动作</span></div>

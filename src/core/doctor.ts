@@ -6,7 +6,8 @@ import { orphanTimers } from './timers.ts';
 // 产出一份结构化报告：CLI 负责用颜色打印，HTTP 面负责原样转 JSON。
 // 判定规则只有一份，两个面不会各说各话。
 import process from 'node:process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { HOME, PLUGINS_DIR } from './paths.ts';
 import { checkRequires, resolveTool } from './resolve.ts';
 import { findPlugin, listPlugins } from './registry.ts';
@@ -58,6 +59,102 @@ export interface DoctorReport {
   /** 第六十三轮⑧：孤儿定时任务 key（timers.json 引用的插件已卸载）。 */
   orphanTimerKeys: string[];
   summary: { plugins: number; actions: number; errors: number; warnings: number };
+  /** 第八十四轮②：每次全量体检的摘要落 doctor-history.jsonl（保留 50 条）。 */
+  history: DoctorHistoryEntry[];
+}
+
+/** 第八十四轮②：体检历史一条记录。failed/warned 是问题文本列表，用于跨次比对。 */
+export interface DoctorHistoryEntry {
+  ts: string;            // ISO 时间
+  errors: number;
+  warnings: number;
+  passed: number;        // 通过项数
+  failed: string[];      // error 文本（截断到 120 字符）
+  warn: string[];        // warning 文本
+}
+
+const HISTORY_LIMIT = 50;
+
+/** 把报告压成一条历史记录。 */
+export function toHistoryEntry(report: DoctorReport, passed: number): DoctorHistoryEntry {
+  const clip = (t: string) => t.length > 120 ? t.slice(0, 117) + '…' : t;
+  const failed = [
+    ...report.tools.filter((t) => !t.ok).map((t) => toolFailText(t.name, t.hint)),
+    ...report.plugins.flatMap((pl) => pl.problems.filter((pr) => pr.level === 'error').map((pr) => pr.text)),
+  ];
+  const warn = report.plugins.flatMap((pl) => pl.problems.filter((pr) => pr.level === 'warning').map((pr) => pr.text));
+  return {
+    ts: new Date().toISOString(),
+    errors: report.summary.errors,
+    warnings: report.summary.warnings,
+    passed,
+    failed: failed.map(clip),
+    warn: warn.map(clip),
+  };
+}
+
+/** 收集报告里全部插件/工具问题文本（doctor 的 error 分散在 plugins/tools 上）。 */
+/** 工具缺失败文案（DoctorTool 无 problems 数组，失败即 !ok + hint）。 */
+function toolFailText(name: string, hint?: string): string {
+  return `工具 ${name} 不可用${hint ? '：' + hint : ''}`;
+}
+
+/** 体检历史文件路径（惰性取 HOME——第八十二轮 migrate.ts 的教训）。 */
+function historyPath(): string {
+  // 惰性读环境：paths.ts 的 HOME 在模块加载时固化，同进程切目录会写错地方（第八十二轮教训）
+  const h = process.env.ZEROKIT_HOME ?? HOME;
+  return h + '/logs/doctor-history.jsonl';
+}
+
+/** 读历史（坏行跳过）， Newest 在前。文件不存在返回 []。 */
+export function readDoctorHistory(): DoctorHistoryEntry[] {
+  try {
+    const raw = readFileSync(historyPath(), 'utf-8').trim();
+    if (!raw) return [];
+    return raw.split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l) as DoctorHistoryEntry; } catch { return null; } })
+      .filter((x): x is DoctorHistoryEntry => x !== null).reverse();
+  } catch { return []; }
+}
+
+/** 追加一条并裁剪到 50 条（旧删新留）。 */
+export function appendDoctorHistory(entry: DoctorHistoryEntry): void {
+  const prev = readDoctorHistory();
+  const next = [entry, ...prev].slice(0, HISTORY_LIMIT);
+  mkdirSync(dirname(historyPath()), { recursive: true });
+  writeFileSync(historyPath(), next.map((e) => JSON.stringify(e)).join('\n') + '\n', 'utf-8');
+}
+
+export interface DoctorDiff {
+  added: string[];    // 新增问题
+  resolved: string[]; // 已解决
+  persist: string[];  // 仍在
+}
+
+/** 第八十四轮③⑤：与上一次体检对比 + 持续计数。 */
+export function diffDoctorHistory(current: DoctorHistoryEntry, prev: DoctorHistoryEntry | undefined): DoctorDiff {
+  if (!prev) return { added: [], resolved: [], persist: [] };
+  const cur = new Set([...current.failed, ...current.warn]);
+  const old = new Set([...prev.failed, ...prev.warn]);
+  const added = [...cur].filter((x) => !old.has(x));
+  const resolved = [...old].filter((x) => !cur.has(x));
+  const persist = [...cur].filter((x) => old.has(x));
+  return { added, resolved, persist };
+}
+
+/** 第八十四轮⑤：某问题文本在历史里连续出现的次数（从最新往回数）。 */
+export function persistCount(text: string, history: DoctorHistoryEntry[]): number {
+  let n = 0;
+  for (const e of history) {
+    if (e.failed.includes(text) || e.warn.includes(text)) n++;
+    else break;
+  }
+  return n;
+}
+
+/** 第八十四轮①：三级汇总行——CLI 与 Web 共用同一句人话。 */
+export function doctorSummaryLine(report: DoctorReport, passed: number): string {
+  const { errors, warnings } = report.summary;
+  return `✗${errors} 项需处理 · ⚠${warnings} 项建议 · ✓${passed} 项通过`;
 }
 
 /** 第三十二轮⑩：找桌面壳可执行文件（仓库本地构建 / ~/.zerokit/bin）。 */
@@ -197,6 +294,8 @@ function checkPlugin(entry: ReturnType<typeof listPlugins>[number]): DoctorPlugi
 }
 
 export function buildDoctorReport(): DoctorReport {
+  // 第八十四轮②：先读上一次历史（本次结果稍后才落盘，不能把自己算进去）
+  const historyBefore = readDoctorHistory();
   const tools: DoctorTool[] = [{ name: 'node', ok: true, version: process.version, path: process.execPath }];
   for (const tool of ['python', 'git']) {
     const found = resolveTool(tool);
@@ -249,6 +348,7 @@ export function buildDoctorReport(): DoctorReport {
     desktop: { installed: shell.installed, path: shell.path, hotkey },
     orphanTimerKeys,
     plugins,
+    history: historyBefore.slice(0, 5),
     summary: {
       plugins: plugins.length,
       actions: plugins.reduce((n, p) => n + p.actions, 0),

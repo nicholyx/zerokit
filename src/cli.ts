@@ -20,7 +20,7 @@ import {
 import { type ScaffoldExample, type ScaffoldRuntime, scaffoldPlugin } from './core/scaffold.ts';
 import { applyUpdate, checkUpdate, listUpdateStates } from './core/update.ts';
 import { checkRequires } from './core/resolve.ts';
-import { buildDoctorReport } from './core/doctor.ts';
+import { buildDoctorReport, toHistoryEntry, appendDoctorHistory, readDoctorHistory, diffDoctorHistory, persistCount, doctorSummaryLine } from './core/doctor.ts';
 import { killAllProcesses, killProcess, listProcesses } from './core/runtime.ts';
 import { readSource } from './core/sources.ts';
 import { makeSnapshot, parseSnapshot, restoreSnapshot, diffSnapshot } from './core/migrate.ts';
@@ -1582,11 +1582,39 @@ async function cmdDoctor(): Promise<number> {
   const auditView = readAuditDetailed();
   const recentErrs = recentErrors(auditView.records, 50);
   const last24h = recentErrs.filter((r) => Date.now() - new Date(r.ts).getTime() < 86400_000).length;
+  // 第八十四轮②：本次体检摘要落历史（report.history 里已带此前 5 条）
+  const passedCount = report.tools.filter((t) => t.ok).length
+    + report.plugins.filter((pl) => pl.problems.length === 0).length;
+  const entry = toHistoryEntry(report, passedCount);
+  appendDoctorHistory(entry);
+  const fullHistory = readDoctorHistory();
+  const diff = diffDoctorHistory(entry, fullHistory[1]);
+  // 第八十四轮③：--diff 只看变化
+  if (process.argv.includes('--diff')) {
+    if (fullHistory.length < 2) {
+      process.stdout.write('没有上一次体检记录（这是第一次）。先跑一次 zkit doctor 建立基线。\n');
+      return 0;
+    }
+    process.stdout.write(c.bold(`与上一次（${String(fullHistory[1]!.ts).slice(0, 19).replace('T', ' ')}）对比：\n`));
+    if (diff.added.length === 0 && diff.resolved.length === 0 && diff.persist.length === 0) {
+      process.stdout.write(c.green('  无变化。\n'));
+    }
+    for (const t of diff.added) process.stdout.write(c.red(`  + 新增：${t}\n`));
+    for (const t of diff.resolved) process.stdout.write(c.green(`  - 已解决：${t}\n`));
+    for (const t of diff.persist) {
+      const n = persistCount(t, fullHistory);
+      process.stdout.write(c.yellow(`  = 仍在：${t}${n > 1 ? c.dim(`（持续 ${n} 次）`) : ''}\n`));
+    }
+    return 0;
+  }
   // 第二十九轮⑥：--json 机读输出——CI/脚本消费诊断结果；退出码语义不变
   if (process.argv.includes('--json')) {
     process.stdout.write(JSON.stringify({
       ok: report.summary.errors === 0,
       summary: report.summary,
+      summaryLine: doctorSummaryLine(report, passedCount),
+      history: fullHistory.slice(0, 5),
+      diff,
       recentErrors: { last24h, total: recentErrs.length },
       tools: report.tools.map((t) => ({ name: t.name, ok: t.ok, version: t.version ?? null, path: t.path ?? null })),
       dirs: report.dirs,
@@ -1625,6 +1653,13 @@ async function cmdDoctor(): Promise<number> {
     process.stdout.write(c.green('✓ 数据目录结构已确保齐全\n'));
   }
   process.stdout.write(c.bold('环境自检\n'));
+  // 第八十四轮①：三级汇总行置顶——先给全局结论再看明细
+  process.stdout.write(`  ${doctorSummaryLine(report, passedCount)}\n`);
+  // 第八十四轮④：最近 5 次体检趋势（新→旧）
+  if (fullHistory.length >= 2) {
+    const trend = fullHistory.slice(0, 5).map((e) => `✗${e.errors}/⚠${e.warnings}`).join(' → ');
+    process.stdout.write(c.dim(`  最近体检：${trend}\n`));
+  }
   // 第三十二轮⑩：桌面壳是可选组件，单独一行说清状态
   process.stdout.write(report.desktop.installed
     ? `  ${c.green('✓')} 桌面壳已安装${report.desktop.hotkey ? c.dim(`（热键 ${report.desktop.hotkey}）`) : ''}\n`
@@ -1665,9 +1700,11 @@ async function cmdDoctor(): Promise<number> {
       ? `  ${c.red('✗')} ${plugin.name || plugin.dir}\n`
       : `  ${c.green('✓')} ${plugin.name} ${c.dim(plugin.id)}\n`);
     for (const problem of plugin.problems) {
+      const pn = persistCount(problem.text.length > 120 ? problem.text.slice(0, 117) + '…' : problem.text, fullHistory);
+      const persistTag = pn >= 2 ? c.red(` ⚠ 持续 ${pn} 次`) : '';
       process.stdout.write(problem.level === 'error'
-        ? c.red(`      ✗ ${problem.text}\n`)
-        : c.yellow(`      ! ${problem.text}\n`));
+        ? c.red(`      ✗ ${problem.text}${persistTag}\n`)
+        : c.yellow(`      ! ${problem.text}${persistTag}\n`));
       if (problem.hint) {
         for (const line of problem.hint.split('\n')) process.stdout.write(c.dim(`        ${line}\n`));
       }
