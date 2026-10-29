@@ -2635,3 +2635,89 @@ export function flattenRuns(runs) {
   }
   return out;
 }
+
+// ==================== 第七十二轮：上下文与智能默认 ====================
+
+/**
+ * ①剪贴板感知：判断剪贴板文本与参数类型的匹配度。
+ * 返回 null（不匹配）或 { field, reason }——reason 是给人看的「为什么建议填这里」。
+ * 规则刻意保守：宁可少建议，不要把剪贴板隐私内容到处标。
+ */
+export function clipboardMatch(text, fields) {
+  if (!text || typeof text !== 'string' || text.length > 100_000) return null;
+  const t = text.trim();
+  if (!t || t.length < 1) return null;
+  // 先整条剪贴板定性，再找字段——顺序不能反过来：
+  // 「1760000000」既是数字也是时间戳，按字段遍历顺序谁先到谁抢走，
+  // 值的语义应优先于字段的出现顺序
+  const looksLikeTs = /^1[6-9]\d{8}(?:\d{3})?$/.test(t);
+  for (const f of fields) {
+    if (!f || f.type === 'checkbox' || f.type === 'select') continue;
+    if (looksLikeTs && f.type !== 'number' && /ts|time|日期|时间/i.test(f.name)) {
+      return { field: f.name, reason: '剪贴板像时间戳' };
+    }
+    if (f.type === 'number') {
+      if (!looksLikeTs && /^-?\d+(?:\.\d+)?$/.test(t)) return { field: f.name, reason: '剪贴板是数字' };
+      continue;
+    }
+    if (/^https?:\/\/\S+$/i.test(t)) {
+      if (/url|link|href|地址|链接/i.test(f.name)) return { field: f.name, reason: '剪贴板是网址' };
+      continue;
+    }
+    // 路径样子的值只建议给名字像路径的字段（不把任意文本灌进 path 参数）
+    if (/^(?:~|\.{0,2}\/|\/|[A-Za-z]:[\\/])\S/.test(t)) {
+      if (/path|dir|file|目录|路径|文件/i.test(f.name)) return { field: f.name, reason: '剪贴板像路径' };
+      continue;
+    }
+    // 通用文本：只建议给名字含关键词的字段（query/q/text/内容/搜索），且剪贴板较短
+    if (t.length <= 200 && /^(query|q|text|content|搜索|内容|关键字|关键词)$/i.test(f.name)) {
+      return { field: f.name, reason: '剪贴板是短文本' };
+    }
+  }
+  return null;
+}
+
+/**
+ * ②参数历史：从该动作的执行历史里取同名字段的历史取值（最近优先、去重、限量）。
+ * runs: runStore[key] 数组（unshift 语义首位最新）
+ */
+export function paramHistory(runs, fieldName, limit = 5) {
+  if (!Array.isArray(runs) || !fieldName) return [];
+  const seen = new Set();
+  const out = [];
+  for (const r of runs) {
+    const v = r?.values?.[fieldName];
+    if (v === undefined || v === null || v === '') continue;
+    const key = String(v);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(v);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/**
+ * ③智能默认占位：无默认无历史时按参数类型给 placeholder 建议（不填值——占位只是提示形状）。
+ */
+export function suggestPlaceholder(field) {
+  if (!field || field.type === 'checkbox' || field.type === 'select') return '';
+  if (field.type === 'number') return String(field.min ?? 0);
+  const n = field.name ?? '';
+  if (/url|link|href/i.test(n)) return 'https://';
+  if (/path|dir|file/i.test(n)) return '~/' ;
+  if (/ts$|time|date/i.test(n)) return '1760000000';
+  if (/^q$|query|search|搜索/i.test(n)) return '关键词';
+  if (/mail/i.test(n)) return 'user@example.com';
+  return '';
+}
+
+/**
+ * ⑦表单 dirty 高亮判定：当前值 ≠ 初始值即 dirty（checkbox 单独比，字符串归一后比）。
+ */
+export function isFieldDirty(field, current, initial) {
+  if (!field) return false;
+  if (field.type === 'checkbox') return Boolean(current) !== Boolean(initial);
+  const norm = (v) => (v === undefined || v === null ? '' : String(v));
+  return norm(current) !== norm(initial);
+}

@@ -2,7 +2,7 @@
 //
 // 这些函数都在 web/extras.js 里，不碰 DOM / localStorage / fetch，
 // 所以可以直接在 Node 里跑。界面接线另由 webui-smoke 断言。
-import { paramsHint, recencyOrder, coActions, flattenRuns, THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref, OVERFLOW_ROWS, PAGE_ROWS, toAiMarkdown, packContext, toMcpConfig, toLlmJsonl, toCurl, watchTrendMarkdown, TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory, looksLikeTimestamp, humanTs, emptyReason, tocFromMd } from '../web/extras.js';
+import { paramsHint, recencyOrder, coActions, flattenRuns, THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref, OVERFLOW_ROWS, PAGE_ROWS, toAiMarkdown, packContext, toMcpConfig, toLlmJsonl, toCurl, watchTrendMarkdown, TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory, looksLikeTimestamp, humanTs, emptyReason, tocFromMd, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty } from '../web/extras.js';
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -1234,6 +1234,48 @@ console.log('\n' + '='.repeat(60));
   check('coActions 无历史空数组', Array.isArray(co2) && co2.length === 0);
   const co3 = coActions(runs, 'a.x', 1);
   check('coActions limit 生效', co3.length === 1);
+}
+
+// ==================== 第七十二轮：上下文与智能默认 ====================
+{
+  const fields = [
+    { name: 'url', type: 'text' },
+    { name: 'limit', type: 'number' },
+    { name: 'path', type: 'text' },
+    { name: 'ts', type: 'text' },
+    { name: 'query', type: 'text' },
+    { name: 'ok', type: 'checkbox' },
+  ];
+  check('72 clipboardMatch url', clipboardMatch('https://a.com', fields)?.field === 'url');
+  check('72 clipboardMatch number', clipboardMatch('42', fields)?.field === 'limit');
+  check('72 clipboardMatch path', clipboardMatch('~/docs/x.md', fields)?.field === 'path');
+  check('72 clipboardMatch ts', clipboardMatch('1760000000', fields)?.field === 'ts');
+  check('72 clipboardMatch 通用文本不乱配', clipboardMatch('随便一段长文本'.repeat(50), fields) === null);
+  check('72 clipboardMatch 空/超长 null', clipboardMatch('', fields) === null && clipboardMatch('x'.repeat(200000), fields) === null);
+}
+{
+  const runs = [
+    { values: { limit: '20' } },
+    { values: { limit: '50' } },
+    { values: { limit: '20' } },
+    { values: {} },
+    { values: { limit: '100' } },
+    { values: { limit: '200' } },
+  ];
+  check('72 paramHistory 去重保序限量', JSON.stringify(paramHistory(runs, 'limit', 5)) === JSON.stringify(['20', '50', '100', '200']));
+  check('72 paramHistory 空值跳过', paramHistory([{ values: { q: '' } }, { values: { q: 'a' } }], 'q').length === 1);
+  check('72 paramHistory 无 values 安全', paramHistory([null, {}], 'x').length === 0);
+}
+{
+  check('72 placeholder url', suggestPlaceholder({ name: 'url', type: 'text' }) === 'https://');
+  check('72 placeholder path', suggestPlaceholder({ name: 'file_path', type: 'text' }) === '~/');
+  check('72 placeholder number', suggestPlaceholder({ name: 'n', type: 'number', min: 5 }) === '5');
+  check('72 placeholder checkbox 空', suggestPlaceholder({ name: 'c', type: 'checkbox' }) === '');
+}
+{
+  check('72 isFieldDirty text', isFieldDirty({ name: 'x', type: 'text' }, 'a', 'b') === true);
+  check('72 isFieldDirty 归一', isFieldDirty({ name: 'x', type: 'text' }, 5, '5') === false);
+  check('72 isFieldDirty checkbox', isFieldDirty({ name: 'c', type: 'checkbox' }, true, undefined) === true);
 }
 
 // ======================= 汇总（必须在所有块之后） =======================

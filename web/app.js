@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns } from './extras.js';
+import { pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -1561,10 +1561,21 @@ function openDetail(plugin, action, prefill) {
   // 深链 query 预填：#/插件/动作?字段=值——比 prefill 更显式的传参方式
   const linkParams = deepLinkParams(location.hash);
   const effectiveInitial = { ...initial, ...linkParams };
+  // 第七十二轮②③：参数历史（同名字段最近取值）与智能占位
   const fields = action.fields.map((f) => {
     const req = f.required ? ' <span class="req">*</span>' : '';
     const help = f.help ? `<div class="help">${esc(f.help)}</div>` : '';
     const errId = `err_${esc(f.name)}`;
+    // ② 同名参数历史 chips（最近 5 个去重；secret 不给——历史里本来也不记 secret）
+    const hist = f.secret ? [] : paramHistory(runStore[favKey] ?? [], f.name, 5)
+      .filter((v) => String(v) !== String(effectiveInitial[f.name] ?? ''));
+    const histChips = hist.length
+      ? `<div class="param-hist" data-hist="${esc(f.name)}">${hist.map((v) =>
+          `<button type="button" class="ghost mini chip" data-histfill="${esc(f.name)}" data-val="${esc(String(v))}" title="点击填入这个历史值">${esc(String(v).length > 24 ? String(v).slice(0, 24) + '…' : String(v))}</button>`).join('')}</div>`
+      : '';
+    // ③ 智能占位：无值无默认时按类型给形状提示（placeholder 不进提交值）
+    const given0 = effectiveInitial[f.name] !== undefined ? effectiveInitial[f.name] : f.default;
+    const ph = given0 === undefined || given0 === '' ? suggestPlaceholder(f) : '';
     if (f.type === 'checkbox') {
       const checked = effectiveInitial[f.name] !== undefined ? effectiveInitial[f.name] === 'true' || effectiveInitial[f.name] === true : Boolean(f.default);
       return `<div class="field check" data-field="${esc(f.name)}">
@@ -1588,19 +1599,19 @@ function openDetail(plugin, action, prefill) {
       : '';
     if (f.multiline) {
       return `<div class="field" data-field="${esc(f.name)}"><label>${esc(f.name)}${req}</label>
-        <textarea id="f_${esc(f.name)}" rows="3" class="auto-grow">${esc(given ?? '')}</textarea>${help}
+        <textarea id="f_${esc(f.name)}" rows="3" class="auto-grow" placeholder="${esc(ph)}" data-initial="${esc(given0 ?? '')}">${esc(given ?? '')}</textarea>${help}${histChips}
         <div class="field-err hidden" id="${errId}"></div></div>`;
     }
     if (f.secret) {
       return `<div class="field secret-field" data-field="${esc(f.name)}"><label>${esc(f.name)}${req}</label>
         <div class="secret-wrap">
-          <input id="f_${esc(f.name)}" type="password"${def} autocomplete="off">
+          <input id="f_${esc(f.name)}" type="password"${def} placeholder="${esc(ph)}" autocomplete="off" data-initial="${esc(given0 ?? '')}">
           <button type="button" class="ghost mini eye" data-eye="${esc(f.name)}" aria-label="显示或隐藏明文" title="显示/隐藏明文">👁</button>
         </div>${help}
         <div class="field-err hidden" id="${errId}"></div></div>`;
     }
     return `<div class="field" data-field="${esc(f.name)}"><label>${esc(f.name)}${req}</label>
-      <input id="f_${esc(f.name)}" type="${type}"${numAttrs}${def} autocomplete="off">${help}
+      <input id="f_${esc(f.name)}" type="${type}"${numAttrs}${def} placeholder="${esc(ph)}" autocomplete="off" data-initial="${esc(given0 ?? '')}">${help}${histChips}
       <div class="field-err hidden" id="${errId}"></div></div>`;
   }).join('');
 
@@ -2036,6 +2047,54 @@ function openDetail(plugin, action, prefill) {
   });
   $('forgetParams')?.addEventListener('click', () => {
     delete paramStore[favKey];
+    savePrefs();
+    openDetail(plugin, action);
+  });
+
+  // 第七十二轮②：历史值 chip 点击回填 + 该字段立即标 dirty
+  el.detailView.querySelectorAll('[data-histfill]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const name = b.dataset.histfill;
+      const input = $(`f_${name}`);
+      if (!input) return;
+      if (input.type === 'checkbox') input.checked = b.dataset.val === 'true';
+      else input.value = b.dataset.val;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.classList.add('dirty');
+      input.closest('.field')?.classList.add('is-dirty');
+    });
+  });
+
+  // 第七十二轮⑦：恢复默认后清掉全部 dirty 标记（值已回初始，视觉也回初始）
+  $('resetBtn')?.addEventListener('click', () => {
+    el.detailView.querySelectorAll('.field.is-dirty, input.dirty').forEach((n) => n.classList.remove('is-dirty', 'dirty'));
+  }, { capture: true });
+
+  // 第七十二轮①：剪贴板感知——权限降级链（读得到→匹配→给建议条；读不到→静默不出）
+  if (navigator.clipboard?.readText) {
+    navigator.clipboard.readText().then((txt) => {
+      const m = clipboardMatch(txt, action.fields ?? []);
+      if (!m) return;
+      const bar = document.createElement('div');
+      bar.className = 'mem-note clip-note';
+      bar.innerHTML = `<b>📋 ${esc(m.reason)}</b> → 建议填进参数 <code>${esc(m.field)}</code>
+        <button type="button" class="ghost mini" id="clipFill">填入</button>
+        <button type="button" class="ghost mini" id="clipDismiss">不了</button>`;
+      const head = el.detailView.querySelector('.detail-head');
+      head?.appendChild(bar);
+      $('clipFill')?.addEventListener('click', () => {
+        const input = $(`f_${m.field}`);
+        if (input) {
+          input.value = txt.trim();
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.classList.add('dirty');
+          input.closest('.field')?.classList.add('is-dirty');
+        }
+        bar.remove();
+      });
+      $('clipDismiss')?.addEventListener('click', () => bar.remove());
+    }).catch(() => { /* 无权限/非聚焦——静默 */ });
+  }
 
   $('aliasInput')?.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
@@ -2127,9 +2186,6 @@ function openDetail(plugin, action, prefill) {
     else delete nicknames[key];
     savePrefs();
     openDetail(plugin, action, prefill);
-  });
-    savePrefs();
-    openDetail(plugin, action);
   });
   renderRiskCard(plugin, action);
   renderRunHistory(plugin, action);
@@ -3178,6 +3234,8 @@ function askConfirm(plugin, action, res) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.className = 'overlay';
+    // 第七十二轮⑧：摘要表用当前表单值（确认的就是将要执行的，不读 res 里的旧值）
+    const vals = collectValues(action);
     const rememberable = action.risk !== 'destructive';
     const riskExplain = action.risk === 'destructive'
       ? '这个动作会改动或删除数据，且不可自动撤销。请确认命令行内容与你的预期一致。'
@@ -3191,6 +3249,14 @@ function askConfirm(plugin, action, res) {
         </div>
         <div class="confirm-explain">${riskExplain}</div>
         <div class="cmd-line">${esc(res.command || '(无动作)')}</div>
+        ${(action.fields ?? []).length ? `<details class="param-summary"><summary>将使用的参数（${(action.fields ?? []).length} 项）</summary>
+          <table class="cmp-table"><caption class="sr-only">确认执行时的参数摘要</caption><tbody>${(action.fields ?? []).map((f) => {
+            const raw = vals?.[f.name];
+            const shown = raw === undefined || raw === '' || raw === null
+              ? '<span class="dim">（空，用默认）</span>'
+              : f.secret ? '••••••' : esc(String(raw).length > 60 ? String(raw).slice(0, 60) + '…' : String(raw));
+            return `<tr><th>${esc(f.name)}${f.required ? ' *' : ''}</th><td>${shown}</td></tr>`;
+          }).join('')}</tbody></table></details>` : ''}
         ${rememberable ? `<div class="remember">
           <input type="checkbox" id="rememberBox" checked>
           <label for="rememberBox">记住这个动作，以后不再询问</label>
