@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS } from './extras.js';
+import { pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -96,6 +96,8 @@ let notesStore = {};  // 执行备注：actionKey -> { text, ts }
 let accent = 'ocean';
 let searchHistory = [];
 let listFilter = 'all';
+// 第六十九轮⑦：列表排序模式（default=插件序 / recent=最近使用，r/m 键切换并记忆）
+let sortMode = localStorage.getItem('zerokit.sortmode') === 'recent' ? 'recent' : 'default';
 let pluginTags = {};
 let aliases = {};
 let nicknames = {};
@@ -729,8 +731,12 @@ function itemHtml(entry, i, showPlugin, query = '') {
   const fav = isFavorite(favorites, key);
   // 搜索态跨插件，条目里带上插件名；浏览态有分组头就不重复了
   const who = showPlugin ? `<span class="plugin">${highlightHtml(p.name, query, esc)}</span>` : '';
+  // 第六十九轮③：参数摘要 tooltip（与 risk-dot 的 title 分工：点上是风险，行尾摘要参数）
+  // 前端动作对象用的是清单层翻译后的 fields（name/type/required），正好对上 paramsHint 入参
+  const phint = paramsHint(a.fields ?? a.params ?? []);
   return `<li class="item${i === active ? ' active' : ''}${smart ? ' smart' : ''}${fav ? ' fav' : ''}${i < 10 ? ' zk-stagger' : ''}" data-i="${i}" data-key="${esc(key)}" role="option"
     style="${i < 10 ? `animation-delay:${i * 18}ms` : ''}"
+    ${phint ? `title="${esc(phint)}"` : ''}
     aria-selected="${i === active ? 'true' : 'false'}" tabindex="${i === active ? 0 : -1}">
     <span class="risk-dot" data-risk="${esc(a.risk)}" title="${esc(riskText(a.risk))}"></span>
     ${who}
@@ -748,6 +754,14 @@ function itemHtml(entry, i, showPlugin, query = '') {
     <span class="badge ${esc(a.risk)}">${esc(riskText(a.risk))}</span>
   </li>`;
 }
+
+/** 第六十九轮⑧：列表密度三档——紧凑 30px / 舒适 38px / 宽松 48px 行高（body 类驱动）。 */
+function applyDensity(mode) {
+  document.body.classList.remove('ld-compact', 'ld-normal', 'ld-loose');
+  document.body.classList.add(`ld-${mode}`);
+}
+// 启动恢复
+applyDensity(localStorage.getItem('zerokit.ldensity') || 'normal');
 
 function hidePanels() {
   for (const v of [el.listView, el.detailView, el.workbench, el.psView,
@@ -1034,9 +1048,18 @@ function renderListInner() {
   perfStats.searchMs = Math.round((performance.now() - tS) * 10) / 10;
   const baseEntries = results.map((r) => r.entry);
   const built = filterActions(baseEntries, listFilter, favorites);
-  filtered = q.trim() === '' && favorites.length > 0 && listFilter === 'all'
-    ? favoritesFirst(built, new Set(favorites))
+  // 第六十九轮⑦：recent 排序——空搜索浏览态按最近执行时间排（搜索态保持相关度序不掺和）
+  const recentMap = {};
+  for (const [k, arr] of Object.entries(runStore)) {
+    const ts = arr?.[0]?.ts;
+    if (typeof ts === 'number' && ts > 0) recentMap[k] = ts;
+  }
+  const orderedBuilt = (sortMode === 'recent' && q.trim() === '')
+    ? recencyOrder(built, recentMap)
     : built;
+  filtered = q.trim() === '' && favorites.length > 0 && listFilter === 'all'
+    ? favoritesFirst(orderedBuilt, new Set(favorites))
+    : orderedBuilt;
   filteredSmart = new Map(results
     .filter((r) => r.smart && filtered.includes(r.entry))
     .map((r) => [r.entry.order, r.smart]));
@@ -1124,7 +1147,8 @@ function renderListInner() {
       if (!groups.has(id)) groups.set(id, []);
       groups.get(id).push([entry, i]);
     });
-    el.list.innerHTML = (listFilter === 'all' ? recentBlockHtml() : '')
+    el.list.innerHTML = (sortMode === 'recent' ? '<li class="sort-note">按最近使用排序（m 键切回插件序）</li>' : '')
+      + (listFilter === 'all' ? recentBlockHtml() : '')
       + [...groups.entries()].map(([id, items]) => {
       const p = items[0][0].plugin;
       const isCollapsed = collapsed.has(id);
@@ -1136,7 +1160,7 @@ function renderListInner() {
       return `<li class="group-head${isCollapsed ? ' collapsed' : ''}" data-group="${esc(id)}" title="${esc(riskTip)}">
           <span class="g-arrow">${isCollapsed ? '▸' : '▾'}</span>
           <span class="g-name">${esc(p.name)}</span>
-          <span class="g-meta">${esc(p.id)} · v${esc(p.version)} · ${items.length} 个动作</span>
+          <span class="g-meta">${esc(p.id)} · <span class="badge ver">v${esc(p.version)}</span> <span class="badge">${items.length} 个动作</span></span>
           ${dep}
         </li>`
         + (isCollapsed ? '' : items.map(([entry, i]) => itemHtml(entry, i, false, '')).join(''));
@@ -7275,6 +7299,40 @@ document.addEventListener('keydown', (e) => {
   if (!typing && e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
     e.preventDefault();
     showHotkeyCheat();
+    return;
+  }
+  // 第六十九轮⑤：Tab 键在列表态快速过滤——只看带参数/无参数动作（再按切回全部）
+  // 注：真 Tab 键留给焦点导航，这里用 F2 语义太重——用 [ 无冲突（详情态才占 [ ]）；
+  // 列表态 [ = 只看带参数，] = 只看无参数，重复按同一键回 all。
+  if (!detail && !typing && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === '[' || e.key === ']')) {
+    e.preventDefault();
+    const want = e.key === '[' ? 'has-params' : 'no-params';
+    listFilter = listFilter === want ? 'all' : want;
+    renderList();
+    return;
+  }
+  // 第六十九轮⑥：列表态 . 键打开当前激活项详情（与详情态 j/k 表格行选一致的习惯延伸）
+  if (!detail && !typing && e.key === '.' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    const li = el.list.querySelector(`li.item[data-i="${active}"]`);
+    if (li) li.click();
+    return;
+  }
+  // 第六十九轮⑧：d 键循环列表密度三档（紧凑/舒适/宽松，记忆 zerokit.ldensity）
+  if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey && e.key === 'd') {
+    e.preventDefault();
+    const cur = localStorage.getItem('zerokit.ldensity') || 'normal';
+    const nxt = cur === 'compact' ? 'normal' : cur === 'normal' ? 'loose' : 'compact';
+    localStorage.setItem('zerokit.ldensity', nxt);
+    applyDensity(nxt);
+    return;
+  }
+  // 第六十九轮⑦：列表排序模式 r = 插件序（默认）/ m = 最近使用
+  if (!detail && !typing && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'r' || e.key === 'm')) {
+    e.preventDefault();
+    sortMode = sortMode === 'recent' ? 'default' : 'recent';
+    localStorage.setItem('zerokit.sortmode', sortMode);
+    renderList();
     return;
   }
   if (detail) {

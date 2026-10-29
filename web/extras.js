@@ -171,6 +171,9 @@ export function accentColor(id) {
 export const FILTERS = [
   { id: 'all', label: '全部' },
   { id: 'fav', label: '收藏' },
+  // 第六十九轮⑤：[ / ] 键（或点 chip）只看带参数/无参数动作
+  { id: 'has-params', label: '带参数' },
+  { id: 'no-params', label: '无参数' },
   { id: 'read', label: '只读' },
   { id: 'mutate', label: '会改动' },
   { id: 'destructive', label: '高风险' },
@@ -185,6 +188,11 @@ export function filterActions(items, filter, favorites) {
   if (filter === 'read' || filter === 'mutate' || filter === 'destructive') {
     return list.filter((e) => e.action.risk === filter);
   }
+  // 第六十九轮⑤：带/无参数过滤（chain 步骤参数不算——看的是动作自身入参；
+  // 前端动作对象里参数字段叫 fields，内核清单叫 params，两处都认）
+  const paramCount = (e) => (e.action.fields ?? e.action.params ?? []).length;
+  if (filter === 'has-params') return list.filter((e) => paramCount(e) > 0);
+  if (filter === 'no-params') return list.filter((e) => paramCount(e) === 0);
   return list;
 }
 
@@ -2552,4 +2560,36 @@ code{font-family:ui-monospace,Menlo,monospace;font-size:13px}
 </style></head><body>
 ${out.join('\n')}
 </body></html>`;
+}
+
+
+// ---------------- 第六十九轮：信息密度与浏览效率 ----------------
+
+/**
+ * 参数摘要 tooltip：一行说清参数名/类型/必填（悬停不点进去就能看全）。
+ * params 形如 [{name,type,required?,description?}]；空数组返回 ''。
+ */
+export function paramsHint(params) {
+  if (!Array.isArray(params) || params.length === 0) return '';
+  const parts = params.slice(0, 6).map((prm) => {
+    const t = prm.type ? `:${prm.type}` : '';
+    const req = prm.required ? '*' : '';
+    return `${prm.name}${t}${req}`;
+  });
+  const more = params.length > 6 ? ` …共 ${params.length} 个` : '';
+  return `参数：${parts.join('  ')}${more}（* 必填）`;
+}
+
+/**
+ * 最近使用排序：按 runs 里该动作最近执行时间降序；没跑过的按原序垫底（稳定）。
+ * entries: [{key, order}]；recentMap: {actionKey: lastTs}。
+ */
+export function recencyOrder(entries, recentMap) {
+  const idx = new Map(entries.map((e, i) => [e.key, i]));
+  return [...entries].sort((a, b) => {
+    const ta = recentMap[a.key] ?? 0;
+    const tb = recentMap[b.key] ?? 0;
+    if (ta !== tb) return tb - ta;
+    return (idx.get(a) ?? 0) - (idx.get(b) ?? 0);
+  });
 }

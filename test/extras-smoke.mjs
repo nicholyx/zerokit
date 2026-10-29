@@ -2,7 +2,7 @@
 //
 // 这些函数都在 web/extras.js 里，不碰 DOM / localStorage / fetch，
 // 所以可以直接在 Node 里跑。界面接线另由 webui-smoke 断言。
-import { THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref, OVERFLOW_ROWS, PAGE_ROWS, toAiMarkdown, packContext, toMcpConfig, toLlmJsonl, toCurl, watchTrendMarkdown, TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory, looksLikeTimestamp, humanTs, emptyReason, tocFromMd } from '../web/extras.js';
+import { paramsHint, recencyOrder, THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref, OVERFLOW_ROWS, PAGE_ROWS, toAiMarkdown, packContext, toMcpConfig, toLlmJsonl, toCurl, watchTrendMarkdown, TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory, looksLikeTimestamp, humanTs, emptyReason, tocFromMd } from '../web/extras.js';
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -125,7 +125,7 @@ const filterPool = [
   { plugin: { id: 'p' }, action: { id: 'b', risk: 'mutate' } },
   { plugin: { id: 'q' }, action: { id: 'c', risk: 'destructive' } },
 ];
-check('筛选：五档标签', FILTERS.map((f) => f.id).join(',') === 'all,fav,read,mutate,destructive');
+check('筛选：七档标签', FILTERS.map((f) => f.id).join(',') === 'all,fav,has-params,no-params,read,mutate,destructive');
 check('筛选：只读/会改动/高风险各自命中',
   filterActions(filterPool, 'read', []).length === 1
   && filterActions(filterPool, 'mutate', []).length === 1
@@ -1183,3 +1183,31 @@ const failed = results.filter((r) => !r[1]);
 for (const [name] of failed) console.error('FAIL  ' + name);
 console.log(`通过 ${results.length - failed.length} / ${results.length}`);
 if (failed.length) process.exitCode = 1;
+
+// ---------------- 第六十九轮：信息密度 ----------------
+{
+  const h1 = paramsHint([{ name: 'limit', type: 'integer', required: true }]);
+  check('paramsHint 单参数标注', h1.includes('limit:integer*') && h1.includes('必填'));
+  const h2 = paramsHint([]);
+  check('paramsHint 空参数空串', h2 === '');
+  const h3 = paramsHint(Array.from({ length: 8 }, (_, i) => ({ name: 'p' + i })));
+  check('paramsHint 超 6 个截断计数', h3.includes('共 8 个'));
+  const h4 = paramsHint(undefined);
+  check('paramsHint undefined 兜底', h4 === '');
+}
+{
+  const entries = [{ key: 'a.x', order: 0 }, { key: 'a.y', order: 1 }, { key: 'b.z', order: 2 }];
+  const sorted = recencyOrder(entries, { 'b.z': 200, 'a.x': 100 });
+  check('recencyOrder 按最近降序', sorted[0].key === 'b.z' && sorted[1].key === 'a.x' && sorted[2].key === 'a.y');
+  const stable = recencyOrder(entries, {});
+  check('recencyOrder 无记录保持原序', stable[0].key === 'a.x' && stable[2].key === 'b.z');
+}
+{
+  const items = [
+    { plugin: { id: 'p' }, action: { id: 'one', risk: 'read', params: [{ name: 'x' }] } },
+    { plugin: { id: 'p' }, action: { id: 'two', risk: 'read', params: [] } },
+  ];
+  check('filterActions has-params', filterActions(items, 'has-params', []).length === 1);
+  check('filterActions no-params', filterActions(items, 'no-params', []).length === 1 && filterActions(items, 'no-params', [])[0].action.id === 'two');
+  check('FILTERS 含新档', FILTERS.some((f) => f.id === 'has-params') && FILTERS.some((f) => f.id === 'no-params'));
+}
