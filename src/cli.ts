@@ -23,6 +23,7 @@ import { checkRequires } from './core/resolve.ts';
 import { buildDoctorReport } from './core/doctor.ts';
 import { killAllProcesses, killProcess, listProcesses } from './core/runtime.ts';
 import { readSource } from './core/sources.ts';
+import { makeSnapshot, parseSnapshot, restoreSnapshot, diffSnapshot } from './core/migrate.ts';
 import { listServices, stopService } from './core/services.ts';
 import {
   addMarket, buildIndex, installFromMarket, loadMarkets, previewInstall,
@@ -2388,7 +2389,66 @@ async function cmdData(args: string[]): Promise<number> {
     process.stdout.write(c.green(`✓ 已恢复 ${w.watches.length} 个监控配置（页面下次打开时生效）\n`));
     return 0;
   }
-  process.stderr.write('用法：zkit data <export [--watch] [文件] | import 文件 [--no-watch]>\n');
+  // ---- 第八十二轮：配置迁移（snapshot/restore/list/diff/path）----
+  if (sub === 'path') {
+    process.stdout.write(HOME_PATH() + '\n');
+    return 0;
+  }
+  if (sub === 'snapshot') {
+    // ①打包：默认脱敏（secret 换占位符）；--with-secrets 显式携带
+    const withSecrets = rest.includes('--with-secrets');
+    const outDir = rest.find((a) => !a.startsWith('-')) ?? process.cwd();
+    if (!fs.existsSync(outDir)) { process.stderr.write(c.red(`✗ 目录不存在：${outDir}\n`)); return 2; }
+    const r = makeSnapshot(outDir, { withSecrets });
+    if (!r.ok || !r.file || !r.meta) { process.stderr.write(c.red(`✗ ${r.error ?? '打包失败'}\n`)); return 1; }
+    process.stdout.write(c.green(`✓ 快照已生成 → ${r.file}\n`));
+    process.stdout.write(`  来自本机（${r.meta.host}）；${r.meta.secretsRemoved > 0 ? c.yellow(`${r.meta.secretsRemoved} 个 secret 已脱敏，恢复后要重填（--with-secrets 可携带明文）`) : '无 secret 需要脱敏'}\n`);
+    return 0;
+  }
+  if (sub === 'list') {
+    // ③预览：不落盘
+    const file = rest.find((a) => !a.startsWith('-'));
+    if (!file || !fs.existsSync(file)) { process.stderr.write('用法：zkit data list <快照文件>\n'); return 2; }
+    const pr = parseSnapshot(fs.readFileSync(file));
+    if (!pr.ok) { process.stderr.write(c.red(`✗ ${pr.error}\n`)); return 1; }
+    const { meta, files } = pr.snap;
+    const settings = files.filter((f) => f.rel.startsWith('settings/'));
+    process.stdout.write(c.bold(`快照预览（来自 ${meta.host}，${meta.createdAt.slice(0, 19).replace('T', ' ')}）\n`));
+    process.stdout.write(`  设置文件 ${settings.length} 个 · 定时器 ${files.some((f) => f.rel === 'timers.json') ? '有' : '无'} · 监控 ${files.some((f) => f.rel === 'watch.json') ? '有' : '无'} · 授权表 ${files.some((f) => f.rel === 'allow.json') ? '有' : '无'}\n`);
+    for (const f of settings) process.stdout.write(`  · ${f.rel.replace('settings/', '')}\n`);
+    if (meta.secretsRemoved > 0) process.stdout.write(c.yellow(`  ⚠ ${meta.secretsRemoved} 个 secret 以占位符导出，恢复后需重填\n`));
+    return 0;
+  }
+  if (sub === 'restore') {
+    // ②恢复：默认跳过已存在，--overwrite 覆盖
+    const file = rest.find((a) => !a.startsWith('-'));
+    if (!file || !fs.existsSync(file)) { process.stderr.write('用法：zkit data restore <快照文件> [--overwrite]\n'); return 2; }
+    const pr = parseSnapshot(fs.readFileSync(file));
+    if (!pr.ok) { process.stderr.write(c.red(`✗ ${pr.error}\n`)); return 1; }
+    process.stdout.write(`来自 ${pr.snap.meta.host} 的快照（${pr.snap.files.length} 个文件）\n`);
+    const rr = restoreSnapshot(pr.snap, { overwrite: rest.includes('--overwrite') });
+    for (const rel of rr.applied) process.stdout.write(c.green(`  ✓ ${rel}\n`));
+    for (const rel of rr.skipped) process.stdout.write(c.yellow(`  跳过 ${rel}（已存在，--overwrite 覆盖）\n`));
+    if (rr.secretsToRefill > 0) process.stdout.write(c.yellow(`⚠ ${rr.secretsToRefill} 个 secret 是占位符——恢复后用 zkit config 重填\n`));
+    process.stdout.write(c.green(`✓ 应用 ${rr.applied.length} 个 · 跳过 ${rr.skipped.length} 个\n`));
+    return 0;
+  }
+  if (sub === 'diff') {
+    // ⑥对比
+    const file = rest.find((a) => !a.startsWith('-'));
+    if (!file || !fs.existsSync(file)) { process.stderr.write('用法：zkit data diff <快照文件>\n'); return 2; }
+    const pr = parseSnapshot(fs.readFileSync(file));
+    if (!pr.ok) { process.stderr.write(c.red(`✗ ${pr.error}\n`)); return 1; }
+    const entries = diffSnapshot(pr.snap);
+    if (entries.length === 0) { process.stdout.write(c.green('快照与当前数据一致\n')); return 0; }
+    for (const e of entries) {
+      const tag = e.kind === 'only-in-snapshot' ? c.yellow('快照有·本机无') : e.kind === 'only-in-here' ? c.cyan('本机有·快照无') : c.red('内容不同');
+      process.stdout.write(`  ${tag}  ${e.rel}\n`);
+    }
+    process.stdout.write(c.dim(`共 ${entries.length} 处差异\n`));
+    return 0;
+  }
+  process.stderr.write('用法：zkit data <snapshot [目录] [--with-secrets] | restore <file> [--overwrite] | list <file> | diff <file> | path | export | import>\n');
   return 2;
 }
 
