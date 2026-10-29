@@ -2,12 +2,17 @@
 
 （下一版攒着）
 
-## [0.84.0] - 2026-10-29
+## [0.85.0] - 2026-10-29
 
 ### Added
 
 - **首次运行体验（第八十轮）**：`zkit welcome`——首次运行显示欢迎语、分级体检摘要（✗N 必须修 · ⚠N 建议 · ✓N 通过）、三步上手（装插件→跑 starter→起界面）、缺工具按平台给安装命令（win32 winget / macOS brew / Linux apt）；回访只报状态增量不重念三步；`--json` 机读（firstRun/summary/starterAction/missingTools/nextSteps）；starter 动作按平台推荐（win32→系统概况 / macOS→当前时间 / Linux→进程概览）；首次标记 `.welcomed` 落盘幂等。
 - MCP 内建工具 `zerokit_welcome`：AI 客户端首次接入先调它拿环境摘要与上手路径（structuredContent 机读）；`zkit mcp tools` 列表与 server 同步含此内建项（`--risk`/`--plugin` 过滤时只列插件工具）。
+
+## [0.84.0] - 2026-10-29
+
+### Added
+
 - **监控持久化（第七十九轮）**：监控配置与最近采样持久化到 `~/.zerokit/watch.json`（浏览器写、server `/api/watch` 透传）；页面刷新/重启后配置与 samples 恢复、趋势线不断档；停止记录（原因+时间）一并落盘。
 - 监控告警升级：连续失败 ≥3 次时通知升级为告警，正文带前 3 条错误摘要；同动作 10 分钟去重窗口防刷屏。
 - `zkit data export [文件]` / `zkit data import <文件> [--no-watch]`：监控配置随备份导出导入，信封兼容第二十轮 collectBackup 格式（监控在 `meta.watch` 分区）。
