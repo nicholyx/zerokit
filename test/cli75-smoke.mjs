@@ -18,7 +18,7 @@ run(['plugin', 'bundled']);
 
 // 平台差异：sysinfo top 的列——macOS {PID,进程,内存}；Linux {PID,COMMAND,内存占用,CPU占用}
 const COL_MEM = process.platform === 'linux' ? '内存占用' : '内存';
-const COL_PROC = process.platform === 'linux' ? 'COMMAND' : '进程';
+const COL_PROC = '进程';
 const MEM_RE = process.platform === 'linux' ? /%/ : / MB/;
 const memOf = (l) => parseFloat(l.match(/([\d.]+) ?(MB|%)/)?.[1] ?? '0');
 const numOf = (l) => parseFloat(l.match(/([\d.]+)/)?.[1] ?? '0');
