@@ -7,7 +7,7 @@ import process from 'node:process';
 import { type Plugin, type RiskLevel, toolName } from './core/manifest.ts';
 import { HOME, LOG_DIR, PLUGINS_DIR } from './core/paths.ts';
 import { actionStats, gcAudit, readAudit, readAuditDetailed, recentErrors, SLOW_MS } from './core/ops.ts';
-import { packPlugin, publishReady, unpackPlugin } from './core/distro.ts';
+import { packPluginWithManifest as packPlugin, publishReady, unpackPlugin, verifyInstalled } from './core/distro.ts';
 import * as distroNs from './core/distro.ts';
 import { lintPlugin, docPlugin, docPluginJson } from './core/lintdoc.ts';
 import * as auditNs from './core/audit.ts';
@@ -992,6 +992,7 @@ async function cmdPlugin(args: string[]): Promise<number> {
   // ---- 第三十四轮：分发与市场工具 ----
   if (sub === 'pack') return cmdPluginPack(args.slice(1));
   if (sub === 'unpack') return cmdPluginUnpack(args.slice(1));
+  if (sub === 'verify') return cmdPluginVerify(args.slice(1));
   if (sub === 'info') return cmdPluginInfo(args.slice(1));
   if (sub === 'recommend') return cmdPluginRecommend(args.slice(1));
   if (sub === 'lint') return cmdPluginLint(args.slice(1));
@@ -1086,8 +1087,10 @@ function cmdPluginPack(args: string[]): number {
   }
   const r = packPlugin(id, outIdx >= 0 ? args[outIdx + 1] : undefined);
   if (!r.ok) { process.stderr.write(c.red(`✗ ${r.message}\n`)); return 1; }
+  const r2 = r as { integrity?: string };
   process.stdout.write(c.green(`✓ ${r.file}（${r.files?.length} 个文件，${r.bytes} 字节）\n`));
   for (const f of r.files ?? []) process.stdout.write(c.dim(`  ${f}\n`));
+  if (r2.integrity) process.stdout.write(c.dim(`  完整性：${r2.integrity}\n`));
   process.stdout.write(c.dim('  包里不含用户设置值（settings 只带 .example 模板）\n'));
   return 0;
 }
@@ -1099,10 +1102,31 @@ function cmdPluginUnpack(args: string[]): number {
     process.stderr.write('用法：zkit plugin unpack <zip 文件> [--replace 覆盖已装版本]\n');
     return 2;
   }
-  const r = unpackPlugin(file, { replace: args.includes('--replace') });
+  const r = unpackPlugin(file, { replace: args.includes('--replace'), verify: !args.includes('--no-verify') });
   if (!r.ok) { process.stderr.write(c.red(`✗ ${r.message}\n`)); return 1; }
   process.stdout.write(c.green(`✓ ${r.message}\n`));
   return 0;
+}
+
+/** 第六十二轮⑤：zkit plugin verify <id>——对已装插件复验完整性。 */
+function cmdPluginVerify(args: string[]): number {
+  const id = args.find((a) => !a.startsWith('-'));
+  if (!id) { process.stderr.write('用法：zkit plugin verify <id>\n'); return 2; }
+  const v = verifyInstalled(id);
+  if (v.noSnapshot) { process.stdout.write(c.yellow(`! ${v.message}\n`)); return 0; }
+  if (!v.ok && v.message && !v.changed.length && !v.missing.length) {
+    process.stderr.write(c.red(`✗ ${v.message}\n`)); return 1;
+  }
+  if (v.ok) {
+    process.stdout.write(c.green(`✓ ${id} ${v.message}\n`));
+    if (v.added.length) process.stdout.write(c.yellow(`! 后加的 ${v.added.length} 个文件（装时快照里没有）：\n`) + v.added.map((f) => c.dim(`  + ${f}\n`)).join(''));
+    return 0;
+  }
+  process.stderr.write(c.red(`✗ ${id} 与装时不一致：\n`));
+  for (const f of v.changed) process.stderr.write(c.red(`  ~ ${f}（内容被改动）\n`));
+  for (const f of v.missing) process.stderr.write(c.red(`  - ${f}（被删除）\n`));
+  process.stderr.write(c.dim('  被改过的插件别直接用：重装（plugin unpack --replace）或找作者确认\n'));
+  return 1;
 }
 
 /** ④zkit plugin publish-ready <id>：上架检查。 */

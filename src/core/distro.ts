@@ -5,7 +5,118 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
+import crypto from 'node:crypto';
 import { PLUGINS_DIR } from './paths.ts';
+
+// ---------------- 第六十二轮：包完整性（MANIFEST.sha256） ----------------
+
+/** 完整性清单文件在包内/装后的固定名字。 */
+export const INTEGRITY_FILE = 'MANIFEST.sha256';
+/** 装后快照（安装当时的逐文件哈希）存在插件目录里的隐藏文件。 */
+export const SNAPSHOT_FILE = '.zk-integrity.json';
+
+export interface IntegrityCheck {
+  ok: boolean;
+  /** 被改动（哈希不匹配）的文件 */
+  changed: string[];
+  /** 快照里有、磁盘上没了的文件 */
+  missing: string[];
+  /** 磁盘上有、快照里没有的新文件（不判罪，但要说出来） */
+  added: string[];
+  /** 快照本身缺失——装的时候就没有（老插件）或被人删了 */
+  noSnapshot?: boolean;
+  message?: string;
+}
+
+/** 生成 sha256sum 风格的清单文本：每行「哈希  路径」，按路径排序。 */
+export function buildManifest(files: Array<{ name: string; data: Buffer }>): string {
+  const lines = files
+    .filter((f) => f.name !== INTEGRITY_FILE)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((f) => `${crypto.createHash('sha256').update(f.data).digest('hex')}  ${f.name}`);
+  // 尾行是清单自身的 digest（对上面所有行的拼接取哈希）——
+  // 改清单里的任何一行（换文件哈希、删行）都会让总哈希对不上。
+  const total = crypto.createHash('sha256').update(lines.join('\n')).digest('hex');
+  lines.push(`${total}  # total`);
+  return lines.join('\n') + '\n';
+}
+
+/** 解析清单文本 → { files: Map<路径,哈希>, total }。格式不对返回 null。 */
+export function parseManifest(text: string): { files: Map<string, string>; total: string | null } | null {
+  const files = new Map<string, string>();
+  let total: string | null = null;
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const m = line.match(/^([0-9a-f]{64})\s{2}(.+)$/);
+    if (!m) return null;
+    const name = (m[2] ?? '').trim();
+    if (name === '# total') { total = m[1] ?? null; continue; }
+    files.set(name, m[1] ?? '');
+  }
+  return { files, total };
+}
+
+/** 校验一组条目 vs 清单文本。返回 null=通过；字符串数组=被改动/缺失的文件（带方向标注）。 */
+export function verifyAgainstManifest(entries: Array<{ name: string; data: Buffer }>, manifestText: string): string[] | null {
+  const parsed = parseManifest(manifestText);
+  if (!parsed) return ['MANIFEST.sha256 格式损坏（无法解析）'];
+  // 总哈希先验：清单自身被动过直接判「包损坏」，不逐文件浪费口舌
+  if (parsed.total) {
+    const body = manifestText.split('\n').filter((l) => l.trim() && !l.trim().endsWith('# total')).join('\n');
+    const actual = crypto.createHash('sha256').update(body).digest('hex');
+    if (actual !== parsed.total) return ['MANIFEST.sha256 总哈希不匹配——清单自身被改动或损坏'];
+  }
+  const byName = new Map(entries.filter((e) => e.name !== INTEGRITY_FILE).map((e) => [e.name, e.data] as const));
+  const bad: string[] = [];
+  for (const [name, hash] of parsed.files) {
+    const data = byName.get(name);
+    if (!data) { bad.push(`${name}（包里缺失）`); continue; }
+    const actual = crypto.createHash('sha256').update(data).digest('hex');
+    if (actual !== hash) bad.push(`${name}（内容被改动）`);
+  }
+  return bad.length ? bad : null;
+}
+
+/** 对已装插件目录复验：对照装时快照逐文件比哈希。 */
+export function verifyInstalled(id: string): IntegrityCheck {
+  const dir = path.join(PLUGINS_DIR, id);
+  if (!fs.existsSync(dir)) {
+    return { ok: false, changed: [], missing: [], added: [], message: `插件 ${id} 没有安装` };
+  }
+  const snapPath = path.join(dir, SNAPSHOT_FILE);
+  if (!fs.existsSync(snapPath)) {
+    return { ok: false, changed: [], missing: [], added: [], noSnapshot: true,
+      message: `没有装时快照（${SNAPSHOT_FILE}）——老插件或被打过补丁，无法复验` };
+  }
+  let snap: { files: Record<string, string> };
+  try {
+    snap = JSON.parse(fs.readFileSync(snapPath, 'utf8')) as { files: Record<string, string> };
+  } catch {
+    return { ok: false, changed: [], missing: [], added: [], message: `${SNAPSHOT_FILE} 损坏（不是合法 JSON）` };
+  }
+  const disk = new Set<string>();
+  const walk = (rel: string) => {
+    const abs = path.join(dir, rel);
+    const stat = fs.statSync(abs);
+    if (stat.isDirectory()) { for (const c of fs.readdirSync(abs)) walk(rel ? path.join(rel, c) : c); return; }
+    if (rel === SNAPSHOT_FILE || rel === INTEGRITY_FILE || rel.split(path.sep).includes('node_modules') || rel.endsWith('.DS_Store')) return;
+    disk.add(rel.split(path.sep).join('/'));
+  };
+  walk('');
+  const changed: string[] = [];
+  const missing: string[] = [];
+  for (const [name, hash] of Object.entries(snap.files)) {
+    if (!disk.has(name)) { missing.push(name); continue; }
+    const actual = crypto.createHash('sha256').update(fs.readFileSync(path.join(dir, ...name.split('/')))).digest('hex');
+    if (actual !== hash) changed.push(name);
+  }
+  const added = [...disk].filter((n) => !(n in snap.files));
+  const ok = changed.length === 0 && missing.length === 0;
+  return { ok, changed, missing, added,
+    message: ok ? `完整：${Object.keys(snap.files).length} 个文件与装时一致${added.length ? `（另有 ${added.length} 个后加文件）` : ''}` : undefined };
+}
+
 
 // ---------------- zip 最小读写（无外部依赖） ----------------
 
@@ -164,8 +275,41 @@ export function packPlugin(id: string, outDir?: string): PackResult {
   return { ok: true, file: out, files: files.map((f) => f.name), bytes: buf.length };
 }
 
-/** ②解包安装：校验 plugin.toml 结构与动作风险声明后落进插件目录。 */
-export function unpackPlugin(zipPath: string, opts: { replace?: boolean } = {}): PackResult {
+/** 第六十二轮①：打包带完整性清单。返回 [zip字节, 清单文本]。 */
+export function packPluginWithManifest(id: string, outDir?: string): PackResult & { integrity?: string } {
+  const dir = path.join(PLUGINS_DIR, id);
+  if (!fs.existsSync(dir)) return { ok: false, message: `插件 ${id} 没有安装（${dir} 不存在）` };
+  const files: Array<{ name: string; data: Buffer }> = [];
+  const walk = (rel: string) => {
+    const abs = path.join(dir, rel);
+    const stat = fs.statSync(abs);
+    if (stat.isDirectory()) {
+      for (const c of fs.readdirSync(abs)) walk(rel ? path.join(rel, c) : c);
+    } else {
+      if (rel.includes('node_modules' + path.sep) || rel.endsWith('.DS_Store')) return;
+      if (rel.startsWith('settings' + path.sep) && !rel.endsWith('.example')) return;
+      if (rel === SNAPSHOT_FILE) return;   // 装时快照不进包（各机器各装各的）
+      files.push({ name: rel.split(path.sep).join('/'), data: fs.readFileSync(abs) });
+    }
+  };
+  walk('');
+  files.sort((a, b) => a.name.localeCompare(b.name));
+  if (!files.some((f) => f.name === 'plugin.toml')) {
+    return { ok: false, message: '插件目录里没有 plugin.toml，不像是可安装的插件' };
+  }
+  const manifest = buildManifest(files);
+  const all = [...files, { name: INTEGRITY_FILE, data: Buffer.from(manifest, 'utf8') }];
+  const total = crypto.createHash('sha256').update(manifest).digest('hex');
+  const buf = zipFiles(all);
+  const out = path.join(outDir ?? process.cwd(), `zerokit-${id}.zip`);
+  fs.writeFileSync(out, buf);
+  return { ok: true, file: out, files: all.map((f) => f.name), bytes: buf.length, integrity: `sha256-${total}` };
+}
+
+/** ②解包安装：校验 plugin.toml 结构与动作风险声明后落进插件目录。
+ * 第六十二轮②⑧：包里带 MANIFEST.sha256 时先逐文件校验，任何不匹配拒绝安装；
+ * 清单自身被改/被删按「包损坏」处理（有清单条目却缺清单文件=不完整）。 */
+export function unpackPlugin(zipPath: string, opts: { replace?: boolean; verify?: boolean } = {}): PackResult {
   let entries: ZipEntry[];
   try {
     entries = unzipFiles(fs.readFileSync(zipPath));
@@ -174,6 +318,14 @@ export function unpackPlugin(zipPath: string, opts: { replace?: boolean } = {}):
   }
   const toml = entries.find((e) => e.name === 'plugin.toml');
   if (!toml) return { ok: false, message: '包里没有 plugin.toml，不装' };
+  // 完整性校验：默认开（老包没清单=没有可比对的基线，放行但提示）
+  const manifestEntry = entries.find((e) => e.name === INTEGRITY_FILE);
+  if (opts.verify !== false && manifestEntry) {
+    const bad = verifyAgainstManifest(entries, manifestEntry.data.toString('utf8'));
+    if (bad) {
+      return { ok: false, message: `完整性校验失败，拒绝安装：\n  - ${bad.join('\n  - ')}` };
+    }
+  }
   // 路径穿越防线：所有条目必须落在目标目录内
   const bad = entries.find((e) => e.name.includes('..') || path.isAbsolute(e.name));
   if (bad) return { ok: false, message: `包里有可疑路径 ${bad.name}，拒绝安装` };
@@ -196,6 +348,23 @@ export function unpackPlugin(zipPath: string, opts: { replace?: boolean } = {}):
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, e.data);
   }
+  // 第六十二轮④：装时快照落盘（.zk-integrity.json）——plugin verify 靠它复验。
+  // 快照基于清单（有清单的包）；没清单的旧包按解包后的实际内容生成。
+  const snapSource = manifestEntry
+    ? manifestEntry.data.toString('utf8')
+    : null;
+  const snapFiles: Record<string, string> = {};
+  if (snapSource) {
+    const parsed = parseManifest(snapSource);
+    if (parsed) for (const [n, h] of parsed.files) snapFiles[n] = h;
+  } else {
+    for (const e of entries) {
+      if (e.name === INTEGRITY_FILE) continue;
+      snapFiles[e.name] = crypto.createHash('sha256').update(e.data).digest('hex');
+    }
+  }
+  fs.writeFileSync(path.join(dest, SNAPSHOT_FILE),
+    JSON.stringify({ at: new Date().toISOString(), files: snapFiles }, null, 2));
   return { ok: true, file: dest, files: entries.map((e) => e.name), message: `已安装 ${id}（${entries.length} 个文件；覆盖旧版备份在 ${id}.bak）` };
 }
 
