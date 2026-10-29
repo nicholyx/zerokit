@@ -29,7 +29,7 @@ import {
 } from './core/market.ts';
 import { applyDefaults, parseArgv, toCliFlags, toJsonSchema } from './core/schema.ts';
 import { depStates, depTree, dependents, installDeps, missingDeps } from './core/deps.ts';
-import { loadTimers, nextFireTime, removeTimer, setTimerPaused, upsertTimer } from './core/timers.ts';
+import { loadTimers, nextFireTime, removeTimer, setTimerPaused, upsertTimer, humanNextFire, missedRun, markCatchupDone, saveTimers, firesOnDay } from './core/timers.ts';
 import {
   SECRET_MASK, publicSettings, resolveSettings, settingsHints, writeSettings,
 } from './core/pluginConfig.ts';
@@ -2251,19 +2251,56 @@ async function cmdTimers(args: string[]): Promise<number> {
   const rest = args.slice(1);
   if (sub === 'list') {
     const { timers } = loadTimers();
+    // 第七十八轮⑥：--json 机读（AI 客户端/脚本消费；含 nextFire 与 missed）
+    if (rest.includes('--json')) {
+      const out = timers.map((t) => {
+        const next = nextFireTime(t);
+        return {
+          key: t.key, title: t.title, interval: t.interval, win: t.win ?? '',
+          paused: t.paused === true, days: t.days ?? 'daily',
+          nextFireAt: next, nextFireHuman: next === null ? null : humanNextFire(next),
+          missed: missedRun(t),
+          lastRanAt: t.lastRanAt ?? null, lastOk: t.lastOk ?? null,
+        };
+      });
+      process.stdout.write(JSON.stringify(out, null, 2) + '\n');
+      return 0;
+    }
     if (!timers.length) { process.stdout.write('（没有定时任务——启动器里 ⏲ 或详情页可创建）\n'); return 0; }
     process.stdout.write(`${timers.length} 个定时任务：\n`);
     for (const t of timers) {
       const next = nextFireTime(t);
-      const nextStr = next === null ? '已暂停' : `下次 ${new Date(next).toLocaleString('zh-CN', { hour12: false })}`;
+      // 第七十八轮⑧：下次触发说人话（今天 09:00 / 明天 09:00 / 周三 09:00）
+      const nextStr = next === null ? '已暂停' : `下次 ${humanNextFire(next)}`;
+      const daysStr = !t.days ? '' : t.days === 'workdays' ? ' · 工作日' : ` · 每周${(t.days as number[]).map((d) => '日一二三四五六'[d]).join('/')}`;
       process.stdout.write(`  ${t.paused ? '⏸' : '⏱'} ${t.key}\n`);
-      process.stdout.write(c.dim(`      ${t.title} · 每 ${t.interval}s${t.win ? ` · 窗口 ${t.win}` : ''} · ${nextStr}\n`));
+      process.stdout.write(c.dim(`      ${t.title} · 每 ${t.interval}s${t.win ? ` · 窗口 ${t.win}` : ''}${daysStr} · ${nextStr}\n`));
+      const missed = missedRun(t);
+      if (missed) process.stdout.write(c.yellow(`      ⚠ 错过：${missed}。补跑：zkit timers catchup ${t.key}\n`));
     }
     return 0;
   }
+  // 第七十八轮②：一次性补跑（幂等——补完记当天，同一天再调不重复执行）
+  if (sub === 'catchup') {
+    const k = rest.find((a) => !a.startsWith('-'));
+    if (!k) { process.stderr.write('用法：zkit timers catchup <插件id.动作id>\n'); return 2; }
+    const file = loadTimers();
+    const t = file.timers.find((x) => x.key === k);
+    if (!t) { process.stderr.write(c.red(`✗ 没有任务 ${k}\n`)); return 1; }
+    const missed = missedRun(t);
+    if (!missed) { process.stdout.write(`${k} 没有需要补跑的（策略 skip / 已暂停 / 今天已补过 / 没错过）\n`); return 0; }
+    process.stdout.write(c.yellow(`补跑 ${k}：${missed}\n`));
+    const [plugId, ...actRest] = k.split('.');
+    const values = t.values ?? {};
+    const code = await cmdRun([plugId ?? '', actRest.join('.') || '', ...Object.entries(values).flatMap(([kk, v]) => ['--' + kk, String(v)])]);
+    markCatchupDone(t);
+    t.lastRanAt = Date.now();
+    saveTimers(file);
+    return code;
+  }
   const key = rest.find((a) => !a.startsWith('-'));
   if (!key) {
-    process.stderr.write('用法：zkit timers <list|pause|resume|remove|run> <插件id.动作id>\n');
+    process.stderr.write('用法：zkit timers <list|pause|resume|remove|run|catchup> <插件id.动作id>\n');
     return 2;
   }
   if (sub === 'pause' || sub === 'resume') {
@@ -2288,7 +2325,7 @@ async function cmdTimers(args: string[]): Promise<number> {
     void upsertTimer; // run 不改配置
     return await cmdRun([plugId ?? '', actionId, ...Object.entries(values).flatMap(([k, v]) => ['--' + k, String(v)])]);
   }
-  process.stderr.write(`不认识的子命令 "${sub}"（list / pause / resume / remove / run）\n`);
+  process.stderr.write(`不认识的子命令 "${sub}"（list / pause / resume / remove / run / catchup）\n`);
   return 2;
 }
 

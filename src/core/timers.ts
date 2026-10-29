@@ -22,6 +22,16 @@ export interface TimerEntry {
   lastOk?: boolean | null;
   /** 执行参数快照（UI 创建时存的 values；CLI timers run 用它复现） */
   values?: Record<string, string>;
+  /**
+   * 第七十八轮①：日期档。缺省 = 每天；'workdays' = 周一~周五；
+   * 数字数组 = 每周指定星期几（0=周日 … 6=周六，如 [1,4] = 每周一、周四）。
+   */
+  days?: 'workdays' | number[];
+  /**
+   * 第七十八轮②：错过补偿的幂等标记——当天（YYYY-MM-DD 本地）已补过一次就不再补。
+   * 与 catchup 策略配合：catchup 档开机发现错过且未补过 → 提示补跑并记当天。
+   */
+  lastCatchupDay?: string;
 }
 
 export interface TimersFile {
@@ -116,6 +126,13 @@ export function nextFireTime(t: TimerEntry, now = Date.now()): number | null {
     const steps = Math.ceil((now - last) / intervalMs);
     next = last + steps * intervalMs;
   }
+  // 第七十八轮①：日期档——next 落在非触发日就逐日推（最多推 7 天，全周禁触发是坏配置）
+  if (t.days && !firesOnDay(t, new Date(next))) {
+    for (let i = 1; i <= 7; i++) {
+      const cand = new Date(next + i * 86400000);
+      if (firesOnDay(t, cand)) { next = cand.getTime(); break; }
+    }
+  }
   // 窗口外：顺延到窗口开点（跨午夜窗口取当天或次日的开点，取不早于 next 的那个）
   if (!inWindowAt(new Date(next), t.win)) {
     const m = (t.win ?? '').match(/^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/);
@@ -129,6 +146,59 @@ export function nextFireTime(t: TimerEntry, now = Date.now()): number | null {
     }
   }
   return next;
+}
+
+/**
+ * 第七十八轮①：某天该不该触发。缺省每天；workdays=周一~五；数组=列出的星期几。
+ */
+export function firesOnDay(t: TimerEntry, date: Date): boolean {
+  if (!t.days) return true;
+  const dow = date.getDay();
+  if (t.days === 'workdays') return dow >= 1 && dow <= 5;
+  return Array.isArray(t.days) && t.days.includes(dow);
+}
+
+/**
+ * 第七十八轮②：开机错过检测——距上次执行已跨过 ≥1 个应触发日、且今天还没补过。
+ * 返回错过描述（人话）；没错过或已补过返回 null。catchup=skip 或暂停不补。
+ */
+export function missedRun(t: TimerEntry, now = Date.now()): string | null {
+  if (t.paused || t.catchup === 'skip') return null;
+  const today = new Date(now);
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  if (t.lastCatchupDay === todayKey) return null;
+  // 上次执行（或创建）那天到今天，中间有没有「应触发却没跑」的完整一天
+  const last = new Date(t.lastRanAt ?? t.createdAt ?? now);
+  for (let d = new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1);
+       d <= new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+       d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) {
+    if (firesOnDay(t, d)) {
+      return `${d.getMonth() + 1} 月 ${d.getDate()} 日（周${'日一二三四五六'[d.getDay()]}）该跑没跑`;
+    }
+  }
+  return null;
+}
+
+/** 第七十八轮②：补跑后记账（同一天只补一次的幂等锚）。 */
+export function markCatchupDone(t: TimerEntry, now = Date.now()): void {
+  const d = new Date(now);
+  t.lastCatchupDay = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * 第七十八轮⑧：下次触发时间说人话——今天/明天 HH:mm、周X HH:mm、N 天后 HH:mm。
+ * 跨周一律退回「M/D HH:mm」绝对日期，不让人心算。
+ */
+export function humanNextFire(next: number, now = Date.now()): string {
+  const n = new Date(next);
+  const hm = `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
+  const today0 = new Date(now); today0.setHours(0, 0, 0, 0);
+  const n0 = new Date(next); n0.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((n0.getTime() - today0.getTime()) / 86400000);
+  if (diffDays === 0) return `今天 ${hm}`;
+  if (diffDays === 1) return `明天 ${hm}`;
+  if (diffDays >= 2 && diffDays <= 6) return `周${'日一二三四五六'[n.getDay()]} ${hm}`;
+  return `${n.getMonth() + 1}/${n.getDate()} ${hm}`;
 }
 
 /** 孤儿检测：任务引用的插件已不在已装列表里。返回孤儿 key 列表。 */
