@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+（下一版攒着）
+
+## [0.71.0] - 2026-10-29
+
 ### Added
 
 - 结果页签栏无障碍三件套：role=tablist/tab/tabpanel + 左右方向键切换（焦点随重画回落修复）
@@ -11,7 +15,6 @@
 - 第二十三轮以来新增的模态缺 role="dialog"（批量补齐）；页签 ✕/✎、篮子 ✕ 等纯符号按钮补 aria-label
 - prefers-reduced-motion 停动画补漏（cell-changed 闪、监控倒计时环过渡、页签/呼吸灯过渡）
 - 标签页标题播报去重（announceTitle 单一出口，值没变不重复触发读屏）
-（下一版攒着）
 
 ## [0.70.0] - 2026-10-29
 
