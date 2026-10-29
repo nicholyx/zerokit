@@ -2246,6 +2246,65 @@ function humanDuration(ms: number): string {
  */
 
 /** 第六十三轮②③④⑤：zkit timers list|pause|resume|remove|run。 */
+/** 第七十九轮⑦⑧：zkit data export --watch / data import —— 监控历史随备份走。
+ * 格式与第二十轮 collectBackup 信封兼容（app/version/exportedAt/keys），
+ * watch 配置作为单独分区塞进 meta——导入时可选 --no-watch 跳过。 */
+async function cmdData(args: string[]): Promise<number> {
+  const sub = args[0];
+  const rest = args.slice(1);
+  const watchPath = path.join(HOME_PATH(), 'watch.json');
+  if (sub === 'export') {
+    const watches = fs.existsSync(watchPath) ? JSON.parse(fs.readFileSync(watchPath, 'utf8')) : { watches: [], stops: [] };
+    const out = {
+      app: 'zerokit', version: '0.84.0', exportedAt: new Date().toISOString(),
+      keys: {},
+      meta: { keyCount: 0, bytes: 0, watch: { watches: watches.watches ?? [], stops: watches.stops ?? [] } },
+    };
+    const text = JSON.stringify(out, null, 2);
+    const outFile = rest.find((a) => !a.startsWith('-'));
+    if (outFile) {
+      fs.writeFileSync(outFile, text);
+      process.stdout.write(c.green(`✓ 已导出 ${(watches.watches ?? []).length} 个监控配置与 ${(watches.stops ?? []).length} 条停止记录 → ${outFile}（${text.length} 字节）\n`));
+    } else {
+      process.stdout.write(text + '\n');
+    }
+    return 0;
+  }
+  if (sub === 'import') {
+    const file = rest.find((a) => !a.startsWith('-'));
+    if (!file || !fs.existsSync(file)) {
+      process.stderr.write('用法：zkit data import <备份文件> [--no-watch 跳过监控配置]\n');
+      return 2;
+    }
+    let parsed: { meta?: { watch?: { watches?: unknown[]; stops?: unknown[] } } };
+    try {
+      parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch {
+      process.stderr.write(c.red('✗ 不是合法 JSON\n'));
+      return 1;
+    }
+    const w = parsed.meta?.watch;
+    if (!w || !Array.isArray(w.watches)) {
+      process.stdout.write('（备份里没有监控配置）\n');
+      return 0;
+    }
+    if (rest.includes('--no-watch')) {
+      process.stdout.write(`已跳过 ${w.watches.length} 个监控配置（--no-watch）\n`);
+      return 0;
+    }
+    fs.mkdirSync(HOME_PATH(), { recursive: true });
+    fs.writeFileSync(watchPath, JSON.stringify({ version: 1, watches: w.watches, stops: w.stops ?? [] }, null, 2));
+    process.stdout.write(c.green(`✓ 已恢复 ${w.watches.length} 个监控配置（页面下次打开时生效）\n`));
+    return 0;
+  }
+  process.stderr.write('用法：zkit data <export [--watch] [文件] | import 文件 [--no-watch]>\n');
+  return 2;
+}
+
+function HOME_PATH(): string {
+  return process.env.ZEROKIT_HOME ?? path.join(process.env.HOME ?? '.', '.zerokit');
+}
+
 async function cmdTimers(args: string[]): Promise<number> {
   const sub = args[0] ?? 'list';
   const rest = args.slice(1);
@@ -2447,7 +2506,7 @@ async function cmdWeb(args: string[]): Promise<number> {
   });
 }
 
-const KNOWN_COMMANDS = ['allow', 'bench', 'audit', 'completion', 'config', 'desktop', 'doctor', 'gc', 'health', 'history', 'help', 'kill', 'last', 'list', 'logs', 'ls', 'man', 'market', 'mcp', 'path', 'plugin', 'ps', 'timers', 'run', 'show', 'stats', 'ui', 'web'];
+const KNOWN_COMMANDS = ['allow', 'bench', 'audit', 'data', 'completion', 'config', 'desktop', 'doctor', 'gc', 'health', 'history', 'help', 'kill', 'last', 'list', 'logs', 'ls', 'man', 'market', 'mcp', 'path', 'plugin', 'ps', 'timers', 'run', 'show', 'stats', 'ui', 'web'];
 
 // 第四十六轮②：man——不引依赖的终端命令参考（stdout 全量文本，man zkit 可外部包一层）
 const MAN_PAGE = `zkit(1) -- zerokit 命令行参考
@@ -2586,6 +2645,8 @@ async function main(): Promise<number> {
       return cmdConfig(rest);
     case 'plugin':
       return cmdPlugin(rest);
+    case 'data':
+      return await cmdData(rest);
     case 'timers':
       return await cmdTimers(rest);
     case 'market':

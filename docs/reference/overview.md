@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-10-29（第七十八轮，v0.83.0）
+> 最后更新：2026-10-29（第七十九轮，v0.84.0）
 
 ## 性能基线（第五十八轮建立，2026-10-28，Apple M4 / Node 22）
 
@@ -378,3 +378,4 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 - **第七十六轮（插件运行沙箱与资源限制）**：`sandbox`（目录钉死）/`max_output`（输出字节上限，超限 SIGKILL）/`env_pass`（环境变量白名单）三键；doctor 沙箱摘要、L12 体检（Issue #270，v0.81.0）
 - **第七十七轮（MCP 面第二波）**：tools `--plugin` 过滤+超量提示、mcp search 跨插件搜索、dry-run 参数预演、allow `--ttl` 有效期+status 剩余时间、revoke 撤销、失败响应 structuredContent 带 next_hint、授权存储统一 allow.json（Issue #273，v0.82.0）
 - **第七十八轮（定时器与监控第二波）**：days 工作日/每周档、catchup 错过补偿（幂等）、timers --json、人话下次触发时间、执行进审计（Issue #276，v0.83.0）
+- **第七十九轮（监控持久化与告警升级）**：watch.json 持久化（浏览器写/server 透传）、刷新恢复 samples 续传、失败告警升级+10 分钟去重、data export/import（meta.watch 分区）（Issue #279，v0.84.0）

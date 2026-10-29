@@ -4,7 +4,7 @@ import http from 'node:http';
 import path from 'node:path';
 import process from 'node:process';
 import { type Plugin, toolName } from './core/manifest.ts';
-import { DATA_DIR, LOG_DIR, PKG_ROOT } from './core/paths.ts';
+import { DATA_DIR, HOME, LOG_DIR, PKG_ROOT } from './core/paths.ts';
 import { needsConfirm, rememberApproval } from './core/approvals.ts';
 import { readFileSync } from 'node:fs';
 
@@ -193,6 +193,30 @@ function previewAction(a: Plugin['actions'][number]): Record<string, unknown> {
 
 /** 第六十七轮①⑤：执行中动作 → AbortController（/api/stop 用） */
 const runningRuns = new Map<string, AbortController>();
+
+/** 第七十九轮①：watch.json 透传存储（server 不解析语义——浏览器是唯一写者） */
+function watchFilePath(): string {
+  return path.join(HOME, 'watch.json');
+}
+function loadWatchFile(): { version: number; watches: unknown[]; stops?: unknown[] } {
+  try {
+    const raw = JSON.parse(fs.readFileSync(watchFilePath(), 'utf8'));
+    if (raw && Array.isArray(raw.watches)) {
+      return { version: 1, watches: raw.watches, stops: Array.isArray(raw.stops) ? raw.stops : [] };
+    }
+  } catch { /* 不存在/坏文件都当空 */ }
+  return { version: 1, watches: [], stops: [] };
+}
+function saveWatchFile(body: unknown): boolean {
+  const b = body as { watches?: unknown } | null;
+  if (!b || !Array.isArray(b.watches)) return false;
+  const file = { version: 1, watches: b.watches, stops: (b as { stops?: unknown[] }).stops ?? [] };
+  fs.mkdirSync(HOME, { recursive: true });
+  const tmp = watchFilePath() + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(file));
+  fs.renameSync(tmp, watchFilePath());
+  return true;
+}
 
 function json(res: http.ServerResponse, code: number, body: unknown): void {
   const text = JSON.stringify(body);
@@ -414,6 +438,19 @@ export function createServer(): http.Server {
         return;
       }
 
+      // 第七十九轮①②⑤：监控持久化桥——浏览器写（唯一真相源），server 只透传存储
+      // ~/.zerokit/watch.json。GET 读回（boot 恢复），PUT 整份覆写（samples 截尾）。
+      if (url.pathname === '/api/watch' && req.method === 'GET') {
+        json(res, 200, loadWatchFile());
+        return;
+      }
+      if (url.pathname === '/api/watch' && req.method === 'PUT') {
+        const body = await readBody(req);
+        const ok = saveWatchFile(body);
+        if (!ok) { json(res, 400, { error: 'watch 文件需要 watches 数组' }); return; }
+        json(res, 200, { ok: true });
+        return;
+      }
       // 环境自检：与 CLI 的 `zkit doctor` 共用 buildDoctorReport，判定只有一份。
       // 第六十三轮①⑥：定时任务持久化桥——UI 读写 ~/.zerokit/timers.json
       if (url.pathname === '/api/timers' && req.method === 'GET') {

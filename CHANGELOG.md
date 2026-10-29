@@ -1,6 +1,10 @@
 ## [Unreleased]
 
-（下一版攒着）
+### Added
+
+- **监控持久化（第七十九轮）**：监控配置与最近采样持久化到 `~/.zerokit/watch.json`（浏览器写、server `/api/watch` 透传）；页面刷新/重启后配置与 samples 恢复、趋势线不断档；停止记录（原因+时间）一并落盘。
+- 监控告警升级：连续失败 ≥3 次时通知升级为告警，正文带前 3 条错误摘要；同动作 10 分钟去重窗口防刷屏。
+- `zkit data export [文件]` / `zkit data import <文件> [--no-watch]`：监控配置随备份导出导入，信封兼容第二十轮 collectBackup 格式（监控在 `meta.watch` 分区）。
 
 ## [0.83.0] - 2026-10-29
 
