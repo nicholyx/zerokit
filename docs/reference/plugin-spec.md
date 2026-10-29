@@ -257,6 +257,23 @@ output      = "text"
 risk        = "read"
 ```
 
+### 运行沙箱与资源限制（第七十六轮）
+
+不信任的插件可以给动作加三键收紧运行面：
+
+```toml
+[[action]]
+id = "fetch"
+sandbox = true          # 子进程工作目录钉死在插件目录（cwd 声明失效）
+max_output = "10MB"     # stdout/stderr 合计上限，超限强制结束
+env_pass = ["HTTP_PROXY"]  # 环境变量白名单：声明后宿主机其余变量一概不给
+```
+
+- `sandbox`：目录钉死——插件读写范围被限定在自己家里；`cwd` 声明会被忽略（限制优先于便利）。
+- `max_output`：数字或 `"10MB"` 字符串（1024 进制）。防「写满磁盘/内存」型失控。
+- `env_pass`：白名单外的环境变量（API key、代理串……）对子进程不可见；白名单内可见。安全基线（PATH/TMPDIR/HOME 等）与清单注入的 `env`、`[[setting]]` 值不受影响。
+- 体检 L12 会点破「声明了 sandbox 却在 env 里写敏感键」——口令请走 `[[setting]]` 掩码存储。
+
 ## \[\[action.param\]\] 段
 
 写在动作下面（写 `[[action.params]]` 也行，两种都收）。

@@ -313,6 +313,8 @@ interface ExecOutcome {
   timedOut: boolean;
   /** 第六十七轮①：外部中断 */
   stopped?: boolean;
+  /** 第七十六轮②：输出超过 max_output 声明被杀 */
+  outputOverflow?: boolean;
 }
 
 /**
@@ -350,6 +352,7 @@ function runInWorker(
     let stderr = '';
     let truncated = false;
     let timedOut = false;
+    let outputOverflow = false;
 
     const worker = new Worker(script, {
       argv: args,
@@ -408,7 +411,7 @@ function childEnv(base: NodeJS.ProcessEnv, argv0: string): NodeJS.ProcessEnv {
 function execArgv(
   file: string,
   args: string[],
-  opts: { cwd: string; env: NodeJS.ProcessEnv; timeout: number; shell: boolean; encoding: string; signal?: AbortSignal },
+  opts: { cwd: string; env: NodeJS.ProcessEnv; timeout: number; shell: boolean; encoding: string; signal?: AbortSignal; maxBytes?: number },
 ): Promise<ExecOutcome> {
   return new Promise((resolve) => {
     const encoding = opts.encoding as BufferEncoding;
@@ -435,7 +438,8 @@ function execArgv(
     let truncated = false;
     let artifactPath: string | undefined;
     let spill: fs.WriteStream | undefined;
-    let timedOut = false;
+let timedOut = false;
+    let outputOverflow = false;
 
     // 用 StringDecoder 而不是 chunk.toString()：多字节字符可能被切成两个数据块，
     // 直接按块解码会把它解坏。
@@ -467,6 +471,13 @@ function execArgv(
         spillPath()?.write(Buffer.from(text, encoding));
         return;
       }
+      // 第七十六轮②：动作声明了 max_output 时按声明的字节数杀（默认硬顶 MAX_OUTPUT 只溢出不杀）
+      if (opts.maxBytes !== undefined && Buffer.byteLength(stdout, encoding) + chunk.length > opts.maxBytes) {
+        truncated = true;
+        outputOverflow = true;
+        child.kill('SIGKILL');
+        return;
+      }
       if (stdout.length + text.length > MAX_OUTPUT) {
         truncated = true;
         stdout = stdout.slice(0, MAX_OUTPUT);
@@ -490,6 +501,7 @@ function execArgv(
         exitCode: null, stdout, stderr: stderr + String(err.message),
         truncated, timedOut: false,
         ...(artifactPath ? { artifactPath } : {}), ...(stopped ? { stopped } : {}),
+        ...(outputOverflow ? { outputOverflow } : {}),
       });
     });
 
@@ -502,6 +514,7 @@ function execArgv(
       resolve({
         exitCode: code, stdout, stderr, truncated, timedOut,
         ...(artifactPath ? { artifactPath } : {}), ...(stopped ? { stopped } : {}),
+        ...(outputOverflow ? { outputOverflow } : {}),
       });
     });
   });
@@ -633,11 +646,27 @@ export async function runAction(
     };
   }
 
-  const cwd = action.cwd ? path.resolve(plugin.dir, action.cwd) : plugin.dir;
+  // 第七十六轮①：sandbox 动作的工作目录钉死在插件目录——cwd 声明失效（限制优先于便利）
+  const cwd = action.sandbox ? plugin.dir : (action.cwd ? path.resolve(plugin.dir, action.cwd) : plugin.dir);
   // 给插件的两个环境变量：清单里 {data_dir} 占位符的等价物（脚本不想改 argv 就读它），
   // 以及数据根目录。放在 action.env 之前，插件自己的 env 声明可以覆盖。
+  // 第七十六轮④：env_pass 白名单。声明了的动作只看到安全基线 + ZEROKIT_* + 清单 env——
+  // process.env 的其余变量（API key、代理串、token）一概不给。
+  const safeEnv: NodeJS.ProcessEnv = {
+    PATH: process.env.PATH ?? '',
+    TMPDIR: process.env.TMPDIR,
+    TEMP: process.env.TEMP,
+    TMP: process.env.TMP,
+    LANG: process.env.LANG,
+    HOME: process.env.HOME,
+    ...(action.env_pass ?? []).reduce<Record<string, string | undefined>>((acc, k) => {
+      if (process.env[k] !== undefined) acc[k] = process.env[k];
+      return acc;
+    }, {}),
+  };
+  const baseEnv = action.env_pass ? safeEnv : process.env;
   const env = childEnv({
-    ...process.env,
+    ...baseEnv,
     ZEROKIT_PLUGIN_DATA_DIR: pluginDataDir(plugin.id),
     ZEROKIT_HOME: HOME,
     // 设置项也作为环境变量给脚本：插件不改 argv 就能读到（ZEROKIT_SETTING_<NAME>）。
@@ -766,6 +795,7 @@ export async function runAction(
     cwd, env, timeout: action.timeout * 1000,
     shell: action.shell, encoding: action.encoding,
     signal: options.signal,
+    ...(action.max_output_bytes !== undefined ? { maxBytes: action.max_output_bytes } : {}),
   });
 
   let outcome: ExecOutcome | undefined;
@@ -832,6 +862,7 @@ export async function runAction(
   let ok = outcome.exitCode === 0 && !outcome.timedOut && !outcome.stopped;
   let error: string | undefined;
   if (outcome.stopped) error = '已被用户停止';
+  else if (outcome.outputOverflow) error = `输出超过 max_output 上限（${action.max_output_bytes} 字节）已被强制结束`;
   else if (outcome.timedOut) error = `执行超时（${action.timeout} 秒）已被强制结束`;
   else if (outcome.exitCode !== 0) error = `退出码 ${outcome.exitCode}`;
 
