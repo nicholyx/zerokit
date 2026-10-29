@@ -100,6 +100,16 @@ export function lintPlugin(p: Plugin): LintFinding[] {
   if (p.actions.length === 0) {
     out.push({ rule: 'L10', severity: 'error', target: p.id, message: '插件没有任何动作——加载了也无处可点' });
   }
+  // L11（第六十一轮③）：ui 声明与 render=web 动作的匹配度。
+  // 声明了 ui 但没有任何 web 动作 → warn（用户期待落空）；
+  // 有 web 动作但全部没显式声明 ui → info（解析器已默认置 true，提醒作者显式写明更稳）。
+  const webActions = p.actions.filter((a) => a.render === 'web');
+  const declaredUi = p.actions.filter((a) => a.ui === true);
+  if (declaredUi.length > 0 && webActions.length === 0) {
+    out.push({ rule: 'L11', severity: 'warn', target: p.id, message: `声明了 ui = true 但没有任何 render = "web" 的动作——用户会期待界面却看不到` });
+  } else if (webActions.length > 0 && declaredUi.length < webActions.length) {
+    out.push({ rule: 'L11', severity: 'info', target: p.id, message: `${webActions.length - declaredUi.length} 个 web 动作未显式声明 ui（解析时已默认 true），建议在清单里写明` });
+  }
   return out.sort((x, y) => RISK_ORDER.indexOf(x.severity) - RISK_ORDER.indexOf(y.severity));
 }
 
@@ -117,6 +127,11 @@ export function docPlugin(p: Plugin): string {
     lines.push(`### ${a.title ?? a.id}（\`${p.id}.${a.id}\`）`, '');
     if (a.description) lines.push(a.description, '');
     lines.push(`- 风险：\`${a.risk}\`${a.risk !== 'read' ? '（有副作用，需授权）' : '（只读）'}`);
+    // 第六十一轮⑤：带 UI 的动作在文档里给出「界面说明」段
+    if (a.ui === true) {
+      lines.push(`- 界面：🖥 带交互界面${a.ui_summary ? `——${a.ui_summary}` : ''}`
+        + (a.ui_height ? `（初始高度 ${a.ui_height}px）` : ''));
+    }
     if (a.params.length) {
       lines.push('', '| 参数 | 类型 | 必填 | 默认 |', '| --- | --- | --- | --- |');
       for (const pm of a.params) {

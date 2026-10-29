@@ -626,6 +626,24 @@ render = "web"        # 结果交给 web/index.html 渲染
 risk   = "read"
 ```
 
+**带 UI 的能力声明（四键，全部可选）**——让用户在安装前就知道「这个插件有界面」，
+并让首帧高度正确（不再先默认再被桥消息顶正，闪烁消失）：
+
+```toml
+[[action]]
+id            = "overview"
+# ... 上面的常规字段 ...
+ui            = true          # 显式声明带 UI（render = "web" 时解析器默认 true）
+ui_height     = 480           # iframe 首帧高度（120–4096，缺省 360）；桥 resize 仍可覆盖
+ui_min_height = 200           # 桥 resize 的下限（80–4096；不得大于 ui_height）
+ui_summary    = "一页看全系统概况，可交互筛选与排序"   # 写给用户看的界面说明（≤200 字）
+```
+
+- `ui` 与 `render = "web"` 的关系：web 动作默认带 UI；显式写 `ui = true` 多余但不报错，
+  `plugin lint` 的 L11 会在「声明了 ui 却没有 web 动作」时给 warn（用户期待落空）。
+- `ui_summary` 出现在 `zkit plugin doc` 的动作条目（「🖥 带交互界面——…」）。
+- uTools 适配层：`cmds` 里的 `window` 类型自动置 `ui = true`（要窗口的就是带 UI）。
+
 内核托管 `/p/<插件id>/`（就是插件的 `web/` 目录），HTML 会**自动注入桥脚本**——
 页面里直接用 `window.zkit`，不用（也不能）引任何宿主文件：
 

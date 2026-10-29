@@ -3633,7 +3633,10 @@ function renderResult(res) {
   if (res.render === 'web' && detail) {
     // 插件自己的页面渲染结果：沙箱 iframe，无 allow-same-origin——
     // 页面拿不到令牌、fetch 不了宿主 API，执行只能走桥（见下方 zkit 桥）
-    body += `<iframe class="web-frame" sandbox="allow-scripts"
+    // 第六十一轮④：清单声明的 ui_height 作为首帧高度（缺省 360），桥的 resize 仍可覆盖——
+    // 声明式配置解决「首帧闪烁回正」：不再先 360 再被桥消息顶到真实高度。
+    const h = Math.max(120, Math.min(4096, Number(detail.action.ui_height) || 360));
+    body += `<iframe class="web-frame" sandbox="allow-scripts" style="height:${h}px"
       src="/p/${esc(detail.plugin.id)}/index.html" title="${esc(detail.action.title)}"></iframe>`;
   } else if (res.render === 'html' && res.stdout) {
     // output = "html"：stdout 本身就是 HTML 片段，沙箱里直接渲染

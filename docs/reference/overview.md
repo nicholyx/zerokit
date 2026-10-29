@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-10-29（第六十轮，v0.65.0 uTools 兼容层）
+> 最后更新：2026-10-29（第六十一轮，v0.66.0 能力类型）
 
 ## 性能基线（第五十八轮建立，2026-10-28，Apple M4 / Node 22）
 
@@ -228,7 +228,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 
 ### 质量
 
-- 38 个测试文件、**1212 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
+- 38 个测试文件、**1217 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
 - `tsc --noEmit` 干净——**而且 CI 真的在跑它**（`typecheck` job）。
   曾经这里写着"干净"但没有任何地方执行这条命令，于是两个只有类型检查才看得见的
   错误在核心里躺了很久（`proxy.ts` 的 Buffer 泛型不兼容、`scaffold.ts` 的类型混用）。
@@ -251,9 +251,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
       `--with-deps` 显式补齐（自带示例优先、其次集市），卸载时拦反向依赖，
       `doctor` 提前发现，组合动作的跨插件引用会自动折算成依赖（#38）。
       第三方包（node 模块 / pip）仍然不代装——见文末「明确不做」。
-- [ ] **「能力类型」写进清单。** 已经能表达"常驻后台"（`background`）、
-      "有守护进程"（`[[service]]`）、"怎么被唤起"（`[action.match]`）、
-      "怎么执行"（`runtime`），但还缺 Raycast 那种"这个插件**带 UI**"的显式声明。
+- [x] **「能力类型」写进清单。**（v0.66.0 第六十一轮：ui/ui_height/ui_min_height/ui_summary 四键 + L11 + doc 界面段 + doctor 联网提示，#225）
 - [ ] **常驻宿主目前只覆盖 Python。** node 侧靠 worker（34ms）已经够快，
       其它语言（如果将来要支持）还没有对应方案。
 - [x] **uTools 兼容层补关键字以外的检索维度。**（v0.65.0 第六十轮完成：`img` 翻译成
@@ -293,6 +291,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 - 第四十九轮（v0.54.0）：结果对比与历史分析——详情页历史分析卡（数值趋势/耗时分布/失败率>30%警示）、⇄ 与上次对比（复用 resultCompare）、收藏结果两两对比、日志 CSV 导出（仅元数据）；hist49-smoke 13 项、全量 32 文件 1041/1041（Issue #188）
 - 第五十轮 v0.55.0：主题与视觉打磨——字号/间距/过渡阶梯、暗色对比度 AA、斑马纹、--danger、滚动条、打印样式（contrastRatio/typeScaleStep）
 - 第五十一轮 v0.56.0：搜索体验深化——丢词建议/组合记忆/搜索态折叠/desc 高亮/计数徽标/清空按钮/历史单条删（suggestNext/comboLabel）
+- 第六十一轮（v0.66.0）「能力类型」进清单：ui/ui_height/ui_min_height/ui_summary 四键、L11 lint 规则、doc 界面说明段、doctor 联网提示、uTools window→ui、utools-smoke 44→45+lintdoc-smoke 29→33、全量 1217/1217（Issue #225）
 - 第六十轮（v0.65.0）uTools 兼容层补全：img 唤起→图片文件匹配、window/多正则→关键字+健康警告、db.put _rev 冲突语义、copyText 三平台、redirect/getWindowSize 降级、logo/platform 元数据、docs/reference/utools-compat.md 支持矩阵、utools-smoke 37→44、全量 1212/1212（Issue #222）
 - 第五十九轮（v0.64.0）设计师走查十项：执行分层主按钮+⋯菜单、视图/浮层动效、列表 stagger、顶栏状态胶囊、risk-dot 排版、执行反馈动画、暗色三层、空态插画、窄屏 sticky、webui-smoke 93→113、全量 1198/1198（Issue #219）
 - 第五十八轮（v0.63.0）性能压舱石：bench.mjs 冷启动+RSS 测量、性能预算（--help<300ms/list<500ms/RSS<150MB）、10k 大输入防护、release-prep 重复版本守卫、全量 1178/1178（Issue #215）

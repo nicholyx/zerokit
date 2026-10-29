@@ -116,5 +116,62 @@ const cli = path.join(REPO, 'src/cli.ts');
   ok(pj.id === 'quick' && Array.isArray(pj.actions), 'doc --json shape');
 }
 
+// ---------------- 第六十一轮③⑤：ui 声明 → L11 / doc 界面说明段 ----------------
+{
+  const { spawnSync } = await import('node:child_process');
+  const run = (args) => spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8' });
+  const dir = path.join(os.tmpdir(), 'zk-lint61-' + Date.now());
+  fs.mkdirSync(dir, { recursive: true });
+  // 造一个「声明 ui 却没有 web 动作」的插件（应 warn）
+  fs.writeFileSync(path.join(dir, 'plugin.toml'), `# 造例：L11
+[plugin]
+id = "l61bad"
+name = "六十一坏例"
+summary = "声明了 ui 却没有 web 动作"
+version = "1.0.0"
+
+[[action]]
+id = "plain"
+title = "纯命令"
+description = "没有任何 web 动作，却声明 ui = true，L11 应给 warn。这个描述够长。"
+run = ["{node}", "-e", "console.log(1)"]
+risk = "read"
+ui = true
+`);
+  const lint = run(['plugin', 'lint', dir]);
+  ok(lint.stdout.includes('L11') && lint.stdout.includes('没有任何 render = "web"'),
+    'L11 warn：声明 ui 却没有 web 动作');
+  fs.rmSync(dir, { recursive: true, force: true });
+
+  // 造一个「带 ui_summary 的 web 动作」插件（doc 应出界面说明段）
+  const dir2 = path.join(os.tmpdir(), 'zk-doc61-' + Date.now());
+  fs.mkdirSync(path.join(dir2, 'web'), { recursive: true });
+  fs.writeFileSync(path.join(dir2, 'web', 'index.html'), '<p>ui</p>');
+  fs.writeFileSync(path.join(dir2, 'plugin.toml'), `# 造例：doc 界面说明
+[plugin]
+id = "l61doc"
+name = "六十一文档例"
+summary = "web 动作带 ui_summary"
+version = "1.0.0"
+
+[[action]]
+id = "panel"
+title = "面板"
+description = "web 动作带界面说明与首帧高度，doc 应渲染界面段。这个描述够长。"
+run = ["{node}", "-e", "console.log('{}')"]
+output = "json"
+render = "web"
+risk = "read"
+ui_height = 480
+ui_summary = "一页看全，可交互筛选"
+`);
+  const doc = run(['plugin', 'doc', dir2]);
+  ok(doc.status === 0 && doc.stdout.includes('带交互界面——一页看全，可交互筛选'), 'doc 出界面说明段');
+  ok(doc.stdout.includes('初始高度 480px'), 'doc 出首帧高度');
+  const lint2 = run(['plugin', 'lint', dir2]);
+  ok(!lint2.stdout.includes('L11'), 'L11 不误报显式带 ui 的 web 动作');
+  fs.rmSync(dir2, { recursive: true, force: true });
+}
+
 console.log(`通过 ${pass} / ${pass + fail}`);
 process.exit(fail > 0 ? 1 : 0);

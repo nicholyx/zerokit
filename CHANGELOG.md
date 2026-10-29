@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+### Added
+
+- 「能力类型」进清单：动作新键 `ui` / `ui_height` / `ui_min_height` / `ui_summary`——安装前可见「带交互界面」徽标，web 动作首帧高度声明式配置（缺省 360，桥 resize 仍可覆盖，首帧不再闪烁）。
+- `plugin lint` 新规则 L11：声明 `ui` 却没有 `render = "web"` 动作给 warn；web 动作未显式声明 ui 给 info。
+- `zkit plugin doc` 带界面动作输出「🖥 带交互界面——<ui_summary>（初始高度 Npx）」说明段。
+- `doctor`：带 UI 的插件若含 http 动作，提示「界面需要联网才能出数据」。
+- uTools 适配层：`cmds` 的 `window` 类型自动置 `ui = true`（要窗口的就是带 UI）。
+
 （下一版攒着）
 
 ## [0.65.0] - 2026-10-29

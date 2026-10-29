@@ -127,6 +127,8 @@ interface CmdMapping {
   /** 关键字：进 keywords 供搜索（含拼音首字母） */
   keywords: string[];
   warnings: string[];
+  /** 第六十一轮⑧：window 唤起置 true——能力类型对齐（带 UI） */
+  ui?: boolean;
 }
 
 /**
@@ -186,6 +188,8 @@ function mapCmds(cmds: Cmd[], explain: string | undefined): CmdMapping {
     } else if (type === 'window') {
       // 第六十轮②：不假装支持，但也不静默丢——落进关键字与健康警告，
       // 用户在 health/加载警告里能看到"这个功能依赖窗口选择"。
+      // 第六十一轮⑧：window 语义上就是要窗口 UI，动作置 ui = true（能力类型对齐）。
+      out.ui = true;
       out.keywords.push(cmd.label ?? '窗口');
       out.warnings.push(
         '这个功能靠"活动窗口"唤起（uTools 的 OS 级能力），zerokit 无法复刻；'
@@ -338,6 +342,7 @@ export function adaptUtoolsPlugin(dir: string): LoadResult {
       steps: [],
     };
     if (mapped.match) action.match = mapped.match;
+    if (mapped.ui) action.ui = true;   // 第六十一轮⑧：window 唤起 → 带 UI
     actions.push(action);
   });
 

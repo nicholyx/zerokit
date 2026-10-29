@@ -135,6 +135,7 @@ const write = (dir, files) => {
       features: [
         { code: 'img-in', explain: '图片输入', cmds: [{ type: 'img' }] },
         { code: 'multi-re', explain: '多正则', cmds: ['regex:^\\d+$', 'regex:^[a-f]+$'] },
+        { code: 'win-pick', explain: '窗口助手', cmds: [{ type: 'window', label: '窗口助手' }] },
       ],
     }),
     'p.js': '// x\n',
@@ -156,6 +157,9 @@ const write = (dir, files) => {
     r2.plugin?.logo === 'icon.png', String(r2.plugin?.logo));
   check('六轮：platform 不含当前平台时警告',
     r2.warnings.some((w) => /只支持/.test(w)), r2.warnings.join(' | '));
+  check('六十一轮⑧：window 唤起的动作 ui=true（带 UI 能力声明）',
+    (r2.plugin?.actions ?? []).some((a) => a.ui === true),
+    JSON.stringify((r2.plugin?.actions ?? []).map((a) => [a.id, a.ui])));
 
   check('关键字进了 keywords（供拼音/模糊搜索）',
     (plugin?.keywords ?? []).includes('hextorgb') && (plugin?.keywords ?? []).includes('颜色转换'),
