@@ -191,6 +191,9 @@ function previewAction(a: Plugin['actions'][number]): Record<string, unknown> {
   return { id: a.id, title: a.title, description: a.description, risk: a.risk, type: a.type, command };
 }
 
+/** 第六十七轮①⑤：执行中动作 → AbortController（/api/stop 用） */
+const runningRuns = new Map<string, AbortController>();
+
 function json(res: http.ServerResponse, code: number, body: unknown): void {
   const text = JSON.stringify(body);
   res.writeHead(code, {
@@ -1230,7 +1233,18 @@ export function createServer(): http.Server {
           return;
         }
 
-        const result = await runAction(plugin, action, { caller: 'ui', values: withDefaults.values });
+        // 第六十七轮①⑤：执行中登记 + AbortController，/api/stop 可中断
+        const ac = new AbortController();
+        const runKey = `${plugin.id}.${action.id}`;
+        runningRuns.set(runKey, ac);
+        let result;
+        try {
+          result = await runAction(plugin, action, {
+            caller: 'ui', values: withDefaults.values, signal: ac.signal,
+          });
+        } finally {
+          runningRuns.delete(runKey);
+        }
         json(res, 200, {
           needConfirm: false,
           ok: result.ok,
@@ -1244,7 +1258,27 @@ export function createServer(): http.Server {
           command: result.command,
           truncated: result.truncated,
           artifactPath: result.artifactPath,
+          stopped: result.stopped === true,
         });
+        return;
+      }
+
+      // 第六十七轮①⑤：停止指定动作的全部在途执行
+      if (url.pathname === '/api/stop' && req.method === 'POST') {
+        const body = await readBody(req);
+        const key = String(body['key'] ?? '');
+        if (!key) {
+          // 停全部在途（Ctrl+. 不在详情页时的语义）
+          const n = runningRuns.size;
+          for (const [k, ac] of runningRuns) { ac.abort(); runningRuns.delete(k); }
+          json(res, 200, { stopped: n > 0, count: n });
+          return;
+        }
+        const ac = runningRuns.get(key);
+        if (!ac) { json(res, 404, { error: '该动作当前没有在执行' }); return; }
+        ac.abort();
+        runningRuns.delete(key);
+        json(res, 200, { stopped: true });
         return;
       }
 

@@ -580,7 +580,7 @@ close();
   assert('风险圆点', appJs.includes('risk-dot') && css.includes('.risk-dot'));
   assert('单行截断', css.includes('.item-desc1'));
   // ⑦ 执行反馈
-  assert('run-main.running', css.includes('.run-main.running') && appJs.includes("classList.add('running')"));
+  assert('run-main.running', css.includes('.run-main.running') && appJs.includes("classList.add('running', 'stoppable')"));
   assert('结果滑入', css.includes('zk-result-in') && appJs.includes('result-anim'));
   // ⑧ 暗色深度
   assert('暗色三层', css.includes('[data-theme="dark"] .cmd-box'));

@@ -64,6 +64,20 @@ function findDesktopShell(): { installed: boolean; path?: string } {
   return hit ? { installed: true, path: hit } : { installed: false };
 }
 
+/** 第六十七轮⑦：从清单原文判断动作是否显式写了 timeout（绕开默认值注入）。 */
+function declaredTimeout(pluginId: string, actionId: string): boolean {
+  try {
+    const dir = listPlugins().find((e) => e.plugin?.id === pluginId)?.dir;
+    if (!dir) return false;
+    const text = readFileSync(dir + '/plugin.toml', 'utf8');
+    const blocks = text.split('[[action]]');
+    return blocks.some((b) => {
+      const id = b.match(/^\s*id\s*=\s*"([^"]+)"/m);
+      return id?.[1] === actionId && /^\s*timeout\s*=/m.test(b);
+    });
+  } catch { return false; }
+}
+
 /** 检查一个插件的命令依赖、插件依赖、设置项、链路引用与清单警告。 */
 function checkPlugin(entry: ReturnType<typeof listPlugins>[number]): DoctorPlugin {
   const problems: DoctorProblem[] = [];
@@ -118,6 +132,18 @@ function checkPlugin(entry: ReturnType<typeof listPlugins>[number]): DoctorPlugi
       level: 'warning',
       text: `缺少必填设置项：${view.missing.join(' / ')}`,
       hint: settingsHints(p, view).join('\n'),
+    });
+  }
+
+  // 第六十七轮⑦：无显式 timeout 声明的动作清单——默认 60s 对慢动作（大目录
+  // 搜索/大文件处理）不够用，超时被杀后用户只看到「执行超时」不知道能调。
+  // 这里不判对错，只把「吃默认值」的动作点名，让人有机会在清单里写 timeout。
+  const defaultTimed = p.actions.filter((a) => (a.timeout ?? 0) === 60 && !declaredTimeout(p.id, a.id));
+  if (defaultTimed.length > 0) {
+    problems.push({
+      level: 'warning',
+      text: `${defaultTimed.length} 个动作未声明 timeout（吃默认 60 秒）`,
+      hint: '慢动作在 plugin.toml 的 [[action]] 里写 timeout = 秒数，超时会被强制结束',
     });
   }
 

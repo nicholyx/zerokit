@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+### Added
+- 执行中可停止：runBtn 变「■ 停止」按钮、`Ctrl+.` 全局中断，`/api/stop` 端点杀在途子进程（结果标 `stopped`，审计记 `reason=stopped`）
+- destructive 动作 CLI 双重确认：y/N 之外要求输入动作 id 本身，输错即取消
+- 同动作并发护栏：同一动作在途时拒绝新执行（防双击/多标签页重入），提示等结束或停止
+- `zkit doctor` 新增「N 个动作未声明 timeout（吃默认 60 秒）」警告，附清单写法提示
+- 插件 timeout 声明贯通：`RunOptions.signal` 中断外层 http 请求走 `AbortSignal.any` 与超时组合
+
+### Fixed
+- 无
+
 （下一版攒着）
 
 ## [0.71.0] - 2026-10-29

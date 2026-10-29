@@ -186,11 +186,21 @@ async function confirmRun(plugin: Plugin, actionId: string, policy: string, comm
   if (policy === 'first-time') {
     process.stderr.write(c.dim('确认后会被记住；高风险动作每次都会问。\n'));
   }
-  process.stderr.write('继续？(y/N) ');
-  const answer = await readLine();
-  if (!/^y(es)?$/i.test(answer.trim())) {
-    process.stderr.write('已取消。\n');
-    return false;
+  // 第六十七轮②：destructive 双重确认——只按 y 太容易带过去，要求输入动作 id 本身。
+  if (actionRisk(plugin, actionId) === 'destructive') {
+    process.stderr.write(c.red(`\n这是 destructive 动作。请输入动作 id「${actionId}」确认执行：`));
+    const typed = (await readLine()).trim();
+    if (typed !== actionId) {
+      process.stderr.write(c.dim(`输入的是「${typed}」，与动作 id 不一致。已取消。\n`));
+      return false;
+    }
+  } else {
+    process.stderr.write('继续？(y/N) ');
+    const answer = await readLine();
+    if (!/^y(es)?$/i.test(answer.trim())) {
+      process.stderr.write('已取消。\n');
+      return false;
+    }
   }
   if (policy === 'first-time') rememberApproval(plugin.id, actionId);
   return true;
