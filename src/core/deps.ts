@@ -130,3 +130,62 @@ function findBundled(id: string): string | undefined {
   }
   return undefined;
 }
+
+// ---------------------------------------------------------------- 第八十七轮：依赖生命周期
+
+export interface DepHealth {
+  id: string;
+  installed: boolean;
+  version?: string;
+  /** 已装版本是否满足 requires 声明（无声明视为满足） */
+  satisfies?: boolean;
+  /** 不满足时的声明原文（供提示用） */
+  requirement?: string;
+}
+
+/**
+ * 依赖健康态（含版本核对）。
+ *
+ * requires.plugins 目前是纯 id 数组（无版本区间），这里先把接口留出来：
+ * 声明形态若是 "id@>=1.2" 或未来扩展的表形态，解析后填 requirement/satisfies。
+ * 当前实现：无版本声明 → satisfies 恒 true。
+ */
+export function depHealth(plugin: Plugin): DepHealth[] {
+  return depStates(plugin).map((d) => ({
+    ...d,
+    satisfies: d.installed ? true : undefined,
+    requirement: undefined,
+  }));
+}
+
+/**
+ * 拓扑序（依赖在前）。用于升级：先升被依赖的，再升依赖别人的。
+ * 环：抛错（负例⑧——环是清单设计错误，不是运行时错误）。
+ */
+export function topoOrder(plugins: Plugin[]): string[] {
+  const byId = new Map(plugins.map((p) => [p.id, p]));
+  const out: string[] = [];
+  const state = new Map<string, 0 | 1 | 2>(); // 0=未访 1=在栈 2=完成
+  const visit = (id: string, trail: string[]) => {
+    if (state.get(id) === 2) return;
+    if (state.get(id) === 1) {
+      throw new Error(`依赖成环：${[...trail, id].join(' → ')}——互相依赖的插件无法确定安装/升级顺序`);
+    }
+    const p = byId.get(id);
+    if (!p) return; // 不在集合里（比如缺装的依赖），交由缺失检查去报
+    state.set(id, 1);
+    for (const dep of p.pluginDeps) visit(dep, [...trail, id]);
+    state.set(id, 2);
+    out.push(id);
+  };
+  for (const p of plugins) visit(p.id, []);
+  return out;
+}
+
+/**
+ * 环检测（不抛错版，doctor/lint 用）：返回检测到的第一条环路径，无环 undefined。
+ */
+export function findCycle(plugins: Plugin[]): string[] | undefined {
+  try { topoOrder(plugins); return undefined; }
+  catch (e) { const m = /依赖成环：(.+)——/.exec(String((e as Error).message)); return m?.[1] ? m[1].split(' → ') : ['?']; }
+}

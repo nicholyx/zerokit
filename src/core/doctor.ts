@@ -12,7 +12,7 @@ import { HOME, PLUGINS_DIR } from './paths.ts';
 import { checkRequires, resolveTool } from './resolve.ts';
 import { findPlugin, listPlugins } from './registry.ts';
 import { verifyInstalled } from './distro.ts';
-import { missingDeps } from './deps.ts';
+import { findCycle, missingDeps } from './deps.ts';
 import { resolveSettings, settingsHints } from './pluginConfig.ts';
 
 export interface DoctorProblem {
@@ -217,11 +217,18 @@ function checkPlugin(entry: ReturnType<typeof listPlugins>[number]): DoctorPlugi
   }
 
   // 命令依赖检查不到位的替代品：插件依赖在这一层报，并给出真正能跑的命令
+  // 第八十七轮②：把「受影响动作数」带上——缺依赖不只是状态不好看，动作真跑不了
   const deps = missingDeps(p);
   if (deps.length > 0) {
+    const affected = p.actions.filter((a) =>
+      a.steps.some((st) => {
+        const depId = (st?.use ?? '').split('.')[0];
+        return depId !== p.id && deps.includes(depId ?? '');
+      }),
+    ).length;
     problems.push({
       level: 'error',
-      text: `缺少插件依赖：${deps.join(', ')}`,
+      text: `缺少插件依赖：${deps.join(', ')}（影响 ${affected} 个动作${affected > 0 ? '' : '，当前动作未直接引用'}）`,
       hint: deps.map((d) => `zkit plugin install ${d}`).join('\n'),
     });
   }
@@ -307,6 +314,20 @@ export function buildDoctorReport(): DoctorReport {
   const plugins = listPlugins().map(checkPlugin);
   let errors = 0;
   let warnings = 0;
+
+  // 第八十七轮⑧：依赖图成环（图级检查——单插件视角看不见环）
+  {
+    const graph = listPlugins()
+      .map((e) => e.plugin)
+      .filter((x): x is NonNullable<typeof x> => Boolean(x));
+    const cycle = findCycle(graph);
+    if (cycle) {
+      plugins.push({
+        id: '(依赖图)', dir: '', name: '依赖图', ok: false, actions: 0,
+        problems: [{ level: 'error', text: `依赖成环：${cycle.join(' → ')}——环上的插件无法确定安装/升级顺序`, hint: 'zkit plugin lint 逐个看清单，把环拆开（互相依赖通常意味着应该合并成一个插件）' }],
+      });
+    }
+  }
   for (const p of plugins) {
     for (const problem of p.problems) {
       if (problem.level === 'error') errors++;
