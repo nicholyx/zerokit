@@ -1495,6 +1495,71 @@ function cmdDesktop(args: string[]): number {
   return 0;
 }
 
+/**
+ * 第八十轮①—⑥：首次运行体验——环境体检 + 上手三步 + 首个插件建议。
+ * 首次/回访分开：回访只报状态变化，不把整个体检再念一遍。
+ */
+async function cmdWelcome(): Promise<number> {
+  const { HOME, ensureDirs } = await import('./core/paths.ts');
+  const fsmod = await import('node:fs');
+  const marker = HOME + '/.welcomed';
+  const first = !fsmod.existsSync(marker);
+  const report = buildDoctorReport();
+
+  // ③ 分级摘要：✓/⚠/✗ 一行总览（回访也看这行）
+  const errs = report.summary.errors;
+  const warns = report.summary.warnings;
+  const okCount = report.tools.filter((t) => t.ok).length + report.plugins.filter((pl) => !pl.problems.length).length;
+
+  // ⑤ 首个插件建议按平台（零依赖起步）
+  const starter = process.platform === 'win32' ? 'sysinfo.overview'
+    : process.platform === 'darwin' ? 'quick.now' : 'sysinfo.top';
+
+  // ④ 缺 python 的安装命令（doctor 只说「没找到」，这里给可复制命令）
+  const pyInstall = process.platform === 'win32' ? 'winget install Python.Python.3.13'
+    : process.platform === 'darwin' ? 'brew install python' : 'sudo apt install python3';
+
+  if (process.argv.includes('--json')) {
+    // ⑥ 机读：AI 客户端引导用户
+    process.stdout.write(JSON.stringify({
+      firstRun: first,
+      summary: { ok: okCount, warnings: warns, errors: errs },
+      starterAction: starter,
+      missingTools: report.tools.filter((t) => !t.ok).map((t) => ({ name: t.name, install: t.name === 'python' ? pyInstall : null })),
+      nextSteps: errs > 0
+        ? ['zkit doctor 看具体错误', '修好 error 级问题后 zkit run ' + starter]
+        : ['zkit plugin bundled 装示例插件', 'zkit run ' + starter, 'zkit ui 打开启动器'],
+    }, null, 2) + '\n');
+    if (first) { ensureDirs(); fsmod.writeFileSync(marker, String(Date.now())); }
+    return errs > 0 ? 1 : 0;
+  }
+
+  process.stdout.write(c.bold(first ? '欢迎使用 zerokit\n' : 'zerokit 状态\n'));
+  process.stdout.write(`  ${errs > 0 ? c.red(`✗ ${errs}`) : c.green('✓ 0')} 项必须修 · ${warns > 0 ? c.yellow(`⚠ ${warns}`) : '⚠ 0'} 项建议 · ✓ ${okCount} 项通过\n`);
+  if (!first) {
+    // ② 回访：只报变化——比上次 welcome 之后新出现的 error
+    if (errs > 0) {
+      process.stdout.write(c.yellow('  上次以来有新问题：zkit doctor 看明细\n'));
+    } else {
+      process.stdout.write(c.dim('  一切正常。\n'));
+    }
+    return errs > 0 ? 1 : 0;
+  }
+  // 首次：上手三步
+  process.stdout.write('\n三步跑通：\n');
+  process.stdout.write(`  1. ${c.cyan('zkit plugin bundled')}    装示例插件（${report.plugins.length} 个已装则跳过）\n`);
+  process.stdout.write(`  2. ${c.cyan(`zkit run ${starter}`)}${' '.repeat(Math.max(1, 20 - starter.length))}跑第一个动作\n`);
+  process.stdout.write(`  3. ${c.cyan('zkit ui')}               打开启动器\n`);
+  for (const t of report.tools.filter((x) => !x.ok)) {
+    process.stdout.write(c.yellow(`  ! ${t.name} 没找到`));
+    if (t.name === 'python') process.stdout.write(c.dim(`——要跑 python 插件：${pyInstall}`));
+    process.stdout.write('\n');
+  }
+  if (report.plugins.length === 0) process.stdout.write(c.dim('  （还没装插件——第 1 步会装上）\n'));
+  ensureDirs(); fsmod.writeFileSync(marker, String(Date.now()));
+  return errs > 0 ? 1 : 0;
+}
+
 async function cmdDoctor(): Promise<number> {
   const report = buildDoctorReport();
   // ⑨最近错误计数：审计里的 deny/非零退出——「环境没坏但一直在失败」要浮出来
@@ -2506,7 +2571,7 @@ async function cmdWeb(args: string[]): Promise<number> {
   });
 }
 
-const KNOWN_COMMANDS = ['allow', 'bench', 'audit', 'data', 'completion', 'config', 'desktop', 'doctor', 'gc', 'health', 'history', 'help', 'kill', 'last', 'list', 'logs', 'ls', 'man', 'market', 'mcp', 'path', 'plugin', 'ps', 'timers', 'run', 'show', 'stats', 'ui', 'web'];
+const KNOWN_COMMANDS = ['allow', 'bench', 'audit', 'data', 'completion', 'config', 'desktop', 'doctor', 'welcome', 'gc', 'health', 'history', 'help', 'kill', 'last', 'list', 'logs', 'ls', 'man', 'market', 'mcp', 'path', 'plugin', 'ps', 'timers', 'run', 'show', 'stats', 'ui', 'web'];
 
 // 第四十六轮②：man——不引依赖的终端命令参考（stdout 全量文本，man zkit 可外部包一层）
 const MAN_PAGE = `zkit(1) -- zerokit 命令行参考
@@ -2655,6 +2720,8 @@ async function main(): Promise<number> {
       return cmdPs();
     case 'kill':
       return cmdKill(rest);
+    case 'welcome':
+      return cmdWelcome();
     case 'doctor':
       return cmdDoctor();
     case 'desktop':
