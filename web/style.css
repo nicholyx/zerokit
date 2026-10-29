@@ -1841,3 +1841,25 @@ input.dirty, textarea.dirty { border-left: 2px solid var(--accent); }
   border: 1px solid color-mix(in srgb, var(--fg) 15%, transparent);
   opacity: 0.8;
 }
+
+/* ---- 第八十六轮：开发者面板 ---- */
+.dev-plugin-card { padding: 12px 14px; border-radius: 10px; margin-bottom: 12px;
+  background: var(--card-bg, rgba(127,127,127,.06)); }
+.dev-head { display: flex; gap: 8px; align-items: center; font-size: 15px; }
+.dev-tag { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 5px;
+  background: var(--warn, #e8b13a); color: #fff; }
+.dev-ver { font-size: 12px; opacity: 0.6; }
+.dev-dir { font-size: 11px; opacity: 0.5; margin: 2px 0 8px; word-break: break-all; }
+.dev-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.dev-action { font-size: 12px; padding: 2px 8px; border-radius: 6px;
+  background: color-mix(in srgb, var(--fg) 7%, transparent); }
+.dev-action i { font-style: normal; opacity: 0.6; margin-left: 4px; }
+.dev-files summary { cursor: pointer; font-size: 12px; opacity: 0.7; margin: 8px 0 4px; }
+.dev-files pre { font-size: 11px; max-height: 160px; overflow: auto; opacity: 0.7; }
+.dev-console-h { font-size: 12px; font-weight: 600; margin: 10px 0 4px; }
+.dev-console { font-size: 12px; max-height: 180px; overflow: auto;
+  border-radius: 8px; padding: 6px 8px; background: rgba(0,0,0,.15); }
+.dev-log { padding: 1px 0; font-family: ui-monospace, monospace; }
+.dev-log.error { color: var(--danger, #d9534f); }
+.dev-log.warn { color: var(--warn, #e8b13a); }
+.dev-log.dim { opacity: 0.5; }

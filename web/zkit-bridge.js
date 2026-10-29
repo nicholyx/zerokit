@@ -157,3 +157,25 @@
   // CommonJS 导出：给 node 侧测试用（浏览器里没有 module，跳过）
   if (typeof module === 'object' && module.exports) module.exports = api;
 })();
+
+// ---- 第八十六轮③：控制台透传（dev 面板排查沙箱内问题）----
+// 沙箱 iframe 是 opaque origin，宿主 devtools 里看不到它的 console——
+// 逐条 postMessage 给宿主，宿主转发到页面控制台与 dev 面板。
+(function () {
+  var send = function (level, args) {
+    try {
+      window.parent.postMessage({ __zkit: true, type: 'console', level: level,
+        text: Array.prototype.map.call(args, function (a) {
+          if (typeof a === 'string') return a;
+          try { return JSON.stringify(a); } catch (e) { return String(a); }
+        }).join(' ') }, '*');
+    } catch (e) { /* 宿主不在就算了 */ }
+  };
+  ['log', 'warn', 'error', 'info'].forEach(function (lv) {
+    var orig = console[lv] ? console[lv].bind(console) : function () {};
+    console[lv] = function () { send(lv, arguments); orig.apply(null, arguments); };
+  });
+  window.addEventListener('error', function (ev) {
+    send('error', [String(ev.message || '未知错误') + (ev.filename ? ' @ ' + ev.filename + ':' + ev.lineno : '')]);
+  });
+})();

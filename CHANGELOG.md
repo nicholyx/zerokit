@@ -1,6 +1,12 @@
 ## [Unreleased]
 
-（下一版攒着）
+### Added
+
+- 开发者面板 `#/dev`：dev 链接插件的清单摘要、文件树、沙箱控制台（最近 30 条透传）与文件变更提示
+- `plugin dev <目录> --web`：进入 Web 开发模式，提示宿主页地址与沙箱资源即改即生效
+- `/api/dev/status`、`/api/dev/poll`：dev 插件探测（symlink）、清单摘要与文件树、变更 stamp 轮询
+- Web 沙箱 console/error 经桥透传到开发者面板（`zk-dev-console` 事件，含 warn/error 分级）
+- dev 链接下的执行审计标记 `source: dev`，与真实安装来源区分
 
 ## [0.90.0] - 2026-10-30
 
