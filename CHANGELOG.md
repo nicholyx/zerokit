@@ -1,6 +1,14 @@
 ## [Unreleased]
 
-（下一版攒着）
+### Added
+
+- `zkit run --jq <路径>`：轻量点路径查询（`.data.ip`、`.items[0].name`、中文键都支持），未命中退出码 1 并说明原因
+- `zkit run --out <file>`：结果直接落文件（JSON 两空格格式化、文本写原文），可与 `--jq` 组合
+- `zkit list --json --brief` 输出补 `actions` 数与 `riskMix` 风险构成，脚本消费不再二次查询
+- `zkit config` 无参数显示全部插件设置状态总览（N/M 已设置 + 缺项标注）
+- `zkit history --tail N` 快捷参数
+- `zkit plugin new` 新增 `--author` 与 `--description`，生成的清单直接带作者行与一句话简介
+
 
 ## [0.72.0] - 2026-10-29
 

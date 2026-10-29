@@ -21,6 +21,10 @@ export const SCAFFOLD_EXAMPLES: readonly ScaffoldExample[] = ['chain', 'setting'
 export interface ScaffoldOptions {
   /** 显示名，默认取 id */
   name?: string;
+  /** 第六十八轮⑧：清单作者行（# author: ...），避免装完不知道谁写的 */
+  author?: string;
+  /** 第六十八轮⑧：覆盖默认 summary，装完列表里一眼知道这插件干嘛的 */
+  summary?: string;
   runtime?: ScaffoldRuntime;
   /** 附带 web/index.html 富交互页面骨架（动作 render = "web"） */
   web?: boolean;
@@ -55,7 +59,7 @@ function entryFiles(runtime: ScaffoldRuntime, web: boolean): Record<string, stri
   };
 }
 
-function manifestTmpl(id: string, name: string, runtime: ScaffoldRuntime, web: boolean): string {
+function manifestTmpl(id: string, name: string, runtime: ScaffoldRuntime, web: boolean, opts: { author?: string; summary?: string } = {}): string {
   const requires = runtime === 'python'
     ? '# python 解释器要在（运行前 zerokit 会检查并给出安装指引）\n[requires]\npython = ">=3.8"\n'
     : '# node 在（写插件的你在用 zerokit，基本都有；声明出来 doctor 能提前发现问题）\n[requires]\nnode = ">=22"\n';
@@ -77,7 +81,7 @@ function manifestTmpl(id: string, name: string, runtime: ScaffoldRuntime, web: b
 id       = "${id}"
 name     = "${name}"
 version  = "0.1.0"
-summary  = "一句话说清这个插件干什么（会显示在启动器搜索里）"
+summary  = "__SUMMARY__"
 keywords = ["${id}"]
 
 ${requires}\
@@ -224,13 +228,26 @@ export function scaffoldPlugin(id: string, opts: ScaffoldOptions = {}): Scaffold
     return { ok: false, dir: target, files: [], message: `${target} 已存在，换个 id 或用 --dir 指定别的位置` };
   }
   const name = opts.name || id;
+  const manifestBase = opts.example
+    ? EXAMPLE_MANIFESTS[opts.example].manifest(id, name)
+    : manifestTmpl(id, name, runtime, opts.web ?? false, { author: opts.author, summary: opts.summary });
+  // 第六十八轮⑧：--author/--description 注入（summary 占位替换 + 头部作者注释行）
+  let manifest = manifestBase;
+  if (opts.summary) manifest = manifest.replace('__SUMMARY__', opts.summary);
+  // 占位没人替换就落默认文案（example 模板 / 未传 --description 时）
+  manifest = manifest.includes('__SUMMARY__')
+    ? manifest.replace('__SUMMARY__', '一句话说清这个插件干什么（会显示在启动器搜索里）')
+    : manifest;
+  if (opts.author) {
+    manifest = manifest.replace('[plugin]\n', `# author: ${opts.author}\n[plugin]\n`);
+  }
   const files: Record<string, string> = opts.example
     ? {
-        'plugin.toml': EXAMPLE_MANIFESTS[opts.example].manifest(id, name),
+        'plugin.toml': manifest,
         ...EXAMPLE_MANIFESTS[opts.example].files,
       }
     : {
-    'plugin.toml': manifestTmpl(id, name, runtime, opts.web ?? false),
+    'plugin.toml': manifest,
     ...entryFiles(runtime, opts.web ?? false),
     'README.md': `# ${name}\n\n由 \`zkit plugin new\` 生成的 zerokit 插件骨架。\n\n## 开发\n\n\`\`\`bash\nzkit plugin dev .      # 进入开发模式（改文件即生效）\nzkit run ${id} hello   # 跑起来\nzkit plugin validate . # 校验清单\n\`\`\`\n\n## 发布\n\n\`\`\`bash\nzkit plugin add .          # 转成正式副本\nzkit plugin export ${id}   # 打包成 .toolpack 单文件\n\`\`\`\n\n完整规范见 zerokit 仓库的 docs/plugin-spec.md。\n\n> 开发模式会在本目录写 \`.zerokit-source.json\`（zerokit 的来源记录），建议加进 .gitignore。\n`,
     };
