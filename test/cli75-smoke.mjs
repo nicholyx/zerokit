@@ -72,7 +72,7 @@ const numOf = (l) => parseFloat(l.match(/([\d.]+)/)?.[1] ?? '0');
 }
 // ⑨ 组合：uniq + pick + sum
 {
-  const r = run(['run', 'sysinfo', 'top', '--limit', '8', '--uniq', COL_PROC, '--pick', '进程,内存', '--sum', COL_MEM]);
+  const r = run(['run', 'sysinfo', 'top', '--limit', '8', '--uniq', COL_PROC, '--pick', `${COL_PROC},${COL_MEM}`, '--sum', COL_MEM]);
   if (!(r.stdout.includes('TOTAL') && !r.stdout.includes('PID'))) {
     console.error(`FAIL  ⑨ 组合加工  <- stdout头: ${JSON.stringify(r.stdout.split('\n').slice(0, 2))} stderr: ${r.stderr.slice(0, 120)}`);
     fail++;
