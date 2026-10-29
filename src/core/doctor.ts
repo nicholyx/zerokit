@@ -10,6 +10,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { HOME, PLUGINS_DIR } from './paths.ts';
 import { checkRequires, resolveTool } from './resolve.ts';
 import { findPlugin, listPlugins } from './registry.ts';
+import { verifyInstalled } from './distro.ts';
 import { missingDeps } from './deps.ts';
 import { resolveSettings, settingsHints } from './pluginConfig.ts';
 
@@ -40,6 +41,14 @@ export interface DoctorTool {
 }
 
 export interface DoctorReport {
+  /** 第八十一轮⑦：全量完整性复验——被改过/删过文件/无快照的插件点名。 */
+  integrity: {
+    checked: number;
+    clean: number;
+    tampered: string[];   // 内容被改
+    missingFiles: string[]; // 文件被删
+    noSnapshot: string[]; // 老插件无装时快照
+  };
   node: { version: string; execPath: string };
   tools: DoctorTool[];
   dirs: { home: string; plugins: string };
@@ -217,7 +226,23 @@ export function buildDoctorReport(): DoctorReport {
   // 第六十三轮⑧：孤儿定时任务——timers.json 里引用的插件已卸载
   const orphanTimerKeys = orphanTimers(plugins.map((p) => p.id));
 
+  // 第八十一轮⑦：全量完整性复验（tampered/missing 进 error 计数，noSnapshot 是 warning）
+  const integrity = { checked: 0, clean: 0, tampered: [] as string[], missingFiles: [] as string[], noSnapshot: [] as string[] };
+  const seenIds = new Set<string>();
+  for (const p of plugins) {
+    if (!p.id || seenIds.has(p.id)) continue;  // quick.bak 等重复目录只验一次
+    seenIds.add(p.id);
+    integrity.checked++;
+    const v = verifyInstalled(p.id);
+    if (v.noSnapshot) { integrity.noSnapshot.push(p.id); warnings++; continue; }
+    if (v.ok) { integrity.clean++; continue; }
+    // 一个插件只进一个桶（优先「被改动」）——doctor 打点名行不重复
+    if (v.changed.length) { integrity.tampered.push(p.id); errors++; }
+    else if (v.missing.length) { integrity.missingFiles.push(p.id); errors++; }
+  }
+
   return {
+    integrity,
     node: { version: process.version, execPath: process.execPath },
     tools,
     dirs: { home: HOME, plugins: PLUGINS_DIR },

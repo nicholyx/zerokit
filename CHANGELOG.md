@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### Added
+
+- **插件供应链安全（第八十一轮）**：`zkit plugin unpack --strict` 拒绝无完整性清单的包（默认警告放行，向后兼容旧包）；无签名包装完仍生成装时快照，`zkit plugin verify` 照常复验。
+- `zkit doctor` 供应链完整性段：全量复验已装插件，被改动/被删文件的插件点名（`--json` 的 `integrity` 字段机读）；重装即可恢复可验证状态。
+- `zkit list --brief` 每个插件带 `installedFrom`（来源类型+地址+日期）——「这个插件哪来的」不用翻数据目录。
+- `zkit market list` 来源标签：`[本地]`（path 源）/`[git]`（远端仓库），market add 登记时记录。
+
 （下一版攒着）
 
 ## [0.85.0] - 2026-10-29

@@ -22,6 +22,7 @@ import { applyUpdate, checkUpdate, listUpdateStates } from './core/update.ts';
 import { checkRequires } from './core/resolve.ts';
 import { buildDoctorReport } from './core/doctor.ts';
 import { killAllProcesses, killProcess, listProcesses } from './core/runtime.ts';
+import { readSource } from './core/sources.ts';
 import { listServices, stopService } from './core/services.ts';
 import {
   addMarket, buildIndex, installFromMarket, loadMarkets, previewInstall,
@@ -270,8 +271,13 @@ function cmdList(): number {
           const missDep = missingDeps(e.plugin).length;
           // 第六十八轮③：brief 补动作摘要（脚本不用二次查询）
           const risks = e.plugin.actions.reduce((m, a) => { m[a.risk] = (m[a.risk] ?? 0) + 1; return m; }, {} as Record<string, number>);
+          // 第八十一轮⑥：安装来源进机读输出（bundled/git/market/dev/dir + 时间）——
+          // 审计「这个插件哪来的」不用翻数据目录
+          const src = readSource(e.plugin.dir);
+          const installedFrom = src ? `${src.type}${src.url ? ` ${src.url}` : ''}${src.installedAt ? ` @${src.installedAt.slice(0, 10)}` : ''}` : 'unknown';
           return { id: e.plugin.id, name: e.plugin.name, version: e.plugin.version,
             actions: e.plugin.actions.length, riskMix: risks,
+            installedFrom,
             health: missDep === 0 && missSet === 0 ? 'ok'
               : [missDep ? `缺依赖 ${missDep}` : '', missSet ? `缺设置 ${missSet}` : ''].filter(Boolean).join('，') || 'ok' };
         })()
@@ -1338,10 +1344,10 @@ function cmdPluginPack(args: string[]): number {
 function cmdPluginUnpack(args: string[]): number {
   const file = args.find((a) => !a.startsWith('-'));
   if (!file) {
-    process.stderr.write('用法：zkit plugin unpack <zip 文件> [--replace 覆盖已装版本]\n');
+    process.stderr.write('用法：zkit plugin unpack <zip 文件> [--replace 覆盖已装版本] [--strict 拒绝无签名清单的包]\n');
     return 2;
   }
-  const r = unpackPlugin(file, { replace: args.includes('--replace'), verify: !args.includes('--no-verify') });
+  const r = unpackPlugin(file, { replace: args.includes('--replace'), verify: !args.includes('--no-verify'), strict: args.includes('--strict') });
   if (!r.ok) { process.stderr.write(c.red(`✗ ${r.message}\n`)); return 1; }
   process.stdout.write(c.green(`✓ ${r.message}\n`));
   return 0;
@@ -1576,6 +1582,7 @@ async function cmdDoctor(): Promise<number> {
       dirs: report.dirs,
       desktop: report.desktop,
       orphanTimerKeys: report.orphanTimerKeys,
+      integrity: report.integrity,
       plugins: report.plugins.map((pl) => ({
         id: pl.id ?? null, name: pl.name ?? null, ok: !pl.problems.some((x) => x.level === 'error'),
         problems: pl.problems.map((x) => ({ level: x.level, text: x.text, hint: x.hint ?? null })),
@@ -1624,6 +1631,23 @@ async function cmdDoctor(): Promise<number> {
   process.stdout.write(`\n数据目录 ${c.dim(report.dirs.home)}\n`);
   process.stdout.write(`插件目录 ${c.dim(report.dirs.plugins)}\n`);
 
+  // 第八十一轮⑦：供应链完整性改动的点名
+  if (report.integrity.tampered.length || report.integrity.missingFiles.length || report.integrity.noSnapshot.length) {
+    process.stdout.write(c.bold('\n供应链完整性\n'));
+    for (const id of report.integrity.tampered) {
+      process.stdout.write(c.red(`  ✗ ${id} 内容与装时不一致（被改动）——重装或找作者确认\n`));
+    }
+    for (const id of report.integrity.missingFiles) {
+      process.stdout.write(c.red(`  ✗ ${id} 有文件被删除\n`));
+    }
+    const ns = report.integrity.noSnapshot;
+    for (const id of ns.slice(0, 5)) {
+      process.stdout.write(c.yellow(`  ! ${id} 没有装时快照，无法复验（老插件或手动拷入）\n`));
+    }
+    if (ns.length > 5) process.stdout.write(c.yellow(`  ! …等共 ${ns.length} 个（重新安装即可获得装时快照）\n`));
+  } else if (report.integrity.checked > 0) {
+    process.stdout.write(c.green(`\n供应链完整性：${report.integrity.clean}/${report.integrity.checked} 个插件复验通过\n`));
+  }
   process.stdout.write(c.bold(`\n插件（${report.plugins.length}）\n`));
   for (const plugin of report.plugins) {
     const bad = plugin.problems.some((x) => x.level === 'error');
@@ -2190,7 +2214,9 @@ function cmdMarket(args: string[]): number {
     }
     for (const m of markets) {
       const index = readIndex(m.name);
-      process.stdout.write(`${c.bold(m.name)}  ${c.dim(`${index?.plugins.length ?? '?'} 个插件`)}\n`);
+      // 第八十一轮⑤：来源类型标签——一眼看出这个集市是本地目录还是远端仓库
+      const kindTag = m.kind === 'path' ? c.cyan('[本地]') : m.kind === 'git' ? c.bold('[git]') : c.dim('[?]');
+      process.stdout.write(`${kindTag} ${c.bold(m.name)}  ${c.dim(`${index?.plugins.length ?? '?'} 个插件`)}\n`);
       if (index?.description) process.stdout.write(`  ${index.description}\n`);
       process.stdout.write(c.dim(`  ${m.url}\n`));
     }

@@ -309,7 +309,7 @@ export function packPluginWithManifest(id: string, outDir?: string): PackResult 
 /** ②解包安装：校验 plugin.toml 结构与动作风险声明后落进插件目录。
  * 第六十二轮②⑧：包里带 MANIFEST.sha256 时先逐文件校验，任何不匹配拒绝安装；
  * 清单自身被改/被删按「包损坏」处理（有清单条目却缺清单文件=不完整）。 */
-export function unpackPlugin(zipPath: string, opts: { replace?: boolean; verify?: boolean } = {}): PackResult {
+export function unpackPlugin(zipPath: string, opts: { replace?: boolean; verify?: boolean; strict?: boolean } = {}): PackResult {
   let entries: ZipEntry[];
   try {
     entries = unzipFiles(fs.readFileSync(zipPath));
@@ -326,6 +326,12 @@ export function unpackPlugin(zipPath: string, opts: { replace?: boolean; verify?
       return { ok: false, message: `完整性校验失败，拒绝安装：\n  - ${bad.join('\n  - ')}` };
     }
   }
+  // 第八十一轮③：无清单的旧包默认警告放行（向后兼容）；--strict 直接拒——
+  // CI 或高安全环境用它，杜绝「来路不明且无法自证完整性」的包
+  if (!manifestEntry && opts.strict) {
+    return { ok: false, message: `包里没有 ${INTEGRITY_FILE} 完整性清单（--strict 模式拒绝未签名包）。让作者用 zkit plugin pack 重新打包` };
+  }
+  const unsignedWarn = !manifestEntry;
   // 路径穿越防线：所有条目必须落在目标目录内
   const bad = entries.find((e) => e.name.includes('..') || path.isAbsolute(e.name));
   if (bad) return { ok: false, message: `包里有可疑路径 ${bad.name}，拒绝安装` };
@@ -365,7 +371,7 @@ export function unpackPlugin(zipPath: string, opts: { replace?: boolean; verify?
   }
   fs.writeFileSync(path.join(dest, SNAPSHOT_FILE),
     JSON.stringify({ at: new Date().toISOString(), files: snapFiles }, null, 2));
-  return { ok: true, file: dest, files: entries.map((e) => e.name), message: `已安装 ${id}（${entries.length} 个文件；覆盖旧版备份在 ${id}.bak）` };
+  return { ok: true, file: dest, files: entries.map((e) => e.name), message: `已安装 ${id}（${entries.length} 个文件；覆盖旧版备份在 ${id}.bak）${unsignedWarn ? `\n⚠ 包没有完整性清单（未签名）——装时快照按实际内容生成，之后 zkit plugin verify ${id} 仍可复验` : ''}` };
 }
 
 // ---------------- ④上架检查 ----------------
