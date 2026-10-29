@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+（下一版攒着）
+
+## [0.76.0] - 2026-10-29
+
 ### Added
 
 - CLI：`history --failed` 只看失败记录，逐条附诊断建议（复用 suggest 规则表）。
