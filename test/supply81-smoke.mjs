@@ -18,9 +18,11 @@ console.log(`supply81-smoke（${home}）`);
 run(['plugin', 'bundled']);
 
 // ① pack 自带清单
-const pack = run(['plugin', 'pack', 'quick']);
-const zipPath = pack.stdout.match(/\/\S+\.zip/)?.[0] ?? '';
-check('① pack 成功', pack.status === 0 && zipPath !== '' && existsSync(zipPath));
+const packDir = mkdtempSync(path.join(tmpdir(), 's81p-'));
+const pack = run(['plugin', 'pack', 'quick', '--out', packDir]);
+// pack 输出文件名固定 zerokit-quick.zip；Windows 路径分隔符差异用 path.join 消掉
+const zipPath = path.join(packDir, 'zerokit-quick.zip');
+check('① pack 成功', pack.status === 0 && existsSync(zipPath));
 const { execFileSync } = await import('node:child_process');
 const { execSync } = await import('node:child_process');
 const zipList = execFileSync('unzip', ['-l', zipPath], { encoding: 'utf8' });
@@ -109,6 +111,6 @@ check('② 装时快照落盘', existsSync(path.join(home, 'plugins', 'quick', '
 }
 
 rmSync(home, { recursive: true, force: true });
-try { rmSync(zipPath, { force: true }); } catch { /* 仓库根的 zip */ }
+rmSync(packDir, { recursive: true, force: true });
 console.log(`\n通过 ${pass} / ${pass + fail}`);
 process.exit(fail > 0 ? 1 : 0);
