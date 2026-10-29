@@ -32,6 +32,9 @@ export interface MarketEntry {
   tags?: string[];
   /** path:<集市仓库内相对路径> 或 git:<仓库地址>[#子目录] */
   source: string;
+  /** 第六十二轮⑥：内容完整性声明（plugin pack 输出的 sha256-…）。
+   * 目录源（path:）没有包级哈希可校，字段可缺；git 源装完可对照。 */
+  integrity?: string;
 }
 
 export interface MarketIndex {
@@ -302,6 +305,8 @@ export function installFromMarket(pluginId: string, marketName?: string, opts: {
           installedAt: new Date().toISOString(),
           market: preview.market,
           source: preview.entry.source,
+          // 第六十二轮⑥：集市条目带的完整性声明原样存档——verify/审计可对照
+          integrity: preview.entry.integrity,
           manifest: fs.readFileSync(path.join(result.dir!, 'plugin.toml'), 'utf8'),
         }, null, 2),
       );
