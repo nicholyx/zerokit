@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder } from './extras.js';
+import { pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -1405,6 +1405,13 @@ function openActive() {
   openDetail(entry.plugin, entry.action, prefill);
 }
 
+/** 第七十轮⑧：actionKey → 动作显示名（共现建议按钮用；找不到回退 key 本身）。 */
+function actionTitleOf(key) {
+  const dot = key.lastIndexOf('.');
+  const e = entries.find((x) => x.plugin.id === key.slice(0, dot) && x.action.id === key.slice(dot + 1));
+  return e ? e.action.title : '';
+}
+
 function openDetail(plugin, action, prefill) {
   detail = { plugin, action };
   // 第十八轮①：切到别的动作，旧监控自动停（一次只盯一个）
@@ -1484,14 +1491,23 @@ function openDetail(plugin, action, prefill) {
 
   // 上次结果提示：同动作最近一次执行可一键回看（不是缓存复用——那会让「跑一次」
   // 语义变味；只是给「我刚才是不是跑过这个」一个不用翻历史的入口）
-  const lastRun = (runStore[aliasKey] ?? []).at(-1);
+  const lastRun = (runStore[aliasKey] ?? [])[0];  // unshift 语义：首位才是最新一条（第七十轮修：at(-1) 取到最旧）
+  const key = actionKey(plugin.id, action.id);
   const lastRunNote = lastRun
     ? `<div class="mem-note last-run-note">上次：${lastRun.ok ? '✓ 成功' : '✗ 失败'} · ${Math.max(1, Math.round((Date.now() - lastRun.ts) / 60000))} 分钟前
-        <button class="ghost mini" id="peekLast" title="回看上次结果">回看</button></div>`
+        <button class="ghost mini" id="peekLast" title="回看上次结果">回看</button>
+        ${lastRun.values ? '<button class="ghost mini" id="rerunLast" title="用上次的参数再跑一次">重跑</button>' : ''}</div>`
+    : '';
+
+  // 第七十轮⑧：常用组合建议——历史里做完这个动作最常接着做的是哪些（共现统计）
+  const coSug = coActions(flattenRuns(runStore), key).filter((c) => c.count >= 2);
+  const coNote = coSug.length
+    ? `<div class="mem-note co-note">做完这个你常接着：${coSug.map((c, i) =>
+        `<button class="ghost mini" data-co="${esc(c.key)}" title="历史共现 ${c.count} 次">${esc(actionTitleOf(c.key) || c.key)}（${c.count}）</button>`).join(' ')}
+        <span class="dim">（历史共现 ≥2 次）</span></div>`
     : '';
 
   // sparkline：这个动作近 20 次的耗时走势（成功点线、失败点红），有历史才画
-  const key = actionKey(plugin.id, action.id);
   const runHist = (runStore[key] ?? []).slice(-20);
   // 第四十九轮①②④⑤：历史分析卡——数值趋势 / 耗时分布 / 失败率警示 / 与上次对比
   const numericFields = (() => {
@@ -1613,6 +1629,7 @@ function openDetail(plugin, action, prefill) {
   ${whyNote}
   ${aliasNote}
   ${lastRunNote}
+  ${coNote}
     ${fields}
     <div id="riskCard" class="risk-card"></div>
     <div id="runHistory" class="run-history"></div>
@@ -1907,7 +1924,7 @@ function openDetail(plugin, action, prefill) {
 
   // 分享卡：结果摘要（标题/成败/耗时/命令行截断）→ 纯文本，复制到剪贴板
   $('shareCardBtn')?.addEventListener('click', async () => {
-    const last = (runStore[actionKey(plugin.id, action.id)] ?? []).at(-1);
+    const last = (runStore[actionKey(plugin.id, action.id)] ?? [])[0];  // 第七十轮修：unshift 语义首位最新
     if (!last) {
       el.count.textContent = '还没有执行结果，先跑一次再分享';
       return;
@@ -2072,11 +2089,32 @@ function openDetail(plugin, action, prefill) {
 
   // 回看上次结果：直接用存的 data 渲染（不再发请求）
   $('peekLast')?.addEventListener('click', () => {
-    const rec = (runStore[aliasKey] ?? []).at(-1);
+    const rec = (runStore[aliasKey] ?? [])[0];
     if (!rec) return;
     lastResult = { ok: rec.ok, ms: rec.ms, data: rec.data, stdout: rec.data === undefined ? '（上次输出未保存结构化数据）' : undefined, render: rec.data === undefined ? 'text' : 'json', ts: rec.ts };
     renderResult(lastResult);
     setTimeout(() => $('result')?.scrollIntoView({ block: 'start' }), 0);
+  });
+  // 第七十轮⑤：一键用上次参数重跑（记录里有 values 快照才显示按钮）
+  $('rerunLast')?.addEventListener('click', () => {
+    const rec = (runStore[aliasKey] ?? [])[0];
+    if (!rec?.values) return;
+    for (const [k, v] of Object.entries(rec.values)) {
+      const f = $(`f_${k}`);
+      if (!f) continue;
+      if (f.type === 'checkbox') f.checked = v === true || v === 'true';
+      else f.value = v;
+    }
+    submit(false);
+  });
+  // 第七十轮⑧：共现建议点击直达
+  el.detailView?.querySelectorAll('[data-co]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const key = b.dataset.co;
+      const dot = key.lastIndexOf('.');
+      const e2 = entries.find((x) => x.plugin.id === key.slice(0, dot) && x.action.id === key.slice(dot + 1));
+      if (e2) openDetail(e2.plugin, e2.action);
+    });
   });
 
   // 昵称：自己的叫法。搜索权重最高，列表里显示在原名旁
@@ -4769,7 +4807,53 @@ const tableUnitConv = {};
 const resultQueryTerms = {};
 // 第二十九轮⑦：点了「加载全部」的表（tableId 集合），会话内不再截断
 const tableFullLoad = new Set();
+/** 第七十轮⑥：右键菜单的收口（点击别处/Esc 都关）。 */
+function closeCtxMenu() {
+  document.querySelectorAll('.ctx-menu').forEach((m) => m.remove());
+}
+function escClose70(e) { if (e.key === 'Escape') closeCtxMenu(); }
+
 function bindTableSorts(scope) {
+  // 第七十轮⑥：结果表右键菜单——复制单元格/整行/整表（一次性委托，不逐行绑）
+  scope.querySelectorAll('table tbody').forEach((tbody) => {
+    if (tbody.dataset.ctx70) return;
+    tbody.dataset.ctx70 = '1';
+    tbody.addEventListener('contextmenu', (ev) => {
+      const td = ev.target.closest('td');
+      const tr = ev.target.closest('tr');
+      if (!td || !tr) return;
+      ev.preventDefault();
+      closeCtxMenu();
+      const rowText = [...tr.querySelectorAll('td')].map((x) => x.textContent.trim()).join('\t');
+      const tblEl = tbody.closest('table');
+      const menu = document.createElement('div');
+      menu.className = 'ctx-menu zk-pop-in';
+      menu.setAttribute('role', 'menu');
+      const mk = (label, fn) => {
+        const b = document.createElement('button');
+        b.setAttribute('role', 'menuitem');
+        b.textContent = label;
+        b.addEventListener('click', () => { fn(); closeCtxMenu(); });
+        menu.appendChild(b);
+      };
+      const copy = (text, what) => navigator.clipboard?.writeText(text)
+        .then(() => { el.count.textContent = `已复制${what}`; })
+        .catch(() => { el.count.textContent = '复制被浏览器拒绝'; });
+      mk('复制单元格', () => copy(td.textContent.trim(), '单元格'));
+      mk('复制整行', () => copy(rowText, '整行'));
+      if (tblEl) mk('复制整表（TSV）', () => {
+        const rows = [...tblEl.querySelectorAll('tr')].map((r) => [...r.querySelectorAll('th,td')].map((c) => c.textContent.trim()).join('\t'));
+        copy(rows.join('\n'), '整表');
+      });
+      const rc = ev.target.closest('table').getBoundingClientRect();
+      menu.style.left = `${Math.min(ev.clientX, rc.right - 150)}px`;
+      menu.style.top = `${ev.clientY}px`;
+      document.body.appendChild(menu);
+      setTimeout(() => document.addEventListener('click', closeCtxMenu, { once: true }), 0);
+      document.addEventListener('keydown', escClose70, { capture: true, once: true });
+    });
+  });
+
   // 第二十九轮⑦：大表「加载全部」——把该表的溢出阈值记成 Infinity 后重画
   scope.querySelectorAll('[data-loadall]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -7287,6 +7371,30 @@ document.addEventListener('keydown', (e) => {
       return;
     }
   }
+  // 第七十轮①：Enter 复制结果表格选中行（j/k 移动后的连续动作——不碰鼠标拿走数据）。
+  // 注意 Ctrl+Enter 是执行，前面 detail 分支已 return，到这里一定是纯 Enter。
+  if (detail && !typing && e.key === 'Enter') {
+    const tr = document.querySelector('#result table tbody tr.row-sel');
+    if (tr) {
+      e.preventDefault();
+      const cells = [...tr.querySelectorAll('td')].map((td) => td.textContent.trim()).join('\t');
+      navigator.clipboard?.writeText(cells).then(() => {
+        el.count.textContent = '已复制选中行';
+      }).catch(() => { el.count.textContent = '复制被浏览器拒绝'; });
+      return;
+    }
+  }
+  // 第七十轮④：Ctrl+1..8 直达结果页签（页签栏点击的键盘等价物）
+  if (detail && !typing && (e.ctrlKey || e.metaKey) && /^[1-8]$/.test(e.key) && resultTabs.length) {
+    const idx = Number(e.key) - 1;
+    if (resultTabs[idx]) {
+      e.preventDefault();
+      activeTab = resultTabs[idx].id;
+      renderResult(resultTabs[idx].res);
+      renderTabBar();
+    }
+    return;
+  }
   // 第二十四轮⑦：[ ] 切换结果页签（环形）
   if (detail && !typing && (e.key === '[' || e.key === ']') && resultTabs.length) {
     e.preventDefault();
@@ -7414,6 +7522,14 @@ document.addEventListener('keydown', (e) => {
     // 第五十二轮③：E=导出（结果区第一个导出按钮）
     const btn = document.querySelector('#result [data-exp], #result #csvBtn, #result [data-exp-csv]');
     if (btn) { e.preventDefault(); btn.click(); }
+  } else if ((e.key === 'x' || e.key === 'X') && document.activeElement === document.body && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    // 第七十轮②：X=导出 CSV（与结果区 CSV 按钮等价）
+    const btn2 = document.querySelector('#result #csvBtn, #result [data-exp-csv], #result [data-exp="csv"]');
+    if (btn2) { e.preventDefault(); btn2.click(); }
+  } else if ((e.key === 'm' || e.key === 'M') && document.activeElement === document.body && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    // 第七十轮③：M=导出 Markdown（第六十九轮 m 排序键只在列表态生效，这里是详情态，不冲突）
+    const btn3 = document.querySelector('#result #mdBtn, #result [data-exp="md"], #result [data-exp-md], #result [data-exp="markdown"]');
+    if (btn3) { e.preventDefault(); btn3.click(); }
   } else if (/^[1-9]$/.test(e.key) && filtered.length > 0 && document.activeElement === el.q) {
     // 纯数字键 1-9 = 选中第 N 条（不直接打开——选中后回车才开，防误触）。
     // 与 Alt+数字 的差别：那是「直开」，这是「快选」，配合 roving tabindex。

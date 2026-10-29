@@ -1745,3 +1745,21 @@ body.ld-loose .item-desc1 { white-space: normal; -webkit-line-clamp: 2; }  /* �
 
 /* recent 排序模式指示：列表上方一行说明，避免用户不知道当前为什么这么排 */
 .sort-note { font-size: 11px; color: var(--fg-dim, #888); padding: 2px 14px 0; }
+
+/* ---------------- 第七十轮：操作连续性 ---------------- */
+/* 结果表右键菜单（复制单元格/整行/整表） */
+.ctx-menu {
+  position: fixed; z-index: 9000; min-width: 140px;
+  background: var(--bg-soft, #fff); border: 1px solid var(--border, #ddd);
+  border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.18);
+  padding: 4px; display: flex; flex-direction: column; gap: 1px;
+}
+.ctx-menu button {
+  all: unset; cursor: pointer; padding: 6px 12px; border-radius: 5px;
+  font-size: 12px; color: var(--fg, #222);
+}
+.ctx-menu button:hover { background: color-mix(in srgb, var(--accent, #4a7dca) 15%, transparent); }
+
+/* 共现建议按钮行 */
+.co-note { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.co-note .dim { opacity: 0.6; font-size: 11px; }

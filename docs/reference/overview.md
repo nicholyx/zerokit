@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-10-29（第六十九轮，v0.74.0）
+> 最后更新：2026-10-29（第七十轮，v0.75.0）
 
 ## 性能基线（第五十八轮建立，2026-10-28，Apple M4 / Node 22）
 
@@ -228,7 +228,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 
 ### 质量
 
-- 45 个测试文件、**1358 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
+- 45 个测试文件、**1373 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
 - `tsc --noEmit` 干净——**而且 CI 真的在跑它**（`typecheck` job）。
   曾经这里写着"干净"但没有任何地方执行这条命令，于是两个只有类型检查才看得见的
   错误在核心里躺了很久（`proxy.ts` 的 Buffer 泛型不兼容、`scaffold.ts` 的类型混用）。
@@ -366,6 +366,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 **速度这块从"欠账"变成了明确优势**（python 动作 21 倍、node 动作 5 倍）。
 **最大的能力缺口是 OS 级能力**——它决定了能不能做到 uTools 那种"选中即唤起"的手感，
 也决定了纯界面型 uTools 插件能不能接得住。
-- 第六十八轮（v0.73.0）CLI 人体工学第二轮：--jq 轻量路径查询（中文键/下标/未命中 exit 1）、--out 落文件（可与 --jq 组合）、list --brief 补 actions+riskMix、config 无参总览、history --tail、plugin new --author/--description、cli68-smoke 19 项、全量 45 文件 1358/1358（Issue #246）
+- 第六十八轮（v0.73.0）CLI 人体工学第二轮：--jq 轻量路径查询（中文键/下标/未命中 exit 1）、--out 落文件（可与 --jq 组合）、list --brief 补 actions+riskMix、config 无参总览、history --tail、plugin new --author/--description、cli68-smoke 19 项、全量 45 文件 1373/1373（Issue #246）
 
-- 第六十九轮（v0.74.0）启动器信息密度与浏览效率：分组头徽标化、参数摘要 tooltip、[/] 带参无参过滤、. 键开详情、m/r 最近使用排序、d 键密度三档、extras-smoke +10、全量 45 文件 1358/1358（Issue #249）
+- 第六十九轮（v0.74.0）启动器信息密度与浏览效率：分组头徽标化、参数摘要 tooltip、[/] 带参无参过滤、. 键开详情、m/r 最近使用排序、d 键密度三档、extras-smoke +10、全量 45 文件 1373/1373（Issue #249）
+- 第七十轮（v0.75.0）启动器操作连续性：结果区 j/k/Enter 复制行、X/M 导出、Ctrl+数字页签、重跑按钮、右键菜单、共现建议 coActions/flattenRuns、lastRun 索引修复（unshift 语义首位最新）、extras-smoke +6、全量 45 文件 1373/1373（Issue #252）
