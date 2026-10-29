@@ -137,6 +137,26 @@ function pad(s: string, n: number): string {
   return s + ' '.repeat(Math.max(0, n - width));
 }
 
+/** 第六十八轮②：轻量点路径查询——.a.b[0].c。不引完整 jq（依赖与语义都过重），
+ * 只支持最常用的字段链 + 数组下标 + 末尾切片 [.a[].b 不支持，够用就好）。 */
+function jqPath(root: unknown, expr: string): { hit: boolean; value?: unknown; why?: string } {
+  if (!expr.startsWith('.')) return { hit: false, why: '表达式要以 . 开头（如 .data.ip）' };
+  let cur: unknown = root;
+  const tokens = expr.slice(1).split(/[.[]|(?<=\d)\]/).filter(Boolean);
+  for (const raw of tokens) {
+    const idx = /^\d+$/.test(raw) ? Number(raw) : undefined;
+    if (idx !== undefined) {
+      if (!Array.isArray(cur) || cur.length <= idx) return { hit: false, why: `下标 [${idx}] 越界或不是数组` };
+      cur = cur[idx];
+    } else {
+      if (cur === null || typeof cur !== 'object') return { hit: false, why: `${raw} 之前已经不是对象` };
+      cur = (cur as Record<string, unknown>)[raw];
+      if (cur === undefined) return { hit: false, why: `没有字段 ${raw}` };
+    }
+  }
+  return { hit: true, value: cur };
+}
+
 function printRunResult(action: { output: string }, result: RunResult, json: boolean): void {
   if (json) {
     process.stdout.write(JSON.stringify({
@@ -248,7 +268,10 @@ function cmdList(): number {
       ? (() => {
           const missSet = resolveSettings(e.plugin).missing.length;
           const missDep = missingDeps(e.plugin).length;
+          // 第六十八轮③：brief 补动作摘要（脚本不用二次查询）
+          const risks = e.plugin.actions.reduce((m, a) => { m[a.risk] = (m[a.risk] ?? 0) + 1; return m; }, {} as Record<string, number>);
           return { id: e.plugin.id, name: e.plugin.name, version: e.plugin.version,
+            actions: e.plugin.actions.length, riskMix: risks,
             health: missDep === 0 && missSet === 0 ? 'ok'
               : [missDep ? `缺依赖 ${missDep}` : '', missSet ? `缺设置 ${missSet}` : ''].filter(Boolean).join('，') || 'ok' };
         })()
@@ -391,6 +414,31 @@ function readStdinValue(): Promise<string> {
   });
 }
 
+/** 第六十八轮④：zkit config 无参数——全部插件的设置状态总览（配了什么/缺什么一眼看全）。 */
+function cmdConfigOverview(): number {
+  const entries = listPlugins().filter((e) => e.plugin);
+  const withSettings = entries.filter((e) => e.plugin!.settings.length > 0);
+  if (withSettings.length === 0) {
+    process.stdout.write('所有插件都没有设置项。\n');
+    return 0;
+  }
+  process.stdout.write(c.bold('设置状态总览（zkit config <插件> 看单个插件明细）：\n'));
+  for (const e of withSettings) {
+    const p = e.plugin!;
+    const view = resolveSettings(p);
+    const set = view.values ? Object.keys(view.values).filter((k) => view.values?.[k] !== undefined).length : 0;
+    const total = p.settings.length;
+    const missing = view.missing.length;
+    const tag = missing > 0 ? c.yellow(`缺 ${missing} 项必填`)
+      : view.invalid.length > 0 ? c.red(`${view.invalid.length} 项不合法`)
+      : c.green('✓ 配齐');
+    process.stdout.write(`  ${pad(p.id, 14)} ${set}/${total} 已设置  ${tag}\n`);
+  }
+  const noSettings = entries.length - withSettings.length;
+  if (noSettings > 0) process.stdout.write(c.dim(`  （另有 ${noSettings} 个插件无设置项）\n`));
+  return 0;
+}
+
 function cmdConfigUsage(): number {
   process.stderr.write('用法：zkit config <插件> [list | get <项> | set <项> [值] | unset <项>]'
     + ' [--json] [--stdin] [--reveal]\n');
@@ -403,7 +451,7 @@ async function cmdConfig(args: string[]): Promise<number> {
   const fromStdin = args.includes('--stdin');
   const clean = args.filter((a) => a !== '--json' && a !== '--reveal' && a !== '--stdin');
   const [pluginId, sub = 'list', name, ...rest] = clean;
-  if (!pluginId) return cmdConfigUsage();
+  if (!pluginId) return cmdConfigOverview();
 
   let plugin: Plugin;
   try {
@@ -562,6 +610,12 @@ async function cmdRun(args: string[]): Promise<number> {
   const outIdx = rest.indexOf('--out');
   const outFmt = outIdx >= 0 && rest[outIdx + 1] ? rest[outIdx + 1] : undefined;
   const doCopy = rest.includes('--copy');
+  // 第六十八轮②：--jq <路径> 轻量查询（.data.ip / .data.items[0].name 这类点路径）
+  const jqIdx = rest.indexOf('--jq');
+  const jqNext = jqIdx >= 0 ? rest[jqIdx + 1] : undefined;
+  const jqExpr = jqIdx >= 0 && jqNext && !jqNext.startsWith('--') ? jqNext : undefined;
+  // 第六十八轮①：--out <file> 结果落文件（文本写原文、JSON 写格式化）
+  const outFile = outFmt && outFmt !== 'csv' && outFmt !== 'table' && !outFmt.startsWith('--') ? outFmt : undefined;
   // 第六十五轮⑤：--share <file.md|file.html> 执行完直接落分享文件
   const shareIdx = rest.indexOf('--share');
   const shareNext = shareIdx >= 0 ? rest[shareIdx + 1] : undefined;
@@ -573,8 +627,8 @@ async function cmdRun(args: string[]): Promise<number> {
   const argv: string[] = [];
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i]!;
-    if (a === '--out' || a === '--watch' || a === '--share') { i++; continue; }
-    if (a.startsWith('--out=') || a.startsWith('--watch=') || a.startsWith('--share=')) continue;
+    if (a === '--out' || a === '--watch' || a === '--share' || a === '--jq') { i++; continue; }
+    if (a.startsWith('--out=') || a.startsWith('--watch=') || a.startsWith('--share=') || a.startsWith('--jq=')) continue;
     if (['--yes', '-y', '--json', '--copy', '--quiet'].includes(a)) continue;
     argv.push(a);
   }
@@ -652,6 +706,16 @@ async function cmdRun(args: string[]): Promise<number> {
       argv: cliX.stripControlFlags(argv), exitCode: result.ok ? 0 : 1,
     });
   }
+  // 第六十八轮②：--jq 点路径查询（在 --out/--copy 之前改写 result.data）
+  if (jqExpr && result.ok) {
+    const picked = jqPath(result.data ?? JSON.parse(result.stdout || 'null'), jqExpr);
+    if (picked.hit) result.data = picked.value;
+    else {
+      process.stderr.write(c.red(`✗ --jq ${jqExpr} 没取到值（${picked.why}）\n`));
+      return 1;
+    }
+  }
+  // 第六十八轮①：--out 文件——文本写原文、JSON 写两空格格式化
   // 第四十五轮③④⑦：输出格式 / 复制 / 安静模式
   const cliX = await import('./core/cliX.ts');
   if (outFmt === 'yaml') {
@@ -667,6 +731,12 @@ async function cmdRun(args: string[]): Promise<number> {
     } else {
       printRunResult(action, result, asJson);
     }
+  }
+  if (outFile && result.ok) {
+    const { writeFileSync } = await import('node:fs');
+    const body = result.data !== undefined ? JSON.stringify(result.data, null, 2) + '\n' : (result.stdout || '');
+    writeFileSync(outFile, body, 'utf8');
+    if (!quiet) process.stdout.write(c.green(`✓ 已写入 ${outFile}（${body.length} 字符）\n`));
   }
   if (doCopy && result.ok) {
     // @ts-expect-error 插件侧 .mjs 无类型声明（运行时存在；类型层留白是刻意的——插件代码不该被内核类型卡住）
@@ -810,7 +880,7 @@ async function cmdPlugin(args: string[]): Promise<number> {
     const rest = args.slice(1);
     const id = rest.find((a) => !a.startsWith('--'));
     if (!id) {
-      process.stderr.write('用法：zkit plugin new <id> [--name 名字] [--runtime node|python] [--web] [--dir 目录] [--example chain|setting|http]\n');
+      process.stderr.write('用法：zkit plugin new <id> [--name 名字] [--author 作者] [--description 一句话简介] [--runtime node|python] [--web] [--dir 目录] [--example chain|setting|http]\n');
       return 2;
     }
     const flag = (name: string): string | undefined => {
@@ -830,6 +900,9 @@ async function cmdPlugin(args: string[]): Promise<number> {
     }
     const r = scaffoldPlugin(id, {
       name: flag('name'),
+      // 第六十八轮⑧：--author/--description 免得装完不知道谁写的/干嘛的
+      author: flag('author'),
+      summary: flag('description'),
       runtime: runtime as ScaffoldRuntime | undefined,
       web: rest.includes('--web'),
       dir: flag('dir'),
@@ -1408,7 +1481,10 @@ async function cmdHistory(args: string[]): Promise<number> {
     process.stdout.write('历史为空。先跑一个：zkit run <插件> <动作>\n');
     return 0;
   }
-  const n = Math.min(Number(args[0]) || 10, list.length);
+  // 第六十八轮⑤：--tail N 与位置参数同义但更顺手（且允许 --tail 与默认 10 并存）
+  const tailIdx = args.indexOf('--tail');
+  const tailN = tailIdx >= 0 && args[tailIdx + 1] ? Number(args[tailIdx + 1]) : undefined;
+  const n = Math.min(tailN || Number(args[0]) || 10, list.length);
   process.stdout.write(c.bold(`最近 ${n} 条（zkit history --rerun N 可重跑）：\n`));
   for (let i = 0; i < n; i++) {
     const e = list[i];
