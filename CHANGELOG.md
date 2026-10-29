@@ -2,6 +2,15 @@
 
 （下一版攒着）
 
+## [0.82.0] - 2026-10-29
+
+### Added
+
+- **MCP 面第二波（第七十七轮）**：`zkit mcp tools --plugin <id>` 按插件过滤（无过滤且超 30 个工具时提示缩窄）；`zkit mcp search <词>` 跨插件搜动作；`zkit mcp dry-run <key> --params '<json>'` 参数预演（占位符展开 + 缺参清单）；`zkit mcp allow --ttl 1h|1d|7d|30d|permanent` 授权有效期 + 授权后显示将执行的命令；`zkit mcp status` 看剩余时间；`zkit mcp revoke` 随时撤销。
+- MCP CallTool 三个失败分支（tool-not-found / not-authorized / bad-params）全部带 `structuredContent.next_hint`——附近工具名、授权命令原文、dry-run 验证命令，客户端不翻文档就能自纠。
+- MCP 授权存储统一：mcp.ts 私有的 mcp-allow.json 桥接 audit.ts 的 allow.json（同一套 ttlDays / -1 永久 / entryAlive 语义），旧文件首次读取自动迁移且迁移不缩权（旧授权给永久）。
+- docs/reference/mcp.md 新增「AI 客户端协作（第二波）」节。
+
 ## [0.81.0] - 2026-10-29
 
 ### Added
