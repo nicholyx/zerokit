@@ -2718,8 +2718,9 @@ function showClipSuggest(text) {
   const { kind, why } = classifyClip(text);
   const recs = clipSuggestions(kind)
     .map((k) => {
-      const e = entries.find((x) => x.key === k || `${x.plugin}.${x.action}` === k);
-      return e ? { key: k, name: e.name, pluginId: e.plugin, actionId: e.action } : null;
+      // entries 元素是 {plugin, action}（都是对象），key 形如 插件id.动作id
+      const e = entries.find((x) => `${x.plugin.id}.${x.action.id}` === k);
+      return e ? { key: k, name: e.action.title, pluginId: e.plugin.id, actionId: e.action.id } : null;
     })
     .filter(Boolean);
   const overlay = document.createElement('div');
@@ -2766,16 +2767,15 @@ document.addEventListener('keydown', (e) => {
 
 /** #/clip 剪贴板历史面板：可回写、单条删、清空。 */
 function showClipPanel() {
+  loadClipHist();   // 打开即重读——别拿模块加载时的旧快照
   hidePanels();
   mode = 'clip';
+  el.modeLabel.textContent = '📋 剪贴板';
   el.listView.classList.add('hidden');
-  let panel = document.getElementById('clipPanel');
-  if (!panel) {
-    panel = document.createElement('section');
-    panel.id = 'clipPanel';
-    panel.className = 'view';
-    el.app.insertBefore(panel, el.app.firstChild);
-  }
+  el.detailView.classList.add('hidden');
+  if (location.hash !== '#/clip') history.replaceState(null, '', '#/clip');
+  const panel = el.allowView;   // 复用面板容器（与定时任务同款）
+  showPanelAnimated(panel);
   const rows = clipHist.length
     ? clipHist.map((c, i) => `
       <div class="clip-row" data-i="${i}">
@@ -7696,6 +7696,9 @@ window.addEventListener('keydown', (e) => {
 
 // 把内部状态挂出来，便于排查，也方便以后用 CDP 做界面自动化测试
 window.__zerokit = {
+  // 第六十四轮：剪贴板工作流（截图脚本与自动化验证用）
+  __zerokitShowClipSuggest: showClipSuggest,
+  __zerokitShowClipPanel: showClipPanel,
   // 第三十九轮：结果区直渲（截图脚本与自动化验证用）
   __zerokitRenderResult: (res) => renderResult(res),
   // 第二十一轮：配置档（截图脚本与深度自动化用）
