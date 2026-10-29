@@ -63,7 +63,7 @@ export function stripControlFlags(argv: string[]): string[] {
 
 // ---------------------------------------------------------------- 输出格式化
 
-type Row = Record<string, unknown>;
+export type Row = Record<string, unknown>;
 
 /** ⑤扁平化：data 若是对象数组直接用；对象包一层 [value]；其它返回 []。 */
 export function toRows(data: unknown): Row[] {
@@ -72,6 +72,85 @@ export function toRows(data: unknown): Row[] {
   }
   if (data && typeof data === 'object' && !Array.isArray(data)) return [data as Row];
   return [];
+}
+
+// ---------------------------------------------------------------- 第七十五轮：结果再加工
+
+/** 75：行级加工选项（按 pick → sort → uniq → head → sum 的固定序应用）。 */
+export interface TransformOpts {
+  pick?: string[];        // 只取这些列
+  sort?: string;          // 列名，前缀 - 降序
+  uniq?: string;          // 按列去重（保首见序）
+  head?: number;          // 取前 N 行
+  sum?: string;           // 数字列合计（附表尾 TOTAL 行）
+}
+
+/** 判数字：字符串也认（'120 MB' 前缀数字），先排空。 */
+function numVal(v: unknown): number | null {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && v.trim() !== '') {
+    const n = Number(v.trim());
+    if (Number.isFinite(n)) return n;
+    const m = /^-?\d+(?:\.\d+)?/.exec(v.trim());
+    return m ? Number(m[0]) : null;
+  }
+  return null;
+}
+
+/** 75：transformRows——pick/sort/uniq/head/sum 组合加工。列不存在时报错（带可用列清单）。 */
+export function transformRows(rows: Row[], opts: TransformOpts): { rows: Row[]; error?: string } {
+  if (rows.length === 0) return { rows };
+  const allKeys = [...new Set(rows.flatMap((r) => Object.keys(r)))];
+  // ① pick
+  let out = rows;
+  if (opts.pick && opts.pick.length > 0) {
+    const missing = opts.pick.filter((k) => !allKeys.includes(k));
+    if (missing.length > 0) return { rows, error: `列不存在：${missing.join('、')}——可用列：${allKeys.join('、')}` };
+    out = out.map((r) => Object.fromEntries(opts.pick!.map((k) => [k, r[k]])));
+  }
+  // ② sort：数字列数值序、文本列字典序；-列 降序
+  if (opts.sort) {
+    const desc = opts.sort.startsWith('-');
+    const col = desc ? opts.sort.slice(1) : opts.sort;
+    if (!allKeys.includes(col)) return { rows, error: `排序列不存在：${col}——可用列：${allKeys.join('、')}` };
+    const allNum = out.every((r) => numVal(r[col]) !== null);
+    out = [...out].sort((a, b) => {
+      if (allNum) {
+        const d = (numVal(a[col]) ?? 0) - (numVal(b[col]) ?? 0);
+        return desc ? -d : d;
+      }
+      const sa = String(a[col] ?? ''); const sb = String(b[col] ?? '');
+      return desc ? sb.localeCompare(sa) : sa.localeCompare(sb);
+    });
+  }
+  // ③ uniq：按列去重保首见序
+  if (opts.uniq) {
+    if (!allKeys.includes(opts.uniq)) return { rows, error: `去重列不存在：${opts.uniq}——可用列：${allKeys.join('、')}` };
+    const seen = new Set<string>();
+    out = out.filter((r) => {
+      const k = JSON.stringify(r[opts.uniq!] ?? '');
+      if (seen.has(k)) return false;
+      seen.add(k); return true;
+    });
+  }
+  // ④ head
+  if (opts.head !== undefined && opts.head >= 0) out = out.slice(0, opts.head);
+  // ⑤ sum：数字列求和附表尾 TOTAL 行
+  if (opts.sum) {
+    if (!allKeys.includes(opts.sum)) return { rows, error: `合计列不存在：${opts.sum}——可用列：${allKeys.join('、')}` };
+    const bad = out.find((r) => numVal(r[opts.sum!]) === null);
+    if (bad) return { rows, error: `合计列「${opts.sum}」含非数字值：${String(bad[opts.sum!]).slice(0, 20)}` };
+    const total = out.reduce((a, r) => a + (numVal(r[opts.sum!]) ?? 0), 0);
+    // TOTAL 行键集跟 pick 后一致（全键集含未 pick 列会让表格多出一列）
+    const sumKeys = (opts.pick && opts.pick.length ? opts.pick : allKeys).filter((k) => k !== opts.sum);
+    const tail: Row = Object.fromEntries((opts.pick && opts.pick.length ? opts.pick : allKeys).map((k) => [k, k === opts.sum ? total : '']));
+    tail[opts.sum] = total;
+    // TOTAL 行首列打标（保住表格可读）
+    const firstKey = sumKeys[0] ?? opts.sum;
+    if (firstKey !== opts.sum) tail[firstKey] = 'TOTAL';
+    out = [...out, tail];
+  }
+  return { rows: out };
 }
 
 /** ⑥table：中文不歪的列宽（宽字符计 2）。 */
