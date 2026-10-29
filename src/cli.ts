@@ -552,6 +552,10 @@ async function cmdRun(args: string[]): Promise<number> {
   const outIdx = rest.indexOf('--out');
   const outFmt = outIdx >= 0 && rest[outIdx + 1] ? rest[outIdx + 1] : undefined;
   const doCopy = rest.includes('--copy');
+  // 第六十五轮⑤：--share <file.md|file.html> 执行完直接落分享文件
+  const shareIdx = rest.indexOf('--share');
+  const shareNext = shareIdx >= 0 ? rest[shareIdx + 1] : undefined;
+  const shareFile = shareNext && !shareNext.startsWith('--') ? shareNext : undefined;
   const quiet = rest.includes('--quiet');
   const watchIdx = rest.indexOf('--watch');
   const watchSec = watchIdx >= 0 && rest[watchIdx + 1] ? rest[watchIdx + 1] : undefined;
@@ -559,8 +563,8 @@ async function cmdRun(args: string[]): Promise<number> {
   const argv: string[] = [];
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i]!;
-    if (a === '--out' || a === '--watch') { i++; continue; }
-    if (a.startsWith('--out=') || a.startsWith('--watch=')) continue;
+    if (a === '--out' || a === '--watch' || a === '--share') { i++; continue; }
+    if (a.startsWith('--out=') || a.startsWith('--watch=') || a.startsWith('--share=')) continue;
     if (['--yes', '-y', '--json', '--copy', '--quiet'].includes(a)) continue;
     argv.push(a);
   }
@@ -659,6 +663,16 @@ async function cmdRun(args: string[]): Promise<number> {
     const { clipboardIO } = await import('../plugins/clipboard/clipio.mjs');
     const r = clipboardIO().write(JSON.stringify(result.data ?? result.stdout, null, 2));
     if (!quiet) process.stdout.write(r.ok ? c.green('✓ 已复制到剪贴板\n') : c.yellow(`! 复制失败：${String(r.error).slice(0, 80)}\n`));
+  }
+  // 第六十五轮⑤：分享文件落盘（.md/.html 按扩展名分流，其它按 md）
+  if (shareFile && result.ok) {
+    const { toShareMarkdown, toShareHtml } = await import('./core/share.ts');
+    const meta = { plugin: pluginId, action: actionId, at: Date.now(), ms: result.ms, ok: true };
+    const isHtml = /\.html?$/i.test(shareFile);
+    const text = isHtml ? toShareHtml(result.data, meta) : toShareMarkdown(result.data, meta);
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync(shareFile, text, 'utf8');
+    process.stdout.write(c.green(`✓ 分享文件已生成：${shareFile}（${isHtml ? 'HTML 单文件' : 'Markdown'}，${text.length} 字符）\n`));
   }
   // 第四十五轮⑧：--watch N 进入轮询，只打印 diff，Ctrl-C 退出
   if (watchSec && result.ok) {
