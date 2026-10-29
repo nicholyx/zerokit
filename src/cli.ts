@@ -1088,6 +1088,16 @@ async function cmdPlugin(args: string[]): Promise<number> {
           : c.yellow(`  ! [${label}] ${ro.id} 跑失败：${r.error ?? ''}（可能是参数必填，先看 zkit run ${v.plugin.id} ${ro.id} --help）\n`));
       }
     };
+    // 第八十六轮①：--web 开发模式提示——dev 链接后宿主页直接能看到（symlink 即实时），
+    // 沙箱资源走 /plugin/<id>/ 的正式路径；改文件即生效（symlink 直指源目录），浏览器刷新即可
+    if (args.includes('--web')) {
+      const port = args.find((a, i) => args[i - 1] === '--port');
+      const portNo = port ? String(Number(port)) : '28970';
+      process.stdout.write(c.green(`  ✓ Web 开发模式：宿主页 http://127.0.0.1:${portNo} → 搜「${result.id ?? '插件'}」直接跑 web 动作\n`));
+      process.stdout.write(c.dim(`    沙箱资源即改即生效（dev 链接直指源目录）；宿主页刷新一次即可看到新资源\n`));
+      process.stdout.write(c.dim(`    zkit ui ${port ? `--port ${portNo} ` : ''}先起界面（若未起）\n`));
+      process.stdout.write(c.dim(`    dev 状态接口：/api/dev/status（清单摘要+文件树）、/api/dev/poll（变更时间戳）\n`));
+    }
     if (doOpen) await verify('open');
     if (doWatch) {
       process.stdout.write(c.dim(`（监听 ${srcAbs} 改动即重新验证，Ctrl-C 退出）\n`));

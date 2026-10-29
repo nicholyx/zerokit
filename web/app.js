@@ -50,6 +50,7 @@ const el = {
   psView: $('psView'), psBtn: $('psBtn'), psCount: $('psCount'), clipBtn: $('clipBtn'),
   logsView: $('logsView'), doctorView: $('doctorView'), listTools: $('listTools'),
   allowView: $('allowView'),
+  devView: $('devView'),
   plugView: $('plugView'), plugBtn: $('plugBtn'), plugCount: $('plugCount'),
   marketView: $('marketView'), marketBtn: $('marketBtn'), marketCount: $('marketCount'),
   modeLabel: $('modeLabel'), modeDot: $('modeDot'), reload: $('reloadBtn'),
@@ -765,7 +766,7 @@ applyDensity(localStorage.getItem('zerokit.ldensity') || 'normal');
 
 function hidePanels() {
   for (const v of [el.listView, el.detailView, el.workbench, el.psView,
-    el.plugView, el.marketView, el.logsView, el.doctorView, el.allowView]) {
+    el.plugView, el.marketView, el.logsView, el.doctorView, el.allowView, el.devView]) {
     v.classList.add('hidden');
     // 第五十九轮②：每次面板重新显示时重放视图动效（先移除类，显示方再加回）
     v.classList.remove('view-anim');
@@ -4732,6 +4733,11 @@ window.addEventListener('message', (ev) => {
   if (!frame || ev.source !== frame.contentWindow) return;
   if (msg.type === 'hello') {
     sendContext(frame);
+  } else if (msg.type === 'console') {
+    // 第八十六轮③：沙箱内 console 透传——宿主控制台可见，dev 面板也记一份
+    const line = `[${detail ? detail.plugin.id + '.' + detail.action.id : 'web'}] ${String(msg.text ?? '').slice(0, 300)}`;
+    if (msg.level === 'error') console.error(line); else if (msg.level === 'warn') console.warn(line); else console.log(line);
+    window.dispatchEvent(new CustomEvent('zk-dev-console', { detail: { level: msg.level ?? 'log', text: line } }));
   } else if (msg.type === 'resize') {
     // 页面报告自己的内容高度；上限防恶意撑爆，下限防缩没了
     const h = Math.min(720, Math.max(80, Number(msg.height) || 0));
@@ -7261,6 +7267,91 @@ function exitMcpAllow() {
   el.q.focus();
 }
 
+// ---------------------------------------------------------------- 开发者面板（第八十六轮）
+
+/** dev 插件面板：清单摘要 + 文件树 + 沙箱控制台 + 变更自动重载。 */
+async function showDevPanel() {
+  mode = 'dev';
+  el.modeLabel.textContent = '开发者';
+  el.searchRow.classList.add('hidden');
+  hidePanels();
+  showPanelAnimated(el.devView);
+  if (location.hash !== '#/dev') history.replaceState(null, '', '#/dev');
+  await renderDevPanel();
+}
+
+function exitDevPanel() {
+  mode = 'command';
+  el.devView.classList.add('hidden');
+  el.searchRow.classList.remove('hidden');
+  showPanelAnimated(el.listView);
+  el.modeLabel.textContent = t('modeCommand');
+  history.replaceState(null, '', location.pathname);
+  renderList();
+  el.q.focus();
+}
+
+let devPanelConsole = [];   // 沙箱 console 最近 50 条
+let devPollTimer = null;    // 变更轮询
+
+window.addEventListener('zk-dev-console', (ev) => {
+  devPanelConsole = [...devPanelConsole.slice(-49), ev.detail];
+  if (mode === 'dev') {
+    const box = document.getElementById('devConsole');
+    if (box) {
+      box.innerHTML = devPanelConsole.slice(-30).map((l) =>
+        `<div class="dev-log ${esc(l.level)}">${esc(l.text)}</div>`).join('');
+      box.scrollTop = box.scrollHeight;
+    }
+  }
+});
+
+async function renderDevPanel() {
+  el.devView.innerHTML = `<div class="ps-head"><h2>开发者</h2>
+      <span class="sub">dev 链接插件的清单摘要、文件树、沙箱控制台与变更通知</span></div>
+    <div class="log-tools"><button class="ghost" id="devReload">刷新</button>
+      <button class="ghost" id="devExit">退出面板</button></div>
+    <div id="devBody"><div class="ps-empty" role="status">读取中…</div></div>`;
+  $('devReload').addEventListener('click', renderDevPanel);
+  $('devExit').addEventListener('click', exitDevPanel);
+  let d;
+  try { d = await api('/api/dev/status'); } catch (e) {
+    $('devBody').innerHTML = `<div class="ps-empty" role="status">读取失败：${esc(e.message)}</div>`;
+    return;
+  }
+  const devs = d.devs ?? [];
+  if (devs.length === 0) {
+    $('devBody').innerHTML = `<div class="ps-empty" role="status">没有 dev 链接的插件。zkit plugin dev &lt;目录&gt; 进入开发模式后这里会出现</div>`;
+    return;
+  }
+  $('devBody').innerHTML = devs.map((x) => `
+    <div class="dev-plugin-card" data-devid="${esc(x.id)}">
+      <div class="dev-head"><b>🧪 ${esc(x.name)}</b> <span class="dev-tag">DEV</span> <span class="dev-ver">${esc(x.version)}</span></div>
+      <div class="dev-dir">${esc(x.dir)}</div>
+      <div class="dev-actions">${(x.actions ?? []).map((a) => `
+        <span class="dev-action"><b>${esc(a.id)}</b> <i>${esc(a.risk)}</i>${a.params.length ? ` (${esc(a.params.join(', '))})` : ''}</span>`).join('')}</div>
+      <details class="dev-files"><summary>文件树（${(x.files ?? []).length}）</summary>
+        <pre>${(x.files ?? []).map(esc).join('\n')}</pre></details>
+      <div class="dev-console-h">沙箱控制台（最近 30 条）</div>
+      <div class="dev-console" id="devConsole">${devPanelConsole.slice(-30).map((l) =>
+        `<div class="dev-log ${esc(l.level)}">${esc(l.text)}</div>`).join('') || '<div class="dev-log dim">（暂无输出——跑一个 web 动作后这里会出现沙箱内的 console）</div>'}</div>
+    </div>`).join('');
+  // 变更轮询：stamp 变了提示（不自动重载宿主页——资源本身即改即生效，用户决定何时重跑）
+  if (devPollTimer) clearInterval(devPollTimer);
+  let lastStamp = null;
+  try { const p = await api('/api/dev/poll'); lastStamp = p.stamp; } catch { /* 忽略 */ }
+  devPollTimer = setInterval(async () => {
+    if (mode !== 'dev') { clearInterval(devPollTimer); devPollTimer = null; return; }
+    try {
+      const p = await api('/api/dev/poll');
+      if (lastStamp !== null && p.stamp > lastStamp) {
+        el.count.textContent = '检测到 dev 插件清单变更——重跑动作即可加载新版本';
+      }
+      lastStamp = p.stamp;
+    } catch { /* 网络闪断忽略 */ }
+  }, 3000);
+}
+
 // ---------------------------------------------------------------- 全局命令面板（Ctrl+P）
 
 let paletteMode = false;
@@ -7338,6 +7429,7 @@ function showPalette() {
     { icon: '📌', label: '收藏结果', hint: '钉住的重要输出', key: '', group: 'page', act: () => { location.hash = '#/saved'; } },
     { icon: '◐', label: '深色 / 浅色', hint: '一键切换主题', key: 'Ctrl+Shift+D', group: 'op', act: () => toggleLightDark() },
     { icon: '☰', label: '设置抽屉', hint: '主题/语言/配置档/备份统一入口', key: '', group: 'page', act: () => openDrawer() },
+    { icon: '🧪', label: '开发者面板', hint: 'dev 插件摘要/文件树/沙箱控制台 #/dev', key: '', group: 'page', act: () => { location.hash = '#/dev'; } },
     // 第八十五轮②：操作类命令——切主题/切语言/备份/清历史
     { icon: '☀', label: '主题：浅色', hint: '切换到浅色主题', key: '', group: 'op', act: () => { exitPalette(); try { localStorage.setItem(PREF.theme, 'light'); } catch { /* 忽略 */ } applyTheme(); } },
     { icon: '🌙', label: '主题：深色', hint: '切换到深色主题', key: '', group: 'op', act: () => { exitPalette(); try { localStorage.setItem(PREF.theme, 'dark'); } catch { /* 忽略 */ } applyTheme(); } },
@@ -7537,6 +7629,10 @@ document.addEventListener('keydown', (e) => {
   }
   if (mode === 'ps') {
     if (e.key === 'Escape') { e.preventDefault(); exitPs(); }
+    return;
+  }
+  if (mode === 'dev') {
+    if (e.key === 'Escape') { e.preventDefault(); exitDevPanel(); }
     return;
   }
   if (mode === 'logs') {
@@ -8032,6 +8128,8 @@ function applyHash() {
   if ((location.hash || '') === '#/clip') { showClipPanel(); return; }
   // #/watch 监控聚合面板（第十八轮⑥）
   if ((location.hash || '') === '#/watch') { showWatchPanel(); return; }
+  // 第八十六轮：#/dev 开发者面板
+  if ((location.hash || '') === '#/dev') { showDevPanel(); return; }
   // #/brief 每日简报
   if ((location.hash || '') === '#/brief') { showBrief(); return; }
   // 第五十四轮：#/timeline 时间线与复盘
@@ -8155,6 +8253,8 @@ window.addEventListener('hashchange', () => {
     showWatchPanel();
     return;
   }
+  // 第八十六轮：#/dev 开发者面板（hashchange 侧）
+  if ((location.hash || '') === '#/dev') { showDevPanel(); return; }
   // 第二十二轮⑤：#/help 帮助页——界面内说明，不跳出应用
   if ((location.hash || '') === '#/help') {
     showHelpPanel();

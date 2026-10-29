@@ -493,6 +493,47 @@ export function createServer(): http.Server {
         return;
       }
 
+      // 第八十六轮④⑤：dev 模式状态——哪些插件是开发链接（symlink）、清单摘要、文件树
+      if (url.pathname === '/api/dev/status' && req.method === 'GET') {
+        const devs: object[] = [];
+        for (const entry of listPlugins()) {
+          const pl = entry.plugin;
+          if (!pl) continue;
+          let isDev = false;
+          try { isDev = fs.lstatSync(pl.dir).isSymbolicLink(); } catch { /* 读不了当非 dev */ }
+          if (!isDev) continue;
+          const tree: string[] = [];
+          const walk = (dir: string, prefix: string, depth: number) => {
+            if (depth > 2) return;
+            let names: string[] = [];
+            try { names = fs.readdirSync(dir).sort(); } catch { return; }
+            for (const n of names.slice(0, 30)) {
+              tree.push(prefix + n);
+              const sub = path.join(dir, n);
+              try { if (fs.statSync(sub).isDirectory()) walk(sub, prefix + n + '/', depth + 1); } catch { /* 跳过 */ }
+            }
+          };
+          walk(pl.dir, '', 0);
+          devs.push({
+            id: pl.id, name: pl.name, version: pl.version, dir: pl.dir,
+            actions: pl.actions.map((a) => ({ id: a.id, title: a.title, risk: a.risk, params: (a.params ?? []).map((x) => x.name) })),
+            files: tree,
+          });
+        }
+        json(res, 200, { devs });
+        return;
+      }
+      // 第八十六轮②：dev 变更通知——长轮询端点，web 端拿 mtime戳比对决定重载 iframe
+      if (url.pathname === '/api/dev/poll' && req.method === 'GET') {
+        let stamp = 0;
+        for (const entry of listPlugins()) {
+          const pl = entry.plugin;
+          if (!pl) continue;
+          try { if (fs.lstatSync(pl.dir).isSymbolicLink()) stamp = Math.max(stamp, fs.statSync(path.resolve(pl.dir, 'plugin.toml')).mtimeMs); } catch { /* 忽略 */ }
+        }
+        json(res, 200, { stamp });
+        return;
+      }
       if (url.pathname === '/api/doctor' && req.method === 'GET') {
         // 第八十四轮①④⑥：与 CLI --json 同源——汇总行、最近 5 次历史、对比一并给前端
         const report = buildDoctorReport();

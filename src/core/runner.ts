@@ -28,7 +28,7 @@ import type { SettingsView } from './pluginConfig.ts';
  *   3. 所有调用落审计；被拒/失败单独落一份，便于快速排查
  */
 
-export type Caller = 'cli' | 'mcp' | 'ui' | 'api';
+export type Caller = 'cli' | 'mcp' | 'ui' | 'api' | 'dev';  // dev=开发模式执行（第八十六轮⑧：审计标 source dev）
 
 const MAX_OUTPUT = 1 << 20; // 1 MiB，超出部分落盘
 const BUILTIN_NAMES: readonly string[] = BUILTIN_VARS;
@@ -606,6 +606,8 @@ export async function runAction(
     tool: toolName(plugin.id, action.id),
     risk: action.risk,
     caller: options.caller,
+    // 第八十六轮⑧：dev 来源一目了然（审计流里可筛）
+    ...(options.caller === 'dev' ? { source: 'dev' as const } : {}),
   };
 
   // 设置项没配好就不执行：让错误停在"配置"这一层，而不是等插件拿空 token 去请求、
