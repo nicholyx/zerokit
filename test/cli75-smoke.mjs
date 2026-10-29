@@ -16,22 +16,30 @@ const run = (args) => spawnSync(process.execPath, [CLI, ...args], {
 console.log(`cli75-smoke（临时目录 ${home}）`);
 run(['plugin', 'bundled']);
 
+// 平台差异：sysinfo top 的列——macOS {PID,进程,内存}；Linux {PID,COMMAND,内存占用,CPU占用}
+const COL_MEM = process.platform === 'darwin' ? '内存' : '内存占用';
+const COL_PROC = process.platform === 'darwin' ? '进程' : 'COMMAND';
+const MEM_RE = process.platform === 'darwin' ? / MB/ : /%/;
+const memOf = (l) => parseFloat(l.match(/([\d.]+) ?(MB|%)/)?.[1] ?? '0');
+const numOf = (l) => parseFloat(l.match(/([\d.]+)/)?.[1] ?? '0');
+
+
 // ① sort 数值降序（内存是 '1509.2 MB' 前缀数字串）
 {
-  const r = run(['run', 'sysinfo', 'top', '--limit', '5', '--sort', '-内存']);
-  const nums = r.stdout.split('\n').filter((l) => / MB/.test(l)).map((l) => parseFloat(l.match(/([\d.]+) MB/)?.[1] ?? '0'));
+  const r = run(['run', 'sysinfo', 'top', '--limit', '5', '--sort', `-${COL_MEM}`]);
+  const nums = r.stdout.split('\n').filter((l) => MEM_RE.test(l)).map(memOf);
   check('① sort 数值降序', nums.length >= 4 && nums.every((n, i) => i === 0 || nums[i - 1] >= n));
 }
 // ② sort 升序
 {
-  const r = run(['run', 'sysinfo', 'top', '--limit', '5', '--sort', '内存']);
-  const nums = r.stdout.split('\n').filter((l) => / MB/.test(l)).map((l) => parseFloat(l.match(/([\d.]+) MB/)?.[1] ?? '0'));
+  const r = run(['run', 'sysinfo', 'top', '--limit', '5', '--sort', COL_MEM]);
+  const nums = r.stdout.split('\n').filter((l) => MEM_RE.test(l)).map(memOf);
   check('② sort 数值升序', nums.length >= 4 && nums.every((n, i) => i === 0 || nums[i - 1] <= n));
 }
 // ③ pick 两列
 {
-  const r = run(['run', 'sysinfo', 'top', '--limit', '3', '--pick', 'PID,进程']);
-  check('③ pick 两列', r.stdout.includes('PID') && r.stdout.includes('进程') && !r.stdout.includes('MB'));
+  const r = run(['run', 'sysinfo', 'top', '--limit', '3', '--pick', `PID,${COL_PROC}`]);
+  check('③ pick 两列', r.stdout.includes('PID') && r.stdout.includes(COL_PROC) && !MEM_RE.test(r.stdout));
 }
 // ④ pick 错列报清单
 {
@@ -47,35 +55,35 @@ run(['plugin', 'bundled']);
 }
 // ⑥ uniq 进程名去重
 {
-  const r = run(['run', 'sysinfo', 'top', '--limit', '10', '--uniq', '进程']);
-  const names = r.stdout.split('\n').filter((l) => / MB/.test(l)).map((l) => (l.match(/\s(\S+)\s+[\d.]+ MB/) ?? [])[1]);
+  const r = run(['run', 'sysinfo', 'top', '--limit', '10', '--uniq', COL_PROC]);
+  const names = r.stdout.split('\n').filter((l) => MEM_RE.test(l)).map((l) => (l.match(/\s(\S+)\s+[\d.]+ ?(MB|%)/) ?? [])[1]);
   check('⑥ uniq 保序去重', new Set(names).size === names.length && names.length >= 3);
 }
 // ⑦ sum TOTAL 行
 {
-  const r = run(['run', 'sysinfo', 'top', '--limit', '5', '--sum', '内存']);
+  const r = run(['run', 'sysinfo', 'top', '--limit', '5', '--sum', COL_MEM]);
   const total = r.stdout.split('\n').find((l) => l.includes('TOTAL'));
   check('⑦ sum TOTAL 行', !!total && /TOTAL/.test(total));
 }
 // ⑧ sum 非数字拒绝
 {
-  const r = run(['run', 'sysinfo', 'top', '--limit', '3', '--sum', '进程']);
+  const r = run(['run', 'sysinfo', 'top', '--limit', '3', '--sum', COL_PROC]);
   check('⑧ sum 非数字拒绝', r.stderr.includes('含非数字值') && r.status === 1);
 }
 // ⑨ 组合：uniq + pick + sum
 {
-  const r = run(['run', 'sysinfo', 'top', '--limit', '8', '--uniq', '进程', '--pick', '进程,内存', '--sum', '内存']);
+  const r = run(['run', 'sysinfo', 'top', '--limit', '8', '--uniq', COL_PROC, '--pick', '进程,内存', '--sum', COL_MEM]);
   check('⑨ 组合加工', r.stdout.includes('TOTAL') && !r.stdout.includes('PID'));
 }
 // ⑩ --json 不受加工影响（原始顺序）
 {
-  const r = run(['run', 'sysinfo', 'top', '--limit', '5', '--sort', '-内存', '--json']);
+  const r = run(['run', 'sysinfo', 'top', '--limit', '5', '--sort', `-${COL_MEM}`, '--json']);
   const d = JSON.parse(r.stdout);
   check('⑩ --json 原始数据', Array.isArray(d.data) && d.data.length === 5 && !('TOTAL' in d.data[0]));
 }
 // ⑪ --quiet 不受加工影响
 {
-  const r = run(['run', 'sysinfo', 'top', '--limit', '5', '--sort', '-内存', '--quiet']);
+  const r = run(['run', 'sysinfo', 'top', '--limit', '5', '--sort', `-${COL_MEM}`, '--quiet']);
   const d = JSON.parse(r.stdout.trim());
   check('⑪ --quiet 原始单行 JSON', d.ok === true && Array.isArray(d.data));
 }
@@ -91,12 +99,12 @@ run(['plugin', 'bundled']);
 }
 // ⑬ 加工旗标不进动作参数
 {
-  const r = run(['run', 'sysinfo', 'top', '--limit', '3', '--sort', '-内存']);
+  const r = run(['run', 'sysinfo', 'top', '--limit', '3', '--sort', `-${COL_MEM}`]);
   check('⑬ 旗标剥离', r.status === 0 && !r.stderr.includes('未知参数'));
 }
 // ⑭ --sort= 等号形式
 {
-  const r = run(['run', 'sysinfo', 'top', '--limit', '3', '--sort=内存']);
+  const r = run(['run', 'sysinfo', 'top', '--limit', '3', '--sort=' + COL_MEM]);
   check('⑭ --sort= 形式', r.status === 0 && r.stdout.includes('PID'));
 }
 
