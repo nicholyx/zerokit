@@ -1,6 +1,9 @@
 ## [Unreleased]
 
-（下一版攒着）
+### Added
+
+- **定时器第二波（第七十八轮）**：`days` 日期档——`workdays`（周一~周五）或数字数组（`[1,4]` = 每周一、周四，0=周日）；`zkit timers catchup <key>` 一次性补跑错过的任务（幂等：同一天只补一次，`lastCatchupDay` 记账；`catchup = "skip"` 声明不补）；`zkit timers list --json` 机读格式（含 `nextFireHuman` 与 `missed`）；下次触发时间说人话（今天 09:00 / 明天 09:00 / 周三 09:00，跨周退回 M/DD 绝对日期）。
+- 定时器 `run`/`catchup` 的执行结果进审计日志，与手动执行同一条时间线。
 
 ## [0.82.0] - 2026-10-29
 
