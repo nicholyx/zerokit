@@ -73,6 +73,18 @@ function checkPlugin(entry: ReturnType<typeof listPlugins>[number]): DoctorPlugi
   const p = entry.plugin;
   for (const w of entry.warnings) problems.push({ level: 'warning', text: w });
 
+  // 第六十一轮⑥：带 UI 的插件若还有 http 动作，提示「界面需要联网」——
+  // 离线场景（飞机/内网）用户会看到界面壳子但数据出不来，提前说白
+  const uiActions = p.actions.filter((a) => a.ui === true);
+  const httpActions = p.actions.filter((a) => a.type === 'http');
+  if (uiActions.length > 0 && httpActions.length > 0) {
+    problems.push({
+      level: 'warning',
+      text: `带界面的插件含 ${httpActions.length} 个 http 动作——界面需要联网才能出数据`,
+      hint: '离线环境下界面会显示但数据加载失败，属预期行为',
+    });
+  }
+
   for (const r of checkRequires(p.requires).filter((x) => !x.ok)) {
     problems.push({
       level: 'error',

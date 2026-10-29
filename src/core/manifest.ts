@@ -126,6 +126,17 @@ export interface Action {
   body?: unknown;
   output: OutputKind;
   render: RenderKind;
+  /**
+   * 第六十一轮①②：「这个动作带 UI」的显式声明（Raycast 式能力类型）。
+   * render = "web" 的动作默认带 UI；纯命令动作也可以显式置 true（极少见）。
+   * ui_height / ui_min_height 只对 web 动作有意义：窗口初始/最小高度（px），
+   * 桥的 resize 消息仍可在运行中覆盖——声明式配置解决的是「首帧不闪」。
+   */
+  ui?: boolean;
+  ui_height?: number;
+  ui_min_height?: number;
+  /** 第五项键：写给用户看的一段「界面说明」（plugin doc 与启动器主页展示） */
+  ui_summary?: string;
   /** 风险等级。必填：它决定确认策略和 MCP 的 annotations */
   risk: RiskLevel;
   params: ActionParam[];
@@ -733,6 +744,40 @@ function parseAction(raw: unknown, errors: string[], warnings: string[]): Action
     return undefined;
   }
 
+  // 第六十一轮①②：ui / ui_height / ui_min_height / ui_summary
+  const uiRaw = a['ui'];
+  let ui: boolean | undefined;
+  if (uiRaw !== undefined) {
+    if (typeof uiRaw !== 'boolean') {
+      errors.push(`动作 ${id}: ui 必须是 true/false`);
+      return undefined;
+    }
+    ui = uiRaw;
+  }
+  const uiHeight = a['ui_height'];
+  if (uiHeight !== undefined) {
+    if (typeof uiHeight !== 'number' || uiHeight < 120 || uiHeight > 4096) {
+      errors.push(`动作 ${id}: ui_height 必须是 120–4096 的数字（像素）`);
+      return undefined;
+    }
+  }
+  const uiMinHeight = a['ui_min_height'];
+  if (uiMinHeight !== undefined) {
+    if (typeof uiMinHeight !== 'number' || uiMinHeight < 80 || uiMinHeight > 4096) {
+      errors.push(`动作 ${id}: ui_min_height 必须是 80–4096 的数字（像素）`);
+      return undefined;
+    }
+    if (uiHeight !== undefined && uiMinHeight > uiHeight) {
+      errors.push(`动作 ${id}: ui_min_height (${uiMinHeight}) 不能大于 ui_height (${uiHeight})`);
+      return undefined;
+    }
+  }
+  const uiSummary = asString(a['ui_summary']);
+  if (uiSummary && uiSummary.length > 200) {
+    errors.push(`动作 ${id}: ui_summary 超过 200 字（当前 ${uiSummary.length}）——写给用户看的界面说明要短`);
+    return undefined;
+  }
+
   const timeoutRaw = a['timeout'];
   let timeout = DEFAULT_TIMEOUT;
   if (timeoutRaw !== undefined) {
@@ -795,6 +840,11 @@ function parseAction(raw: unknown, errors: string[], warnings: string[]): Action
     ),
     output,
     render: renderRaw ?? RENDER_FOR_OUTPUT[output],
+    // 第六十一轮①②：web 动作默认带 UI；声明值优先。高度键只在给了时透传。
+    ui: ui ?? (renderRaw ?? RENDER_FOR_OUTPUT[output]) === 'web',
+    ...(uiHeight !== undefined ? { ui_height: uiHeight } : {}),
+    ...(uiMinHeight !== undefined ? { ui_min_height: uiMinHeight } : {}),
+    ...(uiSummary ? { ui_summary: uiSummary } : {}),
     risk,
     // TOML 里写 [[action.param]] 时键名是 param（单数），写 [[action.params]] 则是 params，两种都收
     params,
