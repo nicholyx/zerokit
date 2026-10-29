@@ -116,6 +116,42 @@ export function renderCsv(rows: Row[]): string {
   return lines.join('\n') + '\n';
 }
 
+// ---------------------------------------------------------------- 第七十四轮：输出与报告体验
+
+/** 74②：大 JSON 结果默认截断摘要——行数超过 limit 时截到 limit 并附展开提示由调用方拼。
+ * 返回 { text, truncated, totalLines }；truncated=false 时 text 是全文。 */
+export function truncateJsonLines(data: unknown, limit = 30): { text: string; truncated: boolean; totalLines: number } {
+  const full = JSON.stringify(data, null, 2);
+  const lines = full.split('\n');
+  if (lines.length <= limit) return { text: full, truncated: false, totalLines: lines.length };
+  return {
+    text: lines.slice(0, limit).join('\n'),
+    truncated: true,
+    totalLines: lines.length,
+  };
+}
+
+/** 74④：Markdown 表格——管道符转义，空值空串。 */
+export function renderMdTable(rows: Row[]): string {
+  if (rows.length === 0) return '_（无表格数据）_\n';
+  const keys = [...new Set(rows.flatMap((r) => Object.keys(r)))].slice(0, 8);
+  const cell = (s: string): string => String(s).replace(/\|/g, '\\|').replace(/\n/g, ' ');
+  const head = `| ${keys.join(' | ')} |`;
+  const sep = `| ${keys.map(() => '---').join(' | ')} |`;
+  const body = rows.map((r) => `| ${keys.map((k) => cell(String(r[k] ?? ''))).join(' | ')} |`);
+  return [head, sep, ...body].join('\n') + '\n';
+}
+
+/** 74⑤：TSV——制表符分隔，值内制表符/换行替换为空格（直贴表格软件）。 */
+export function renderTsv(rows: Row[]): string {
+  if (rows.length === 0) return '\n';
+  const keys = [...new Set(rows.flatMap((r) => Object.keys(r)))].slice(0, 8);
+  const cell = (s: string): string => String(s).replace(/[\t\n\r]/g, ' ');
+  const lines = [keys.join('\t')];
+  for (const r of rows) lines.push(keys.map((k) => cell(String(r[k] ?? ''))).join('\t'));
+  return lines.join('\n') + '\n';
+}
+
 // ---------------------------------------------------------------- watch 轮询
 
 /** ⑨两次结果的逐键 diff 描述（顶层键，值 JSON 化对比）。 */
