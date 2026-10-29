@@ -1683,8 +1683,10 @@ li.item .item-desc1 { color: var(--fg-dim); font-size: 12px;
 /* 动效总闸：prefers-reduced-motion 下全部归零（本轮新增动效统一在这停）。 */
 @media (prefers-reduced-motion: reduce) {
   .view-anim, .drawer-pop, #palette .palette-box, .more-pop, li.item.zk-stagger,
-  .status-pill.pill-live .pill-dot, .run-main.running, #result.result-anim > *:first-child {
+  .status-pill.pill-live .pill-dot, .run-main.running, #result.result-anim > *:first-child,
+  .cell-changed, .watch-ring .ring-fg, .rtab, .pill-dot {
     animation: none !important;
+    transition: none !important;
   }
 }
 
