@@ -672,9 +672,13 @@ async function cmdRun(args: string[]): Promise<number> {
   const argv: string[] = [];
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i]!;
-    if (a === '--out' || a === '--watch' || a === '--share' || a === '--jq' || a === '--env' || a === '--format') { i++; continue; }
-    if (a.startsWith('--out=') || a.startsWith('--watch=') || a.startsWith('--share=') || a.startsWith('--jq=') || a.startsWith('--env=') || a.startsWith('--format=')) continue;
+    if (a === '--out' || a === '--watch' || a === '--share' || a === '--jq' || a === '--env' || a === '--format'
+        || a === '--sort' || a === '--pick' || a === '--uniq' || a === '--sum' || a === '--head') { i++; continue; }
+    if (a.startsWith('--out=') || a.startsWith('--watch=') || a.startsWith('--share=') || a.startsWith('--jq=') || a.startsWith('--env=') || a.startsWith('--format=')
+        || a.startsWith('--sort=') || a.startsWith('--pick=') || a.startsWith('--uniq=') || a.startsWith('--sum=') || a.startsWith('--head=')) continue;
     if (['--yes', '-y', '--json', '--copy', '--quiet', '--full'].includes(a)) continue;
+    // 第七十五轮：--sort -列 的降序值（-内存 不是短旗标，前一个是 --sort 就吞掉）
+    if (a.startsWith('-') && !a.startsWith('--') && i > 0 && rest[i - 1] === '--sort') continue;
     argv.push(a);
   }
   const parsed = parseArgv(action, argv);
@@ -770,18 +774,50 @@ async function cmdRun(args: string[]): Promise<number> {
   // 第六十八轮①：--out 文件——文本写原文、JSON 写两空格格式化
   // 第四十五轮③④⑦：输出格式 / 复制 / 安静模式
   const cliX = await import('./core/cliX.ts');
+  // 第七十五轮：结果再加工——pick/sort/uniq/head/sum（只影响显示输出，--json/--quiet/--out 拿原始数据）
+  const flagVal = (name: string): string | undefined => {
+    const i = rest.indexOf(name);
+    return i >= 0 ? rest[i + 1] : undefined;
+  };
+  const tf: import('./core/cliX.ts').TransformOpts = {};
+  const tfSort = flagVal('--sort');
+  const tfPick = flagVal('--pick');
+  const tfUniq = flagVal('--uniq');
+  const tfSum = flagVal('--sum');
+  const tfHead = flagVal('--head');
+  if (tfSort) tf.sort = tfSort;
+  if (tfPick) tf.pick = tfPick.split(',').map((s) => s.trim()).filter(Boolean);
+  if (tfUniq) tf.uniq = tfUniq;
+  if (tfSum) tf.sum = tfSum;
+  if (tfHead && /^\d+$/.test(tfHead)) tf.head = Number(tfHead);
+  const hasTf = !!(tf.sort || tf.pick || tf.uniq || tf.sum || tf.head !== undefined);
+  // 加工标志位：四个表格类格式 + 默认 JSON 展示路径都走加工后数据；--json/--quiet 不走
+  let tfRows: import('./core/cliX.ts').Row[] = [];
+  let tfError: string | undefined;
+  if (hasTf && result.ok) {
+    const t = cliX.transformRows(cliX.toRows(result.data), tf);
+    tfRows = t.rows; tfError = t.error;
+    if (tfError) {
+      process.stderr.write(c.red(`✗ ${tfError}\n`));
+      return 1;
+    }
+  }
   // 第七十四轮④⑤：--format md / tsv；②：--full 展开大结果（默认 30 行截断）
   const wantFull = rest.includes('--full');
+  const dispRows = hasTf ? tfRows : undefined;
   if (outFmt === 'yaml') {
     process.stdout.write(cliX.renderYaml(result.data));
   } else if (outFmt === 'csv') {
-    process.stdout.write(cliX.renderCsv(cliX.toRows(result.data)));
+    process.stdout.write(cliX.renderCsv(dispRows ?? cliX.toRows(result.data)));
   } else if (outFmt === 'md') {
-    process.stdout.write(cliX.renderMdTable(cliX.toRows(result.data)));
+    process.stdout.write(cliX.renderMdTable(dispRows ?? cliX.toRows(result.data)));
   } else if (outFmt === 'tsv') {
-    process.stdout.write(cliX.renderTsv(cliX.toRows(result.data)));
+    process.stdout.write(cliX.renderTsv(dispRows ?? cliX.toRows(result.data)));
   } else if (outFmt === 'table') {
-    process.stdout.write(cliX.renderTable(cliX.toRows(result.data)));
+    process.stdout.write(cliX.renderTable(dispRows ?? cliX.toRows(result.data)));
+  } else if (hasTf && !quiet && !asJson) {
+    // 第七十五轮：加工后没有指定格式时默认表格展示（比裸 JSON 可读）；--json/--quiet 走原始数据
+    process.stdout.write(cliX.renderTable(tfRows));
   } else if (!wantFull && !quiet && !asJson && result.data !== undefined
              && result.data && typeof result.data === 'object') {
     // 第七十四轮②：大 JSON 默认截断摘要（--full 展开；--quiet/--json 不受影响——它们面向管道）
