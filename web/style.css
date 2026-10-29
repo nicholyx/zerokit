@@ -1731,3 +1731,17 @@ li.item .item-desc1 { color: var(--fg-dim); font-size: 12px;
 }
 .clip-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .clip-at { flex: none; font-size: 11px; color: var(--fg-dim); }
+
+/* ---------------- 第六十九轮：信息密度与浏览效率 ---------------- */
+/* 列表密度三档：紧凑一屏多看，宽松长描述舒展（d 键循环，记忆 zerokit.ldensity） */
+body.ld-compact #list li.item { padding: 2px 10px; min-height: 30px; }
+body.ld-compact .item-desc1 { display: none; }           /* 紧凑档连描述一起藏，纯扫视名字 */
+body.ld-normal  #list li.item { padding: 5px 12px; min-height: 38px; }
+body.ld-loose   #list li.item { padding: 10px 14px; min-height: 48px; }
+body.ld-loose .item-desc1 { white-space: normal; -webkit-line-clamp: 2; }  /* 宽松档描述两行 */
+
+/* 分组头版本/动作数徽标化（比纯文字分隔更扫得快） */
+.group-head .badge.ver { opacity: 0.85; }
+
+/* recent 排序模式指示：列表上方一行说明，避免用户不知道当前为什么这么排 */
+.sort-note { font-size: 11px; color: var(--fg-dim, #888); padding: 2px 14px 0; }
