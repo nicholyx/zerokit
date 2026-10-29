@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+（下一版攒着）
+
+## [0.68.0] - 2026-10-29
+
 ### Added
 
 - 定时任务持久化：配置写 `~/.zerokit/timers.json`（原子写），启动器刷新/重启后自动恢复注册表与节奏——「定时」不再随页面消失。
@@ -8,7 +12,6 @@
 - `doctor` 孤儿检测：timers.json 引用的插件已卸载时在报告与 `--json` 输出里点名。
 - 启动器 `POST /api/timers`（upsert/pause/resume/remove）与 `GET /api/timers`——UI 与 CLI 的状态一致性由同一文件保证。
 
-（下一版攒着）
 
 ## [0.67.0] - 2026-10-29
 
