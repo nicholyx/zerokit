@@ -1,4 +1,5 @@
 ## [Unreleased]
+
 ### Added
 
 - `zkit doctor` 顶部新增三级汇总行（`✗N 项需处理 · ⚠N 项建议 · ✓N 项通过`），CLI 与 Web 同源同句
