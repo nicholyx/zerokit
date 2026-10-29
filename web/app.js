@@ -1231,6 +1231,7 @@ function renderListInner() {
 // 此前每项 li/星标都各自 addEventListener，重渲一次列表挂一批监听器，
 // 千项列表就是几千个闭包；委托后只有一个，重渲不再重新绑定。
 let listEventsBound = false;
+void restoreWatches();
 function bindListItems(q) {
   if (listEventsBound) return;
   listEventsBound = true;
@@ -2447,6 +2448,64 @@ function watchRegistry() {
   return window.__zkWatch;
 }
 
+/* ===== 第七十九轮①②⑤：监控配置持久化（watch.json，数据目录）=====
+ * 谁写：浏览器（只有浏览器知道 samples/changes 的实时状态）；
+ * 何时写：每次采样后 + 停止时（增量小写）；server 只做透传存储。
+ * 恢复：boot 时 GET /api/watch 读回——只恢复配置与最近 samples，
+ * 调度链重建（deadline 按 interval 重算），不回放历史执行。 */
+async function persistWatch() {
+  try {
+    const reg = watchRegistry();
+    const stops = readJson('zerokit.watch-stops', []);
+    const body = {
+      version: 1,
+      watches: Object.entries(reg).map(([key, w]) => ({
+        key,
+        interval: w.interval, failStreak: w.failStreak, matchStr: w.matchStr,
+        title: w.title, pluginId: w.pluginId, actionId: w.actionId,
+        runs: w.runs, changes: w.changes,
+        samples: (w.samples ?? []).slice(-10),
+      })),
+      stops: stops.slice(-20),
+    };
+    await fetch('/api/watch', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', 'x-zerokit-token': TOKEN },
+      body: JSON.stringify(body),
+    });
+  } catch { /* 持久化失败不影响监控本身 */ }
+}
+
+let watchRestored = false;
+/** boot 恢复：读回配置并重建调度链（samples 续传——趋势线不断档）。 */
+async function restoreWatches() {
+  if (watchRestored) return;
+  watchRestored = true;
+  try {
+    const r = await fetch('/api/watch', { headers: { 'x-zerokit-token': TOKEN } });
+    if (!r.ok) return;
+    const file = await r.json();
+    if (!file || !Array.isArray(file.watches)) return;
+    const reg = watchRegistry();
+    for (const w of file.watches) {
+      if (!w || typeof w.key !== 'string' || !w.interval) continue;
+      const [pluginId, ...actRest] = w.key.split('.');
+      reg[w.key] = {
+        interval: w.interval, failStreak: w.failStreak ?? 0, matchStr: w.matchStr ?? '',
+        samples: Array.isArray(w.samples) ? w.samples : [],
+        title: w.title ?? w.key, pluginId: pluginId ?? '', actionId: actRest.join('.') ?? '',
+        deadline: Date.now() + w.interval * 1000,
+        runs: w.runs ?? 0, changes: w.changes ?? 0,
+      };
+      scheduleWatch(w.key, w.interval);
+    }
+    // ⑤ 停止记录恢复（#/watch 面板的 stop 日志）
+    const stops = Array.isArray(file.stops) ? file.stops : [];
+    if (stops.length) writeJson('zerokit.watch-stops', stops);
+    if (Object.keys(reg).length) { updateWatchTitle(); renderWatchBar(); }
+  } catch { /* 读不回就当没有——不阻塞启动 */ }
+}
+
 function stopWatch(key) {
   const reg = watchRegistry();
   const w = reg[key];
@@ -2548,6 +2607,7 @@ function scheduleWatch(key, sec) {
     }
     w.samples.push({ ts: Date.now(), ok: now?.ok === true, data: now?.data, err: now?.ok === true ? undefined : String(now?.error ?? '') });
     if (w.samples.length > 30) w.samples.shift();
+    void persistWatch(); // ① 增量持久化：浏览器写、server 透传
     // ⑤ 停止条件
     const stop = watchStopCondition(
       w.samples.map((s) => ({ ok: s.ok, data: s.data })),
@@ -2563,6 +2623,12 @@ function scheduleWatch(key, sec) {
         : `（命中停止串「${w.matchStr}」）`;
       w.stopReason = `监控已自动停：${stop === 'stop-fail' ? `连续 ${w.failStreak} 次失败` : '结果命中了停止串'}${why}`;
       watchStopLog.push(w.stopReason);
+      // ⑤ 停止记录持久化（原因+时间），导入导出带着走
+      const stops = readJson('zerokit.watch-stops', []);
+      stops.push({ ts: Date.now(), key, reason: w.stopReason });
+      if (stops.length > 20) stops.shift();
+      writeJson('zerokit.watch-stops', stops);
+      void persistWatch();
       if (watchStopLog.length > 5) watchStopLog.shift();
       el.count.textContent = w.stopReason;
       if (mode === 'watch') showWatchPanel();   // 正看着面板就刷新摘要
@@ -2574,10 +2640,37 @@ function scheduleWatch(key, sec) {
   }, sec * 1000);
 }
 
-/** ⑧ 变更通知：只在结果变化时打扰（不是每次采样都通知） */
+/**
+ * ⑧ 变更通知 + 第七十九轮③④告警升级：
+ * ③ 连续失败 ≥3 次后，通知正文带前 3 条错误摘要（人不在屏幕前也能从通知判断 severity）；
+ * ④ 同动作 10 分钟去重窗口——风暴时只弹第一条，不刷屏。
+ */
+const watchAlertAt = {}; // key → 上次告警时间戳（内存态即可：刷新重置不算损失）
 function notifyWatchChange(w, prev, next) {
   try {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    const fails = (w.samples ?? []).filter((sm) => !sm.ok).length;
+    const failStreakNow = (() => {
+      let n = 0;
+      for (let i = (w.samples ?? []).length - 1; i >= 0; i--) {
+        if (!w.samples[i].ok) n++;
+        else break;
+      }
+      return n;
+    })();
+    const now = Date.now();
+    const isAlert = failStreakNow >= 3; // ③ 升级线
+    if (isAlert) {
+      if (now - (watchAlertAt[w.title] ?? 0) < 10 * 60 * 1000) return; // ④ 去重窗口
+      watchAlertAt[w.title] = now;
+      const errs = (w.samples ?? []).filter((sm) => !sm.ok).slice(-3)
+        .map((sm) => String(sm.err ?? '未知错误').slice(0, 60));
+      new Notification('zerokit 监控告警', {
+        body: `⚠ ${w.title} 连续失败 ${failStreakNow} 次（累计 ${fails}）：\n${errs.join('\n')}`,
+        tag: `zk-watch-alert-${w.title}`,
+      });
+      return;
+    }
     new Notification('zerokit 监控', {
       body: `⇄ ${w.title} 结果有变化（第 ${w.changes} 次）`,
       tag: `zk-watch-${w.title}`,
