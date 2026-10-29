@@ -1,3 +1,4 @@
+import { orphanTimers } from './timers.ts';
 // 环境与插件自检。
 //
 // 这套检查原本长在 cli.ts 的 cmdDoctor 里，只服务终端一个面。启动器也想显示
@@ -45,6 +46,8 @@ export interface DoctorReport {
   plugins: DoctorPlugin[];
   /** 第三十二轮⑩：桌面壳（可选组件）的安装状态。没装是 warning 级提示，不是 error。 */
   desktop: { installed: boolean; path?: string; hotkey?: string };
+  /** 第六十三轮⑧：孤儿定时任务 key（timers.json 引用的插件已卸载）。 */
+  orphanTimerKeys: string[];
   summary: { plugins: number; actions: number; errors: number; warnings: number };
 }
 
@@ -173,11 +176,15 @@ export function buildDoctorReport(): DoctorReport {
     hotkey = cfg.hotkey;
   } catch { /* 没配过热键 */ }
 
+  // 第六十三轮⑧：孤儿定时任务——timers.json 里引用的插件已卸载
+  const orphanTimerKeys = orphanTimers(plugins.map((p) => p.id));
+
   return {
     node: { version: process.version, execPath: process.execPath },
     tools,
     dirs: { home: HOME, plugins: PLUGINS_DIR },
     desktop: { installed: shell.installed, path: shell.path, hotkey },
+    orphanTimerKeys,
     plugins,
     summary: {
       plugins: plugins.length,

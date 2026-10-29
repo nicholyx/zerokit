@@ -412,6 +412,47 @@ export function createServer(): http.Server {
       }
 
       // 环境自检：与 CLI 的 `zkit doctor` 共用 buildDoctorReport，判定只有一份。
+      // 第六十三轮①⑥：定时任务持久化桥——UI 读写 ~/.zerokit/timers.json
+      if (url.pathname === '/api/timers' && req.method === 'GET') {
+        const { loadTimers, nextFireTime } = await import('./core/timers.ts');
+        const { timers } = loadTimers();
+        json(res, 200, { timers: timers.map((t) => ({ ...t, nextAt: nextFireTime(t) ?? 0 })) });
+        return;
+      }
+      if (url.pathname === '/api/timers' && req.method === 'POST') {
+        const body = await readBody(req);
+        const { upsertTimer, removeTimer, setTimerPaused } = await import('./core/timers.ts');
+        const op = String(body['op'] ?? '');
+        if (op === 'remove') {
+          const gone = removeTimer(String(body['key'] ?? ''));
+          json(res, gone ? 200 : 404, gone ? { ok: true } : { error: '任务不存在' });
+          return;
+        }
+        if (op === 'pause' || op === 'resume') {
+          const st = setTimerPaused(String(body['key'] ?? ''), op === 'pause');
+          if (st === null) { json(res, 404, { error: '任务不存在' }); return; }
+          json(res, 200, { ok: true, paused: st });
+          return;
+        }
+        if (op === 'upsert') {
+          const t = body['timer'] as Record<string, unknown> | undefined;
+          if (!t || typeof t['key'] !== 'string' || typeof t['interval'] !== 'number') {
+            json(res, 400, { error: 'timer 需要 key 与 interval' });
+            return;
+          }
+          const file = upsertTimer({
+            key: String(t['key']), title: String(t['title'] ?? t['key']),
+            interval: Number(t['interval']), win: t['win'] ? String(t['win']) : '',
+            paused: !!t['paused'], createdAt: Number(t['createdAt'] ?? Date.now()),
+            values: t['values'] && typeof t['values'] === 'object' ? t['values'] as Record<string, string> : undefined,
+          });
+          json(res, 200, { ok: true, count: file.timers.length });
+          return;
+        }
+        json(res, 400, { error: 'op 需要 upsert / pause / resume / remove' });
+        return;
+      }
+
       if (url.pathname === '/api/doctor' && req.method === 'GET') {
         json(res, 200, buildDoctorReport());
         return;
