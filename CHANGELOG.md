@@ -1,12 +1,15 @@
 ## [Unreleased]
 
+（下一版攒着）
+
+## [0.87.0] - 2026-10-30
+
 ### Added
 
 - `zkit data snapshot`：把可迁移配置（设置/授权/定时器/监控）打包成单文件 `.zksnap` 快照，secret 默认脱敏导出（`--with-secrets` 显式携带）
 - `zkit data restore <file>`：恢复快照，已存在文件默认跳过（`--overwrite` 覆盖）；恢复前 `zkit data list` 可预览内容清单
 - `zkit data diff <file>`：对比快照与当前数据目录（缺/多/改分组）；`zkit data path` 一行打印数据目录
 
-（下一版攒着）
 
 ## [0.86.0] - 2026-10-30
 
