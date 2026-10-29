@@ -1654,6 +1654,39 @@ li.item .item-desc1 { color: var(--fg-dim); font-size: 12px;
 }
 [data-theme="dark"] .more-pop, [data-theme="dark"] #palette .palette-box { border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent); }
 
+/* ===== 第七十三轮：视觉与微交互打磨 ===== */
+
+/* ① 焦点环主题自适应：暗色加发光晕提升可见性（暗色下细线轮廓会沉进背景） */
+[data-theme="dark"] :focus-visible { outline-color: var(--accent, #5aa9ff); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #5aa9ff) 25%, transparent); }
+
+/* ② 表格行悬停反馈：结果表/对比表通用，轻 accent 着色不打断斑马纹 */
+#result table tbody tr:hover td, .cmp-table tbody tr:hover td, .watch-summary table tbody tr:hover td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+
+/* ③ 页签栏溢出横向滚动：≥8 页签不再换行挤爆；mask 渐隐右缘提示可滚 */
+.rtabs { flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: thin; }
+.rtab { flex: 0 0 auto; white-space: nowrap; }
+
+/* ④ 按钮按压反馈：轻微下沉 + 缩放，松手回弹 */
+button:not(:disabled):active, .btn:not(:disabled):active, .primary:not(:disabled):active, .ghost:not(:disabled):active { transform: translateY(1px) scale(.985); filter: brightness(.92); }
+
+/* ⑤ 滚动条暗色适配：提亮 thumb 让它在暗底上可见又不刺眼 */
+[data-theme="dark"] ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--fg-dim) 50%, transparent); }
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--fg-dim) 75%, transparent); }
+
+/* ⑥ 正文链接降噪：默认无下划线，悬停/聚焦才出现——文字密度高时下划线是噪音 */
+.detail-note a, .report-body a, .e-hint a, .empty-why a { text-decoration: none; }
+.detail-note a:hover, .report-body a:hover, .e-hint a:hover, .empty-why a:hover,
+.detail-note a:focus-visible, .report-body a:focus-visible { text-decoration: underline; text-underline-offset: 2px; }
+
+/* ⑦ 文本选中色跟随 accent：默认纯蓝选中色与主题色调脱节 */
+::selection { background: color-mix(in srgb, var(--accent, #5aa9ff) 30%, transparent); }
+
+/* ⑧ 空态插画暗色降亮度：暗色下 30% 的 fg 线条太亮显突兀 */
+[data-theme="dark"] .empty-art { opacity: .55; }
+[data-theme="dark"] .empty-art::before { border-color: color-mix(in srgb, var(--fg) 22%, transparent); }
+[data-theme="dark"] .empty-art::after { background: color-mix(in srgb, var(--fg) 22%, transparent);
+  box-shadow: 0 10px 0 color-mix(in srgb, var(--fg) 22%, transparent), 0 20px 0 color-mix(in srgb, var(--fg) 14%, transparent); }
+
 /* ⑨ 空态插画化：纯 CSS 小图形（一个圆角方 + 两根线条 + 问号/放大镜圆），不引图片。 */
 .empty-art { width: 72px; height: 72px; margin: 0 auto 14px; position: relative; opacity: .8; }
 .empty-art::before { content: ''; position: absolute; inset: 8px; border-radius: 16px;
@@ -1688,6 +1721,8 @@ li.item .item-desc1 { color: var(--fg-dim); font-size: 12px;
     animation: none !important;
     transition: none !important;
   }
+  /* 第七十三轮④：reduced-motion 下停 transform 按压位移，只留明暗反馈 */
+  button:not(:disabled):active, .btn:not(:disabled):active, .primary:not(:disabled):active, .ghost:not(:disabled):active { transform: none; }
 }
 
 /* ⑩ 顶栏窄屏折叠：≤720px 文字按钮收成短标签（图标化语义保真——用短词不是图形，避免语义丢失）。 */
