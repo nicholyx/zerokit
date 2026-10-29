@@ -1,6 +1,13 @@
 ## [Unreleased]
 
-（下一版攒着）
+### Added
+
+- CLI：`history --failed` 只看失败记录，逐条附诊断建议（复用 suggest 规则表）。
+- CLI：`run --env KEY=VAL` 临时环境变量注入（可多次，只在本次进程生效不落盘）。
+- CLI：`plugin dev <目录> --open` 装好即自动验证（清单加载 + 首个只读动作实跑）；`--watch` 目录监听，存盘即重验（防抖 250ms）。
+- CLI：`config --json`（无插件参数）机读输出全部插件设置项（secret 恒掩码）。
+- CLI：`bench [--quick]` 子命令暴露 scripts/bench.mjs（--quick 只测三条冷启动路径）。
+- CLI：`mcp tools --risk <read|mutate|destructive>` 按风险过滤工具列表。
 
 ## [0.75.0] - 2026-10-29
 
