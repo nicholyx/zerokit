@@ -60,10 +60,14 @@ export interface RunResult {
   command: string;
   /** background 动作：被托管起来的进程信息，可在「运行中」里查看和结束 */
   background?: { id: string; pid: number };
+  /** 第六十七轮①：被外部中断（停止按钮 / Ctrl+.）——不是失败，是用户主动停 */
+  stopped?: boolean;
 }
 
 export interface RunOptions {
   caller: Caller;
+  /** 第六十七轮①⑧：外部中断（UI 停止按钮 / Ctrl+.）。触发即杀子进程，结果标 stopped。 */
+  signal?: AbortSignal;
   /** 已解析、已补齐默认值并校验过的参数 */
   values: Record<string, unknown>;
   cwd?: string;
@@ -307,6 +311,8 @@ interface ExecOutcome {
   truncated: boolean;
   artifactPath?: string;
   timedOut: boolean;
+  /** 第六十七轮①：外部中断 */
+  stopped?: boolean;
 }
 
 /**
@@ -402,7 +408,7 @@ function childEnv(base: NodeJS.ProcessEnv, argv0: string): NodeJS.ProcessEnv {
 function execArgv(
   file: string,
   args: string[],
-  opts: { cwd: string; env: NodeJS.ProcessEnv; timeout: number; shell: boolean; encoding: string },
+  opts: { cwd: string; env: NodeJS.ProcessEnv; timeout: number; shell: boolean; encoding: string; signal?: AbortSignal },
 ): Promise<ExecOutcome> {
   return new Promise((resolve) => {
     const encoding = opts.encoding as BufferEncoding;
@@ -413,6 +419,16 @@ function execArgv(
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+    // 第六十七轮①⑧：外部中断——与超时同路（杀进程），但结局标 stopped 不标 timedOut
+    let stopped = false;
+    const onAbort = () => {
+      stopped = true;
+      child.kill('SIGKILL');
+    };
+    if (opts.signal) {
+      if (opts.signal.aborted) onAbort();
+      else opts.signal.addEventListener('abort', onAbort, { once: true });
+    }
 
     let stdout = '';
     let stderr = '';
@@ -469,10 +485,11 @@ function execArgv(
       clearTimeout(timer);
       stdout += outDecoder.end();
       stderr += errDecoder.end();
+      opts.signal?.removeEventListener('abort', onAbort);
       resolve({
         exitCode: null, stdout, stderr: stderr + String(err.message),
         truncated, timedOut: false,
-        ...(artifactPath ? { artifactPath } : {}),
+        ...(artifactPath ? { artifactPath } : {}), ...(stopped ? { stopped } : {}),
       });
     });
 
@@ -481,9 +498,10 @@ function execArgv(
       stdout += outDecoder.end();
       stderr += errDecoder.end();
       spill?.end();
+      opts.signal?.removeEventListener('abort', onAbort);
       resolve({
         exitCode: code, stdout, stderr, truncated, timedOut,
-        ...(artifactPath ? { artifactPath } : {}),
+        ...(artifactPath ? { artifactPath } : {}), ...(stopped ? { stopped } : {}),
       });
     });
   });
@@ -747,6 +765,7 @@ export async function runAction(
   const viaSpawn = () => execArgv(argv[0]!, argv.slice(1), {
     cwd, env, timeout: action.timeout * 1000,
     shell: action.shell, encoding: action.encoding,
+    signal: options.signal,
   });
 
   let outcome: ExecOutcome | undefined;
@@ -810,9 +829,10 @@ export async function runAction(
   outcome ??= await viaSpawn();
 
   const ms = Date.now() - started;
-  let ok = outcome.exitCode === 0 && !outcome.timedOut;
+  let ok = outcome.exitCode === 0 && !outcome.timedOut && !outcome.stopped;
   let error: string | undefined;
-  if (outcome.timedOut) error = `执行超时（${action.timeout} 秒）已被强制结束`;
+  if (outcome.stopped) error = '已被用户停止';
+  else if (outcome.timedOut) error = `执行超时（${action.timeout} 秒）已被强制结束`;
   else if (outcome.exitCode !== 0) error = `退出码 ${outcome.exitCode}`;
 
   let data: unknown;
@@ -837,7 +857,7 @@ export async function runAction(
     truncated: outcome.truncated,
     // ⑦慢动作水位线：超 3s 打标，stats/audit 输出靠它快速定位拖后腿的动作
     ...(isSlow(ms) ? { slow: true } : {}),
-    ...(error ? { error, reason: outcome.timedOut ? 'timeout' : 'nonzero-exit' } : {}),
+    ...(error ? { error, reason: outcome.stopped ? 'stopped' : outcome.timedOut ? 'timeout' : 'nonzero-exit' } : {}),
   });
 
   const result: RunResult = {
@@ -853,6 +873,7 @@ export async function runAction(
   if (data !== undefined) result.data = data;
   if (outcome.artifactPath) result.artifactPath = outcome.artifactPath;
   if (error) result.error = error;
+  if (outcome.stopped) result.stopped = true;
   return result;
 }
 
@@ -1188,7 +1209,9 @@ async function runHttpAction(
       init.body = JSON.stringify(expandDeep(action.body, vars));
       headers['content-type'] ??= 'application/json';
     }
-    const signal = AbortSignal.timeout(action.timeout * 1000);
+    // ⑧ 外部中断与超时组合：任一触发即断（AbortSignal.any 是 Node 20+ 标准 API）
+    const timeoutSignal = AbortSignal.timeout(action.timeout * 1000);
+    const signal = options.signal ? AbortSignal.any([timeoutSignal, options.signal]) : timeoutSignal;
     // 配了代理就自己走代理。**不能依赖 fetch 的 proxy 选项**：Node 22 上它是
     // 被静默丢弃的（详见 src/core/proxy.ts 顶部注释），设了代理却直连出去，
     // 使用者根本看不出来。没配代理时这里与改动前完全一致。
@@ -1209,6 +1232,7 @@ async function runHttpAction(
     };
     if (data !== undefined) result.data = data;
     if (!ok) result.error = `HTTP ${res.status} ${res.statusText}`;
+    if (options.signal?.aborted) { result.stopped = true; result.error = '已被用户停止'; result.ok = false; }
     audit({
       ...base, decision: ok ? 'allow' : 'deny', command: result.command, ms,
       exitCode: res.status,

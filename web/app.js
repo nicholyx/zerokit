@@ -2151,6 +2151,9 @@ async function executeAction(plugin, action, values, remember = false) {
 
 let submitInFlight = 0;
 
+/** 第六十七轮④：在途动作 key 集合（并发护栏）。 */
+const actionInFlight = new Set();
+
 /** 第十九轮③：同动作执行时间戳（限速窗口），key 是 actionKey。 */
 const rateWindow = {};
 
@@ -3011,8 +3014,27 @@ async function submit(remember) {
 async function submitInner(remember) {
   if (!detail) return;
   const { plugin, action } = detail;
+  // 第六十七轮④：同动作并发护栏——同 key 已在途就拒绝新执行（防双击/多标签页重入）
+  if (actionInFlight.has(actionKey(plugin.id, action.id))) {
+    renderResult({ ok: false, error: '同一动作已在执行中——等它结束或点「停止」后再试。', render: 'text' });
+    return;
+  }
+  actionInFlight.add(actionKey(plugin.id, action.id));
   const btn = $('runBtn');
-  if (btn) { btn.disabled = true; btn.textContent = '执行中…'; btn.classList.add('running'); }
+  // 第六十七轮①⑤：执行中按钮变「停止」——点了调 /api/stop 中断在途执行
+  let stopArmed = false;
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = '■ 停止';
+    btn.classList.add('running', 'stoppable');
+    btn.setAttribute('aria-label', '停止当前执行（Ctrl+.）');
+    btn.onclick = async () => {
+      stopArmed = true;
+      btn.disabled = true; btn.textContent = '停止中…';
+      try { await api('/api/stop', { method: 'POST', body: { key: actionKey(plugin.id, action.id) } }); }
+      catch { /* 服务端没这个执行了也没关系——按钮状态由 finally 恢复 */ }
+    };
+  }
   try {
     $('previewBox').innerHTML = '';
     $('invokeBox').innerHTML = '';
@@ -3039,6 +3061,7 @@ async function submitInner(remember) {
     rateWindow[rk] = [...(rateWindow[rk] ?? []), Date.now()];
     const res = await executeAction(plugin, action, values, remember);
     if (!res) return;   // 用户在确认框点了取消，不算失败也不算成功
+    if (res.stopped) window.__zkStoppedNote = true;
     lastValues = values;
     lastResult = res;
     renderResult(res);
@@ -3079,8 +3102,13 @@ async function submitInner(remember) {
   } catch (e) {
     renderResult({ ok: false, error: e.message, render: 'text' });
   } finally {
+    actionInFlight.delete(actionKey(plugin.id, action.id));
     const b = $('runBtn');
-    if (b) { b.disabled = false; b.textContent = '▶ 执行'; b.classList.remove('running'); }
+    if (b) {
+      b.disabled = false; b.textContent = '▶ 执行';
+      b.classList.remove('running', 'stoppable'); b.removeAttribute('aria-label');
+      b.onclick = null;   // 恢复默认（绑定表里的 click 走 submit）
+    }
   }
 }
 
@@ -8054,3 +8082,14 @@ function showKeyHelp() {
   panel.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' || ev.key === '?' ) close(); });
   panel.tabIndex = -1; panel.focus();
 }
+
+// 第六十七轮⑤：Ctrl+. 停止当前在途执行（与按钮同一条 /api/stop 通道）
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.key === '.') {
+    const keyEl = document.querySelector('#detail-title') ?? null;
+    // 详情页直接用当前动作 key；不在详情页时停止全部在途（key 传空由服务端遍历）
+    const key = detail ? actionKey(detail.plugin.id, detail.action.id) : '';
+    api('/api/stop', { method: 'POST', body: { key } }).catch(() => {});
+    e.preventDefault();
+  }
+});

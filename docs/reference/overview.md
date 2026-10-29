@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-10-29（第六十六轮，v0.71.0 无障碍回归与深水区）
+> 最后更新：2026-10-29（第六十七轮，v0.72.0 安全基线第三轮——执行隔离与逃生门）
 
 ## 性能基线（第五十八轮建立，2026-10-28，Apple M4 / Node 22）
 
@@ -228,7 +228,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 
 ### 质量
 
-- 43 个测试文件、**1319 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
+- 44 个测试文件、**1339 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
 - `tsc --noEmit` 干净——**而且 CI 真的在跑它**（`typecheck` job）。
   曾经这里写着"干净"但没有任何地方执行这条命令，于是两个只有类型检查才看得见的
   错误在核心里躺了很久（`proxy.ts` 的 Buffer 泛型不兼容、`scaffold.ts` 的类型混用）。
@@ -292,6 +292,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 - 第五十轮 v0.55.0：主题与视觉打磨——字号/间距/过渡阶梯、暗色对比度 AA、斑马纹、--danger、滚动条、打印样式（contrastRatio/typeScaleStep）
 - 第五十一轮 v0.56.0：搜索体验深化——丢词建议/组合记忆/搜索态折叠/desc 高亮/计数徽标/清空按钮/历史单条删（suggestNext/comboLabel）
 - 第六十六轮（v0.71.0）无障碍回归：rtabs tablist/tab/tabpanel+方向键 roving（重画焦点回落修复）、抽屉 focus trap（Tab 圈禁/Esc 回焦点）、模态 role=dialog 批量补、图标按钮 aria-label、tfilter aria-label、对比表 caption、标题播报去重、reduced-motion 补漏、a11y-scan.mjs 进 lint 门禁、a11y66-smoke 21 项、全量 1319/1319（Issue #240）
+- 第六十七轮（v0.72.0）安全基线第三轮：执行中停止按钮+Ctrl+.（/api/stop 杀在途进程、结果标 stopped、审计 reason=stopped）、destructive CLI 双重确认（输动作 id）、同动作并发护栏、doctor 未声明 timeout 警告、AbortSignal.any 组合外部中断与超时、safety67-smoke 20 项、全量 44 文件 1339/1339（Issue #243）
 - 第六十五轮（v0.70.0）结果导出与分享：⧉ 分享 MD/HTML 单文件（内联样式无外链）+复制分享文本（50KB 截断标注）、CLI --share 落盘、元数据头 secret 掩码、share65-smoke 17 项、全量 1298/1298（Issue #237）
 - 第六十四轮（v0.69.0）剪贴板工作流：#/clip 历史面板（20 条去重/截断/写回/清空）、classifyClip 七类识别、Ctrl+Shift+V 贴入即搜+建议卡直达预填、clip64-smoke 24 项、全量 1281/1281（Issue #234）
 - 第六十三轮（v0.68.0）定时任务持久化：timers.json 原子写+UI 恢复、zkit timers list/pause/resume/remove/run、nextFireTime 窗口推算（跨午夜/不连环补）、doctor 孤儿检测、/api/timers 桥、timers-smoke 22 项、全量 1257/1257（Issue #231）
