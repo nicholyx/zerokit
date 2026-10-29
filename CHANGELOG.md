@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+（下一版攒着）
+
+## [0.81.0] - 2026-10-29
+
 ### Added
 
 - **插件运行沙箱（第七十六轮）**：`[[action]]` 三键声明——`sandbox = true` 钉死子进程工作目录在插件目录（cwd 声明失效，限制优先于便利）；`max_output = "10MB"` 限制 stdout/stderr 合计字节，超限强制结束并报「输出超过 max_output 上限」；`env_pass = ["VAR"]` 环境变量白名单，声明后子进程只看到安全基线（PATH/TMPDIR/HOME 等）+ 白名单变量 + 清单注入，宿主机其余环境变量（API key、代理串）一概不给。
@@ -7,7 +11,6 @@
 - 插件体检新增 **L12**：声明了 `sandbox` 的动作若在 `env` 里写疑似敏感键（token/secret/password/api_key），警告改走 `[[setting]]` 掩码存储。
 
 
-（下一版攒着）
 
 ## [0.80.0] - 2026-10-29
 
