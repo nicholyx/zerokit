@@ -147,6 +147,18 @@ function checkPlugin(entry: ReturnType<typeof listPlugins>[number]): DoctorPlugi
     });
   }
 
+  // 第七十六轮⑥：沙箱摘要——哪些动作声明了哪层限制，一眼可核对。
+  const sbx = p.actions.filter((a) => a.sandbox === true);
+  const capped = p.actions.filter((a) => a.max_output_bytes !== undefined);
+  const passed = p.actions.filter((a) => (a.env_pass ?? []).length > 0);
+  if (sbx.length + capped.length + passed.length > 0) {
+    problems.push({
+      level: 'warning',
+      text: `沙箱声明：${sbx.length} 个动作目录钉死、${capped.length} 个限输出、${passed.length} 个限环境变量`,
+      hint: 'sandbox = true 钉死工作目录；max_output 限输出字节；env_pass 白名单环境变量——见 docs/reference/plugin-spec.md 沙箱节',
+    });
+  }
+
   // 组合动作的步骤跨插件引用：缺插件由插件依赖统一报，这里只报「插件在、动作没了」。
   for (const a of p.actions) {
     if (a.type !== 'chain') continue;

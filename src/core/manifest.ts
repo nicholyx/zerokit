@@ -144,6 +144,16 @@ export interface Action {
   match?: ActionMatch;
   /** 超时秒数 */
   timeout: number;
+  /**
+   * 第七十六轮①②④：运行沙箱三键。
+   * sandbox：子进程工作目录钉死在插件目录（cwd 声明失效——限制本身优先于便利）。
+   * max_output_bytes：stdout/stderr 合计上限，超限杀进程报「输出超限」（防写满内存/磁盘）。
+   * env_pass：环境变量白名单。声明后子进程只看到 PATH/TMPDIR/LANG/HOME+ZEROKIT_*+清单
+   * env 与 setting 注入——process.env 的其余变量（API key、代理串）一概不给。
+   */
+  sandbox?: boolean;
+  max_output_bytes?: number;
+  env_pass?: string[];
   /** 子进程输出的字符编码。默认 utf8；非 UTF-8 的输出（比如老工具用 GBK）要在这里声明 */
   encoding: string;
   /** 工作目录，相对插件目录 */
@@ -244,6 +254,16 @@ export interface LoadResult {
   plugin?: Plugin;
   errors: string[];
   warnings: string[];
+}
+
+/** 第七十六轮②："10MB"/"512KB"/"1GB" → 字节数。纯数字直接 Number。不认识返回 undefined。 */
+function parseSizeBytes(v: string): number | undefined {
+  const m = /^\s*(\d+(?:\.\d+)?)\s*(B|KB|MB|GB|KiB|MiB|GiB)?\s*$/i.exec(v);
+  if (!m) return undefined;
+  const n = Number(m[1]);
+  const unit = (m[2] ?? 'B').toUpperCase();
+  const mult: Record<string, number> = { B: 1, KB: 1024, MB: 1024 ** 2, GB: 1024 ** 3, KIB: 1024, MIB: 1024 ** 2, GIB: 1024 ** 3 };
+  return n * (mult[unit] ?? 1);
 }
 
 const DEFAULT_TIMEOUT = 60;
@@ -787,6 +807,22 @@ function parseAction(raw: unknown, errors: string[], warnings: string[]): Action
     }
     timeout = timeoutRaw;
   }
+  // 第七十六轮①②④：沙箱三键——sandbox / max_output（字节数，支持 "10MB" 字符串）/ env_pass
+  const sandboxRaw = a['sandbox'];
+  if (sandboxRaw !== undefined && typeof sandboxRaw !== 'boolean') {
+    errors.push(`动作 ${id}: sandbox 必须是 true/false`);
+  }
+  const maxOutputRaw = a['max_output'];
+  let maxOutputBytes: number | undefined;
+  if (maxOutputRaw !== undefined) {
+    const parsed = typeof maxOutputRaw === 'number' ? maxOutputRaw : parseSizeBytes(String(maxOutputRaw));
+    if (parsed === undefined || parsed <= 0) errors.push(`动作 ${id}: max_output 必须是正字节数（数字或 "10MB"）`);
+    else maxOutputBytes = parsed;
+  }
+  const envPassRaw = a['env_pass'];
+  if (envPassRaw !== undefined && (!Array.isArray(envPassRaw) || envPassRaw.some((v) => typeof v !== 'string'))) {
+    errors.push(`动作 ${id}: env_pass 必须是字符串数组`);
+  }
 
   const encodingRaw = (asString(a['encoding']) ?? 'utf8').toLowerCase();
   let encoding = encodingRaw;
@@ -849,6 +885,9 @@ function parseAction(raw: unknown, errors: string[], warnings: string[]): Action
     // TOML 里写 [[action.param]] 时键名是 param（单数），写 [[action.params]] 则是 params，两种都收
     params,
     timeout,
+    ...(sandboxRaw === true ? { sandbox: true } : {}),
+    ...(maxOutputBytes !== undefined ? { max_output_bytes: maxOutputBytes } : {}),
+    ...(Array.isArray(envPassRaw) && envPassRaw.every((v) => typeof v === 'string') ? { env_pass: envPassRaw as string[] } : {}),
     encoding,
     env: Object.fromEntries(
       Object.entries(asRecord(a['env'])).map(([k, v]) => [k, String(v)]),

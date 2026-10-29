@@ -110,6 +110,15 @@ export function lintPlugin(p: Plugin): LintFinding[] {
   } else if (webActions.length > 0 && declaredUi.length < webActions.length) {
     out.push({ rule: 'L11', severity: 'info', target: p.id, message: `${webActions.length - declaredUi.length} 个 web 动作未显式声明 ui（解析时已默认 true），建议在清单里写明` });
   }
+  // L12（第七十六轮⑦）：声明了 sandbox 却往 env 里塞敏感字面量——白名单模式本意是
+  // 收紧环境，再通过 action.env 传明文口令等于左手锁门右手开窗。口令应走 [[setting]]。
+  const sandboxed = p.actions.filter((a) => a.sandbox === true);
+  for (const a of sandboxed) {
+    const suspicious = Object.keys(a.env ?? {}).filter((k) => /token|secret|password|passwd|api_?key/i.test(k));
+    if (suspicious.length > 0) {
+      out.push({ rule: 'L12', severity: 'warn', target: `${p.id}.${a.id}`, message: `动作声明了 sandbox，但 env 里出现疑似敏感键 ${suspicious.join('、')}——口令应走 [[setting]] 声明（掩码存储），不该在清单里写明文` });
+    }
+  }
   return out.sort((x, y) => RISK_ORDER.indexOf(x.severity) - RISK_ORDER.indexOf(y.severity));
 }
 
