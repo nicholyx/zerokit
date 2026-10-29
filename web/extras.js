@@ -2463,3 +2463,93 @@ export function clipSuggestions(kind) {
   };
   return map[kind] ?? [];
 }
+
+// ============================================================
+// 第六十五轮：结果导出与分享——Markdown/HTML 单文件、分享文本
+// ============================================================
+
+/** 分享元数据头（Markdown 折叠块）。meta: {plugin, action, at?, params?, ms?, ok?} */
+export function shareMetaHeader(meta) {
+  const when = meta.at ? new Date(meta.at).toLocaleString() : new Date().toLocaleString();
+  const params = meta.params && Object.keys(meta.params).length
+    ? '\n' + Object.entries(meta.params).map(([k, v]) => `- ${k}: ${typeof v === 'string' && /secret|token|key|password/i.test(k) ? '••••' : String(v)}`).join('\n')
+    : '';
+  return [
+    '<details><summary>执行信息</summary>',
+    '',
+    `- 插件：${meta.plugin ?? '-'}　动作：${meta.action ?? '-'}`,
+    `- 时间：${when}${meta.ms != null ? `　耗时：${formatMs(meta.ms)}` : ''}${meta.ok != null ? `　结果：${meta.ok ? '成功' : '失败'}` : ''}`,
+    `- 由 zerokit 生成${params}`,
+    '',
+    '</details>',
+    '',
+  ].join('\n');
+}
+
+const SHARE_CUT = 50 * 1024;   // 50KB 正文保护线
+
+/** 结果 → 分享 Markdown。大正文截断标注（完整版留在导出文件里由调用方决定）。 */
+export function toShareMarkdown(result, meta, { full = true } = {}) {
+  const head = shareMetaHeader(meta);
+  let body;
+  if (Array.isArray(result)) {
+    body = markdownTable(result.slice(0, full ? result.length : 200));
+  } else if (result && typeof result === 'object') {
+    body = toMarkdownProps(result) ?? `- \`${JSON.stringify(result).slice(0, 200)}\``;
+  } else {
+    body = '```text\n' + String(result ?? '') + '\n```';
+  }
+  const text = head + '\n' + body + '\n';
+  if (text.length > SHARE_CUT && !full) {
+    return text.slice(0, SHARE_CUT) + '\n\n…（内容超过 50KB 已截断，完整结果请看导出文件）\n';
+  }
+  return text;
+}
+
+/** HTML 转义。 */
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** 结果 → 单文件 HTML（内联样式，双击即看）。 */
+export function toShareHtml(result, meta, { full = true } = {}) {
+  const md = toShareMarkdown(result, meta, { full });
+  // 极简 MD→HTML：表格行、代码块、列表、details 直译 + 段落兜底（分享够用，不做全解析器）
+  const lines = md.split('\n');
+  const out = [];
+  let inCode = false, inTable = false;
+  const rowCells = (l) => l.replace(/^\||\|$/g, '').split('|').map((c) => `<td>${escHtml(c.trim())}</td>`).join('');
+  for (const l of lines) {
+    if (l.startsWith('```')) { out.push(inCode ? '</code></pre>' : '<pre><code>'); inCode = !inCode; continue; }
+    if (inCode) { out.push(escHtml(l)); continue; }
+    if (/^\|.*\|$/.test(l.trim())) {
+      if (/^\|[\s:-]+\|$/.test(l.trim()) || /^\|[\s:|-]+\|$/.test(l.trim())) continue;   // 分隔行
+      if (!inTable) { out.push('<table>'); inTable = true; }
+      out.push(`<tr>${rowCells(l.trim())}</tr>`);
+      continue;
+    }
+    if (inTable) { out.push('</table>'); inTable = false; }
+    if (l.startsWith('<details>')) { out.push('<details open><summary>执行信息</summary><div class="meta">'); continue; }
+    if (l === '</details>') { out.push('</div></details>'); continue; }
+    if (l.startsWith('- ')) { out.push(`<li>${escHtml(l.slice(2))}</li>`); continue; }
+    if (!l.trim()) { out.push(''); continue; }
+    out.push(`<p>${escHtml(l)}</p>`);
+  }
+  if (inTable) out.push('</table>');
+  const title = `${meta.plugin ?? ''}.${meta.action ?? ''} 结果`;
+  return `<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escHtml(title)}</title>
+<style>
+body{font:14px/1.7 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;max-width:860px;margin:24px auto;padding:0 16px;color:#1f2328}
+.meta{font-size:12px;color:#57606a;background:#f6f8fa;border-radius:8px;padding:8px 12px}
+table{border-collapse:collapse;margin:12px 0}
+td{border:1px solid #d0d7de;padding:4px 10px}
+tr:nth-child(2n) td{background:#f6f8fa}
+pre{background:#f6f8fa;border-radius:8px;padding:12px;overflow:auto}
+code{font-family:ui-monospace,Menlo,monospace;font-size:13px}
+</style></head><body>
+${out.join('\n')}
+</body></html>`;
+}

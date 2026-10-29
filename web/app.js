@@ -35,6 +35,7 @@ import { TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, expo
 import { COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory } from './extras.js';
 import { chainFill, batchDedup, chunkWindows, parseBatchList } from './extras.js';
 import { classifyClip, pushClipHistory, clipSuggestions } from './extras.js';
+import { toShareMarkdown, toShareHtml } from './extras.js';
 import { toAiMarkdown, packContext, toMcpConfig, toCurl, toLlmJsonl, watchTrendMarkdown } from './extras.js';
 import { navGroups, emptyState, skeletonRows, resultHeightTier, viewportMode, classifyError, batchSummary } from './extras.js';
 import { pluginCompare as plugCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags as pluginTagChips, pluginStatCards, installedList, installCommand } from './extras.js';
@@ -3903,6 +3904,9 @@ function renderResult(res) {
         <button class="ghost" id="copyRes" title="复制结果；Shift=美化 JSON；Alt=带备注与时间">复制</button>
         <button class="ghost" id="saveRes" title="把结果存成文本文件">下载</button>
         <button class="ghost" id="mdRes" title="导出成 Markdown（表格/代码块），方便贴进文档或 Issue">导出 Markdown</button>
+        <button class="ghost" id="shareMdRes" title="导出分享 Markdown 单文件（含执行信息折叠头，贴 Issue/文档即用）">⧉ 分享 MD</button>
+        <button class="ghost" id="shareHtmlRes" title="导出分享 HTML 单文件（内联样式，双击浏览器直接看，无外链）">⧉ 分享 HTML</button>
+        <button class="ghost" id="shareCopyRes" title="复制分享文本（Markdown，含元数据头；超过 50KB 自动截断）">⧉ 复制分享</button>
         ${res.data !== undefined ? `<button class="ghost" id="csvRes" title="导出成 CSV，Excel / Numbers 直接打开">导出 CSV</button>
         <button class="ghost" id="jsonRes" title="导出成 JSON，给脚本接着处理">导出 JSON</button>
         ${toJsonl(res.data) ? `<button class="ghost" id="jsonlRes" title="导出 JSONL（每行一个 JSON，jq / ndjson 友好）">导出 JSONL</button>
@@ -4191,6 +4195,23 @@ function renderResult(res) {
       if (btn) { const t = btn.textContent; btn.textContent = '已导出'; setTimeout(() => { btn.textContent = t; }, 1500); }
     });
   };
+  // 第六十五轮：分享三路——MD 单文件 / HTML 单文件 / 复制分享文本
+  if (res.data !== undefined && detail) {
+    const shareMeta = {
+      plugin: detail.plugin.id, action: detail.action.id,
+      at: Date.now(), ms: res.ms, ok: res.ok !== false,
+      params: collectValues(detail.action),
+    };
+    exportAs('shareMdRes', toShareMarkdown(res.data, shareMeta), 'text/markdown;charset=utf-8', 'md');
+    exportAs('shareHtmlRes', toShareHtml(res.data, shareMeta), 'text/html;charset=utf-8', 'html');
+    const btn = document.getElementById('shareCopyRes');
+    if (btn) btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(toShareMarkdown(res.data, shareMeta, { full: false }));
+        el.count.textContent = '分享文本已复制（Markdown，含执行信息头）';
+      } catch { el.count.textContent = '复制被浏览器拒绝'; }
+    });
+  }
   if (res.data !== undefined) {
     exportAs('csvRes', '\ufeff' + toCsv(res.data), 'text/csv;charset=utf-8', 'csv');  // BOM：Excel 中文不乱码
     exportAs('jsonRes', JSON.stringify(res.data, null, 2), 'application/json', 'json');
