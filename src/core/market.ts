@@ -22,6 +22,9 @@ export interface MarketSource {
   /** 本地缓存目录 */
   path: string;
   addedAt: string;
+  /** 第八十一轮⑤：来源类型（path 本地目录 / git 远端仓库）——
+   * market list 显示，排查「这个集市从哪来的」不用翻登记文件 */
+  kind?: 'path' | 'git';
 }
 
 export interface MarketEntry {
@@ -148,7 +151,7 @@ export function addMarket(source: string): { ok: boolean; name?: string; message
   }
 
   const list = loadMarkets().filter((m) => m.name !== name);
-  list.push({ name, url, path: cacheDir, addedAt: new Date().toISOString() });
+  list.push({ name, url, path: cacheDir, addedAt: new Date().toISOString(), kind: isLocal ? 'path' : 'git' });
   saveMarkets(list);
   return {
     ok: true,
