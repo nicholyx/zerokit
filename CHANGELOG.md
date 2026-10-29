@@ -1,4 +1,9 @@
 ## [Unreleased]
+
+（下一版攒着）
+
+## [0.89.0] - 2026-10-30
+
 ### Added
 
 - `zkit doctor` 顶部新增三级汇总行（`✗N 项需处理 · ⚠N 项建议 · ✓N 项通过`），CLI 与 Web 同源同句
@@ -8,7 +13,6 @@
 - `doctor --json` 新增 `summaryLine` / `history` / `diff` 字段
 
 
-（下一版攒着）
 
 ## [0.88.0] - 2026-10-30
 
