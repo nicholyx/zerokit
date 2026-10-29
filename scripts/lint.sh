@@ -60,6 +60,14 @@ else
   fail=1
 fi
 
+# a11y 静态扫描（第六十六轮）：已知反模式正则盘点
+if node scripts/a11y-scan.mjs; then
+  echo "OK    a11y 扫描（web/ 已知反模式）"
+else
+  echo "FAIL  a11y 扫描"
+  fail=1
+fi
+
 # zizmor：CI 用容器跑，本地有 docker 才跑
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   if docker run --rm -v "$PWD":/repo:ro \

@@ -219,6 +219,43 @@ function applyAiAssist() {
 }
 
 /** 外观面板：主题三档 + 六个强调色。以前只能循环切换，想回上一档要再点两轮。 */
+// 第六十六轮⑥：标签页标题播报去重——单一出口，值没变不重复触发读屏。
+let lastTitleAnnounced = '';
+function announceTitle(n, running) {
+  const v = tabTitle(n, running);
+  if (v === document.title && v === lastTitleAnnounced) return;
+  document.title = v;
+  lastTitleAnnounced = v;
+}
+
+// 第六十六轮②：浮层焦点圈禁（focus trap）——Tab 循环留在浮层内，Esc 关后焦点回触发按钮。
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+function trapFocus(container, { onClose } = {}) {
+  const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const onKey = (e) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      release(); onClose?.(); return;
+    }
+    if (e.key !== 'Tab') return;
+    const items = [...container.querySelectorAll(FOCUSABLE)].filter((n) => n.offsetParent !== null || n === document.activeElement);
+    if (!items.length) return;
+    const first = items[0]; const last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) { last.focus(); e.preventDefault(); }
+    else if (!e.shiftKey && document.activeElement === last) { first.focus(); e.preventDefault(); }
+    else if (!container.contains(document.activeElement)) { first.focus(); e.preventDefault(); }
+  };
+  container.addEventListener('keydown', onKey);
+  function release(focusBack = true) {
+    container.removeEventListener('keydown', onKey);
+    if (focusBack && opener && document.contains(opener)) opener.focus();
+  }
+  // 进浮层先把焦点放进去（屏幕阅读器跟着走）
+  const firstIn = container.querySelector(FOCUSABLE);
+  firstIn?.focus();
+  return { release };
+}
+
 function openThemePop() {
   const pop = $('themePop');
   if (!pop) return;
@@ -909,7 +946,7 @@ function renderListInner() {
         <li data-bi="${i}" class="${dups.includes(i) ? 'dup' : ''}">${esc(b.action.title)}
           <button class="ghost mini" data-bup="${i}" title="上移">↑</button>
           <button class="ghost mini" data-bdown="${i}" title="下移">↓</button>
-          <button class="ghost mini" data-bdel="${i}" title="移出篮子">✕</button>
+          <button class="ghost mini" data-bdel="${i}" title="移出篮子" aria-label="移出篮子">✕</button>
         </li>`).join('')}</ol>`;
     el.listView.insertBefore(bar, el.list);
     bar.querySelector('#batchRun').addEventListener('click', runBatch);
@@ -2303,7 +2340,7 @@ function updateWatchTitle() {
   // ⑦ 标签页标题带上监控数（与运行中进程数合并；fetchPs 也会写 title，两边都调这个）
   const n = Object.keys(watchRegistry()).length;
   const running = Number((document.title.match(/^\((\d+)\)/) ?? [])[1] ?? 0);
-  document.title = tabTitle(n, running);
+  announceTitle(n, running);
 }
 
 /** ①⑤ 监控设置弹窗：间隔档位 + 停止条件（连续失败 N 次 / 结果包含某串） */
@@ -2313,7 +2350,7 @@ function openWatchDialog(plugin, action, key) {
   const intervalOpts = WATCH_INTERVALS.map((o) =>
     `<option value="${o.sec}" ${o.sec === 30 ? 'selected' : ''}>${o.label}</option>`).join('');
   overlay.innerHTML = `
-    <div class="modal">
+    <div class="modal" role="dialog" aria-modal="true">
       <h3>监控「${esc(action.title)}」</h3>
       <div class="help">界面开着才会跑。每次采样记录结果，变化会高亮，可在 #/watch 面板聚合查看。</div>
       <label class="field">重跑间隔
@@ -2657,7 +2694,7 @@ function openTimerDialog(plugin, action) {
   const presets = TIMER_PRESETS.map((p) =>
     `<button type="button" class="ghost mini t-preset" data-sec="${p.sec}">${p.label}</button>`).join(' ');
   overlay.innerHTML = `
-    <div class="modal">
+    <div class="modal" role="dialog" aria-modal="true">
       <h3>定时执行：${esc(action.title)}</h3>
       <div class="help">界面开着才会跑。只读动作才允许定时（有副作用的自动跑风险太大）。</div>
       <div class="field"><label>间隔（秒）</label><input id="tSec" type="number" min="10" step="1" value="${ex?.interval ?? 60}"></div>
@@ -2726,6 +2763,8 @@ function showClipSuggest(text) {
     .filter(Boolean);
   const overlay = document.createElement('div');
   overlay.className = 'clip-suggest zk-pop-in';
+  overlay.setAttribute('role', 'status');
+  overlay.setAttribute('aria-live', 'polite');
   overlay.setAttribute('role', 'dialog');
   const shown = text.length > 120 ? text.slice(0, 120) + '…' : esc(text);
   overlay.innerHTML = `
@@ -2784,7 +2823,7 @@ function showClipPanel() {
         <span class="clip-text" title="${esc(c.text.slice(0, 200))}">${esc(c.text.slice(0, 80))}${c.full > 500 ? ` …（${c.full} 字符）` : ''}</span>
         <span class="clip-at">${new Date(c.at).toLocaleTimeString()}</span>
         <button class="ghost" data-write="${i}" title="写回剪贴板">↩</button>
-        <button class="ghost" data-del="${i}" title="删除这条">✕</button>
+        <button class="ghost" data-del="${i}" title="删除这条" aria-label="删除这条">✕</button>
       </div>`).join('')
     : '<div class="empty" role="status">还没有剪贴板历史——复制点东西再点 📋 按钮</div>';
   panel.innerHTML = `
@@ -3054,7 +3093,7 @@ function askConfirm(plugin, action, res) {
       ? '这个动作会改动或删除数据，且不可自动撤销。请确认命令行内容与你的预期一致。'
       : '这个动作会改动系统或插件状态（写文件、发请求、起进程等）。';
     overlay.innerHTML = `
-      <div class="modal">
+      <div class="modal" role="dialog" aria-modal="true">
         <h3>确认执行</h3>
         <div class="risk-note">
           ${esc(plugin.name)} · ${esc(action.title)} ·
@@ -3184,7 +3223,7 @@ function openImportDialog() {
     const overlay = document.createElement('div');
     overlay.className = 'overlay';
     overlay.innerHTML = `
-      <div class="modal">
+      <div class="modal" role="dialog" aria-modal="true">
         <h3>导入备份</h3>
         <div class="risk-note">来自 ${esc(backup.exportedAt || '未知时间')} · v${esc(backup.version || '?')} · 共 ${Object.keys(backup.keys).length} 个键</div>
         <div class="import-groups">
@@ -3325,7 +3364,7 @@ function bindHotkey(actionKeyStr, title) {
   overlay.className = 'overlay';
   const m = hotkeyMap();
   overlay.innerHTML = `
-    <div class="modal">
+    <div class="modal" role="dialog" aria-modal="true">
       <h3>绑定到 ${esc(title)}</h3>
       <div class="hk-grid">${HOTKEYS.map((hk) => {
         const owner = m[hk];
@@ -3496,6 +3535,8 @@ function pushResultTab(res) {
 function renderTabBar() {
   const box = $('result');
   if (!box) return;
+  box.setAttribute('role', 'tabpanel');
+  box.setAttribute('aria-label', '结果内容');
   let bar = $('rtabs');
   if (!resultTabs.length) { bar?.remove(); return; }
   if (!bar) {
@@ -3503,14 +3544,32 @@ function renderTabBar() {
     bar.id = 'rtabs'; bar.className = 'rtabs';
     box.parentNode?.insertBefore(bar, box);
   }
+  bar.setAttribute('role', 'tablist');
+  bar.setAttribute('aria-label', '结果页签');
   bar.innerHTML = resultTabs.map((t) => `
     <button class="rtab${t.id === activeTab ? ' active' : ''}" data-rtab="${esc(t.id)}"
+      role="tab" aria-selected="${t.id === activeTab}"
+      tabindex="${t.id === activeTab ? '0' : '-1'}"
       title="${esc(t.note ? `备注：${t.note}` : '点击切换 · 双击写备注 · 右键固定/取消固定')}${t.pinned ? '（已固定）' : ''}">
       ${t.pinned ? '📌 ' : ''}${esc(resultTabTitle(t.name, t.ts, Date.now(), lang))}
-      <span class="rtab-note" data-rn="${esc(t.id)}" title="写备注">✎</span>
-      <span class="rtab-x" data-rx="${esc(t.id)}" title="关闭">✕</span>
+      <span class="rtab-note" data-rn="${esc(t.id)}" title="写备注" aria-label="写备注">✎</span>
+      <span class="rtab-x" data-rx="${esc(t.id)}" title="关闭" aria-label="关闭">✕</span>
     </button>`).join('')
     + (resultTabs.length >= 2 ? '<button class="rtab rtab-cmp ghost" data-rcmp title="选两个页签并排对比">⇄ 对比</button>' : '');
+  if (!bar.dataset.roving) {
+    bar.dataset.roving = '1';
+    bar.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      const tabs = [...bar.querySelectorAll('[data-rtab]')];
+      const cur = tabs.findIndex((t) => t.classList.contains('active'));
+      const next = tabs[(cur + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+      if (!next) return;
+      e.preventDefault();
+      next.click();                       // 先切：click 会重画页签栏（innerHTML 重建）
+      const after = bar.querySelector(`[data-rtab="${CSS.escape(next.dataset.rtab ?? '')}"]`);
+      after?.focus();                     // 重画后再聚焦，焦点不掉回 body
+    });
+  }
   bar.querySelectorAll('[data-rtab]').forEach((b) => {
     const tid = b.dataset.rtab;
     b.addEventListener('click', (e) => {
@@ -3581,7 +3640,7 @@ function showCompareView(ta, tb) {
   box.innerHTML = `
     <div class="result-card">
       <h4>⇄ 对比：${esc(ta.name)} vs ${esc(tb.name)}</h4>
-      <table class="kv-table cmp-table"><thead><tr><th>键</th><th>${esc(ta.name)}</th><th>${esc(tb.name)}</th></tr></thead>
+      <table class="kv-table cmp-table"><caption class="sr-only">结果对比</caption><thead><tr><th>键</th><th>${esc(ta.name)}</th><th>${esc(tb.name)}</th></tr></thead>
       <tbody>${tr || '<tr><td colspan="3">无可比数据（两结果都不是对象）</td></tr>'}</tbody></table>
       <div class="help">黄色行 = 值不同。点任意页签回到结果。</div>
     </div>`;
@@ -4450,7 +4509,7 @@ function bridgeNav(frame, msg) {
   const overlay = document.createElement('div');
   overlay.className = 'overlay';
   overlay.innerHTML = `
-    <div class="modal">
+    <div class="modal" role="dialog" aria-modal="true">
       <h3>打开外部链接</h3>
       <div class="risk-note">插件页面请求在系统浏览器打开：</div>
       <div class="cmd-line">${esc(url)}</div>
@@ -4633,7 +4692,7 @@ function renderTable(rows0, tableId = '') {
     return `<span class="unit-conv" data-ucol="${esc(c)}">${esc(c)}: ${targets.map((t) => `<button class="link mini" data-uconv="${esc(c)}:${esc(t)}" title="把 ${esc(c)} 列换算成 ${esc(t)}">→${esc(t)}</button>`).join(' ')}</span>`;
   }).join(' ');
   // 第十六轮③：筛选输入行（thead 第二行）
-  const fRow = `<tr class="tfilter">${visCols.map((c) => `<th><input data-tf="${esc(c)}" placeholder="筛…" value="${esc((fterms[0] && tableFilterTerms[tableId]?.join(' ')) || '')}" autocomplete="off" spellcheck="false"></th>`).join('')}</tr>`;
+  const fRow = `<tr class="tfilter" aria-label="按列筛选">${visCols.map((c) => `<td><input data-tf="${esc(c)}" placeholder="筛…" value="${esc((fterms[0] && tableFilterTerms[tableId]?.join(' ')) || '')}" autocomplete="off" spellcheck="false"></th>`).join('')}</tr>`;
   const gear = `<span class="colvis-btn" data-colvis="${esc(tableId || 't')}" title="显示/隐藏列" role="button" tabindex="0">⚙</span>`;
   // 第五十三轮③：表格密度三档（记忆进 zerokit.tdensity）
   const dpref = localStorage.getItem('zerokit.tdensity') || 'normal';
@@ -5492,7 +5551,7 @@ async function showPluginHome(id) {
     if (!others.length) { el.count.textContent = '没有其它插件可对比'; return; }
     const ov = document.createElement('div');
     ov.className = 'overlay';
-    ov.innerHTML = `<div class="modal">
+    ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true">
       <h3>与哪个插件对比？</h3>
       <div class="chain-cands">${others.map((o, i) => `<button data-cmp="${i}">${esc(o.name)} <span class="sub">${esc(o.id)} · ${o.actions.length} 动作</span></button>`).join('')}</div>
       <div class="actions"><button class="ghost" data-cmp-close>取消</button></div>
@@ -5506,7 +5565,7 @@ async function showPluginHome(id) {
       if (!cmp) { el.count.textContent = '对比失败：插件数据不完整'; ov.remove(); return; }
       ov.querySelector('.modal').innerHTML = `
         <h3>对比：${esc(cmp.a.name)} vs ${esc(cmp.b.name)}</h3>
-        <table class="cmp-table"><thead><tr><th>维度</th><th>${esc(cmp.a.name)}</th><th>${esc(cmp.b.name)}</th></tr></thead>
+        <table class="cmp-table"><caption class="sr-only">插件对比</caption><thead><tr><th>维度</th><th>${esc(cmp.a.name)}</th><th>${esc(cmp.b.name)}</th></tr></thead>
         <tbody>
           <tr><td>动作数</td><td>${cmp.a.actions}</td><td>${cmp.b.actions}</td></tr>
           ${cmp.risks.map((r) => `<tr class="${r.a !== r.b ? 'cmp-diff' : ''}"><td>风险 ${esc(r.risk)}</td><td>${r.a}</td><td>${r.b}</td></tr>`).join('')}
@@ -5990,7 +6049,7 @@ async function doRemove(card) {
     const overlay = document.createElement('div');
     overlay.className = 'overlay';
     overlay.innerHTML = `
-      <div class="modal">
+      <div class="modal" role="dialog" aria-modal="true">
         <h3>卸载插件</h3>
         <div class="risk-note">插件目录会被整个删掉；数据目录里的历史数据保留。</div>
         <div class="cmd-line">${esc(id)}</div>
@@ -6051,7 +6110,7 @@ async function fetchPs() {
     el.psBtn.classList.toggle('has-items', running > 0);
     // 徽标计数：有东西在跑时，标签页标题一眼可见（切去别的页也不会忘）；
     // 第十八轮⑦：监控数也并入标题（⏱N），fetchPs 与监控启停都走 tabTitle 保持一致
-    document.title = tabTitle(Object.keys(watchRegistry()).length, running);
+    announceTitle(Object.keys(watchRegistry()).length, running);
     return data;
   } catch {
     return null;
@@ -6787,7 +6846,7 @@ async function showSaved() {
         box.className = 'cmp-view';
         box.innerHTML = `<div class="ps-head"><h3>收藏对比：${esc(a.command)} ⇄ ${esc(c.command)}</h3>
           <button class="ghost mini" id="cmpClose">关闭</button></div>
-          <table class="cmp-table"><thead><tr><th>键</th><th>较早</th><th>较晚</th></tr></thead><tbody>${html}</tbody></table>`;
+          <table class="cmp-table"><caption class="sr-only">历史对比</caption><thead><tr><th>键</th><th>较早</th><th>较晚</th></tr></thead><tbody>${html}</tbody></table>`;
         view.prepend(box);
         box.querySelector('#cmpClose').addEventListener('click', () => box.remove());
         el.count.textContent = rows.length ? `对比出 ${rows.filter((r2) => r2.diff).length} 处差异` : '两条没有可比的键';
@@ -7846,10 +7905,13 @@ function refreshModeLabel() {
 }
 $('themeFast')?.addEventListener('click', toggleLightDark);
   // 第四十七轮①：设置抽屉——管理类入口统一收纳
+let drawerTrap = null;
 function openDrawer() {
   $('drawer')?.classList.remove('hidden');
   $('drawerMask')?.classList.remove('hidden');
   openThemePop();   // 主题区常驻抽屉
+  drawerTrap?.release(false);
+  drawerTrap = trapFocus($('drawer'), { onClose: closeDrawer });   // 第六十六轮②
 }
 function closeDrawer() {
   $('drawer')?.classList.add('hidden');
