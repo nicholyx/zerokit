@@ -55,6 +55,16 @@ export function suggestLine(input: string, candidates: readonly string[]): strin
   return `是不是想敲「${s[0]!.candidate}」？（${input} → ${s[0]!.candidate}）`;
 }
 
+/** 第八十三轮⑥：二级候选——首选 + 另列两个「你是不是想」，与首选拉出区分度。 */
+export function suggestLineMulti(input: string, candidates: readonly string[]): string | null {
+  const s = suggest(input, candidates, 3);
+  if (s.length === 0) return null;
+  const primary = s[0]!.candidate;
+  if (s.length === 1) return `是不是想敲「${primary}」？（${input} → ${primary}）`;
+  const rest = s.slice(1).map((x) => x.candidate).join(' / ');
+  return `是不是想敲「${primary}」？（${input} → ${primary}）也可能是：${rest}`;
+}
+
 // ---------------- 失败输出自诊断 ----------------
 
 export interface DiagnosedError {
@@ -119,6 +129,50 @@ export function diagnose(stderr: string): DiagnosedError | null {
     }
   }
   return null;
+}
+
+// ---------------- 第八十三轮：退出码 / 超时对照 / 缺设置 ----------------
+
+export interface CodeDiagnosis { code: number; headline: string; detail: string }
+
+/**
+ * ①退出码语义表。只翻译有把握的码；未知码返回 null 不硬猜（⑧负例）。
+ * 137/143 在 macOS/Linux 是 SIGKILL/SIGTERM 的 shell 惯例（128+信号）。
+ */
+export function diagnoseExitCode(code: number | null): CodeDiagnosis | null {
+  if (code == null || code === 0) return null;
+  if (code === 137) {
+    return { code, headline: '进程被强制结束（SIGKILL，退出码 137）', detail: '常见原因是超内存被系统杀，或 sandbox 的 max_output 上限触发强制结束' };
+  }
+  if (code === 143) {
+    return { code, headline: '进程被终止（SIGTERM，退出码 143）', detail: '通常是用户点了停止、或执行超时被 runner 结束' };
+  }
+  if (code > 128 && code <= 160) {
+    // 其余 128+n 信号段：只报信号编号，不编死因
+    return { code, headline: `进程被信号 ${code - 128} 终止（退出码 ${code}）`, detail: '进程不是自己退出的，是被外部信号结束' };
+  }
+  if (code === 2) {
+    return { code, headline: '退出码 2：参数或用法错误', detail: '程序认为自己收到的参数不对。检查参数取值与格式（枚举值、数字范围）' };
+  }
+  if (code === 1) return null; // 普通失败：交给 stderr 文本诊断，码本身没增量信息
+  return null;
+}
+
+/** ②超时对照文案：实际 vs 声明/默认。差距不足 5% 视为贴着上限，提示加倍。 */
+export function timeoutDiagnosis(elapsedMs: number, declaredSec: number): string | null {
+  if (elapsedMs < declaredSec * 1000 * 0.95) return null;
+  const ratio = elapsedMs / (declaredSec * 1000);
+  const advice = ratio >= 2
+    ? '实际用时是上限的两倍以上——加倍也不一定够，先查是不是卡在网络或等输入'
+    : '实际用时贴着上限——把清单里 timeout 加一档再试';
+  return `跑了 ${(elapsedMs / 1000).toFixed(1)}s，撞上 ${declaredSec}s 上限。${advice}`;
+}
+
+/** ③缺设置指引：从清单 required 设置推断「zkit config <插件>」命令行 */
+export function missingSettingHint(pluginId: string, missingNames: string[]): string | null {
+  if (missingNames.length === 0) return null;
+  const first = missingNames[0];
+  return `此插件有必填设置未配置：${missingNames.join('、')}。执行 zkit config ${pluginId} 填 ${first}${missingNames.length > 1 ? `（其余 ${missingNames.length - 1} 项一并填）` : ''}`;
 }
 
 // ---------------- 路径平台检测 ----------------

@@ -1167,7 +1167,8 @@ async function runChainAction(
     truncated ||= result.truncated;
 
     if (!result.ok) {
-      const error = `${label}失败：${result.error ?? `退出码 ${result.exitCode}`}`;
+      // 第八十三轮⑤：断点位置带步骤序号与总步数，前面成功几步也讲清
+      const error = `${label}失败（整条链 ${plan.length} 步，断在第 ${index + 1} 步）：${result.error ?? `退出码 ${result.exitCode}`}`;
       audit({
         ...base, decision: 'deny', reason: 'chain-step-failed', command,
         exitCode: result.exitCode, ms: Date.now() - started, error,

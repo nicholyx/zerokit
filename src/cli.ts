@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
-import { suggestLine, diagnose, foreignPath, findOrphanPlugins } from './core/suggest.ts';
+import { suggestLine, suggestLineMulti, diagnose, diagnoseExitCode, timeoutDiagnosis, missingSettingHint, foreignPath, findOrphanPlugins } from './core/suggest.ts';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -887,6 +887,15 @@ async function cmdRun(args: string[]): Promise<number> {
       ?? { kind: 'exit-nonzero', headline: '程序报错退出', nextSteps: ['看上方 stderr 原文定位报错行', '同参数重试一次排除偶发'] };
     process.stderr.write(c.yellow(`\n⟐ 看起来是：${d.headline}\n下一步：\n`));
     for (const st of d.nextSteps) process.stderr.write(`  - ${st}\n`);
+    // 第八十三轮①②：退出码语义 + 超时对照（只加有把握的增量信息，未知码不硬猜）
+    const oc = (result as { exitCode?: number | null }).exitCode ?? null;
+    const codeDiag = diagnoseExitCode(oc);
+    if (codeDiag) process.stderr.write(c.dim(`⟐ 退出码 ${codeDiag.code}：${codeDiag.headline}\n  ${codeDiag.detail}\n`));
+    const r = result as { timedOut?: boolean; ms?: number; timeoutSec?: number };
+    if (r.timedOut && typeof r.ms === 'number' && typeof r.timeoutSec === 'number') {
+      const t = timeoutDiagnosis(r.ms, r.timeoutSec);
+      if (t) process.stderr.write(c.dim(`⟐ ${t}\n`));
+    }
   }
   return result.ok ? 0 : 1;
 }
@@ -1703,11 +1712,22 @@ async function cmdHistory(args: string[]): Promise<number> {
       return 0;
     }
     const { diagnose } = await import('./core/suggest.ts');
+    // 第八十三轮④：每条失败附同动作最近 10 次成功率——偶发还是必现一眼可辨
+    const allHistory = cliX.readHistory();
+    const successRate = (plugin: string, action: string): string | null => {
+      const recent = allHistory.filter((h) => h.plugin === plugin && h.action === action).slice(-10);
+      if (recent.length < 2) return null;
+      const ok = recent.filter((h) => h.exitCode === 0).length;
+      const pct = Math.round((ok / recent.length) * 100);
+      return `最近 ${recent.length} 次：${pct}% 成功${pct === 0 ? '（必现）' : pct < 50 ? '（多半失败）' : '（偶发）'}`;
+    };
     process.stdout.write(c.bold(`最近 ${failed.length} 条失败（zkit history --rerun N 可重跑）：\n`));
     for (let i = 0; i < failed.length; i++) {
       const e = failed[i];
       if (!e) continue;
       process.stdout.write(`  ${String(i + 1).padStart(3)}  ${c.dim(e.ts.slice(5, 19))}  ${c.red('✗')} zkit run ${e.plugin} ${e.action} ${e.argv.join(' ')}\n`);
+      const rate = successRate(e.plugin, e.action);
+      if (rate) process.stdout.write(c.dim(`      ${rate}\n`));
       const d = diagnose(`exit ${e.exitCode} plugin=${e.plugin} action=${e.action} ${e.argv.join(' ')}`);
       if (d) process.stdout.write(c.yellow(`      ⟐ 看起来是：${d.headline}\n`) + c.dim(`        下一步：${d.nextSteps[0] ?? ''}\n`));
     }
@@ -2860,7 +2880,7 @@ async function main(): Promise<number> {
     default: {
       // 第三十五轮①：打错命令给最接近的建议，而不是只甩一份全量帮助
       process.stderr.write(c.red(`未知命令：${cmd}`) + '\n');
-      const hint = suggestLine(String(cmd), KNOWN_COMMANDS);
+      const hint = suggestLineMulti(String(cmd), KNOWN_COMMANDS);
       if (hint) process.stderr.write(c.yellow(`  ${hint}`) + '\n');
       process.stdout.write(HELP);
       return 2;
