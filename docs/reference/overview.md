@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-10-30（第八十三轮，v0.88.0）
+> 最后更新：2026-10-30（第八十四轮，v0.89.0）
 
 ## 性能基线（第五十八轮建立，2026-10-28，Apple M4 / Node 22）
 
@@ -228,7 +228,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 
 ### 质量
 
-- 55 个文件、**1581 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
+- 56 个文件、**1595 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
 - `tsc --noEmit` 干净——**而且 CI 真的在跑它**（`typecheck` job）。
   曾经这里写着"干净"但没有任何地方执行这条命令，于是两个只有类型检查才看得见的
   错误在核心里躺了很久（`proxy.ts` 的 Buffer 泛型不兼容、`scaffold.ts` 的类型混用）。
@@ -381,3 +381,4 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 - **第七十九轮（监控持久化与告警升级）**：watch.json 持久化（浏览器写/server 透传）、刷新恢复 samples 续传、失败告警升级+10 分钟去重、data export/import（meta.watch 分区）（Issue #279，v0.84.0）
 - **第八十轮（首次运行体验）**：`zkit welcome` 首访欢迎+分级体检摘要+三步上手+平台缺工具安装命令、回访增量、--json 机读；MCP 内建 zerokit_welcome 工具（Issue #282，v0.85.0）
 - **第八十一轮（插件供应链安全）**：unpack --strict 拒未签名包（默认警告放行）、doctor 供应链完整性段全量复验点名被改插件、list --brief 带 installedFrom 来源追踪、market list 来源标签（Issue #284，v0.86.0）
+- **第八十四轮（健康体检面整合）**：doctor 三级汇总行（CLI/Web 同源同句）、体检历史 doctor-history.jsonl 保留 50 条、--diff 三向对比（新增/已解决/仍在）、持续问题标记（⚠ 持续 N 次）、--json 补 summaryLine/history/diff、Web 端最近 5 次趋势、doctor84-smoke 14 项（Issue #293，v0.89.0）

@@ -1,4 +1,12 @@
 ## [Unreleased]
+### Added
+
+- `zkit doctor` 顶部新增三级汇总行（`✗N 项需处理 · ⚠N 项建议 · ✓N 项通过`），CLI 与 Web 同源同句
+- 体检历史：每次全量体检摘要落 `~/.zerokit/logs/doctor-history.jsonl`（保留最近 50 条），Web 端展示最近 5 次趋势
+- `zkit doctor --diff`：与上一次体检对比，只列新增 / 已解决 / 仍在
+- 持续问题标记：同一问题连续出现时标 `⚠ 持续 N 次`（CLI 与 Web）
+- `doctor --json` 新增 `summaryLine` / `history` / `diff` 字段
+
 
 （下一版攒着）
 

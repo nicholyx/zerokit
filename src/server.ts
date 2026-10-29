@@ -32,7 +32,7 @@ import { applyDefaults, coerceParam, toFormFields, toJsonSchema } from './core/s
 import { type PublicSetting, publicSettings, SECRET_MASK, writeSettings } from './core/pluginConfig.ts';
 import { dependents, depStates, installDeps, missingDeps } from './core/deps.ts';
 import { buildArgv, chainDisplay, confirmPolicy, displayCommand, runAction } from './core/runner.ts';
-import { buildDoctorReport } from './core/doctor.ts';
+import { buildDoctorReport, toHistoryEntry, appendDoctorHistory, readDoctorHistory, diffDoctorHistory, doctorSummaryLine } from './core/doctor.ts';
 import {
   addMarket, findEntry, installFromMarket, loadMarkets, previewInstall,
   readIndex, refreshMarket, removeMarket,
@@ -494,7 +494,19 @@ export function createServer(): http.Server {
       }
 
       if (url.pathname === '/api/doctor' && req.method === 'GET') {
-        json(res, 200, buildDoctorReport());
+        // 第八十四轮①④⑥：与 CLI --json 同源——汇总行、最近 5 次历史、对比一并给前端
+        const report = buildDoctorReport();
+        const passed = report.tools.filter((t) => t.ok).length
+          + report.plugins.filter((pl) => pl.problems.length === 0).length;
+        const entry = toHistoryEntry(report, passed);
+        appendDoctorHistory(entry);
+        const full = readDoctorHistory();
+        json(res, 200, {
+          ...report,
+          summaryLine: doctorSummaryLine(report, passed),
+          history: full.slice(0, 5),
+          diff: diffDoctorHistory(entry, full[1]),
+        });
         return;
       }
 
