@@ -214,8 +214,8 @@ try {
     && (await getJson('/api/mcp/allow')).body.items.find((x) => x.key === 'demo.touch').allowed === true,
     JSON.stringify(grant.body));
   check('POST /api/mcp/allow：授权名单落盘（与 zkit mcp allow 共用一份）',
-    fs.readFileSync(path.join(TMP_HOME, 'mcp-allow.json'), 'utf8').includes('demo.touch'),
-    'mcp-allow.json');
+    fs.existsSync(path.join(TMP_HOME, 'allow.json')) && fs.readFileSync(path.join(TMP_HOME, 'allow.json'), 'utf8').includes('demo.touch'),
+    'allow.json（第七十七轮起与 audit 体系统一）');
 
   const revoke = await postJson('/api/mcp/allow', { key: 'demo.touch', revoke: true });
   check('POST /api/mcp/allow：撤销后恢复未授权',

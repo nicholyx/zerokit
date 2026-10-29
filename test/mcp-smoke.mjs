@@ -260,6 +260,107 @@ try {
   }
 }
 
+// ===== 第七十七轮：MCP 面第二波（CLI 子命令端到端）=====
+let wPassed = 0, wFailed = 0;
+const check = (msg, cond) => { if (cond) { wPassed++; pass(msg); } else { wFailed++; failed++; console.error('FAIL  ' + msg + '  <- mcp77'); } };
+{
+  // 前面 suite 段的 finally 清掉了 TMP_HOME 内容——这里重建并重装 bundled
+  fs.mkdirSync(TMP_HOME, { recursive: true });
+  const resetup = spawnSync(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'plugin', 'bundled'], {
+    cwd: ROOT, encoding: 'utf8', timeout: 60000, env: { ...process.env, ZEROKIT_HOME: TMP_HOME },
+  });
+  if (resetup.status !== 0) throw new Error('二波段 bundled 重装失败');
+  const out = (args) => spawnSync(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'mcp', ...args], {
+    cwd: ROOT, encoding: 'utf8', timeout: 30000, env: { ...process.env, ZEROKIT_HOME: TMP_HOME },
+  });
+  // ① --plugin 过滤
+  {
+    const r = out(['tools', '--plugin', 'sysinfo']);
+    check('二波① tools --plugin 过滤', r.stdout.includes('共 5 个 MCP 工具（插件=sysinfo）') && r.stdout.includes('sysinfo__overview'));
+    const rj = JSON.parse(out(['tools', '--plugin', 'sysinfo', '--json']).stdout);
+    check('二波① --json count=5', rj.count === 5 && rj.tools.every((t) => t.name.startsWith('sysinfo__')));
+  }
+  // ② 超量提示（当前 52 个 > 30）
+  {
+    const r = out(['tools']);
+    check('二波② 超 30 个提示缩窄', r.stdout.includes('加 --plugin <id>') && r.stdout.includes('mcp search'));
+  }
+  // ③ search
+  {
+    const r = out(['search', '内存']);
+    check('二波③ search 命中', /命中 [1-9]/.test(r.stdout));
+    const rj = JSON.parse(out(['search', '内存', '--json']).stdout);
+    check('二波③ search --json', rj.query === '内存' && rj.count >= 1);
+    const r0 = out(['search', 'zzz不存在的词']);
+    check('二波③ search 零命中退出 0', r0.stdout.includes('命中 0'));
+  }
+  // ⑤ status 空态
+  {
+    const r = out(['status']);
+    check('二波⑤ status 空态', r.stdout.includes('没有授权记录'));
+  }
+  // ⑤⑥ allow --ttl 1h → status 剩 N 分钟 → revoke
+  {
+    fs.rmSync(path.join(TMP_HOME, 'allow.json'), { force: true });
+    const ra = out(['allow', 'clipboard.copy', '--ttl', '1h']);
+    check('二波⑤ allow --ttl 1h', ra.stdout.includes('已授权'));
+    check('二波⑦ allow 显示将执行的命令', ra.stdout.includes('将执行的命令') && ra.stdout.includes('clipboard.mjs'));
+    const rs = out(['status']);
+    check('二波⑤ status 剩余时间', /剩 \d+ (分钟|小时)/.test(rs.stdout) && rs.stdout.includes('clipboard.copy'));
+    const rr = out(['revoke', 'clipboard.copy']);
+    check('二波⑥ revoke', rr.stdout.includes('已撤销'));
+    const rr2 = out(['revoke', 'clipboard.copy']);
+    check('二波⑥ revoke 不存在报错', rr2.status === 1 && rr2.stderr.includes('没有找到授权记录'));
+    const rs2 = out(['status']);
+    check('二波⑥ revoke 后空', rs2.stdout.includes('没有授权记录'));
+  }
+  // ⑧ dry-run
+  {
+    const r = out(['dry-run', 'quick.ts2date', '--params', JSON.stringify({ ts: 1760000000 })]);
+    const jText = r.stdout.slice(0, r.stdout.indexOf('\n}') + 2); const j = jText ? JSON.parse(jText) : null; if (!j) console.error('dryrun out:', JSON.stringify(r).slice(0, 200));
+    check('二波⑧ dry-run 命令展开', j.action === 'quick.ts2date' && j.command.includes('quick.mjs') && j.command.includes('1760000000'));
+    check('二波⑧ dry-run 风险字段', j.risk === 'read');
+    const r2 = out(['dry-run', 'quick.ts2date']);
+    const j2T = r2.stdout.slice(0, r2.stdout.indexOf('\n}') + 2); const j2 = j2T ? JSON.parse(j2T) : {};
+    check('二波⑧ dry-run 缺参提示', Array.isArray(j2.missing_params) && j2.missing_params.includes('ts'));
+    const r3 = out(['dry-run', 'quick.noexist']);
+    check('二波⑧ dry-run 不存在退出 1', r3.status === 1);
+  }
+  // ④ next_hint（JSON-RPC 端到端——未授权分支）
+  {
+    fs.rmSync(path.join(TMP_HOME, 'allow.json'), { force: true });
+    const child = spawn(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'mcp', 'serve'], {
+      stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ZEROKIT_HOME: TMP_HOME },
+    });
+    let buf = '';
+    child.stdout.on('data', (chunk) => { buf += chunk.toString('utf8'); });
+    const send = (obj) => child.stdin.write(JSON.stringify(obj) + '\n');
+    const waitMsg = async (pred, ms = 8000) => {
+      const t0 = Date.now();
+      while (Date.now() - t0 < ms) {
+        const idx = buf.indexOf('\n');
+        if (idx >= 0) {
+          const line = buf.slice(0, idx); buf = buf.slice(idx + 1);
+          try { const j = JSON.parse(line); if (pred(j)) return j; } catch { /* 非 JSON 行跳过 */ }
+        }
+        await new Promise((r2) => setTimeout(r2, 50));
+      }
+      return null;
+    };
+    try {
+      send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 't', version: '1' } } });
+      await waitMsg((j) => j.id === 1);
+      send({ jsonrpc: '2.0', method: 'notifications/initialized' });
+      send({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'clipboard__copy', arguments: { text: 'x' } } });
+      const resp = await waitMsg((j) => j.id === 2);
+      const sc = resp?.result?.structuredContent;
+      check('二波④ 未授权 next_hint', !!sc && sc.error === 'not-authorized' && sc.next_hint.includes('zkit mcp allow clipboard.copy'));
+    } finally {
+      child.kill();
+    }
+  }
+}
+
 // 和其它测试保持一致的统计行
 console.log('\n' + '='.repeat(60));
 console.log(`通过 ${passed} / ${passed + failed}`);

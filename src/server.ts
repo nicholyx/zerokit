@@ -1014,7 +1014,7 @@ export function createServer(): http.Server {
       }
 
       // MCP 授权面板：列出所有有副作用的动作与其授权状态；POST 增/撤授权。
-      // 授权名单与 `zkit mcp allow` 是同一份（~/.zerokit/mcp-allow.json）。
+      // 授权名单与 `zkit mcp allow` 是同一份（~/.zerokit/allow.json，第七十七轮起与 audit 体系统一）。
       if (url.pathname === '/api/mcp/allow' && req.method === 'GET') {
         const mcp = await import('./mcp.ts');
         const allow = mcp.loadAllow();

@@ -81,7 +81,7 @@ export interface RunOptions {
 const TOKEN_RE = /\{([a-zA-Z_][a-zA-Z0-9_.]*)\}/g;
 const WHOLE_TOKEN_RE = /^\{([a-zA-Z_][a-zA-Z0-9_.]*)\}$/;
 
-function buildVars(plugin: Plugin, values: Record<string, unknown>): Record<string, string> {
+export function buildVars(plugin: Plugin, values: Record<string, unknown>): Record<string, string> {
   const settings = resolveSettings(plugin);
   const vars: Record<string, string> = {
     ...settingsVars(settings),

@@ -13,7 +13,9 @@ import { type Action, type Plugin, toolName } from './core/manifest.ts';
 import { HOME, PLUGINS_DIR } from './core/paths.ts';
 import { findPlugin, listPlugins } from './core/registry.ts';
 import { applyDefaults, coerceParam, toJsonSchema } from './core/schema.ts';
-import { audit, confirmPolicy, runAction } from './core/runner.ts';
+import { audit, buildVars, confirmPolicy, runAction } from './core/runner.ts';
+import { type AllowEntry, entryAlive, loadAllow as loadAllowAudit, pruneAllow, saveAllow as saveAllowAudit, upsertAllow } from './core/audit.ts';
+import { suggestLine } from './core/suggest.ts';
 
 /**
  * MCP 面：把每个插件的每个动作暴露成一个 MCP 工具。
@@ -34,41 +36,41 @@ function allowPath(): string {
   return path.join(HOME, 'mcp-allow.json');
 }
 
-/** ⑧授权记录带时间：{key, at} 表（读旧格式——纯数组——自动迁移为带时间记录） */
-export function loadAllowEntries(): Array<{ key: string; at?: string }> {
+/**
+ * 授权名单（第七十七轮⑤⑥统一）：与 audit.ts 共用 allow.json（AllowEntry 带 ttlDays）。
+ * 旧 mcp-allow.json 若还在，首次读取时迁移并入（保留原授权时间，ttl 给永久——
+ * 用户当年显式授的权不因迁移缩短）。
+ */
+export function loadAllowEntries(): AllowEntry[] {
+  const current = loadAllowAudit();
+  if (current.length > 0) return current;
+  // 迁移旧文件（mcp-allow.json 的 {entries:[{key,at}]} 或纯数组）
   try {
     const raw: unknown = JSON.parse(fs.readFileSync(allowPath(), 'utf8'));
-    if (Array.isArray(raw)) {
-      // 旧格式纯字符串数组：迁移成对象表并落盘
-      const entries = raw.filter((x): x is string => typeof x === 'string')
-        .map((key) => ({ key, at: undefined as string | undefined }));
-      if (entries.length > 0) saveAllowEntries(entries);
-      return entries;
+    const oldKeys: Array<{ key: string; at?: string }> = Array.isArray(raw)
+      ? raw.filter((x): x is string => typeof x === 'string').map((key) => ({ key }))
+      : raw && typeof raw === 'object' && Array.isArray((raw as { entries?: unknown }).entries)
+        ? (raw as { entries: Array<{ key: string; at?: string }> }).entries
+        : [];
+    if (oldKeys.length > 0) {
+      const migrated: AllowEntry[] = oldKeys.map((e) => ({ key: e.key, at: e.at ?? new Date().toISOString(), ttlDays: -1 }));
+      saveAllowAudit(migrated);
+      return migrated;
     }
-    if (raw && typeof raw === 'object' && Array.isArray((raw as { entries?: unknown }).entries)) {
-      return (raw as { entries: Array<{ key: string; at?: string }> }).entries;
-    }
-    return [];
-  } catch {
-    return [];
-  }
+  } catch { /* 旧文件不存在——正常 */ }
+  return [];
 }
 
-function saveAllowEntries(entries: Array<{ key: string; at?: string }>): void {
-  fs.mkdirSync(HOME, { recursive: true });
-  fs.writeFileSync(allowPath(), JSON.stringify({ entries }, null, 2));
-}
-
-/** 读取 MCP 授权名单。启动器面板与 CLI 共用同一份，避免两处各管各的。 */
+/** 读取 MCP 授权名单（只含未过期条目）。启动器面板与 CLI 共用同一份。 */
 export function loadAllow(): Set<string> {
-  const entries = loadAllowEntries();
-  return new Set(entries.map((e) => e.key));
+  const { alive } = pruneAllow(loadAllowEntries());
+  return new Set(alive.map((e) => e.key));
 }
 
 export function saveAllow(set: Set<string>): void {
-  const old = new Map(loadAllowEntries().map((e) => [e.key, e.at]));
-  const entries = [...set].sort().map((key) => ({ key, at: old.get(key) ?? new Date().toISOString() }));
-  saveAllowEntries(entries);
+  const old = new Map(loadAllowEntries().map((e) => [e.key, e]));
+  const entries: AllowEntry[] = [...set].sort().map((key) => old.get(key) ?? { key, at: new Date().toISOString(), ttlDays: 30 });
+  saveAllowAudit(entries);
 }
 
 function isAllowed(plugin: Plugin, action: Action, allow: Set<string>): boolean {
@@ -288,9 +290,12 @@ export async function serve(): Promise<number> {
     const name = req.params.name;
     const found = findByName(name);
     if (!found) {
+      // 第七十七轮④：AI 拿结构化 next_hint，不再只有一句人话
+      const names = collectTools().map((t) => toolName(t.plugin.id, t.action.id));
       return {
         content: [{ type: 'text', text: `没有这个工具：${name}。可能是插件被卸载了，请重新拉取工具列表。` }],
         isError: true,
+        structuredContent: { error: 'tool-not-found', next_hint: suggestLine(name, names) || '重新拉取工具列表（tools/list）' },
       };
     }
     const { plugin, action } = found;
@@ -311,6 +316,7 @@ export async function serve(): Promise<number> {
             + `（策略：只读动作默认放行，有副作用的动作必须显式授权）`,
         }],
         isError: true,
+        structuredContent: { error: 'not-authorized', key, next_hint: `zkit mcp allow ${key}（用户在终端执行；zkit mcp dry-run ${key} 可先看会跑什么）` },
       };
     }
 
@@ -338,12 +344,15 @@ export async function serve(): Promise<number> {
       const streak = noteFailureStreak();
       const tail = [`建议：`, ...hints.map((h) => `- ${h}`)];
       if (streak) tail.push(streak);
+      // 参数表写进结构化字段——AI 不用从人话里抠参数名
+      const paramTable = action.params.map((p2) => `${p2.name}:${p2.type}${p2.required ? '（必填）' : ''}`).join('、') || '（无参数）';
       return {
         content: [{
           type: 'text',
           text: `参数有问题：\n- ${errors.join('\n- ')}\n${tail.join('\n')}`,
         }],
         isError: true,
+        structuredContent: { error: 'bad-params', params: paramTable, next_hint: '按 params 表重传；zkit mcp dry-run ' + toolName(plugin.id, action.id) + ' --params \'{...}\' 可先验证' },
       };
     }
 
@@ -524,6 +533,102 @@ function cmdConfig(args: string[]): number {
   return 0;
 }
 
+/** 第七十七轮⑧：还原将执行的命令行——与 runner 同一套 buildVars，占位符全展开 */
+function buildCommand(plugin: Plugin, action: Action, values: Record<string, string>): string[] {
+  const vars = buildVars(plugin, values);
+  return (action.run ?? []).map((tok) => {
+    const m = /^\{([^}]+)\}$/.exec(tok);
+    if (!m) return tok.replace(/\{([^}]+)\}/g, (_x, n: string) => vars[n] ?? '');
+    const v = vars[m[1]!];
+    return v === undefined || v === '' ? tok : v;
+  });
+}
+
+/** 第七十七轮③：跨插件动作搜索——标题/描述/关键词，给 AI 客户端缩小工具面用 */
+function cmdSearch(args: string[]): number {
+  const q = args.find((a) => !a.startsWith('-')) ?? '';
+  if (!q) { process.stderr.write('用法：zkit mcp search <词> [--json]\n'); return 1; }
+  const asJson = args.includes('--json');
+  const ql = q.toLowerCase();
+  const hits = collectTools().filter(({ plugin, action }) => {
+    const hay = [action.title, action.description, plugin.name, plugin.id, action.id, ...(plugin.keywords ?? [])].join('\n').toLowerCase();
+    return hay.includes(ql);
+  });
+  if (asJson) {
+    process.stdout.write(JSON.stringify({ query: q, count: hits.length, tools: hits.map(({ plugin, action }) => ({ name: toolName(plugin.id, action.id), risk: action.risk })) }, null, 2) + '\n');
+    return 0;
+  }
+  process.stdout.write(`搜「${q}」命中 ${hits.length} 个动作：\n`);
+  for (const { plugin, action } of hits) {
+    const riskMark = action.risk === 'read' ? '' : action.risk === 'destructive' ? '  ⚠destructive' : '  ●有副作用';
+    process.stdout.write(`  ${toolName(plugin.id, action.id)}${riskMark}\n    ${action.title}\n`);
+  }
+  return 0;
+}
+
+/** 第七十七轮⑧：dry-run——不执行，返回将运行的命令/风险/参数解析结果 */
+function cmdDryRun(args: string[]): number {
+  const target = args[0];
+  if (!target || target.startsWith('-')) {
+    process.stderr.write('用法：zkit mcp dry-run <插件.动作> --params \'{"k":"v"}\'\n');
+    return 1;
+  }
+  const paramsIdx = args.indexOf('--params');
+  let values: Record<string, string> = {};
+  if (paramsIdx >= 0 && args[paramsIdx + 1]) {
+    try { values = JSON.parse(args[paramsIdx + 1] ?? '{}') as Record<string, string>; }
+    catch { process.stderr.write('✗ --params 不是合法 JSON\n'); return 1; }
+  }
+  const tools = collectTools();
+  const match = tools.find((t) => `${t.plugin.id}.${t.action.id}` === target);
+  if (!match) {
+    const names = tools.map((t) => `${t.plugin.id}.${t.action.id}`);
+    process.stderr.write(`✗ 找不到动作 ${target}。\n${suggestLine(target, names) ?? '（没有相近名字。zkit mcp search <词> 搜动作）'}\n`);
+    return 1;
+  }
+  const { plugin, action } = match;
+  const cmd = buildCommand(plugin, action, values);
+  const missing = action.params.filter((pa) => pa.required && (values[pa.name] ?? pa.default) === undefined).map((pa) => pa.name);
+  process.stdout.write(JSON.stringify({ action: target, risk: action.risk, command: cmd, missing_params: missing, param_count: action.params.length }, null, 2) + '\n');
+  if (missing.length > 0) process.stdout.write(`注意：还缺必填参数 ${missing.join('、')}\n`);
+  return 0;
+}
+
+/** 第七十七轮⑤：status 列每个授权剩余时间 */
+function cmdStatus(): number {
+  const entries: AllowEntry[] = loadAllowEntries();
+  const now = Date.now();
+  if (entries.length === 0) { process.stdout.write('没有授权记录（只读动作默认放行，不需要授权）。\n'); return 0; }
+  process.stdout.write(`AI 调用授权（${entries.length} 条）：\n`);
+  for (const e of entries) {
+    const alive = entryAlive(e, now);
+    let remain = '已过期';
+    if (e.ttlDays === -1) remain = '永久';
+    else if (alive) {
+      const msLeft = e.ttlDays * 86_400_000 - (now - Date.parse(e.at));
+      if (msLeft >= 86_400_000) remain = `剩 ${Math.floor(msLeft / 86_400_000)} 天`;
+      else if (msLeft >= 3_600_000) remain = `剩 ${Math.floor(msLeft / 3_600_000)} 小时`;
+      else remain = `剩 ${Math.max(1, Math.floor(msLeft / 60_000))} 分钟`;
+    }
+    process.stdout.write(`  ${e.key.padEnd(34)} ${remain}${alive ? '' : '（将不再放行）'}  授权于 ${e.at}\n`);
+  }
+  return 0;
+}
+
+/** 第七十七轮⑥：revoke 撤销单个授权（原先要手动删文件） */
+function cmdRevoke(args: string[]): number {
+  const target = args[0];
+  if (!target) { process.stderr.write('用法：zkit mcp revoke <插件.动作>\n'); return 1; }
+  const entries: AllowEntry[] = loadAllowEntries();
+  if (!entries.some((e) => e.key === target)) {
+    process.stderr.write(`✗ 没有找到授权记录 ${target}（zkit mcp status 看现有授权）\n`);
+    return 1;
+  }
+  saveAllowAudit(entries.filter((e) => e.key !== target));
+  process.stdout.write(`✓ 已撤销 ${target} 的授权\n`);
+  return 0;
+}
+
 /** ⑥⑦静态工具清单：不启动 server 就能查全部工具（--json 供文档生成） */
 function cmdTools(args: string[]): number {
   const asJson = args.includes('--json');
@@ -533,8 +638,12 @@ function cmdTools(args: string[]): number {
   const riskWant = riskRaw && ['read', 'mutate', 'destructive', 'write'].includes(riskRaw)
     ? (riskRaw === 'write' ? 'mutate' : riskRaw)
     : undefined;
+  // 第七十七轮①：--plugin <id> 按插件过滤
+  const plugIdx = args.indexOf('--plugin');
+  const plugWant = plugIdx >= 0 ? args[plugIdx + 1] : undefined;
   const collected = collectTools()
     .filter(({ action }) => !riskWant || action.risk === riskWant)
+    .filter(({ plugin }) => !plugWant || plugin.id === plugWant)
     .map(({ plugin, action }) => ({
     name: toolName(plugin.id, action.id),
     title: `${plugin.name} · ${action.title}`,
@@ -557,10 +666,13 @@ function cmdTools(args: string[]): number {
     process.stdout.write(JSON.stringify({ count: tools.length, ...(riskWant ? { risk: riskWant } : {}), tools }, null, 2) + '\n');
     return 0;
   }
-  process.stdout.write(`共 ${tools.length} 个 MCP 工具${riskWant ? `（风险=${riskWant}）` : ''}（加 --json 看机读格式）：\n`);
+  process.stdout.write(`共 ${tools.length} 个 MCP 工具${riskWant ? `（风险=${riskWant}）` : ''}${plugWant ? `（插件=${plugWant}）` : ''}（加 --json 看机读格式）：\n`);
   for (const t of tools) {
     const riskMark = t.risk === 'read' ? '' : t.risk === 'destructive' ? '  ⚠destructive' : '  ●有副作用';
     process.stdout.write(`  ${t.name}${riskMark}\n    ${t.title}\n`);
+  }
+  if (!plugWant && !riskWant && tools.length > 30) {
+    process.stdout.write(`\n提示：工具较多（${tools.length} 个）。加 --plugin <id> 只看一个插件，或用 zkit mcp search <词> 搜动作。\n`);
   }
   return 0;
 }
@@ -594,8 +706,26 @@ function cmdAllow(args: string[]): number {
     return 1;
   }
   set.add(target);
+  // 第七十七轮⑤：--ttl 1h|1d|7d|30d|permanent（缺省 30 天）
+  const ttlIdx = args.indexOf('--ttl');
+  const ttlRaw = ttlIdx >= 0 ? args[ttlIdx + 1] : undefined;
+  let ttlDays = 30;
+  if (ttlRaw === 'permanent' || ttlRaw === '-1') ttlDays = -1;
+  else if (ttlRaw === '1h') ttlDays = 1 / 24;
+  else if (ttlRaw === '1d') ttlDays = 1;
+  else if (ttlRaw === '7d') ttlDays = 7;
+  else if (ttlRaw === '30d') ttlDays = 30;
+  else if (ttlRaw !== undefined) {
+    const n = Number(ttlRaw);
+    if (!Number.isFinite(n) || n <= 0) { process.stderr.write('✗ --ttl 只认 1h / 1d / 7d / 30d / permanent\n'); return 1; }
+    ttlDays = n;
+  }
+  const existing = loadAllowEntries();
+  saveAllowAudit(upsertAllow(existing, target, ttlDays));
   saveAllow(set);
   process.stdout.write(`✓ 已授权 AI 调用 ${target}（风险等级 ${match.action.risk}）\n`);
+  // 第二波⑦：授权前就该看到将执行的确切命令行——知情才谈得上授权
+  process.stdout.write(`  将执行的命令：${buildCommand(match.plugin, match.action, {}).join(' ')}\n`);
   if (match.action.risk === 'destructive') {
     process.stdout.write('  注意：这是高风险动作，建议在 AI 客户端里也保持逐次确认。\n');
   }
@@ -608,13 +738,21 @@ export async function cli(args: string[]): Promise<number> {
   if (sub === 'config') return cmdConfig(args.slice(1));
   if (sub === 'tools') return cmdTools(args.slice(1));
   if (sub === 'allow') return cmdAllow(args.slice(1));
+  if (sub === 'search') return cmdSearch(args.slice(1));
+  if (sub === 'dry-run') return cmdDryRun(args.slice(1));
+  if (sub === 'status') return cmdStatus();
+  if (sub === 'revoke') return cmdRevoke(args.slice(1));
   process.stdout.write(`用法：
   zkit mcp serve            以 MCP server 方式运行（stdio，给 AI 客户端拉起）
   zkit mcp config [客户端]  打印接入配置；加 --write 直接写入（会备份原文件）
                             客户端：${clientSpecs().map((s) => s.key).join(' / ')}
   zkit mcp tools [--json]   列出全部 MCP 工具与描述（--json 为机读格式）
   zkit mcp allow [动作]     授权有副作用的动作给 AI 调用（--list 显示授权与时间）
-                            只读动作默认放行，不需要授权
+                            只读动作默认放行，不需要授权；授权时显示将执行的命令
+  zkit mcp search <词>      跨插件搜动作（标题/描述/关键词）
+  zkit mcp dry-run <动作>   不执行，看将运行的命令/风险/参数（--params '{}')
+  zkit mcp status           每个授权的剩余有效期
+  zkit mcp revoke <动作>    撤销单个授权
 `);
   return 0;
 }
