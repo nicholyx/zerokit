@@ -527,7 +527,15 @@ function cmdConfig(args: string[]): number {
 /** ⑥⑦静态工具清单：不启动 server 就能查全部工具（--json 供文档生成） */
 function cmdTools(args: string[]): number {
   const asJson = args.includes('--json');
-  const tools = collectTools().map(({ plugin, action }) => ({
+  // 第七十一轮⑧：--risk <级别> 按风险过滤（read / mutate / destructive）
+  const riskIdx = args.indexOf('--risk');
+  const riskRaw = riskIdx >= 0 ? args[riskIdx + 1] : undefined;
+  const riskWant = riskRaw && ['read', 'mutate', 'destructive', 'write'].includes(riskRaw)
+    ? (riskRaw === 'write' ? 'mutate' : riskRaw)
+    : undefined;
+  const collected = collectTools()
+    .filter(({ action }) => !riskWant || action.risk === riskWant)
+    .map(({ plugin, action }) => ({
     name: toolName(plugin.id, action.id),
     title: `${plugin.name} · ${action.title}`,
     description: toolDescription(plugin, action),
@@ -544,11 +552,12 @@ function cmdTools(args: string[]): number {
       openWorldHint: touchesNetwork(plugin, action),
     },
   }));
+  const tools = collected;
   if (asJson) {
-    process.stdout.write(JSON.stringify({ count: tools.length, tools }, null, 2) + '\n');
+    process.stdout.write(JSON.stringify({ count: tools.length, ...(riskWant ? { risk: riskWant } : {}), tools }, null, 2) + '\n');
     return 0;
   }
-  process.stdout.write(`共 ${tools.length} 个 MCP 工具（加 --json 看机读格式）：\n`);
+  process.stdout.write(`共 ${tools.length} 个 MCP 工具${riskWant ? `（风险=${riskWant}）` : ''}（加 --json 看机读格式）：\n`);
   for (const t of tools) {
     const riskMark = t.risk === 'read' ? '' : t.risk === 'destructive' ? '  ⚠destructive' : '  ●有副作用';
     process.stdout.write(`  ${t.name}${riskMark}\n    ${t.title}\n`);

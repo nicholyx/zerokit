@@ -55,6 +55,7 @@ const row = (name, ms, note = '') => {
   console.log();
 }
 
+if (!process.env['BENCH_QUICK']) {
 // ---------- 1. 内核冷启动（进程起来 + 开始监听）----------
 {
   const t0 = now();
@@ -132,4 +133,6 @@ console.log();
 const worst = rows.filter(([n, ms]) => !n.startsWith('RSS') && ms > 300);
 if (worst.length) {
   console.log('超过 300ms 的环节：' + worst.map(([n]) => n).join('、'));
+}
+
 }

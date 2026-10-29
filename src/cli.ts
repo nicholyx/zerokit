@@ -418,6 +418,29 @@ function readStdinValue(): Promise<string> {
 function cmdConfigOverview(): number {
   const entries = listPlugins().filter((e) => e.plugin);
   const withSettings = entries.filter((e) => e.plugin!.settings.length > 0);
+  // 第七十一轮⑥：config --json（无插件参数）机读输出全部设置项（secret 恒掩码）
+  if (process.argv.includes('--json')) {
+    const plugins = withSettings.map((e) => {
+      const p = e.plugin!;
+      const view = resolveSettings(p);
+      return {
+        plugin: p.id,
+        items: p.settings.map((st) => {
+          const state = view.states.find((x) => x.setting.name === st.name);
+          return {
+            name: st.name,
+            secret: st.secret === true,
+            required: st.required === true,
+            source: state?.source ?? 'unset',
+            value: st.secret ? (state && state.source !== 'unset' ? '******' : null)
+              : state && state.source !== 'unset' ? state.value : null,
+          };
+        }),
+      };
+    });
+    process.stdout.write(JSON.stringify({ plugins }, null, 2) + '\n');
+    return 0;
+  }
   if (withSettings.length === 0) {
     process.stdout.write('所有插件都没有设置项。\n');
     return 0;
@@ -623,12 +646,27 @@ async function cmdRun(args: string[]): Promise<number> {
   const quiet = rest.includes('--quiet');
   const watchIdx = rest.indexOf('--watch');
   const watchSec = watchIdx >= 0 && rest[watchIdx + 1] ? rest[watchIdx + 1] : undefined;
+  // 第七十一轮②：--env KEY=VAL 临时环境变量（可多次；只在本次进程注入，不落盘）
+  const envOverrides: Record<string, string> = {};
+  for (let i = 0; i < rest.length; i++) {
+    if (rest[i] === '--env' && rest[i + 1]) {
+      const kv = rest[i + 1]!;
+      const eq = kv.indexOf('=');
+      if (eq > 0) envOverrides[kv.slice(0, eq)] = kv.slice(eq + 1);
+      i++; continue;
+    }
+    if (rest[i]!.startsWith('--env=')) {
+      const kv = rest[i]!.slice(6);
+      const eq = kv.indexOf('=');
+      if (eq > 0) envOverrides[kv.slice(0, eq)] = kv.slice(eq + 1);
+    }
+  }
   // 剥控制旗标（含其后随值），只留动作参数
   const argv: string[] = [];
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i]!;
-    if (a === '--out' || a === '--watch' || a === '--share' || a === '--jq') { i++; continue; }
-    if (a.startsWith('--out=') || a.startsWith('--watch=') || a.startsWith('--share=') || a.startsWith('--jq=')) continue;
+    if (a === '--out' || a === '--watch' || a === '--share' || a === '--jq' || a === '--env') { i++; continue; }
+    if (a.startsWith('--out=') || a.startsWith('--watch=') || a.startsWith('--share=') || a.startsWith('--jq=') || a.startsWith('--env=')) continue;
     if (['--yes', '-y', '--json', '--copy', '--quiet'].includes(a)) continue;
     argv.push(a);
   }
@@ -697,7 +735,14 @@ async function cmdRun(args: string[]): Promise<number> {
     }
   }
 
+  // 注入 --env 覆盖（子进程继承 process.env，这里临时改、跑完还原）
+  const savedEnv: [string, string | undefined][] = [];
+  for (const [k, v] of Object.entries(envOverrides)) {
+    savedEnv.push([k, process.env[k]]);
+    process.env[k] = v;
+  }
   const result = await runAction(plugin, action, { caller: 'cli', values: withDefaults.values });
+  for (const [k, v] of savedEnv) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
   // 第四十五轮⑤：成功执行进历史（重放要干净的参数面）
   if (result.ok) {
     const cliX = await import('./core/cliX.ts');
@@ -937,17 +982,54 @@ async function cmdPlugin(args: string[]): Promise<number> {
   if (sub === 'dev') {
     const source = args[1];
     if (!source) {
-      process.stderr.write('用法：zkit plugin dev <目录>\n');
+      process.stderr.write('用法：zkit plugin dev <目录> [--open] [--watch]\n');
       return 2;
     }
+    // 第七十一轮⑤：--open 装好后立即自动验证（清单加载 + 首个只读动作实跑）；
+    // --watch 目录监听（fs.watch 递归），改动即重新验证——反馈回路从「手动跑」缩到「存盘即验」
+    const doOpen = args.includes('--open');
+    const doWatch = args.includes('--watch');
     const result = devLink(source);
     for (const w of result.warnings) process.stderr.write(c.yellow(`! ${w}`) + '\n');
     process.stdout.write(result.ok ? c.green(`✓ ${result.message}\n`) : c.red(`✗ ${result.message}\n`));
-    if (result.ok && result.id) {
+    if (!result.ok) return 1;
+    if (result.id) {
       process.stdout.write(c.dim(`  跑一下看看：zkit run ${result.id} hello\n`));
       process.stdout.write(c.dim(`  退出开发模式：zkit plugin remove ${result.id}（只删链接，不碰源目录）\n`));
     }
-    return result.ok ? 0 : 1;
+    const srcAbs = path.resolve(source);
+    const verify = async (label: string): Promise<void> => {
+      const v = loadDir(srcAbs);
+      if (!v.plugin) {
+        for (const e of v.errors) process.stdout.write(c.red(`  ✗ [${label}] ${e}\n`));
+        return;
+      }
+      process.stdout.write(c.green(`  ✓ [${label}] 清单有效：${v.plugin.name} v${v.plugin.version} ${v.plugin.actions.length} 个动作\n`));
+      const ro = v.plugin.actions.find((a) => a.risk === 'read');
+      if (ro) {
+        const r = await runAction(v.plugin!, ro, { caller: 'cli', values: {} });
+        process.stdout.write(r.ok
+          ? c.green(`  ✓ [${label}] 首个只读动作 ${ro.id} 实跑通过（${r.ms}ms）\n`)
+          : c.yellow(`  ! [${label}] ${ro.id} 跑失败：${r.error ?? ''}（可能是参数必填，先看 zkit run ${v.plugin.id} ${ro.id} --help）\n`));
+      }
+    };
+    if (doOpen) await verify('open');
+    if (doWatch) {
+      process.stdout.write(c.dim(`（监听 ${srcAbs} 改动即重新验证，Ctrl-C 退出）\n`));
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const watcher = fs.watch(srcAbs, { recursive: true }, () => {
+          clearTimeout(timer);
+          timer = setTimeout(() => { void verify('watch'); }, 250);  // 防抖：编辑器连写只验一次
+        });
+        await new Promise<void>((resolve) => {
+          process.on('SIGINT', () => { watcher.close(); resolve(); });
+        });
+      } catch (e) {
+        process.stderr.write(c.yellow(`! 监听失败（${(e as Error).message}），--watch 在此平台不可用\n`));
+      }
+    }
+    return 0;
   }
   if (sub === 'validate') {
     const dir = args[1];
@@ -1464,6 +1546,24 @@ async function cmdLast(args: string[]): Promise<number> {
 /** 第四十五轮⑥：zkit history [N]——最近 N 条；--rerun N 重跑第 N 条。 */
 async function cmdHistory(args: string[]): Promise<number> {
   const cliX = await import('./core/cliX.ts');
+  // 第七十一轮④：--failed 只看失败记录，附诊断建议（复用 suggest.ts 的规则表）
+  if (args.includes('--failed')) {
+    const failed = cliX.readHistory().filter((e) => e.exitCode !== 0).slice(-30).reverse();
+    if (failed.length === 0) {
+      process.stdout.write(c.green('最近没有失败记录。\n'));
+      return 0;
+    }
+    const { diagnose } = await import('./core/suggest.ts');
+    process.stdout.write(c.bold(`最近 ${failed.length} 条失败（zkit history --rerun N 可重跑）：\n`));
+    for (let i = 0; i < failed.length; i++) {
+      const e = failed[i];
+      if (!e) continue;
+      process.stdout.write(`  ${String(i + 1).padStart(3)}  ${c.dim(e.ts.slice(5, 19))}  ${c.red('✗')} zkit run ${e.plugin} ${e.action} ${e.argv.join(' ')}\n`);
+      const d = diagnose(`exit ${e.exitCode} plugin=${e.plugin} action=${e.action} ${e.argv.join(' ')}`);
+      if (d) process.stdout.write(c.yellow(`      ⟐ 看起来是：${d.headline}\n`) + c.dim(`        下一步：${d.nextSteps[0] ?? ''}\n`));
+    }
+    return 0;
+  }
   const list = cliX.readHistory().filter((e) => e.exitCode === 0).slice(-30).reverse();
   const rerunIdx = args.indexOf('--rerun');
   if (rerunIdx >= 0 && args[rerunIdx + 1]) {
@@ -2251,7 +2351,7 @@ async function cmdWeb(args: string[]): Promise<number> {
   });
 }
 
-const KNOWN_COMMANDS = ['allow', 'audit', 'completion', 'config', 'desktop', 'doctor', 'gc', 'health', 'history', 'help', 'kill', 'last', 'list', 'logs', 'ls', 'man', 'market', 'mcp', 'path', 'plugin', 'ps', 'timers', 'run', 'show', 'stats', 'ui', 'web'];
+const KNOWN_COMMANDS = ['allow', 'bench', 'audit', 'completion', 'config', 'desktop', 'doctor', 'gc', 'health', 'history', 'help', 'kill', 'last', 'list', 'logs', 'ls', 'man', 'market', 'mcp', 'path', 'plugin', 'ps', 'timers', 'run', 'show', 'stats', 'ui', 'web'];
 
 // 第四十六轮②：man——不引依赖的终端命令参考（stdout 全量文本，man zkit 可外部包一层）
 const MAN_PAGE = `zkit(1) -- zerokit 命令行参考
@@ -2276,7 +2376,7 @@ const MAN_PAGE = `zkit(1) -- zerokit 命令行参考
   zkit market list|add|remove   插件集市
 
 安全与运维
-  zkit doctor [--json|--fix]  环境自检（--fix 顺手修）
+  zkit doctor [--json|--fix|--fix --yes]  环境自检（--fix 顺手修；--fix --yes 脚本化跳过说明输出）
   zkit health / audit [N] [--follow] / allow / gc [--apply]
   zkit ps / kill            托管进程
 
@@ -2420,6 +2520,23 @@ async function main(): Promise<number> {
       return cmdHistory(rest);
     case 'logs':
       return cmdLogs(rest);
+    // 第七十一轮⑦：bench 子命令暴露 scripts/bench.mjs（--quick=BENCH_N:3 只测冷启动）
+    case 'bench': {
+      const quick = rest.includes('--quick');
+      const args2 = [];
+      if (quick) args2.push('quick');
+      const { spawn } = await import('node:child_process');
+      const pathmod = await import('node:path');
+      const benchFile = pathmod.join(import.meta.dirname, '..', 'scripts', 'bench.mjs');
+      if (!fs.existsSync(benchFile)) {
+        process.stderr.write('✗ scripts/bench.mjs 不存在（开发环境专用命令）\n');
+        return 1;
+      }
+      const env2 = { ...process.env, ...(quick ? { BENCH_N: '3', BENCH_QUICK: '1' } : {}) };
+      const child = spawn(process.execPath, [benchFile, ...args2], { stdio: 'inherit', env: env2 });
+      const code = await new Promise<number>((resolve) => child.on('close', resolve));
+      return code;
+    }
     case 'mcp': {
       const mcp = await import('./mcp.ts');
       return mcp.cli(rest);
