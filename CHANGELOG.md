@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+### Added
+
+- 定时任务持久化：配置写 `~/.zerokit/timers.json`（原子写），启动器刷新/重启后自动恢复注册表与节奏——「定时」不再随页面消失。
+- 新命令 `zkit timers list / pause / resume / remove / run`：CLI 与启动器共享同一份任务状态；`run` 立即执行一次（走 runner、进审计日志），不重置节奏。
+- 下次触发推算 `nextFireTime`：错过整段对齐节奏不连环补、执行窗口外顺延到窗口开点（支持跨午夜窗口）、暂停返回空。
+- `doctor` 孤儿检测：timers.json 引用的插件已卸载时在报告与 `--json` 输出里点名。
+- 启动器 `POST /api/timers`（upsert/pause/resume/remove）与 `GET /api/timers`——UI 与 CLI 的状态一致性由同一文件保证。
+
 （下一版攒着）
 
 ## [0.67.0] - 2026-10-29

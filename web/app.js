@@ -2691,6 +2691,11 @@ function openTimerDialog(plugin, action) {
     startTimerTick(key);
     overlay.remove();
     el.count.textContent = `已开启定时执行：每 ${sec} 秒一次${win ? `（窗口 ${win}）` : ''}（#/timers 可管理）`;
+    // 第六十三轮①：落盘（CLI 与下次加载都能看到）
+    api('/api/timers', { method: 'POST', body: { op: 'upsert', timer: {
+      key, title: reg[key].title, interval: sec, win, createdAt: reg[key].createdAt,
+      values: reg[key].values ?? {},
+    } } }).catch(() => {});
   });
 }
 
@@ -7306,6 +7311,23 @@ async function load(notify) {
   if (!el.list.childElementCount && el.listView && !el.listView.classList.contains('hidden')) {
     el.list.innerHTML = skeletonRows(6).map(() => '<li class="skel-row" aria-hidden="true"></li>').join('');
   }
+  // 第六十三轮⑥：从持久化文件恢复定时任务（刷新/重启不丢）。
+  // 恢复配置与节奏锚点；执行历史是会话内状态，不跨会话搬。
+  try {
+    const saved = await api('/api/timers');
+    const reg = timerRegistry();
+    for (const t of saved.timers || []) {
+      if (!reg[t.key]) {
+        reg[t.key] = {
+          id: null, interval: t.interval, win: t.win || '',
+          title: t.title, values: t.values || {},
+          createdAt: t.createdAt ?? Date.now(), lastRanAt: t.lastRanAt ?? t.createdAt ?? Date.now(),
+          history: [], paused: !!t.paused, nextAt: 0,
+        };
+      }
+      if (!reg[t.key].paused) startTimerTick(t.key);
+    }
+  } catch { /* 定时任务恢复失败不拦主界面 */ }
   try {
     const data = await api('/api/plugins');
     plugins = data.plugins || [];

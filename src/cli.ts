@@ -29,6 +29,7 @@ import {
 } from './core/market.ts';
 import { applyDefaults, parseArgv, toCliFlags, toJsonSchema } from './core/schema.ts';
 import { depStates, depTree, dependents, installDeps, missingDeps } from './core/deps.ts';
+import { loadTimers, nextFireTime, removeTimer, setTimerPaused, upsertTimer } from './core/timers.ts';
 import {
   SECRET_MASK, publicSettings, resolveSettings, settingsHints, writeSettings,
 } from './core/pluginConfig.ts';
@@ -1271,6 +1272,7 @@ async function cmdDoctor(): Promise<number> {
       tools: report.tools.map((t) => ({ name: t.name, ok: t.ok, version: t.version ?? null, path: t.path ?? null })),
       dirs: report.dirs,
       desktop: report.desktop,
+      orphanTimerKeys: report.orphanTimerKeys,
       plugins: report.plugins.map((pl) => ({
         id: pl.id ?? null, name: pl.name ?? null, ok: !pl.problems.some((x) => x.level === 'error'),
         problems: pl.problems.map((x) => ({ level: x.level, text: x.text, hint: x.hint ?? null })),
@@ -1983,6 +1985,54 @@ function humanDuration(ms: number): string {
  *   2. 插件声明的常驻服务（按端口/PID 检测，可能是别的程序甚至手动起的）
  * 这是启动器和「一堆快捷方式」的分界线。
  */
+
+/** 第六十三轮②③④⑤：zkit timers list|pause|resume|remove|run。 */
+async function cmdTimers(args: string[]): Promise<number> {
+  const sub = args[0] ?? 'list';
+  const rest = args.slice(1);
+  if (sub === 'list') {
+    const { timers } = loadTimers();
+    if (!timers.length) { process.stdout.write('（没有定时任务——启动器里 ⏲ 或详情页可创建）\n'); return 0; }
+    process.stdout.write(`${timers.length} 个定时任务：\n`);
+    for (const t of timers) {
+      const next = nextFireTime(t);
+      const nextStr = next === null ? '已暂停' : `下次 ${new Date(next).toLocaleString('zh-CN', { hour12: false })}`;
+      process.stdout.write(`  ${t.paused ? '⏸' : '⏱'} ${t.key}\n`);
+      process.stdout.write(c.dim(`      ${t.title} · 每 ${t.interval}s${t.win ? ` · 窗口 ${t.win}` : ''} · ${nextStr}\n`));
+    }
+    return 0;
+  }
+  const key = rest.find((a) => !a.startsWith('-'));
+  if (!key) {
+    process.stderr.write('用法：zkit timers <list|pause|resume|remove|run> <插件id.动作id>\n');
+    return 2;
+  }
+  if (sub === 'pause' || sub === 'resume') {
+    const st = setTimerPaused(key, sub === 'pause');
+    if (st === null) { process.stderr.write(c.red(`✗ 没有任务 ${key}\n`)); return 1; }
+    process.stdout.write(c.green(`✓ ${key} ${st ? '已暂停' : '已恢复'}\n`));
+    return 0;
+  }
+  if (sub === 'remove') {
+    if (!removeTimer(key)) { process.stderr.write(c.red(`✗ 没有任务 ${key}\n`)); return 1; }
+    process.stdout.write(c.green(`✓ 已删除 ${key}\n`));
+    return 0;
+  }
+  if (sub === 'run') {
+    // 立即执行一次：走 runner（产出进审计日志），不动持久化节奏
+    const { timers } = loadTimers();
+    const t = timers.find((x) => x.key === key);
+    if (!t) { process.stderr.write(c.red(`✗ 没有任务 ${key}\n`)); return 1; }
+    const [plugId, ...actRest] = key.split('.');
+    const actionId = actRest.join('.') || '';
+    const values = (t as { values?: Record<string, string> }).values ?? {};
+    void upsertTimer; // run 不改配置
+    return await cmdRun([plugId ?? '', actionId, ...Object.entries(values).flatMap(([k, v]) => ['--' + k, String(v)])]);
+  }
+  process.stderr.write(`不认识的子命令 "${sub}"（list / pause / resume / remove / run）\n`);
+  return 2;
+}
+
 function cmdPs(): number {
   const procs = listProcesses();
   const services = listServices();
@@ -2101,7 +2151,7 @@ async function cmdWeb(args: string[]): Promise<number> {
   });
 }
 
-const KNOWN_COMMANDS = ['allow', 'audit', 'completion', 'config', 'desktop', 'doctor', 'gc', 'health', 'history', 'help', 'kill', 'last', 'list', 'logs', 'ls', 'man', 'market', 'mcp', 'path', 'plugin', 'ps', 'run', 'show', 'stats', 'ui', 'web'];
+const KNOWN_COMMANDS = ['allow', 'audit', 'completion', 'config', 'desktop', 'doctor', 'gc', 'health', 'history', 'help', 'kill', 'last', 'list', 'logs', 'ls', 'man', 'market', 'mcp', 'path', 'plugin', 'ps', 'timers', 'run', 'show', 'stats', 'ui', 'web'];
 
 // 第四十六轮②：man——不引依赖的终端命令参考（stdout 全量文本，man zkit 可外部包一层）
 const MAN_PAGE = `zkit(1) -- zerokit 命令行参考
@@ -2240,6 +2290,8 @@ async function main(): Promise<number> {
       return cmdConfig(rest);
     case 'plugin':
       return cmdPlugin(rest);
+    case 'timers':
+      return await cmdTimers(rest);
     case 'market':
       return cmdMarket(rest);
     case 'ps':
