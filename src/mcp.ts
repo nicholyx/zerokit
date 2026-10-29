@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import { buildDoctorReport } from './core/doctor.ts';
 import { diagnose } from './core/suggest.ts';
 import os from 'node:os';
 import path from 'node:path';
@@ -269,7 +270,15 @@ export async function serve(): Promise<number> {
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    const tools = collectTools().map(({ plugin, action }) => ({
+    // 第八十轮⑦：内建 zerokit_welcome——AI 客户端首问环境状态与上手路径
+    const tools: object[] = [{
+      name: 'zerokit_welcome',
+      title: 'zerokit · 上手引导',
+      description: '环境体检摘要（✓/⚠/✗ 计数）、首个建议动作、缺什么工具与安装命令。AI 客户端第一次接入时先调这个。',
+      inputSchema: { type: 'object' as const, properties: {}, additionalProperties: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    }];
+    const pluginTools = collectTools().map(({ plugin, action }) => ({
       name: toolName(plugin.id, action.id),
       title: `${plugin.name} · ${action.title}`,
       description: toolDescription(plugin, action),
@@ -282,12 +291,32 @@ export async function serve(): Promise<number> {
         openWorldHint: touchesNetwork(plugin, action),
       },
     }));
+    tools.push(...pluginTools);
     process.stderr.write(`[zerokit] tools/list -> ${tools.length} 个工具\n`);
     return { tools };
   });
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     const name = req.params.name;
+    // 第八十轮⑦：内建工具在此分流，不进插件 runner
+    if (name === 'zerokit_welcome') {
+      const report = buildDoctorReport();
+      const pyInstall = process.platform === 'win32' ? 'winget install Python.Python.3.13'
+        : process.platform === 'darwin' ? 'brew install python' : 'sudo apt install python3';
+      const starter = process.platform === 'win32' ? 'sysinfo.overview'
+        : process.platform === 'darwin' ? 'quick.now' : 'sysinfo.top';
+      return {
+        content: [{ type: 'text', text: 'zerokit 环境摘要' }],
+        structuredContent: {
+          summary: { errors: report.summary.errors, warnings: report.summary.warnings, plugins: report.summary.plugins, actions: report.summary.actions },
+          starterAction: starter,
+          missingTools: report.tools.filter((t) => !t.ok).map((t) => ({ name: t.name, install: t.name === 'python' ? pyInstall : null })),
+          nextSteps: report.summary.errors > 0
+            ? ['先跑 zkit doctor 看 error 明细并修复', '修好后执行 starterAction 验证']
+            : ['zkit run ' + starter + ' 跑第一个动作', 'zkit mcp tools --plugin 按插件过滤工具面'],
+        },
+      };
+    }
     const found = findByName(name);
     if (!found) {
       // 第七十七轮④：AI 拿结构化 next_hint，不再只有一句人话
@@ -632,6 +661,16 @@ function cmdRevoke(args: string[]): number {
 /** ⑥⑦静态工具清单：不启动 server 就能查全部工具（--json 供文档生成） */
 function cmdTools(args: string[]): number {
   const asJson = args.includes('--json');
+  // 第八十轮⑦：CLI 与 server 同源——zerokit_welcome 内建工具两边都在列表头
+  const builtinWelcome = {
+    name: 'zerokit_welcome',
+    title: 'zerokit · 上手引导',
+    description: '环境体检摘要（✓/⚠/✗ 计数）、首个建议动作、缺什么工具与安装命令。AI 客户端第一次接入时先调这个。',
+    risk: 'read',
+    params: [] as never[],
+    inputSchema: { type: 'object' as const, properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  };
   // 第七十一轮⑧：--risk <级别> 按风险过滤（read / mutate / destructive）
   const riskIdx = args.indexOf('--risk');
   const riskRaw = riskIdx >= 0 ? args[riskIdx + 1] : undefined;
@@ -641,7 +680,7 @@ function cmdTools(args: string[]): number {
   // 第七十七轮①：--plugin <id> 按插件过滤
   const plugIdx = args.indexOf('--plugin');
   const plugWant = plugIdx >= 0 ? args[plugIdx + 1] : undefined;
-  const collected = collectTools()
+  const pluginCollected = collectTools()
     .filter(({ action }) => !riskWant || action.risk === riskWant)
     .filter(({ plugin }) => !plugWant || plugin.id === plugWant)
     .map(({ plugin, action }) => ({
@@ -661,7 +700,8 @@ function cmdTools(args: string[]): number {
       openWorldHint: touchesNetwork(plugin, action),
     },
   }));
-  const tools = collected;
+  // 第八十轮⑦：welcome 不吃 --risk/--plugin 过滤（它是内建面，永远第一行）
+  const tools = riskWant || plugWant ? pluginCollected : [builtinWelcome, ...pluginCollected];
   if (asJson) {
     process.stdout.write(JSON.stringify({ count: tools.length, ...(riskWant ? { risk: riskWant } : {}), tools }, null, 2) + '\n');
     return 0;
