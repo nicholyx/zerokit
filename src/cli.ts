@@ -631,14 +631,21 @@ async function cmdRun(args: string[]): Promise<number> {
   const asJson = rest.includes('--json');
   // 第四十五轮：新控制旗标——out/copy/quiet/watch
   const outIdx = rest.indexOf('--out');
-  const outFmt = outIdx >= 0 && rest[outIdx + 1] ? rest[outIdx + 1] : undefined;
+  // 第七十四轮④⑤：--format <yaml|csv|table|md|tsv>（与 --out <file> 区分：--out 后跟的是文件名时当文件写）
+  const fmtIdx = rest.indexOf('--format');
+  const fmtNext = fmtIdx >= 0 ? rest[fmtIdx + 1] : undefined;
+  const fmtVal = fmtIdx >= 0 && fmtNext && ['yaml', 'csv', 'table', 'md', 'tsv'].includes(fmtNext) ? fmtNext : undefined;
+  const outFmt = fmtVal ?? (outIdx >= 0 && rest[outIdx + 1] && ['yaml', 'csv', 'table'].includes(rest[outIdx + 1]!) ? rest[outIdx + 1] : undefined);
   const doCopy = rest.includes('--copy');
   // 第六十八轮②：--jq <路径> 轻量查询（.data.ip / .data.items[0].name 这类点路径）
   const jqIdx = rest.indexOf('--jq');
   const jqNext = jqIdx >= 0 ? rest[jqIdx + 1] : undefined;
   const jqExpr = jqIdx >= 0 && jqNext && !jqNext.startsWith('--') ? jqNext : undefined;
-  // 第六十八轮①：--out <file> 结果落文件（文本写原文、JSON 写格式化）
-  const outFile = outFmt && outFmt !== 'csv' && outFmt !== 'table' && !outFmt.startsWith('--') ? outFmt : undefined;
+  // 第六十八轮①：--out <file> 结果落文件（文本写原文、JSON 写格式化）。
+  // outFile 判定与 outFmt 无关：--out 后跟的值只要不是已知格式名（那是 --out csv 的简写）就是文件名。
+  const outNext = outIdx >= 0 ? rest[outIdx + 1] : undefined;
+  const outFile = outIdx >= 0 && outNext && !outNext.startsWith('--') && !['yaml', 'csv', 'table', 'md', 'tsv'].includes(outNext)
+    ? outNext : (fmtIdx >= 0 ? undefined : undefined);
   // 第六十五轮⑤：--share <file.md|file.html> 执行完直接落分享文件
   const shareIdx = rest.indexOf('--share');
   const shareNext = shareIdx >= 0 ? rest[shareIdx + 1] : undefined;
@@ -665,9 +672,9 @@ async function cmdRun(args: string[]): Promise<number> {
   const argv: string[] = [];
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i]!;
-    if (a === '--out' || a === '--watch' || a === '--share' || a === '--jq' || a === '--env') { i++; continue; }
-    if (a.startsWith('--out=') || a.startsWith('--watch=') || a.startsWith('--share=') || a.startsWith('--jq=') || a.startsWith('--env=')) continue;
-    if (['--yes', '-y', '--json', '--copy', '--quiet'].includes(a)) continue;
+    if (a === '--out' || a === '--watch' || a === '--share' || a === '--jq' || a === '--env' || a === '--format') { i++; continue; }
+    if (a.startsWith('--out=') || a.startsWith('--watch=') || a.startsWith('--share=') || a.startsWith('--jq=') || a.startsWith('--env=') || a.startsWith('--format=')) continue;
+    if (['--yes', '-y', '--json', '--copy', '--quiet', '--full'].includes(a)) continue;
     argv.push(a);
   }
   const parsed = parseArgv(action, argv);
@@ -763,12 +770,28 @@ async function cmdRun(args: string[]): Promise<number> {
   // 第六十八轮①：--out 文件——文本写原文、JSON 写两空格格式化
   // 第四十五轮③④⑦：输出格式 / 复制 / 安静模式
   const cliX = await import('./core/cliX.ts');
+  // 第七十四轮④⑤：--format md / tsv；②：--full 展开大结果（默认 30 行截断）
+  const wantFull = rest.includes('--full');
   if (outFmt === 'yaml') {
     process.stdout.write(cliX.renderYaml(result.data));
   } else if (outFmt === 'csv') {
     process.stdout.write(cliX.renderCsv(cliX.toRows(result.data)));
+  } else if (outFmt === 'md') {
+    process.stdout.write(cliX.renderMdTable(cliX.toRows(result.data)));
+  } else if (outFmt === 'tsv') {
+    process.stdout.write(cliX.renderTsv(cliX.toRows(result.data)));
   } else if (outFmt === 'table') {
     process.stdout.write(cliX.renderTable(cliX.toRows(result.data)));
+  } else if (!wantFull && !quiet && !asJson && result.data !== undefined
+             && result.data && typeof result.data === 'object') {
+    // 第七十四轮②：大 JSON 默认截断摘要（--full 展开；--quiet/--json 不受影响——它们面向管道）
+    const t = cliX.truncateJsonLines(result.data, 30);
+    if (t.truncated) {
+      process.stdout.write(t.text + '\n');
+      process.stderr.write(c.yellow(`… 结果共 ${t.totalLines} 行，已截到 30 行——加 --full 展开\n`));
+    } else {
+      process.stdout.write(t.text + '\n');
+    }
   } else {
     if (quiet) {
       // 第四十五轮⑦：--quiet 只出结果 JSON 单行，头部装饰全免
