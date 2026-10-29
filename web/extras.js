@@ -2593,3 +2593,45 @@ export function recencyOrder(entries, recentMap) {
     return (idx.get(a) ?? 0) - (idx.get(b) ?? 0);
   });
 }
+
+
+// ---------------- 第七十轮：操作连续性 ----------------
+
+/**
+ * 历史共现统计：从执行历史里找「做完 A 之后最常接着做」的动作。
+ * runs: {actionKey: [{ts, ok}]} 或已展开的 [{actionKey, ts, ok}] 序列；
+ * 这里吃扁平时序数组（调用方展开），按时间排序后数相邻对（窗口 = 紧邻）。
+ * 返回 [{key, count}] 按 count 降序，最多 limit 条；不含 fromKey 自己。
+ */
+export function coActions(flatRuns, fromKey, limit = 3) {
+  if (!Array.isArray(flatRuns)) return [];
+  const seq = flatRuns
+    .filter((r) => r && r.ok && r.ts)
+    .sort((a, b) => a.ts - b.ts);
+  const counts = new Map();
+  for (let i = 1; i < seq.length; i++) {
+    if (seq[i - 1].actionKey === fromKey && seq[i].actionKey !== fromKey) {
+      const k = seq[i].actionKey;
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([key, count]) => ({ key, count }));
+}
+
+/**
+ * 展开执行历史为扁平时序数组（供 coActions）。
+ * runs: {actionKey: [{ts, ok}]}
+ */
+export function flattenRuns(runs) {
+  const out = [];
+  for (const [actionKey, arr] of Object.entries(runs ?? {})) {
+    if (!Array.isArray(arr)) continue;
+    for (const r of arr) {
+      if (r && typeof r.ts === 'number') out.push({ actionKey, ts: r.ts, ok: !!r.ok });
+    }
+  }
+  return out;
+}

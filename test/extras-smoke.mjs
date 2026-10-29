@@ -2,7 +2,7 @@
 //
 // 这些函数都在 web/extras.js 里，不碰 DOM / localStorage / fetch，
 // 所以可以直接在 Node 里跑。界面接线另由 webui-smoke 断言。
-import { paramsHint, recencyOrder, THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref, OVERFLOW_ROWS, PAGE_ROWS, toAiMarkdown, packContext, toMcpConfig, toLlmJsonl, toCurl, watchTrendMarkdown, TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory, looksLikeTimestamp, humanTs, emptyReason, tocFromMd } from '../web/extras.js';
+import { paramsHint, recencyOrder, coActions, flattenRuns, THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref, OVERFLOW_ROWS, PAGE_ROWS, toAiMarkdown, packContext, toMcpConfig, toLlmJsonl, toCurl, watchTrendMarkdown, TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory, looksLikeTimestamp, humanTs, emptyReason, tocFromMd } from '../web/extras.js';
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -1178,11 +1178,6 @@ console.log('\n' + '='.repeat(60));
   results.push(['resultQuery 10k 数字比较 <50ms', rqMs < 50 && rq.length > 7000]);
 }
 
-// ======================= 汇总（必须在所有块之后） =======================
-const failed = results.filter((r) => !r[1]);
-for (const [name] of failed) console.error('FAIL  ' + name);
-console.log(`通过 ${results.length - failed.length} / ${results.length}`);
-if (failed.length) process.exitCode = 1;
 
 // ---------------- 第六十九轮：信息密度 ----------------
 {
@@ -1211,3 +1206,38 @@ if (failed.length) process.exitCode = 1;
   check('filterActions no-params', filterActions(items, 'no-params', []).length === 1 && filterActions(items, 'no-params', [])[0].action.id === 'two');
   check('FILTERS 含新档', FILTERS.some((f) => f.id === 'has-params') && FILTERS.some((f) => f.id === 'no-params'));
 }
+
+// ---------------- 第七十轮：操作连续性 ----------------
+{
+  const flat = flattenRuns({
+    'a.x': [{ ts: 100, ok: true }, { ts: 300, ok: true }],
+    'b.y': [{ ts: 200, ok: true }, { ts: 301, ok: false }],
+  });
+  check('flattenRuns 展开时序', flat.length === 4 && flat[0].ts === 100 && flat[3].ts === 301 && flat[3].ok === false && flat[2].ts === 200);
+  const flat2 = flattenRuns(null);
+  check('flattenRuns 空兜底', Array.isArray(flat2) && flat2.length === 0);
+}
+{
+  const runs = [
+    { actionKey: 'a.x', ts: 100, ok: true },
+    { actionKey: 'b.y', ts: 200, ok: true },
+    { actionKey: 'a.x', ts: 300, ok: true },
+    { actionKey: 'b.y', ts: 400, ok: true },
+    { actionKey: 'c.z', ts: 500, ok: true },
+    { actionKey: 'a.x', ts: 600, ok: false },  // 失败不算
+    { actionKey: 'd.w', ts: 700, ok: true },
+  ];
+  const co = coActions(runs, 'a.x');
+  check('coActions 共现降序', co[0].key === 'b.y' && co[0].count === 2);
+  check('coActions 不含自己', co.every((c) => c.key !== 'a.x'));
+  const co2 = coActions(runs, 'zzz.none');
+  check('coActions 无历史空数组', Array.isArray(co2) && co2.length === 0);
+  const co3 = coActions(runs, 'a.x', 1);
+  check('coActions limit 生效', co3.length === 1);
+}
+
+// ======================= 汇总（必须在所有块之后） =======================
+const failed = results.filter((r) => !r[1]);
+for (const [name] of failed) console.error('FAIL  ' + name);
+console.log(`通过 ${results.length - failed.length} / ${results.length}`);
+if (failed.length) process.exitCode = 1;
