@@ -30,7 +30,7 @@ import {
   readIndex, refreshMarket, removeMarket, searchMarkets,
 } from './core/market.ts';
 import { applyDefaults, parseArgv, toCliFlags, toJsonSchema } from './core/schema.ts';
-import { depStates, depTree, dependents, installDeps, missingDeps } from './core/deps.ts';
+import { depHealth, depStates, depTree, dependents, findCycle, installDeps, missingDeps, topoOrder } from './core/deps.ts';
 import { loadTimers, nextFireTime, removeTimer, setTimerPaused, upsertTimer, humanNextFire, missedRun, markCatchupDone, saveTimers, firesOnDay } from './core/timers.ts';
 import {
   SECRET_MASK, publicSettings, resolveSettings, settingsHints, writeSettings,
@@ -942,6 +942,21 @@ async function cmdPluginUpdate(args: string[]): Promise<number> {
     process.stdout.write(c.yellow(`  移除动作：${check.removedActions.join(', ')}\n`));
   }
   process.stdout.write(c.dim('  插件目录会被整体替换；持久数据放在数据目录里不受影响。\n'));
+  // 第八十七轮④：升级顺序提示——依赖树里被依赖的先升，反过来升会有一段「新链旧环」的窗口
+  {
+    const installed = listPlugins().map((e) => e.plugin).filter((x): x is NonNullable<typeof x> => Boolean(x));
+    const order = topoOrder(installed);
+    const myPos = order.indexOf(id);
+    const dependents = order.filter((oid) => {
+      const op = installed.find((x) => x.id === oid);
+      return op?.pluginDeps.includes(id);
+    });
+    if (dependents.length > 0) {
+      process.stdout.write(c.dim(`  有 ${dependents.length} 个插件依赖它（${dependents.join(', ')}）；如果一起升级，先升本插件（拓扑序：${order.join(' → ')}）。\n`));
+    } else if (myPos >= 0) {
+      process.stdout.write(c.dim('  无插件依赖它，升级顺序无关。\n'));
+    }
+  }
 
   if (!yes) {
     if (!process.stdin.isTTY) {
@@ -1235,6 +1250,14 @@ async function cmdPlugin(args: string[]): Promise<number> {
     }
     process.stdout.write('\n依赖：\n');
     printDepTree(tree, '  ');
+    // 第八十七轮①：健康态（版本核对）——现在无版本区间形态，satisfies 恒 true，接口留给未来
+    process.stdout.write('\n健康态：\n');
+    for (const h of depHealth(plugin)) {
+      const mark = h.installed ? c.green('✓ 已装') : c.red('✗ 缺失');
+      const ver = h.version ? ` v${h.version}` : '';
+      const sat = h.installed && h.satisfies === false ? c.yellow(`（不满足 ${h.requirement ?? ''}）`) : '';
+      process.stdout.write(`  ${mark} ${h.id}${ver}${sat}\n`);
+    }
     return missingDeps(plugin).length > 0 ? 1 : 0;
   }
   if (sub === 'install') {
@@ -2189,6 +2212,19 @@ async function cmdPluginInstall(args: string[]): Promise<number> {
   const marketName = marketIdx >= 0 ? args[marketIdx + 1] : undefined;
   const skipConfirm = args.includes('--yes') || args.includes('-y');
   const withDeps = args.includes('--with-deps');
+
+  // 第八十七轮⑧：安装前环检测——若新插件的依赖会被已装插件反向依赖（罕见但致命），先说清
+  {
+    const users = dependents(id);
+    if (users.length > 0) {
+      for (const u of users) {
+        const up = findPlugin(u)?.plugin;
+        if (up?.pluginDeps.includes(id)) {
+          process.stdout.write(c.yellow(`! 注意：${u} 已声明依赖 ${id}，装完它们会互相/交叉依赖——用 zkit doctor 检查是否成环\n`));
+        }
+      }
+    }
+  }
 
   const preview = previewInstall(id, marketName);
   if (!preview) {

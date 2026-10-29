@@ -441,6 +441,8 @@ export function lintMarketIndex(raw: string, opts: { baseDir?: string } = {}): M
     if (!e.version || !/^\d+\.\d+\.\d+/.test(e.version ?? '')) warnings.push(`${at}(${e.id}) version 不是 x.y.z 格式`);
     if (!e.source) { errors.push(`${at}(${e.id}) 缺 source`); continue; }
     if (!/^(path:|git:)/.test(e.source)) errors.push(`${at}(${e.id}) source "${e.source}" 必须以 path: 或 git: 开头`);
+    // 第八十七轮⑥：path 源只在源仓库本机可用——装得上的人有限，集市作者要知道
+    if (e.source.startsWith('path:')) warnings.push(`${at}(${e.id}) 是 path: 本地源，其它机器装不了（要求求改为 git: 或发 .toolpack 才可分发）`);
     // path: 源的本地存在性（给了 baseDir 才查——源仓库根）
     if (e.source.startsWith('path:') && opts.baseDir) {
       const rel = e.source.slice(5).replace(/^\/+/, '');
