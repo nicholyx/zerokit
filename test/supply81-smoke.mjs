@@ -23,10 +23,9 @@ const pack = run(['plugin', 'pack', 'quick', '--out', packDir]);
 // pack 输出文件名固定 zerokit-quick.zip；Windows 路径分隔符差异用 path.join 消掉
 const zipPath = path.join(packDir, 'zerokit-quick.zip');
 check('① pack 成功', pack.status === 0 && existsSync(zipPath));
-const { execFileSync } = await import('node:child_process');
-const { execSync } = await import('node:child_process');
-const zipList = execFileSync('unzip', ['-l', zipPath], { encoding: 'utf8' });
-check('① 包内含 MANIFEST.sha256', zipList.includes('MANIFEST.sha256'));
+process.env.ZEROKIT_HOME = home;
+const distro0 = await import('../src/core/distro.ts');
+check('① 包内含 MANIFEST.sha256', distro0.unzipFiles(readFileSync(zipPath)).some((e) => e.name === 'MANIFEST.sha256'));
 check('① pack 输出 integrity 指纹', /sha256|指纹|完整性/.test(pack.stdout));
 
 // ② unpack 校验通过 + 快照
@@ -36,33 +35,31 @@ check('② 装时快照落盘', existsSync(path.join(home, 'plugins', 'quick', '
 
 // ⑧ 篡改一个字节必须拒
 {
-  const { execSync } = await import('node:child_process');
-  const tmpd = mkdtempSync(path.join(tmpdir(), 's81t-'));
-  const td = path.join(tmpd, 'tampered.zip');
-  execSync(`cd "${tmpd}" && unzip -q "${zipPath}" -d ex`, { encoding: 'utf8' });
-  // 翻转 quick.mjs 中间一个字节
-  const f = path.join(tmpd, 'ex', 'quick.mjs');
-  const b = readFileSync(f);
-  b[b.length >> 1] ^= 0xFF;
-  writeFileSync(f, b);
-  execSync(`cd "${tmpd}/ex" && zip -q -r "${td}" .`, { encoding: 'utf8' });
+  // Node 内置 zip 工具重写包（Windows runner 没有 unzip/zip 命令）——distro.ts 的 zipFiles/unzipFiles
+  process.env.ZEROKIT_HOME = home;
+  const distro = await import('../src/core/distro.ts');
+  const entries = distro.unzipFiles(readFileSync(zipPath));
+  const b = entries.find((e) => e.name === 'quick.mjs');
+  b.data[b.data.length >> 1] ^= 0xFF;   // 翻一个字节
+  const td = path.join(packDir, 'tampered.zip');
+  writeFileSync(td, distro.zipFiles(entries));
   const r = run(['plugin', 'unpack', td, '--replace']);
   check('⑧ 篡改包被拒', r.status === 1 && (r.stdout + r.stderr).includes('拒绝安装'));
   check('⑧ 报哪个文件不一致', (r.stdout + r.stderr).includes('quick.mjs'));
-  rmSync(tmpd, { recursive: true, force: true });
 }
 
 // ③ 无清单旧包：默认警告放行，--strict 拒
 {
-  const tmpd = mkdtempSync(path.join(tmpdir(), 's81u-'));
-  const ud = path.join(tmpd, 'unsigned.zip');
-  execSync(`cd "${tmpd}" && unzip -q "${zipPath}" -d ex && rm ex/MANIFEST.sha256 && cd ex && zip -q -r "${ud}" .`, { encoding: 'utf8' });
+  const distro2 = await import('../src/core/distro.ts');
+  const entries2 = distro2.unzipFiles(readFileSync(zipPath))
+    .filter((e) => e.name !== 'MANIFEST.sha256');
+  const ud = path.join(packDir, 'unsigned.zip');
+  writeFileSync(ud, distro2.zipFiles(entries2));
   const r1 = run(['plugin', 'unpack', ud, '--replace']);
   check('③ 无清单默认放行', r1.status === 0 && r1.stdout.includes('已安装'));
   check('③ 警告未签名', r1.stdout.includes('未签名'));
   const r2 = run(['plugin', 'unpack', ud, '--replace', '--strict']);
   check('③ --strict 拒绝', r2.status === 1 && (r2.stdout + r2.stderr).includes('--strict'));
-  rmSync(tmpd, { recursive: true, force: true });
 }
 
 // ④ verify：干净 → 改动 → 点名
