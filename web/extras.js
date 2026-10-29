@@ -1571,6 +1571,42 @@ export const COMMAND_LIST = [
   { icon: '☰', name: '设置抽屉', hint: '主题/语言/配置档/备份/日志/自检的统一入口', go: 'drawer' },
 ];
 
+// ---------------- 第八十五轮：命令面板分组与快捷键提示 ----------------
+
+/**
+ * 给命令条目分组：page=页面路由 / op=常用操作 / null=动作与插件（不分组平铺）。
+ * 输入为空时用分组头分段展示；非空输入打分混排（分组头反而碍事）。
+ */
+export function paletteGroup(cmd) {
+  if (cmd.group === 'page') return '页面';
+  if (cmd.group === 'op') return '操作';
+  return null;
+}
+
+/**
+ * 渲染前的排序：最近使用过的命令（cmdhist，新的在前）排到同组最前。
+ * hist 是命令名数组（如 ['日志', '监控']）。
+ */
+export function boostRecent(items, hist) {
+  const rank = new Map(hist.map((h, i) => [h, i]));
+  return [...items].sort((a, b) => {
+    const ra = rank.has(a.label) ? rank.get(a.label) : Infinity;
+    const rb = rank.has(b.label) ? rank.get(b.label) : Infinity;
+    return ra - rb;
+  });
+}
+
+/**
+ * Tab 补全：输入是列表中某条目的唯一前缀时返回补全后的文本，否则 null。
+ * 匹配用 label 去掉可能的 '> ' 命令前缀。
+ */
+export function tabComplete(query, labels) {
+  const q = query.trim().toLowerCase();
+  if (!q) return null;
+  const hits = labels.filter((l) => l.toLowerCase().startsWith(q));
+  return hits.length === 1 ? hits[0] : null;
+}
+
 /** ③快速执行语法：`;插件.动作` → {plugin, action}；不匹配返回 null */
 export function quickRunKey(text) {
   const s = String(text ?? '').trim();

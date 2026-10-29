@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty } from './extras.js';
+import { paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -7320,29 +7320,38 @@ function showPalette() {
   const overlay = document.createElement('div');
   overlay.className = 'overlay';
   overlay.id = 'paletteOverlay';
+  // 第八十五轮①②：全部条目带 group（page=页面 / op=操作）与 key（快捷键提示）
   const pages = [
-    { icon: '⌘', label: 'AI 工作台', hint: '自然语言指挥插件干活', act: () => showWorkbench('') },
-    { icon: '▶', label: '运行中', hint: '看正在跑的进程/服务，可结束', act: () => showPs() },
-    { icon: '⚙', label: '插件管理', hint: '安装/更新/卸载/配置', act: () => showPlugins() },
-    { icon: '🛍', label: '插件集市', hint: '浏览并一键安装集市插件', act: () => showMarket() },
-    { icon: '▤', label: '审计日志', hint: '每次执行/被拒/失败', act: () => showLogs() },
-    { icon: '✓', label: '环境自检', hint: '解释器/依赖/配置问题', act: () => showDoctor() },
-    { icon: '🔑', label: 'MCP 授权', hint: '哪些动作允许 AI 调用', act: () => showMcpAllow() },
-    { icon: '📈', label: '使用统计', hint: '总执行数 / 成功率 / 趋势', act: () => showStats() },
-    { icon: '⏱', label: '定时任务', hint: '管理界面内定时器', act: () => { location.hash = '#/timers'; } },
-    { icon: '📋', label: '剪贴板历史', hint: '最近复制的内容与识别', act: () => { location.hash = '#/clip'; } },
-    { icon: '👁', label: '监控面板', hint: '自动重跑的监控聚合', act: () => { location.hash = '#/watch'; } },
-    { icon: '📰', label: '今日简报', hint: '跑了多少 / 成败 / 最常用', act: () => { location.hash = '#/brief'; } },
-    { icon: '🗓', label: '时间线', hint: '按天复盘执行 + 周对比 + 时段分布', act: () => { location.hash = '#/timeline'; } },
-    { icon: '📌', label: '收藏结果', hint: '钉住的重要输出', act: () => { location.hash = '#/saved'; } },
-    { icon: '◐', label: '深色 / 浅色', hint: '一键切换主题（Ctrl+Shift+D）', act: () => toggleLightDark() },
-    { icon: '☰', label: '设置抽屉', hint: '主题/语言/配置档/备份统一入口', act: () => openDrawer() },
+    { icon: '⌘', label: 'AI 工作台', hint: '自然语言指挥插件干活', key: '', group: 'page', act: () => showWorkbench('') },
+    { icon: '▶', label: '运行中', hint: '看正在跑的进程/服务，可结束', key: '', group: 'page', act: () => showPs() },
+    { icon: '⚙', label: '插件管理', hint: '安装/更新/卸载/配置', key: '', group: 'page', act: () => showPlugins() },
+    { icon: '🛍', label: '插件集市', hint: '浏览并一键安装集市插件', key: '', group: 'page', act: () => showMarket() },
+    { icon: '▤', label: '审计日志', hint: '每次执行/被拒/失败', key: 'Ctrl+L', group: 'page', act: () => showLogs() },
+    { icon: '✓', label: '环境自检', hint: '解释器/依赖/配置问题', key: '', group: 'page', act: () => showDoctor() },
+    { icon: '🔑', label: 'MCP 授权', hint: '哪些动作允许 AI 调用', key: '', group: 'page', act: () => showMcpAllow() },
+    { icon: '📈', label: '使用统计', hint: '总执行数 / 成功率 / 趋势', key: '', group: 'page', act: () => showStats() },
+    { icon: '⏱', label: '定时任务', hint: '管理界面内定时器', key: '', group: 'page', act: () => { location.hash = '#/timers'; } },
+    { icon: '📋', label: '剪贴板历史', hint: '最近复制的内容与识别', key: '', group: 'page', act: () => { location.hash = '#/clip'; } },
+    { icon: '👁', label: '监控面板', hint: '自动重跑的监控聚合', key: '', group: 'page', act: () => { location.hash = '#/watch'; } },
+    { icon: '📰', label: '今日简报', hint: '跑了多少 / 成败 / 最常用', key: '', group: 'page', act: () => { location.hash = '#/brief'; } },
+    { icon: '🗓', label: '时间线', hint: '按天复盘执行 + 周对比 + 时段分布', key: '', group: 'page', act: () => { location.hash = '#/timeline'; } },
+    { icon: '📌', label: '收藏结果', hint: '钉住的重要输出', key: '', group: 'page', act: () => { location.hash = '#/saved'; } },
+    { icon: '◐', label: '深色 / 浅色', hint: '一键切换主题', key: 'Ctrl+Shift+D', group: 'op', act: () => toggleLightDark() },
+    { icon: '☰', label: '设置抽屉', hint: '主题/语言/配置档/备份统一入口', key: '', group: 'page', act: () => openDrawer() },
+    // 第八十五轮②：操作类命令——切主题/切语言/备份/清历史
+    { icon: '☀', label: '主题：浅色', hint: '切换到浅色主题', key: '', group: 'op', act: () => { exitPalette(); try { localStorage.setItem(PREF.theme, 'light'); } catch { /* 忽略 */ } applyTheme(); } },
+    { icon: '🌙', label: '主题：深色', hint: '切换到深色主题', key: '', group: 'op', act: () => { exitPalette(); try { localStorage.setItem(PREF.theme, 'dark'); } catch { /* 忽略 */ } applyTheme(); } },
+    { icon: '🖨', label: '主题：跟随系统', hint: '按系统偏好自动切换', key: '', group: 'op', act: () => { exitPalette(); try { localStorage.setItem(PREF.theme, 'auto'); } catch { /* 忽略 */ } applyTheme(); } },
+    { icon: '🀄', label: '语言：中文', hint: '界面切换到中文', key: '', group: 'op', act: () => { exitPalette(); try { localStorage.setItem('zerokit.lang', 'zh'); } catch { /* 忽略 */ } langPref = 'zh'; lang = pickLang('zh', navigator.language); applyLang(true); } },
+    { icon: '🅐', label: '语言：English', hint: 'switch UI to English', key: '', group: 'op', act: () => { exitPalette(); try { localStorage.setItem('zerokit.lang', 'en'); } catch { /* 忽略 */ } langPref = 'en'; lang = pickLang('en', navigator.language); applyLang(true); } },
+    { icon: '📤', label: '导出备份', hint: '下载全部个性化数据（JSON）', key: '', group: 'op', act: () => { exitPalette(); exportBackup(); } },
+    { icon: '🗑', label: '清空搜索历史', hint: '删除全部搜索历史记录', key: '', group: 'op', act: () => { exitPalette(); try { localStorage.removeItem('zerokit.searches'); el.count.textContent = '已清空搜索历史'; } catch { /* 忽略 */ } } },
   ];
   overlay.innerHTML = `
     <div class="modal palette">
       <input id="paletteQ" type="text" placeholder="输入动作名、插件名或页面名…" autocomplete="off" spellcheck="false">
       <ul id="paletteList" role="listbox"></ul>
-      <div class="palette-foot">↑↓ 选择 · Enter 打开 · Esc 关闭</div>
+      <div class="palette-foot">↑↓ 选择 · Enter 打开 · 1-9 直选 · Tab 补全 · Esc 关闭</div>
     </div>`;
   document.body.appendChild(overlay);
   const q = overlay.querySelector('#paletteQ');
@@ -7350,13 +7359,36 @@ function showPalette() {
   let sel = 0;
   let items = [];
 
+  // 第八十五轮③⑧：空查询时按「页面 / 操作」分组展示（有分组头的条目才分段）；
+  // 非空查询混排（paletteScore 已排好，分组头反而碍事）。
+  const grouped = !q.value.trim() && items.some((x) => x.group);
   const paint = () => {
-    list.innerHTML = items.map((x, i) => `
+    if (!grouped) {
+      list.innerHTML = items.map((x, i) => `
       <li class="palette-item${i === sel ? ' on' : ''}" data-i="${i}">
+        <span class="palette-num">${i < 9 ? i + 1 : ''}</span>
         <span class="palette-icon">${x.icon}</span>
         <span class="palette-label">${x.label}</span>
         <span class="palette-hint">${x.hint}</span>
+        ${x.key ? `<kbd class="palette-key">${x.key}</kbd>` : ''}
       </li>`).join('') || '<li class="palette-item none">没有匹配的项</li>';
+    } else {
+      const parts = [];
+      let lastGroup = null;
+      items.forEach((x, i) => {
+        const g = paletteGroup(x) ?? '';
+        if (g !== lastGroup) { parts.push(`<li class="palette-group" role="presentation">${g || '动作与插件'}</li>`); lastGroup = g; }
+        parts.push(`
+      <li class="palette-item${i === sel ? ' on' : ''}" data-i="${i}">
+        <span class="palette-num">${i < 9 ? i + 1 : ''}</span>
+        <span class="palette-icon">${x.icon}</span>
+        <span class="palette-label">${x.label}</span>
+        <span class="palette-hint">${x.hint}</span>
+        ${x.key ? `<kbd class="palette-key">${x.key}</kbd>` : ''}
+      </li>`);
+      });
+      list.innerHTML = parts.join('');
+    }
     list.querySelectorAll('.palette-item.on').forEach((n) => n.scrollIntoView({ block: 'nearest' }));
   };
   const refill = () => {
@@ -7396,10 +7428,16 @@ function showPalette() {
       icon: '🧩', label: p.name, hint: `插件 · ${p.id}`,
       act: () => { exitPalette(); location.hash = `#/plugins/${encodeURIComponent(p.id)}`; },
     }));
-    const all = [...pages.map((x) => ({ ...x, act: (() => { const f = x.act; return () => { exitPalette(); f(); }; })() })),
-      ...actionItems, ...pluginItems];
+    const all = [...pages.map((x) => ({ ...x, act: (() => { const f = x.act; return () => { pushCmdHist(x.label); exitPalette(); f(); }; })() })),
+      ...actionItems.map((x) => ({ ...x, act: (() => { const f = x.act; return () => { pushCmdHist(x.label); exitPalette(); f(); }; })() })),
+      ...pluginItems];
     // 打分排序：精确 > 前缀 > 子串 > hint 子串 > 子序列（拼首字母）；空查询取前 20
     items = paletteScore(all, needle);
+    // 第八十五轮⑥：空查询时最近用过的页面/操作排前（动作与插件不参与——它们的记忆已有专门机制）
+    if (!needle) {
+      const head = boostRecent(items.filter((x) => x.group), readJson('zerokit.cmdhist') ?? []);
+      items = [...head, ...items.filter((x) => !x.group)];
+    }
     sel = 0;
     paint();
   };
@@ -7425,6 +7463,11 @@ function showPalette() {
     }
   };
   const exitPalette = () => { paletteMode = false; overlay.remove(); };
+  /** 第八十五轮⑥：页面/操作的最近使用（与命令模式共用 zerokit.cmdhist，保留 10 条） */
+  const pushCmdHist = (label) => {
+    if (!label) return;
+    try { localStorage.setItem('zerokit.cmdhist', JSON.stringify(pushHistory(readJson('zerokit.cmdhist') ?? [], label).slice(0, 10))); } catch { /* 存不进就算了 */ }
+  };
 
   q.addEventListener('input', refill);
   // 第二十四轮⑨：面板输入历史（命令+查询一起记），↑↓ 在空选择位翻历史
@@ -7432,6 +7475,16 @@ function showPalette() {
   const histList = () => [...new Set([...(readJson('zerokit.cmdhist') ?? []), ...(readJson('zerokit.searches') ?? []).map((s) => String(s))])];
   q.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { e.preventDefault(); exitPalette(); }
+    // 第八十五轮⑤：1-9 直接选中对应序号条目（只在有足够条目时生效）
+    else if (/^[1-9]$/.test(e.key) && items.length >= Number(e.key)) {
+      e.preventDefault(); items[Number(e.key) - 1]?.act();
+    }
+    // 第八十五轮⑦：Tab 补全——前缀唯一匹配时补全到该条目文本
+    else if (e.key === 'Tab' && q.value.trim()) {
+      const labels = items.map((x) => x.label);
+      const comp = tabComplete(q.value, labels);
+      if (comp) { e.preventDefault(); q.value = comp; refill(); }
+    }
     else if (e.key === 'ArrowDown') {
       const h = histList();
       if (sel < items.length - 1) { e.preventDefault(); sel = Math.min(sel + 1, items.length - 1); paint(); }
@@ -7470,6 +7523,13 @@ document.addEventListener('keydown', (e) => {
     const inOverlay = document.activeElement
       && [...document.querySelectorAll('body > .overlay')].some((o) => o.contains(document.activeElement));
     if (inOverlay) return; // overlay 内部各自的 keydown（如命令面板）会处理并 stopPropagation 之前的顺序问题——这里不重复处理
+  }
+  // Ctrl+P / Ctrl+K：全局命令面板——必须在 mode 分支之前：面板是「从任何页面都能唤起」的
+  // 统一入口，日志/自检/统计页 return 早退会把它挡掉（第八十五轮实测发现）
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.key === 'k' || e.key === 'K')) {
+    e.preventDefault();
+    showPalette();
+    return;
   }
   if (mode === 'plugins') {
     if (e.key === 'Escape') { e.preventDefault(); exitPlugins(); }
@@ -7635,12 +7695,6 @@ document.addEventListener('keydown', (e) => {
       }
     }
     return; // 没绑定的功能键不拦，让浏览器自己处理
-  }
-  // Ctrl+P / Ctrl+K：全局命令面板（键盘党不用碰鼠标）
-  if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.key === 'k' || e.key === 'K')) {
-    e.preventDefault();
-    showPalette();
-    return;
   }
   if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && batch.length) {
     // 第五十二轮⑥：Alt+↑↓ 移动批量篮内当前项（与鼠标 ↑↓ 等价；操作对象 = 最近点过的篮内项）
