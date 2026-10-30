@@ -1,6 +1,14 @@
 ## [Unreleased]
 
-（下一版攒着）
+### Added
+
+- 首跑引导升级为四步：新增「仪表盘」一步（NetBar 一屏看全）；标题下加定位副标题「插件是能力包：一份清单，四个面」
+- `zkit doctor` 首行输出版本号（与 package.json 同源；1.x 起附「1.0 稳定线：四面前」定位）
+
+### Changed
+
+- 1.0 收口：全站 25 处空态盘点——每处带 role=status 与下一步指引；README 快速开始链路（market add → search → install → doctor）新目录实测走通；START-HERE 版本号与断言数对齐
+
 
 ## [0.99.0] - 2026-10-30
 
