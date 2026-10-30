@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale } from './extras.js';
+import { humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -1634,7 +1634,7 @@ function openDetail(plugin, action, prefill) {
   const aliasName = Object.entries(aliases).find(([, v]) => v === aliasKey)?.[0];
   const nickKey = actionKey(plugin.id, action.id);
   const whyRows = (action.lastWhy ?? [])
-    .map((r) => `<tr><td>${esc(r[0])}</td><td>${r[1].toFixed(2)}</td><td>×${r[2]}</td></tr>`).join('');
+    .map((r) => `<tr><td>${esc(r[0])}</td><td>${r[1].toFixed(2)}</td><td>×${r[2]}</td></tr>`);
   const whyNote = whyRows
     ? `<div class="mem-note why-note"><b>为什么命中</b><table class="why-table"><tr><th>信号</th><th>分</th><th>权重</th></tr>${whyRows}</table></div>`
     : '';
@@ -4200,9 +4200,13 @@ function renderResult(res) {
     void box.offsetWidth;
     box.classList.add('result-anim');
   }
-  const head = res.ok
+  // 第九十七轮④：结果注释（双击标题区写，内存态——刷新即弃，轻量不落盘）
+  const rNoteKey = detail ? `${detail.plugin.id}.${detail.action.id}` : '';
+  const rNote = rNoteKey ? (resultNotes[rNoteKey] ?? '') : '';
+  const head = (res.ok
     ? `<span class="ok">✓ 成功</span><span class="sr-only" role="status">动作完成，${res.ms !== undefined ? `耗时 ${formatMs(res.ms)}` : '无耗时数据'}</span>`
-    : `<span class="bad">✗ 失败</span><span class="sr-only" role="status">动作失败${res.error ? '：' + esc(String(res.error).slice(0, 80)) : ''}</span>`;
+    : `<span class="bad">✗ 失败</span><span class="sr-only" role="status">动作失败${res.error ? '：' + esc(String(res.error).slice(0, 80)) : ''}</span>`)
+    + (rNote ? ` <span class="rnote" title="双击标题区修改注释">📝 ${esc(rNote)}</span>` : '');
   // 统一毫秒展示 + 「慢于平常」：超该动作历史 P95 才亮（历史 ≥3 次才参与判断）
   const ms = res.ms !== undefined ? formatMs(res.ms) : '';
   const slowBadge = (() => {
@@ -4704,6 +4708,17 @@ function renderResult(res) {
     }
   });
 
+  // 第九十七轮④：双击结果标题区写注释（≤60 字，Esc 取消；写进 resultNotes 重渲）
+  {
+    const ch = $('cardHead');
+    if (ch) ch.addEventListener('dblclick', () => {
+      const cur = rNoteKey ? (resultNotes[rNoteKey] ?? '') : '';
+      const v = window.prompt('给这次结果写个注释（≤60 字，留空清除）', cur);
+      if (v === null) return;
+      if (rNoteKey) resultNotes[rNoteKey] = v.slice(0, 60);
+      refreshResult();
+    });
+  }
   const exportAs = (btnId, text, mime, ext) => {
     $(btnId)?.addEventListener('click', async () => {
       const blob = new Blob([text], { type: `${mime};charset=utf-8` });
@@ -4744,7 +4759,14 @@ function renderResult(res) {
     });
   }
   if (res.data !== undefined) {
-    exportAs('csvRes', '\ufeff' + toCsv(res.data), 'text/csv;charset=utf-8', 'csv');  // BOM：Excel 中文不乱码
+    // 第九十七轮⑧：CSV 导出当前视图（筛选/查询作用后的行，非全量）——所见即所得
+    let exportRows = res.data;
+    if (Array.isArray(res.data) && res.data.length && typeof res.data[0] === 'object') {
+      const tid = (detail ? `${detail.plugin.id}.${detail.action.id}` : '') || 't';
+      exportRows = resultQuery(filterRows(res.data, tableFilterTerms[tid] ?? []), resultQueryTerms[tid] ?? '');
+      if (!exportRows.length) exportRows = res.data; // 过滤后空（异常态）兜底全量，不导出空文件
+    }
+    exportAs('csvRes', '\ufeff' + toCsv(exportRows), 'text/csv;charset=utf-8', 'csv');  // BOM：Excel 中文不乱码
     exportAs('jsonRes', JSON.stringify(res.data, null, 2), 'application/json', 'json');
     // 第十七轮③：JSONL 导出（每行一个对象，jq / ndjson 友好）
     const jsonl = toJsonl(res.data);
@@ -5138,7 +5160,13 @@ function renderTable(rows0, tableId = '') {
   const bigTable = view.length > OVERFLOW_ROWS && !tableFullLoad.has(tableId || 't');
   const viewRows = bigTable ? view.slice(0, PAGE_ROWS) : view;
   // 第三十九轮③：行点击就地展开该行 JSON（tr.det-row 跟在后面，再点收起）
-  const body = viewRows.map((row) => `<tr data-rowjson="${esc(JSON.stringify(row))}">${visCols.map((c) => {
+  // 第九十七轮③：数值列最大值（迷你条比例基准）
+  const colMax = {};
+  for (const c of visCols) {
+    if (!numeric[c]) continue;
+    colMax[c] = Math.max(0, ...view.map((r) => Number(r[c]) || 0));
+  }
+  const bodyRows = viewRows.map((row) => `<tr data-rowjson="${esc(JSON.stringify(row))}">${visCols.map((c) => {
     const v = row[c];
     const val = (v && typeof v === 'object') ? JSON.stringify(v) : String(v ?? '');
     // 第三十九轮⑤：时间戳列自动人性化（10/13 位数字 → 本地时间），列头加⏱标注
@@ -5150,8 +5178,32 @@ function renderTable(rows0, tableId = '') {
     // 第十八轮③：主键+列名的格级锚点（监控 diff 高亮定位用）
     const pk = String(Object.values(row)[0] ?? '');
     const dmark = ` data-dcell="${esc(pk)}|${esc(c)}"`;
-    return `<td${numeric[c] ? ' class="num"' : ''}${clip ? ` class="cell-clip" title="点击展开" data-full="${esc(val)}"` : ''}${dmark}>${esc(clip ? `${shown.slice(0, 45)}…` : shown)}</td>`;
+    // 第九十七轮⑦：数值右对齐（cellAlign 兜底数字串）；① 单位人性化进 title；③ 数值迷你条
+    const h = numeric[c] ? humanCell(typeof v === 'number' ? v : Number(String(val).replace(/,/g, ''))) : null;
+    const share = numeric[c] ? barShare(Number(val) || 0, colMax[c]) : 0;
+    const classes = [numeric[c] || cellAlign(v) === 'r' ? 'num' : '', clip ? 'cell-clip' : '', share > 0 ? 'has-bar' : ''].filter(Boolean).join(' ');
+    const barStyle = share > 0 ? ` style="--bar:${Math.round(share * 100)}%"` : '';
+    const title = clip ? ` title="${esc(val.length > 45 ? val : shown)}"` : (h ? ` title="原值 ${esc(val)}"` : '');
+    return `<td class="${classes}"${title}${barStyle}${clip ? ` data-full="${esc(val)}"` : ''}${dmark}>${esc(clip ? `${shown.slice(0, 45)}…` : shown)}</td>`;
   }).join('')}</tr>`).join('');
+  // 第九十七轮②：首列连续段小计（段≥2 行且含数值列才出；长段均值/短段求和）
+  const gsegs = groupSegments(viewRows, visCols);
+  const bodyParts = [];
+  let gi = 0;
+  for (let r = 0; r < bodyRows.length; r++) {
+    bodyParts.push(bodyRows[r]);
+    while (gi < gsegs.length && gsegs[gi].end === r) {
+      const g = gsegs[gi];
+      if (g.agg) {
+        const cells = visCols.map((c, ci) => ci === 0
+          ? `<td class="gsum-label">└ ${esc(String(g.value))} 小计</td>`
+          : (visCols[ci] === g.agg.col ? `<td class="num gsum">${g.agg.kind === 'avg' ? '均值' : 'Σ'} ${g.agg.total}</td>` : '<td class="gsum-empty"></td>')).join('');
+        bodyParts.push(`<tr class="gsum-row">${cells}</tr>`);
+      }
+      gi++;
+    }
+  }
+  const body = bodyParts.join('');
   // 第十六轮⑥：统计行——数字列给 Σ/均值/最小~最大，文本列给非空计数
   const foot = visCols.map((c) => {
     const st = colStats(view, c);
@@ -5188,6 +5240,8 @@ function renderTable(rows0, tableId = '') {
 const tableState = {};
 // 第十六轮③：每张表的筛选词（tableId → 词组），输入即时过滤
 const tableFilterTerms = {};
+// 第九十七轮④：结果注释（会话态，键=插件.动作）
+const resultNotes = {};
 // 第十六轮⑦：单位换算请求（tableId → {col, to}），换算后的数据走 refreshResult 重画
 const tableUnitConv = {};
 // 第二十三轮⑤⑥：结果查询词（tableId → 串）——支持子串与数字比较（size>100）
@@ -5227,6 +5281,21 @@ function bindTableSorts(scope) {
         .then(() => { el.count.textContent = `已复制${what}`; })
         .catch(() => { el.count.textContent = '复制被浏览器拒绝'; });
       mk('复制单元格', () => copy(td.textContent.trim(), '单元格'));
+      // 第九十七轮⑤：只看这个值——列值等值过滤，一键缩小到当前行同类
+      // （小计行不是数据行，不给只看——它的值是聚合出来的）
+      if (tblEl && !tr.classList.contains('gsum-row')) {
+        const ths = [...tblEl.querySelectorAll('thead th')].map((t) => t.textContent.replace(/[▲▼⏱].*$/, '').trim());
+        const cellIdx = [...tr.querySelectorAll('td')].indexOf(td);
+        const colName = ths[cellIdx];
+        const tblId = tblEl.dataset.table || '';
+        if (colName) mk(`只看「${colName} = ${td.textContent.trim().slice(0, 12)}」`, () => {
+          const cur = tableFilterTerms[tblId] ?? [];
+          const term = String(td.textContent.trim());
+          if (!cur.includes(term)) cur.push(term);
+          tableFilterTerms[tblId] = cur;
+          refreshResult();
+        });
+      }
       mk('复制整行', () => copy(rowText, '整行'));
       if (tblEl) mk('复制整表（TSV）', () => {
         const rows = [...tblEl.querySelectorAll('tr')].map((r) => [...r.querySelectorAll('th,td')].map((c) => c.textContent.trim()).join('\t'));

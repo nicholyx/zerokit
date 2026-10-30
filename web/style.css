@@ -1938,3 +1938,15 @@ input.dirty, textarea.dirty { border-left: 2px solid var(--accent); }
 @media (prefers-reduced-motion: reduce) {
   #zkSplitter { transition: none !important; }
 }
+
+/* ==================== 第九十七轮：结果再呈现 ==================== */
+/* ③ 数值迷你条：背景按 --bar 比例铺色，不占布局 */
+td.has-bar { background-image: linear-gradient(90deg, color-mix(in srgb, var(--accent) 22%, transparent) var(--bar, 0%), transparent var(--bar, 0%)); }
+/* ② 分组小计行 */
+tr.gsum-row td { background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--fg-dim); font-size: 12px; padding: 3px 8px; }
+td.gsum-label { font-weight: 600; }
+/* ④ 结果注释徽标 */
+.rnote { font-size: 12px; color: var(--fg-dim); background: color-mix(in srgb, var(--accent) 10%, transparent); border-radius: 6px; padding: 1px 8px; }
+/* ⑥ 首列钉住：宽表横滚时首列 sticky（父容器 .tbl-wrap overflow:auto） */
+.tbl-wrap table thead th:nth-child(1), .tbl-wrap table tbody td:nth-child(1) { position: sticky; left: 0; background: var(--bg, #16181d); z-index: 1; }
+.tbl-wrap table tbody tr:hover td:nth-child(1) { background: color-mix(in srgb, var(--fg) 7%, var(--bg, #16181d)); }
