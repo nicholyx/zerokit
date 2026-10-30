@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-10-30（第九十轮，v0.95.0）
+> 最后更新：2026-10-30（第九十一轮，v0.96.0）
 
 ## 性能基线（第五十八轮建立，2026-10-28，Apple M4 / Node 22）
 
@@ -387,3 +387,5 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 - **第八十七轮（插件依赖健康与升级安全）**：`plugin deps` 健康态（版本+满足接口）、doctor 缺依赖带受影响动作数+图级成环检查（环路径直报）、`plugin update` 拓扑序升级提示、`market lint` path 本地源不可分发提示、安装前交叉依赖提醒、deps87-smoke 17 项（Issue #302，v0.92.0）
 
 - 第八十九轮（v0.94.0）：MCP 面第三波——工具健康徽标（审计成功率进描述）、resources 面（plugins/health 只读资源）、dry-run --explain、_meta.server 版本+uptime、表格形状摘要、并发护栏 busy+retry_after_ms、失败指数退避（Issue #308）
+
+- 第九十一轮（v0.96.0）：管道与脚本协作——which/env 探查、--stdin-json 管道喂参、history --csv、未知参数建议、退出码语义入 --help（Issue #314）
