@@ -1863,3 +1863,42 @@ input.dirty, textarea.dirty { border-left: 2px solid var(--accent); }
 .dev-log.error { color: var(--danger, #d9534f); }
 .dev-log.warn { color: var(--warn, #e8b13a); }
 .dev-log.dim { opacity: 0.5; }
+
+/* ---------------------------------------------------------------- 第九十轮：首页仪表盘 */
+#dashView { padding: 18px 22px; overflow-y: auto; }
+.dash-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px;
+}
+.dash-card {
+  border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+  border-radius: 10px; padding: 12px 14px;
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+}
+.dash-card h3 { margin: 0 0 10px; font-size: var(--fs-sm, 13px); color: var(--fg-dim); font-weight: 600; }
+.dash-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.dash-tile {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  border: 1px solid color-mix(in srgb, var(--fg) 14%, transparent);
+  background: var(--bg, transparent); border-radius: 8px; padding: 8px 10px; cursor: pointer;
+  transition: transform var(--tr-fast, .12s), border-color var(--tr-fast, .12s);
+}
+.dash-tile:hover { transform: translateY(-1px); border-color: var(--accent); }
+.dt-name { font-weight: 600; font-size: var(--fs-md, 14px); }
+.dt-plugin { font-size: var(--fs-sm, 12px); color: var(--fg-dim); }
+.dash-rows { display: flex; flex-direction: column; gap: 4px; }
+.dash-row {
+  display: flex; align-items: center; gap: 8px; text-align: left;
+  border: 0; background: transparent; padding: 6px 8px; border-radius: 6px; cursor: pointer;
+}
+.dash-row:hover { background: color-mix(in srgb, var(--fg) 7%, transparent); }
+.dr-what { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dr-meta { font-size: var(--fs-sm, 12px); color: var(--fg-dim); white-space: nowrap; }
+.dash-stats { display: flex; gap: 18px; flex-wrap: wrap; align-items: baseline; }
+.ds-line { display: flex; flex-direction: column; gap: 2px; }
+.ds-line b { font-size: 22px; }
+.ds-line span { font-size: var(--fs-sm, 12px); color: var(--fg-dim); }
+.ds-top { width: 100%; font-size: var(--fs-sm, 12px); color: var(--fg-dim); border-top: 1px dashed color-mix(in srgb, var(--fg) 15%, transparent); padding-top: 8px; }
+.dash-empty { display: flex; flex-direction: column; gap: 4px; padding: 10px 4px; color: var(--fg-dim); }
+.dash-empty b { color: var(--fg); }
+.dash-empty span { font-size: var(--fs-sm, 12px); }
+@media (max-width: 720px) { .dash-grid { grid-template-columns: 1fr; } }

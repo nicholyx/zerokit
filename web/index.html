@@ -21,6 +21,7 @@
     <div class="bar-right">
       <span class="hint-inline" id="count"></span>
       <button class="ghost run-chip" id="plugBtn" title="管理插件：查看来源与版本、安装、更新、卸载">插件 <b id="plugCount">0</b></button>
+      <button class="ghost run-chip" id="dashBtn" title="仪表盘：收藏、最近执行、监控、统计一屏看全" aria-label="打开仪表盘">NetBar</button>
       <button class="ghost run-chip" id="psBtn" title="查看正在运行的进程与服务">运行中 <b id="psCount">0</b></button>
       <button class="ghost run-chip" id="marketBtn" title="浏览集市：装插件不用记地址">集市 <b id="marketCount">0</b></button>
       <button class="ghost" id="drawerBtn" title="设置与管理：主题、语言、配置档、备份、自检、日志都在抽屉里" aria-label="打开设置抽屉">☰ 设置</button>
@@ -72,6 +73,7 @@
     <div id="doctorView" class="plug-view hidden"></div>
     <div id="allowView" class="plug-view hidden"></div>
     <div id="devView" class="plug-view hidden"></div>
+    <div id="dashView" class="plug-view hidden" role="region" aria-label="仪表盘"></div>
     <div id="workbench" class="workbench hidden"></div>
   </main>
 

@@ -416,7 +416,7 @@ export const I18N = {
     modeCommand: '命令', modePlugins: '插件', modeMarket: '集市', modeStats: '统计',
     modeBrief: '简报', modeWatch: '监控', modeHelp: '帮助', modeTimers: '定时',
     modeLogs: '日志', modeDoctor: '自检', modePs: '运行中', modeWorkbench: '工作台',
-    modeSaved: '收藏', modeMcp: 'MCP', modeDetail: '详情',
+    modeSaved: '收藏', modeMcp: 'MCP', modeDetail: '详情', modeDash: '仪表盘',
     searchPlaceholder: '搜索动作、插件、内容…（Ctrl+K 专注）',
     run: '执行', back: '返回', close: '关闭', copy: '复制', cancel: '取消',
     confirm: '确认执行', all: '全部', favorite: '收藏', settings: '设置',
@@ -438,7 +438,7 @@ export const I18N = {
     modeCommand: 'Commands', modePlugins: 'Plugins', modeMarket: 'Market', modeStats: 'Stats',
     modeBrief: 'Brief', modeWatch: 'Watch', modeHelp: 'Help', modeTimers: 'Timers',
     modeLogs: 'Logs', modeDoctor: 'Doctor', modePs: 'Running', modeWorkbench: 'Workbench',
-    modeSaved: 'Saved', modeMcp: 'MCP', modeDetail: 'Detail',
+    modeSaved: 'Saved', modeMcp: 'MCP', modeDetail: 'Detail', modeDash: 'Dashboard',
     searchPlaceholder: 'Search actions, plugins, content… (Ctrl+K)',
     run: 'Run', back: 'Back', close: 'Close', copy: 'Copy', cancel: 'Cancel',
     confirm: 'Confirm', all: 'All', favorite: 'Favorite', settings: 'Settings',
@@ -2756,4 +2756,44 @@ export function isFieldDirty(field, current, initial) {
   if (field.type === 'checkbox') return Boolean(current) !== Boolean(initial);
   const norm = (v) => (v === undefined || v === null ? '' : String(v));
   return norm(current) !== norm(initial);
+}
+
+// ---------------------------------------------------------------- 第九十轮：首页仪表盘
+
+/**
+ * 仪表盘问候：按小时给一句人话（与顶栏状态胶囊同一套措辞，单一来源）。
+ */
+export function dashGreeting(hour = new Date().getHours()) {
+  if (hour < 5) return '夜深了';
+  if (hour < 9) return '早上好';
+  if (hour < 12) return '午安';
+  if (hour < 18) return '下午好';
+  return '晚上好';
+}
+
+/**
+ * 仪表盘四宫格的空态判定：每个 widget 一句引导（无收藏→教收藏、无历史→教跑第一条、
+ * 无监控→教开监控、统计永不为空——零执行也是「0 次」本身）。
+ */
+export function dashEmpty(kind) {
+  switch (kind) {
+    case 'favs': return { title: '还没有收藏', hint: '列表里按 F 或点星标，常用的动作会出现在这里' };
+    case 'runs': return { title: '还没有执行记录', hint: '随便跑一个动作（比如 系统信息 → 系统概况），回来就能看到它' };
+    case 'watch': return { title: '没有在跑的监控', hint: '详情页开「监控」，数据变了它会告诉你' };
+    default: return null;
+  }
+}
+
+/**
+ * 仪表盘统计摘要：今日 N 次 / 成功率 / 最常用动作——包一层 dailyBrief，
+ * 只是把 top 的 key 翻成显示名（查不到的 key 原样返回，卸载的插件不至于显示 undefined）。
+ */
+export function dashStats(brief, nameOf) {
+  const b = brief ?? { total: 0, ok: 0, failed: 0, top: [], avgMs: 0 };
+  const rate = b.total ? Math.round((b.ok / b.total) * 100) : 0;
+  return {
+    total: b.total, ok: b.ok, rate,
+    avgMs: b.avgMs ?? 0,
+    topName: b.top?.[0]?.[0] ? (nameOf?.(b.top[0][0]) ?? b.top[0][0]) : '',
+  };
 }
