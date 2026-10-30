@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-10-30（第八十八轮，v0.93.0）
+> 最后更新：2026-10-30（第八十九轮，v0.94.0）
 
 ## 性能基线（第五十八轮建立，2026-10-28，Apple M4 / Node 22）
 
@@ -385,3 +385,5 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 - **第八十五轮（命令面板与工作台进阶）**：面板收录 16+ 页面路由与 7 条操作命令（带快捷键徽标）、空查询分组展示、1-9 数字直选、Tab 补全、最近使用置顶（cmdhist 10 条）；修 Ctrl+P 被日志/自检等页面 mode 分支挡掉的真实缺陷、palette85-smoke 20 项（Issue #296，v0.90.0）
 - **第八十六轮（Web 插件开发者体验）**：开发者面板 #/dev（清单摘要/文件树/沙箱控制台/变更提示）、`plugin dev --web`、/api/dev/status+poll、桥透传 console、审计标 source:dev、devweb86-smoke 16 项（Issue #299，v0.91.0）
 - **第八十七轮（插件依赖健康与升级安全）**：`plugin deps` 健康态（版本+满足接口）、doctor 缺依赖带受影响动作数+图级成环检查（环路径直报）、`plugin update` 拓扑序升级提示、`market lint` path 本地源不可分发提示、安装前交叉依赖提醒、deps87-smoke 17 项（Issue #302，v0.92.0）
+
+- 第八十九轮（v0.94.0）：MCP 面第三波——工具健康徽标（审计成功率进描述）、resources 面（plugins/health 只读资源）、dry-run --explain、_meta.server 版本+uptime、表格形状摘要、并发护栏 busy+retry_after_ms、失败指数退避（Issue #308）
