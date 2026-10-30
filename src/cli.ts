@@ -1846,6 +1846,42 @@ async function cmdHistory(args: string[]): Promise<number> {
     for (const e of all) process.stdout.write(`${e.ts},${esc(e.plugin)},${esc(e.action)},${e.exitCode},${esc(e.argv.join(' '))}\n`);
     return 0;
   }
+  // 第九十二轮①②③④⑥⑧：过滤旗标（--failed 已有独立段在上；这里组合 --today/--plugin/--action/--json）
+  const flagVal = (name: string): string | undefined => {
+    const i = args.indexOf(name);
+    return i >= 0 ? args[i + 1] : undefined;
+  };
+  const wantToday = args.includes('--today');
+  const wantPlugin = flagVal('--plugin');
+  const wantAction = flagVal('--action');
+  const wantJson = args.includes('--json');
+  if (wantToday || wantPlugin || wantAction || wantJson) {
+    let rows = cliX.readHistory().slice().reverse();
+    if (wantToday) {
+      // 「今天」按本地时区零点锚定（CI 跨时区的教训：不能拿 UTC 拼日期比）
+      const d = new Date(); d.setHours(0, 0, 0, 0);
+      rows = rows.filter((e) => Date.parse(e.ts) >= d.getTime());
+    }
+    if (wantPlugin) rows = rows.filter((e) => e.plugin === wantPlugin);
+    if (wantAction) {
+      const dot = wantAction.indexOf('.');
+      const p = dot > 0 ? wantAction.slice(0, dot) : undefined;
+      const a = dot > 0 ? wantAction.slice(dot + 1) : wantAction;
+      rows = rows.filter((e) => e.action === a && (!p || e.plugin === p));
+    }
+    if (wantJson) { process.stdout.write(JSON.stringify(rows, null, 2) + '\n'); return 0; }
+    if (rows.length === 0) {
+      const cond = [wantToday && '今天', wantPlugin && `插件 ${wantPlugin}`, wantAction && `动作 ${wantAction}`].filter(Boolean).join(' + ');
+      process.stdout.write(c.dim(`（过滤后 0 条：${cond}。去掉旗标看全部，或 zkit history --failed 只看失败。）\n`));
+      return 0;
+    }
+    const show = rows.slice(0, Math.min(tailN ?? 30, rows.length));
+    process.stdout.write(c.bold(`共 ${rows.length} 条（${show.length === rows.length ? '全部' : `前 ${show.length}`}）：\n`));
+    for (const e of show) {
+      process.stdout.write(`  ${c.dim(e.ts.slice(5, 19))}  ${e.exitCode === 0 ? '✓' : c.red('✗')} zkit run ${e.plugin} ${e.action} ${e.argv.join(' ')}\n`);
+    }
+    return 0;
+  }
   const n = Math.min(tailN || Number(args[0]) || 10, list.length);
   process.stdout.write(c.bold(`最近 ${n} 条（zkit history --rerun N 可重跑）：\n`));
   for (let i = 0; i < n; i++) {
@@ -2032,6 +2068,18 @@ function cmdStats(args: string[]): number {
   if (args.includes('--json')) {
     process.stdout.write(JSON.stringify({ actions: stats }, null, 2) + '\n');
     return 0;
+  }
+  // 第九十二轮⑤：概览行——总次数/成功率/最常用 top5/最慢 top5（数据都有，就差摆出来）
+  {
+    const total = stats.reduce((s, x) => s + x.count, 0);
+    const fail = stats.reduce((s, x) => s + x.failCount, 0);
+    const rate = total === 0 ? 0 : Math.round(((total - fail) / total) * 100);
+    const fmt = (v: number | undefined) => (v == null ? '—' : v >= 1000 ? (v / 1000).toFixed(1) + 's' : Math.round(v) + 'ms');
+    const topUse = [...stats].sort((a, b) => b.count - a.count).slice(0, 5);
+    const topSlow = [...stats].sort((a, b) => (b.p95Ms ?? 0) - (a.p95Ms ?? 0)).slice(0, 5);
+    process.stdout.write(`执行概览：共 ${total} 次，成功率 ${rate}%（失败 ${fail}）\n`);
+    if (topUse[0]) process.stdout.write(`最常用：${topUse.map((s) => `${s.key}×${s.count}`).join('、')}\n`);
+    if (topSlow[0] && (topSlow[0]?.p95Ms ?? 0) > 0) process.stdout.write(`最慢（P95）：${topSlow.map((s) => `${s.key} ${fmt(s.p95Ms)}`).join('、')}\n`);
   }
   process.stdout.write(`动作耗时统计（${stats.length} 个动作，来自审计日志）：\n`);
   process.stdout.write(`${pad('动作', 34)}${pad('次数', 6)}${pad('失败', 6)}${pad('P50', 10)}${pad('P95', 10)}${pad('最慢', 10)}最近\n`);
