@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty } from './extras.js';
+import { paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -50,7 +50,7 @@ const el = {
   psView: $('psView'), psBtn: $('psBtn'), psCount: $('psCount'), clipBtn: $('clipBtn'),
   logsView: $('logsView'), doctorView: $('doctorView'), listTools: $('listTools'),
   allowView: $('allowView'),
-  devView: $('devView'),
+  devView: $('devView'), dashView: $('dashView'), dashBtn: $('dashBtn'),
   plugView: $('plugView'), plugBtn: $('plugBtn'), plugCount: $('plugCount'),
   marketView: $('marketView'), marketBtn: $('marketBtn'), marketCount: $('marketCount'),
   modeLabel: $('modeLabel'), modeDot: $('modeDot'), reload: $('reloadBtn'),
@@ -804,7 +804,7 @@ applyDensity(localStorage.getItem('zerokit.ldensity') || 'normal');
 
 function hidePanels() {
   for (const v of [el.listView, el.detailView, el.workbench, el.psView,
-    el.plugView, el.marketView, el.logsView, el.doctorView, el.allowView, el.devView]) {
+    el.plugView, el.marketView, el.logsView, el.doctorView, el.allowView, el.devView, el.dashView]) {
     v.classList.add('hidden');
     // 第五十九轮②：每次面板重新显示时重放视图动效（先移除类，显示方再加回）
     v.classList.remove('view-anim');
@@ -6460,7 +6460,8 @@ async function fetchPs() {
     const running = (data.processes ?? []).filter((p) => p.running).length
       + (data.services ?? []).filter((s) => s.running).length;
     el.psCount.textContent = String(running);
-    el.psBtn.classList.toggle('has-items', running > 0);
+    el.dashBtn?.addEventListener('click', () => showDash());
+  el.psBtn.classList.toggle('has-items', running > 0);
     // 徽标计数：有东西在跑时，标签页标题一眼可见（切去别的页也不会忘）；
     // 第十八轮⑦：监控数也并入标题（⏱N），fetchPs 与监控启停都走 tabTitle 保持一致
     announceTitle(Object.keys(watchRegistry()).length, running);
@@ -6899,6 +6900,94 @@ async function wbSend() {
 }
 
 
+
+// ---------------------------------------------------------------- 第九十轮：首页仪表盘
+
+/**
+ * 仪表盘 #/dash：四宫格一屏看全（收藏快捷 / 最近执行 / 监控状态 / 今日统计）。
+ * 数据全部来自内存态（favorites / runStore / watchRegistry），不新拉任何接口。
+ */
+function showDash() {
+  mode = 'dash';
+  el.modeLabel.textContent = t('modeDash');
+  el.searchRow.classList.add('hidden');
+  hidePanels();
+  showPanelAnimated(el.dashView);
+  if (location.hash !== '#/dash') history.replaceState(null, '', '#/dash');
+  document.title = 'zerokit';
+
+  const nameOf = (key) => {
+    const dot = key.lastIndexOf('.');
+    const entry = entries.find((e) => e.plugin.id === key.slice(0, dot) && e.action.id === key.slice(dot + 1));
+    return entry ? entry.action.title : '';
+  };
+
+  // ② 收藏磁贴（空态分级：没有收藏教怎么收藏）
+  const favEntries = entries.filter((e) => favorites.includes(`${e.plugin.id}.${e.action.id}`)).slice(0, 8);
+  const favHtml = favEntries.length
+    ? `<div class="dash-tiles">${favEntries.map((e) => {
+        const key = `${e.plugin.id}.${e.action.id}`;
+        const risk = e.action.risk ?? 'read';
+        return `<button class="dash-tile" data-dash-go="${esc(key)}" title="${esc(e.plugin.name)} · ${esc(e.action.title)}">
+          <span class="risk-dot" data-risk="${risk}"></span>
+          <span class="dt-name">${esc(e.action.title)}</span>
+          <span class="dt-plugin">${esc(e.plugin.name)}</span>
+        </button>`;
+      }).join('')}</div>`
+    : (() => { const e2 = dashEmpty('favs'); return `<div class="dash-empty"><b>${e2.title}</b><span>${e2.hint}</span></div>`; })();
+
+  // ③ 最近执行（跨动作最近 5 条；点击回那条动作）
+  const recent = recentRuns(runStore, 5);
+  const recentHtml = recent.length
+    ? `<div class="dash-rows">${recent.map((r) => `<button class="dash-row" data-dash-go="${esc(r.key)}">
+        <span class="${r.ok ? 'ok' : 'bad'}">${r.ok ? '✓' : '✗'}</span>
+        <span class="dr-what">${esc(nameOf(r.key) || r.key)}</span>
+        <span class="dr-meta">${formatMs(r.ms ?? 0)} · ${esc(new Date(r.ts).toLocaleTimeString())}</span>
+      </button>`).join('')}</div>`
+    : (() => { const e2 = dashEmpty('runs'); return `<div class="dash-empty"><b>${e2.title}</b><span>${e2.hint}</span></div>`; })();
+
+  // ④ 监控状态
+  const reg = watchRegistry();
+  const watchKeys = Object.keys(reg);
+  const watchHtml = watchKeys.length
+    ? `<div class="dash-rows">${watchKeys.map((k) => {
+        const w = reg[k];
+        return `<button class="dash-row" data-dash-go="${esc(k)}">
+          <span>⏱</span><span class="dr-what">${esc(nameOf(k) || k)}</span>
+          <span class="dr-meta">${intervalLabel(w.interval)} · 采样 ${w.samples?.length ?? 0}</span>
+        </button>`;
+      }).join('')}</div>`
+    : (() => { const e2 = dashEmpty('watch'); return `<div class="dash-empty"><b>${e2.title}</b><span>${e2.hint}</span></div>`; })();
+
+  // ⑤ 今日统计（dailyBrief 包一层；零执行显示 0 本身）
+  const st = dashStats(dailyBrief(runStore), nameOf);
+  const statsHtml = `<div class="dash-stats">
+    <div class="ds-line"><b>${st.total}</b><span>今日执行</span></div>
+    <div class="ds-line"><b>${st.rate}%</b><span>成功率${st.total ? `（${st.ok} 成功）` : ''}</span></div>
+    <div class="ds-line"><b>${st.avgMs ? formatMs(st.avgMs) : '—'}</b><span>平均耗时</span></div>
+    ${st.topName ? `<div class="ds-top">最常用：${esc(st.topName)}</div>` : ''}
+  </div>`;
+
+  el.dashView.innerHTML = `
+    <div class="ps-head"><h2>${dashGreeting()} · 仪表盘</h2>
+      <span class="sub">一屏看全：收藏 / 最近执行 / 监控 / 今日统计——数据都在本机</span></div>
+    <div class="dash-grid">
+      <section class="dash-card"><h3>⭐ 快捷动作</h3>${favHtml}</section>
+      <section class="dash-card"><h3>🕘 最近执行</h3>${recentHtml}</section>
+      <section class="dash-card"><h3>⏱ 监控</h3>${watchHtml}</section>
+      <section class="dash-card"><h3>📊 今日</h3>${statsHtml}</section>
+    </div>`;
+
+  // 磁贴 / 行点击 → 直达详情
+  el.dashView.querySelectorAll('[data-dash-go]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const key = b.dataset.dashGo;
+      const dot = key.lastIndexOf('.');
+      const entry = entries.find((e) => e.plugin.id === key.slice(0, dot) && e.action.id === key.slice(dot + 1));
+      if (entry) openDetail(entry.plugin, entry.action);
+    });
+  });
+}
 
 // ---------------------------------------------------------------- 全局统计页
 
@@ -7458,6 +7547,7 @@ function showPalette() {
     { icon: '▤', label: '审计日志', hint: '每次执行/被拒/失败', key: 'Ctrl+L', group: 'page', act: () => showLogs() },
     { icon: '✓', label: '环境自检', hint: '解释器/依赖/配置问题', key: '', group: 'page', act: () => showDoctor() },
     { icon: '🔑', label: 'MCP 授权', hint: '哪些动作允许 AI 调用', key: '', group: 'page', act: () => showMcpAllow() },
+    { icon: 'NetBar', label: '仪表盘', hint: '收藏 / 最近执行 / 监控 / 统计一屏看全', key: '', group: 'page', act: () => showDash() },
     { icon: '📈', label: '使用统计', hint: '总执行数 / 成功率 / 趋势', key: '', group: 'page', act: () => showStats() },
     { icon: '⏱', label: '定时任务', hint: '管理界面内定时器', key: '', group: 'page', act: () => { location.hash = '#/timers'; } },
     { icon: '📋', label: '剪贴板历史', hint: '最近复制的内容与识别', key: '', group: 'page', act: () => { location.hash = '#/clip'; } },
@@ -8222,6 +8312,12 @@ function applyHash() {
     return;
   }
 
+  // 第九十轮：#/dash 仪表盘
+  if ((location.hash || '') === '#/dash') {
+    showDash();
+    return;
+  }
+
   // #/stats  全局统计
   if ((location.hash || '') === '#/stats') {
     showStats();
@@ -8300,6 +8396,7 @@ window.addEventListener('hashchange', () => {
   }
   // #/logs 等面板路由：hashchange 直达（applyHash 有同款分支，hash 導航也要）
   if ((location.hash || '') === '#/logs') { showLogs(); return; }
+  if ((location.hash || '') === '#/dash') { showDash(); return; }
   if ((location.hash || '') === '#/stats') { showStats(); return; }
   if ((location.hash || '') === '#/doctor') { showDoctor(); return; }
   // 第二十九轮⑧：#/perf 性能页——列表/搜索耗时三指标卡，改代码前后各看一眼
@@ -8441,6 +8538,7 @@ function applyLang(rerender = false) {
     case 'logs': showLogs(); break;
     case 'doctor': showDoctor(); break;
     case 'plugins': showPlugins(); break;
+    case 'dash': showDash(); break;
     case 'stats': showStats(); break;
     case 'saved': showSaved(); break;
     case 'ps': showPs(); break;
