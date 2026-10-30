@@ -900,7 +900,8 @@ async function cmdRun(args: string[]): Promise<number> {
     // 第四十八轮⑥：与 UI/MCP 同一套知识库——认不出也给 exit-nonzero 兜底分类
     const d = diagnose(String((result as { error?: string }).error ?? '') + '\n' + String(result.stderr ?? ''))
       ?? { kind: 'exit-nonzero', headline: '程序报错退出', nextSteps: ['看上方 stderr 原文定位报错行', '同参数重试一次排除偶发'] };
-    process.stderr.write(c.yellow(`\n⟐ 看起来是：${d.headline}\n下一步：\n`));
+    // 第九十四轮⑥：分类徽标前缀（kind 直出，机器与人都能 grep）
+    process.stderr.write(c.yellow(`\n[${d.kind}] ⟐ 看起来是：${d.headline}\n下一步：\n`));
     for (const st of d.nextSteps) process.stderr.write(`  - ${st}\n`);
     // 第八十三轮①②：退出码语义 + 超时对照（只加有把握的增量信息，未知码不硬猜）
     const oc = (result as { exitCode?: number | null }).exitCode ?? null;

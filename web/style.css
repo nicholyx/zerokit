@@ -1902,3 +1902,11 @@ input.dirty, textarea.dirty { border-left: 2px solid var(--accent); }
 .dash-empty b { color: var(--fg); }
 .dash-empty span { font-size: var(--fs-sm, 12px); }
 @media (max-width: 720px) { .dash-grid { grid-template-columns: 1fr; } }
+
+
+/* ============ 第九十四轮：错误内容与排错体验 ============ */
+.fail-card .fail-kind { font-size: 11px; padding: 1px 7px; border-radius: 9px; background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); border: 1px solid color-mix(in srgb, var(--bad) 45%, transparent); vertical-align: 1px; }
+.fail-stderr summary { cursor: pointer; color: var(--fg-dim); font-size: 12px; padding: 4px 0; user-select: none; }
+.fail-stderr pre { margin-top: 4px; }
+.fail-sug { margin-top: 6px; padding: 6px 10px; border-left: 3px solid var(--warn); background: color-mix(in srgb, var(--warn) 10%, transparent); border-radius: 4px; font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { .fail-card .fail-kind { animation: none !important; } }

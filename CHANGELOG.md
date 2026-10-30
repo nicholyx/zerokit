@@ -1,6 +1,13 @@
 ## [Unreleased]
 
-（下一版攒着）
+### Added
+
+- 失败结果卡升级：错误分类徽标（kind 直出）+「📋 复制报错」（分类+命令+环境三行+stderr 全文，贴 issue 一发入魂）
+- stderr 折叠展示：默认末 5 行，点开全文（保留原始报错可搜索）
+- 失败卡动作名近邻建议：「quick.ts2dat → 是不是想敲 quick.ts2date？」
+- CLI 失败输出加分类前缀 `[kind] ⟐ 看起来是：…`（机器与人都能 grep）
+- 失败卡上报分类到审计（`kind: fail-class`，fire-and-forget 不打断渲染）
+
 
 ## [0.98.0] - 2026-10-30
 
