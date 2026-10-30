@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats } from './extras.js';
+import { paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -48,6 +48,7 @@ const $ = (id) => document.getElementById(id);
 window.__zkVersion = (document.querySelector('meta[name=zk-version]')?.content ?? '');
 const el = {
   q: $('q'), list: $('list'), empty: $('empty'), count: $('count'), searchRow: $('searchRow'),
+  stage: $('stage'),
   listView: $('listView'), detailView: $('detailView'), workbench: $('workbench'),
   psView: $('psView'), psBtn: $('psBtn'), psCount: $('psCount'), clipBtn: $('clipBtn'),
   logsView: $('logsView'), doctorView: $('doctorView'), listTools: $('listTools'),
@@ -141,6 +142,10 @@ function collectPrefsSnapshot() {
     favorites, aliases, nicknames, pluginTags,
     hotkeys: readJson('zerokit.hotkeys', {}),
     savedList: readJson('zerokit.saved', []),
+    // 第九十六轮④：列表密度与布局也进快照（配置档切换连形态一起换）
+    ldensity: localStorage.getItem('zerokit.ldensity'),
+    layoutPreset: localStorage.getItem('zerokit.layout.preset'),
+    layoutPct: localStorage.getItem('zerokit.layout.pct'),
   };
 }
 
@@ -156,6 +161,9 @@ function applyPrefsSnapshot(snap) {
   pluginTags = snap.pluginTags && typeof snap.pluginTags === 'object' ? snap.pluginTags : {};
   writeJson('zerokit.hotkeys', snap.hotkeys ?? {});
   writeJson('zerokit.saved', Array.isArray(snap.savedList) ? snap.savedList : []);
+  if (typeof snap.ldensity === 'string') localStorage.setItem('zerokit.ldensity', snap.ldensity);
+  if (typeof snap.layoutPreset === 'string') localStorage.setItem('zerokit.layout.preset', snap.layoutPreset);
+  if (typeof snap.layoutPct === 'string') localStorage.setItem('zerokit.layout.pct', snap.layoutPct);
   applyTheme();
   applyAccent();
   applyFontScale();
@@ -200,8 +208,7 @@ function applyAccent() {
   document.documentElement.dataset.accent = normalizeAccent(accent);
 }
 
-function applyTheme() {
-  const choice = normalizeTheme(localStorage.getItem(PREF.theme));
+function applyTheme() {  const choice = normalizeTheme(localStorage.getItem(PREF.theme));
   const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true;
   const resolved = resolveTheme(choice, prefersDark);
   document.documentElement.dataset.theme = resolved;
@@ -804,8 +811,105 @@ function applyDensity(mode) {
 // 启动恢复
 applyDensity(localStorage.getItem('zerokit.ldensity') || 'normal');
 
-function hidePanels() {
-  for (const v of [el.listView, el.detailView, el.workbench, el.psView,
+// ==================== 第九十六轮：分栏布局、预设与手势 ====================
+
+/** 当前列表分栏宽（%）。来源：layout.pct（拖拽记忆）> 预设 > 默认 38。 */
+function layoutListPct() {
+  const preset = localStorage.getItem('zerokit.layout.preset');
+  const manual = localStorage.getItem('zerokit.layout.pct');
+  if (manual) return clampListPct(manual);
+  if (preset && LAYOUT_PRESETS[preset]) return LAYOUT_PRESETS[preset].listPct;
+  return 38;
+}
+
+/** 把分栏宽度应用到 #stage（grid 两栏）并挂 splitter。 */
+function applySplitLayout() {
+  const wide = window.innerWidth > 1080 && !el.listView.classList.contains('hidden')
+    && !el.detailView.classList.contains('hidden');
+  if (!wide) {
+    el.stage.style.gridTemplateColumns = '';
+    document.getElementById('zkSplitter')?.remove();
+    return;
+  }
+  const pct = layoutListPct();
+  el.stage.style.gridTemplateColumns = `${pct}% 4px 1fr`;
+  let sp = document.getElementById('zkSplitter');
+  if (!sp) {
+    sp = document.createElement('div');
+    sp.id = 'zkSplitter';
+    sp.title = '拖拽调节分栏宽度（双击复位）';
+    sp.setAttribute('role', 'separator');
+    sp.setAttribute('aria-orientation', 'vertical');
+    // 拖拽：记录起拖位置与起始百分比，mousemove 实时换算（dragPct 已含 26–60 钳制）
+    let dragging = null;
+    sp.addEventListener('pointerdown', (e) => {
+      dragging = { x: e.clientX, pct: layoutListPct() };
+      sp.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    sp.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const next = dragPct(dragging.x, dragging.pct, e.clientX, el.stage.clientWidth);
+      el.stage.style.gridTemplateColumns = `${next}% 4px 1fr`;
+      sp.dataset.pct = String(next);
+    });
+    sp.addEventListener('pointerup', () => {
+      if (dragging && sp.dataset.pct) {
+        localStorage.setItem('zerokit.layout.pct', sp.dataset.pct);
+        localStorage.removeItem('zerokit.layout.preset'); // 手动拖拽覆盖预设
+        el.count.textContent = `分栏 ${sp.dataset.pct}%`;
+      }
+      dragging = null;
+    });
+    sp.addEventListener('dblclick', () => {
+      localStorage.removeItem('zerokit.layout.pct');
+      localStorage.removeItem('zerokit.layout.preset');
+      applySplitLayout();
+      el.count.textContent = '分栏已复位';
+    });
+    el.stage.insertBefore(sp, el.detailView);
+  }
+}
+
+/** ② 预设三档切换（normal / wide-list / wide-detail）。 */
+function setLayoutPreset(id) {
+  if (!LAYOUT_PRESETS[id]) return;
+  localStorage.setItem('zerokit.layout.preset', id);
+  localStorage.removeItem('zerokit.layout.pct'); // 预设覆盖手动拖拽
+  applySplitLayout();
+  el.count.textContent = `布局：${LAYOUT_PRESETS[id].label}`;
+}
+
+
+// 第九十六轮⑦：Ctrl+滚轮调结果字号（跟字体三档同一套键，写回 font-scale 立即生效）
+document.addEventListener('wheel', (e) => {
+  if (!e.ctrlKey) return;
+  const cur = localStorage.getItem('zerokit.font-scale') || 'm';
+  const next = nextFontScale(cur, e.deltaY < 0 ? 1 : -1);
+  if (next === cur) return;
+  localStorage.setItem('zerokit.font-scale', next);
+  document.documentElement.dataset.fontScale = next;
+  el.count.textContent = `字号：${{ s: '小', m: '中', l: '大' }[next]}`;
+  e.preventDefault();
+}, { passive: false });
+
+// 第九十六轮③：Ctrl+= / Ctrl+- 同一套字号调节
+document.addEventListener('keydown', (e) => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  if (e.key === '=' || e.key === '+') {
+    const cur = localStorage.getItem('zerokit.font-scale') || 'm';
+    localStorage.setItem('zerokit.font-scale', nextFontScale(cur, 1));
+    document.documentElement.dataset.fontScale = localStorage.getItem('zerokit.font-scale');
+    e.preventDefault();
+  } else if (e.key === '-') {
+    const cur = localStorage.getItem('zerokit.font-scale') || 'm';
+    localStorage.setItem('zerokit.font-scale', nextFontScale(cur, -1));
+    document.documentElement.dataset.fontScale = localStorage.getItem('zerokit.font-scale');
+    e.preventDefault();
+  }
+});
+
+function hidePanels() {  for (const v of [el.listView, el.detailView, el.workbench, el.psView,
     el.plugView, el.marketView, el.logsView, el.doctorView, el.allowView, el.devView, el.dashView]) {
     v.classList.add('hidden');
     // 第五十九轮②：每次面板重新显示时重放视图动效（先移除类，显示方再加回）
@@ -1083,6 +1187,7 @@ function renderListInner() {
   el.doctorView.classList.add('hidden');
   showPanelAnimated(el.listView);
   if (detail) showPanelAnimated(el.detailView);
+  applySplitLayout();
 
   const tS = performance.now();
   const results = search(q);
@@ -1272,7 +1377,19 @@ function renderListInner() {
 // 此前每项 li/星标都各自 addEventListener，重渲一次列表挂一批监听器，
 // 千项列表就是几千个闭包；委托后只有一个，重渲不再重新绑定。
 let listEventsBound = false;
-void restoreWatches();
+// 第九十六轮⑤：双击列表项 = 切换收藏（与星标等价；委托到 #list，重画不影响）
+el.list.addEventListener('dblclick', (e) => {
+  const li = e.target.closest('li.item');
+  if (!li) return;
+  const key = li.dataset.key;
+  if (!key) return;
+  const i = favorites.indexOf(key);
+  if (i >= 0) { favorites.splice(i, 1); el.count.textContent = '已取消收藏'; }
+  else { favorites.push(key); el.count.textContent = '已收藏（双击同款取消）'; }
+  savePrefs();
+  patchItemFav(key);
+});
+
 function bindListItems(q) {
   if (listEventsBound) return;
   listEventsBound = true;
@@ -1463,9 +1580,12 @@ function openDetail(plugin, action, prefill) {
   // 深链：CLI / MCP / 别人的消息里可以直接给 #/插件/动作 让界面跳到这一条
   const wantedHash = `#/${plugin.id}/${action.id}`;
   if (location.hash !== wantedHash) history.pushState(null, '', wantedHash);
-  el.listView.classList.add('hidden');
+  // 第九十六轮①：宽屏双栏——列表保留为侧栏（splitter 可拖宽度）；窄屏保持全屏替换
+  const keepList = window.innerWidth > 1080;
+  if (!keepList) el.listView.classList.add('hidden');
   el.workbench.classList.add('hidden');
   showPanelAnimated(el.detailView);
+  applySplitLayout();
 
   const depWarn = plugin.requiresOk ? '' : `
     <div class="cmd-line" style="color:var(--bad)">
@@ -7850,6 +7970,25 @@ document.addEventListener('keydown', (e) => {
       && [...document.querySelectorAll('body > .overlay')].some((o) => o.contains(document.activeElement));
     if (inOverlay) return; // overlay 内部各自的 keydown（如命令面板）会处理并 stopPropagation 之前的顺序问题——这里不重复处理
   }
+
+// 第九十六轮⑥：长按 Esc ≥600ms —— 一把清空搜索词+筛选+回列表态（重度搜索用户的逃生门）
+{
+  let escDownAt = 0; let escFired = false;
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (!escDownAt) { escDownAt = Date.now(); escFired = false; }
+    if (!escFired && Date.now() - escDownAt >= 600) {
+      escFired = true;
+      el.q.value = '';
+      listFilter = 'all';
+      applyHash();
+      renderList();
+      el.count.textContent = '已清空搜索';
+    }
+  });
+  document.addEventListener('keyup', (e) => { if (e.key === 'Escape') escDownAt = 0; });
+}
+
   // Ctrl+P / Ctrl+K：全局命令面板——必须在 mode 分支之前：面板是「从任何页面都能唤起」的
   // 统一入口，日志/自检/统计页 return 早退会把它挡掉（第八十五轮实测发现）
   if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.key === 'k' || e.key === 'K')) {

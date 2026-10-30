@@ -1913,3 +1913,28 @@ input.dirty, textarea.dirty { border-left: 2px solid var(--accent); }
 
 /* 第九十五轮：首跑引导副标题 */
 .firstrun-sub { color: var(--fg-dim); font-size: 13px; margin: -6px 0 10px; }
+
+
+/* ==================== 第九十六轮：分栏布局与手势 ==================== */
+/* 宽屏双栏：#stage 变 grid（listView | splitter | detailView），由 JS 按需挂宽度 */
+#stage { position: relative; }
+#zkSplitter {
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  margin: 0 -1px;
+  z-index: 5;
+}
+#zkSplitter::after {
+  content: '';
+  position: absolute;
+  inset: 0 -3px;
+  /* 热区 10px，视觉只有 1px 细线，悬停亮起 */
+  border-left: 1px solid var(--line, #2a2f3a);
+}
+#zkSplitter:hover::after, #zkSplitter:active::after {
+  border-left-color: var(--accent);
+}
+@media (prefers-reduced-motion: reduce) {
+  #zkSplitter { transition: none !important; }
+}
