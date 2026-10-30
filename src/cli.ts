@@ -1702,6 +1702,12 @@ async function cmdDoctor(): Promise<number> {
     process.stdout.write(c.green('✓ 数据目录结构已确保齐全\n'));
   }
   process.stdout.write(c.bold('环境自检\n'));
+  // 第九十五轮④：1.0 体检段——版本与里程碑信息（与 package.json 同源）
+  {
+    const ver = (JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;
+    const major = Number(ver.split('.')[0]);
+    process.stdout.write(c.dim(`  zerokit v${ver}${major >= 1 ? '（1.0 稳定线：四面前 CLI / 启动器 / MCP / 桌面壳）' : ''}\n`));
+  }
   // 第八十四轮①：三级汇总行置顶——先给全局结论再看明细
   process.stdout.write(`  ${doctorSummaryLine(report, passedCount)}\n`);
   // 第八十四轮④：最近 5 次体检趋势（新→旧）

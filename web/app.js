@@ -8324,10 +8324,11 @@ function showFirstRunGuide() {
     { icon: '🔍', t: '搜一下', d: '顶部搜索框支持中文、拼音、首字母。打「xtxx」试试「系统信息」。' },
     { icon: '▶', t: '执行', d: '选一个动作回车进入详情。只读的直接跑；会改动的要确认。' },
     { icon: '📊', t: '看结果', d: '结果可复制/下载/重跑，表格能排序筛选，还能开监控自动盯变化。' },
+    { icon: '🏠', t: '仪表盘', d: '顶栏「NetBar」看全局：快捷动作、最近执行、监控与统计一屏全收。' },
   ];
   overlay.innerHTML = `
     <div class="modal firstrun-modal">
-      <h3>欢迎使用 zerokit 启动器</h3>
+      <h3>欢迎使用 zerokit 启动器</h3>\n      <p class="firstrun-sub">插件是能力包：一份清单，四个面（CLI / 启动器 / MCP / 桌面壳）。</p>
       <div class="firstrun-steps">
         ${steps.map((s2, i) => `<div class="firstrun-step">
           <div class="firstrun-icon">${s2.icon}</div>
