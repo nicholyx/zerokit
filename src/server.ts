@@ -254,14 +254,18 @@ function serveStatic(res: http.ServerResponse, urlPath: string): void {
       res.writeHead(404).end('web/ 目录还没生成');
       return;
     }
-    const html = fs.readFileSync(index, 'utf8').replace('__TOKEN__', SESSION_TOKEN);
+    const html = fs.readFileSync(index, 'utf8').replace('__TOKEN__', SESSION_TOKEN).replace('__VERSION__', SERVER_VERSION);
     res.writeHead(200, { 'content-type': MIME['.html']! }).end(html);
     return;
   }
   const ext = path.extname(full).toLowerCase();
   let body = fs.readFileSync(full);
   if (ext === '.html' || ext === '.js') {
-    body = Buffer.from(body.toString('utf8').replace('__TOKEN__', SESSION_TOKEN));
+    // 根页面两占位符都注入（令牌+版本）；插件页只换令牌（版本在启动器壳才有意义）
+    const isRoot = rel === 'index.html';
+    body = Buffer.from(body.toString('utf8')
+      .replace('__TOKEN__', SESSION_TOKEN)
+      .replace('__VERSION__', rel === 'index.html' ? SERVER_VERSION : '__VERSION__'));
   }
   res.writeHead(200, {
     'content-type': MIME[ext] ?? 'application/octet-stream',

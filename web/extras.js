@@ -2797,3 +2797,61 @@ export function dashStats(brief, nameOf) {
     topName: b.top?.[0]?.[0] ? (nameOf?.(b.top[0][0]) ?? b.top[0][0]) : '',
   };
 }
+
+
+// ============ 第九十三轮：分享与深链闭环 ============
+
+/** ①② 生成详情深链：#/插件id/动作id?字段=值——只带非 secret 字段，值 encodeURIComponent。
+ * 与 deepLinkParams 互逆：deepLinkParams(encodeDeepLink('sysinfo','overview',{a:'1'})).a === '1'。 */
+export function encodeDeepLink(pluginId, actionId, values = {}, fields = []) {
+  const parts = [];
+  const byName = new Map((fields ?? []).map((f) => [f?.name ?? f, f]));
+  // 无定义时按名字猜 secret（拿不到清单的场景，宁可多剔也不错放）
+  const looksSecret = (k) => /secret|token|password|passwd|api[_-]?key|credential/i.test(k);
+  for (const [k, v] of Object.entries(values ?? {})) {
+    if (v == null || v === '' || v === false) continue; // 默认值/空不带，链接短
+    const f = byName.get(k);
+    if (f?.secret || (!f && looksSecret(k))) continue; // secret 永不进链接（会进聊天记录）
+    if (!/^[\w.-]+$/.test(k)) continue;
+    // 有字段定义时只带定义过的键——链接即表单，别把动态杂键漏进去
+    if (byName.size > 0 && !byName.has(k)) continue;
+    parts.push(`${k}=${encodeURIComponent(String(v))}`);
+  }
+  const q = parts.length ? `?${parts.join('&')}` : '';
+  return `#/${encodeURIComponent(pluginId)}/${encodeURIComponent(actionId)}${q}`;
+}
+
+/** ③ 结果快照信封：{app:'zerokit',kind:'zkresult',version,savedAt,action:{plugin,name},result}。 */
+export function buildZkresult(result, action = {}, version = '0.0.0') {
+  return {
+    app: 'zerokit',
+    kind: 'zkresult',
+    version,
+    savedAt: new Date().toISOString(),
+    action: { plugin: action?.plugin ?? '', action: action?.action ?? '', title: action?.title ?? '' },
+    result: result ?? null,
+  };
+}
+
+/** ④⑧ 解析+校验快照：非 zerokit 快照 / 缺 result / 缺 app 各自报错；返回 {ok,snapshot|error}。 */
+export function parseZkresult(text) {
+  let j;
+  try { j = JSON.parse(String(text ?? '')); } catch { return { ok: false, error: '不是合法 JSON' }; }
+  if (!j || typeof j !== 'object') return { ok: false, error: '快照不是对象' };
+  if (j.app !== 'zerokit' || j.kind !== 'zkresult') return { ok: false, error: '不是 zerokit 结果快照（app/kind 不匹配）' };
+  if (!('result' in j)) return { ok: false, error: '快照缺 result 字段' };
+  if (!j?.savedAt || Number.isNaN(Date.parse(j.savedAt))) return { ok: false, error: '快照时间戳不合法' };
+  return { ok: true, snapshot: j };
+}
+
+/** ⑦ 复制命令带注释头：zkit run … 前面加一行「# 插件名 · 动作名」。 */
+export function commandWithNote(argvLine, pluginName = '', actionName = '') {
+  const note = pluginName || actionName ? `# ${[pluginName, actionName].filter(Boolean).join(' · ')}\n` : '';
+  return `${note}${argvLine}`;
+}
+
+/** ⑥ 收藏备注规范化：截 60 字、去首尾空白；空串=无备注。 */
+export function favNote(note) {
+  const t = String(note ?? '').trim();
+  return t ? t.slice(0, 60) : '';
+}

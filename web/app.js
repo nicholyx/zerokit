@@ -17,7 +17,7 @@ import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
 import { paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats } from './extras.js';
-import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost } from './extras.js';
+import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
 import { cellDisplay, tableDensity, kvCollapsed } from './extras.js';
@@ -44,6 +44,7 @@ import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, togg
 const TOKEN = document.querySelector('meta[name=zk-token]').content;
 const $ = (id) => document.getElementById(id);
 
+window.__zkVersion = (document.querySelector('meta[name=zk-version]')?.content ?? '');
 const el = {
   q: $('q'), list: $('list'), empty: $('empty'), count: $('count'), searchRow: $('searchRow'),
   listView: $('listView'), detailView: $('detailView'), workbench: $('workbench'),
@@ -2065,8 +2066,10 @@ function openDetail(plugin, action, prefill) {
       setTimeout(() => { ev.currentTarget.textContent = '复制 mcpServers'; }, 1500);
     });
     $('copyInvoke').addEventListener('click', async (ev) => {
+      // 第九十三轮⑦：复制的命令块首行带注释（# 插件名 · 动作名）——贴进聊天/脚本一眼知道是啥
+      const noted = commandWithNote(text, plugin.name ?? plugin.id, action.title ?? action.id);
       try {
-        await navigator.clipboard.writeText(text);
+        await navigator.clipboard.writeText(noted);
         ev.currentTarget.textContent = '已复制';
       } catch {
         ev.currentTarget.textContent = '复制失败（非 https 环境）';
@@ -2151,11 +2154,11 @@ function openDetail(plugin, action, prefill) {
   });
 
   // 分享链接：带当前参数的完整深链（收的人打开就是填好的表单）
+  // 第九十三轮②：改走 encodeDeepLink——secret 字段不进链接、空值不带，链接更短也更安全
   $('shareBtn')?.addEventListener('click', () => {
     const vals = collectValues(action);
-    const qs = Object.entries(vals).filter(([, v]) => v !== '' && v !== undefined && v !== null)
-      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&');
-    const link = `${location.origin}${location.pathname}#/${plugin.id}/${action.id}${qs ? `?${qs}` : ''}`;
+    const hash = encodeDeepLink(plugin.id, action.id, vals, action.params ?? []);
+    const link = `${location.origin}${location.pathname}${hash}`;
     navigator.clipboard?.writeText(link).then(() => {
       $('shareBtn').textContent = '已复制链接';
       setTimeout(() => { $('shareBtn').textContent = '分享'; }, 1500);
@@ -4249,6 +4252,7 @@ function renderResult(res) {
       </div>
       <div class="result-tools">
         <button class="ghost" id="copyRes" title="复制结果；Shift=美化 JSON；Alt=带备注与时间">复制</button>
+        <button class="ghost" id="snapRes" title="导出 .zkresult 快照（含元数据；对方可导入回放）">📦 快照</button>
         <button class="ghost" id="saveRes" title="把结果存成文本文件">下载</button>
         <button class="ghost" id="mdRes" title="导出成 Markdown（表格/代码块），方便贴进文档或 Issue">导出 Markdown</button>
         <button class="ghost" id="shareMdRes" title="导出分享 Markdown 单文件（含执行信息折叠头，贴 Issue/文档即用）">⧉ 分享 MD</button>
@@ -4324,6 +4328,18 @@ function renderResult(res) {
     a.download = `zerokit-${detail ? `${detail.plugin.id}-${detail.action.id}` : 'result'}.txt`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  // 第九十三轮③：导出 .zkresult 快照——含插件/动作/版本/时间元数据，对方可导入回放
+  $('snapRes')?.addEventListener('click', () => {
+    const snap = buildZkresult(res, detail ? { plugin: detail.plugin.id, action: detail.action.id, title: detail.action.title } : {}, window.__zkVersion ?? '');
+    const blob = new Blob([JSON.stringify(snap, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `zerokit-${detail ? `${detail.plugin.id}-${detail.action.id}` : 'result'}-${snap.savedAt.slice(0, 10)}.zkresult.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    el.count.textContent = '快照已导出（.zkresult.json）';
   });
   $('mdRes')?.addEventListener('click', () => {
     const title = detail ? `${detail.plugin.name} · ${detail.action.title}` : 'zerokit 结果';
@@ -8642,6 +8658,27 @@ $('dlLang')?.addEventListener('click', () => {
 $('dlLogs')?.addEventListener('click', () => { closeDrawer(); $('logsBtn')?.click(); });
 $('dlDoctor')?.addEventListener('click', () => { closeDrawer(); $('doctorBtn')?.click(); });
 $('dlSaved')?.addEventListener('click', () => { closeDrawer(); $('savedBtn')?.click(); });
+// 第九十三轮④：导入 .zkresult 快照回放——外来快照只读展示，重跑会明示「将本地执行」
+$('dlImportSnap')?.addEventListener('click', () => {
+  closeDrawer();
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = '.zkresult.json,.zkresult,application/json';
+  inp.onchange = async () => {
+    const f = inp.files?.[0];
+    if (!f) return;
+    const text = await f.text();
+    const r = parseZkresult(text);
+    if (!r.ok) { el.count.textContent = `导入失败：${r.error}`; alert(`导入失败：${r.error}`); return; }
+    const snap = r.snapshot;
+    // 外来快照：挂到结果区直接回放；isForeign 标记让「重跑」按钮提示语义
+    try {
+      renderResult({ data: snap.result?.data ?? snap.result, ok: snap.result?.ok ?? true, ms: snap.result?.ms, note: `外来快照 · ${snap.action?.title || `${snap.action?.plugin}.${snap.action?.action}`} · ${snap.savedAt.slice(0, 19).replace('T', ' ')}（重跑将在本机执行）` });
+      el.count.textContent = `已导入快照（${snap.action?.plugin}.${snap.action?.action}，v${snap.version}）`;
+    } catch (err) { el.count.textContent = `快照渲染失败：${err?.message ?? err}`; }
+  };
+  inp.click();
+});
 $('dlTimers')?.addEventListener('click', () => { closeDrawer(); $('timersBtn')?.click(); });
 $('dlBrief')?.addEventListener('click', () => { closeDrawer(); $('briefBtn')?.click(); });
 $('dlHelp')?.addEventListener('click', () => { closeDrawer(); $('guideBtn')?.click(); });
