@@ -1910,3 +1910,6 @@ input.dirty, textarea.dirty { border-left: 2px solid var(--accent); }
 .fail-stderr pre { margin-top: 4px; }
 .fail-sug { margin-top: 6px; padding: 6px 10px; border-left: 3px solid var(--warn); background: color-mix(in srgb, var(--warn) 10%, transparent); border-radius: 4px; font-size: 13px; }
 @media (prefers-reduced-motion: reduce) { .fail-card .fail-kind { animation: none !important; } }
+
+/* 第九十五轮：首跑引导副标题 */
+.firstrun-sub { color: var(--fg-dim); font-size: 13px; margin: -6px 0 10px; }
