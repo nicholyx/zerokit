@@ -295,6 +295,13 @@ function openThemePop() {
       <button data-backup="import" title="从备份 JSON 恢复：可预览、可选择类别、合并不覆盖">⬆ 导入数据</button>
       <button data-backup="purge" title="清除本地结果与运行历史（含参数记忆），审计日志不动">🧹 清除痕迹</button>
     </div>
+    <div class="tp-head">分类清除（第八十八轮）</div>
+    <div class="tp-row tp-scope-wipe">
+      <button data-scope-wipe="runs" title="只清执行历史（localStorage zerokit.runs），收藏与设置不动">🕘 执行历史 <span data-scope-count="runs"></span></button>
+      <button data-scope-wipe="searches" title="只清搜索历史">🔍 搜索历史 <span data-scope-count="searches"></span></button>
+      <button data-scope-wipe="saved" title="只清保存的结果快照">💾 结果快照 <span data-scope-count="saved"></span></button>
+      <button data-scope-wipe="timers" title="只清定时任务">⏲ 定时任务 <span data-scope-count="timers"></span></button>
+    </div>
     <div class="tp-head">配置档 <small class="tp-profile-cur">${esc(curProfileName())}</small></div>
     <div class="tp-row tp-profiles">
       ${panelProfileNames().map((n) => `
@@ -366,6 +373,37 @@ function openThemePop() {
       if (act === 'export') exportBackup();
       else if (act === 'import') openImportDialog();
       else if (act === 'purge') purgeSensitive();
+    });
+  });
+  // ---- 第八十八轮⑤：分类清除（UI 侧 localStorage 类；文件侧走 CLI data wipe） ----
+  const uiScopes = {
+    runs: { key: 'zerokit.runs', label: '执行历史' },
+    searches: { key: 'zerokit.searches', label: '搜索历史' },
+    saved: { key: 'zerokit.saved-results', label: '结果快照' },
+    timers: { key: 'zerokit.timers', label: '定时任务' },
+  };
+  for (const [sc, meta] of Object.entries(uiScopes)) {
+    const n = readJson(meta.key);
+    const cnt = n == null ? 0
+      : Array.isArray(n) ? n.length
+      : typeof n === 'object' ? Object.keys(n).length
+      : 1;
+    const badge = pop.querySelector(`[data-scope-count="${sc}"]`);
+    if (badge) badge.textContent = cnt > 0 ? `（${cnt}）` : '（空）';
+  }
+  pop.querySelectorAll('[data-scope-wipe]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const sc = b.dataset.scopeWipe ?? '';
+      const meta = uiScopes[sc];
+      if (!meta) return;
+      const badge = pop.querySelector(`[data-scope-count="${sc}"]`);
+      const n = readJson(meta.key);
+      const cnt = n == null ? 0 : Array.isArray(n) ? n.length : typeof n === 'object' ? Object.keys(n).length : 1;
+      if (cnt === 0) { el.count.textContent = `${meta.label}：没有数据`; return; }
+      if (!confirm(`清除「${meta.label}」（共 ${cnt} 条）？此操作不可撤销。`)) return;
+      try { localStorage.removeItem(meta.key); } catch { /* 隐私模式 */ }
+      el.count.textContent = `✓ 已清除 ${meta.label} ${cnt} 条`;
+      openThemePop(); // 重建面板刷新计数
     });
   });
   // ---- 第二十一轮：配置档分组（新建 / 切换 / 重命名 / 删除） ----
