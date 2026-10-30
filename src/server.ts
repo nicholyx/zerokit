@@ -428,6 +428,9 @@ export function createServer(): http.Server {
         };
         if (decision === 'error') entries = entries.filter((e) => Boolean(e['error']));
         else if (decision) entries = entries.filter((e) => e['decision'] === decision);
+        // 第九十二轮⑦：插件过滤（与 CLI history --plugin 同语义）
+        const pluginF = (url.searchParams.get('plugin') ?? '').trim();
+        if (pluginF) entries = entries.filter((e) => e['plugin'] === pluginF);
         if (q) entries = entries.filter((e) => JSON.stringify(e).toLowerCase().includes(q));
         json(res, 200, {
           file,

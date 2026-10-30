@@ -5277,6 +5277,10 @@ let logsFile = 'audit';
 let logsPage = 1;
 let logsDecision = '';
 let logsQuery = '';
+// 第九十二轮⑦：快捷过滤状态（今天/插件 chip）
+let logsToday = false;
+let logsPlugin = '';
+let logsPlugins = [];
 
 async function showLogs() {
   mode = 'logs';
@@ -5324,6 +5328,10 @@ function logRowHtml(e, i) {
 async function renderLogs() {
   const chips = [['', '全部'], ['allow', '允许'], ['deny', '被拒'], ['error', '失败']]
     .map(([id, label]) => `<button class="chip${logsDecision === id ? ' on' : ''}" data-log-decision="${id}">${label}</button>`).join('');
+  // 第九十二轮⑦：快捷过滤 chip——今天 + 插件（语义与 CLI --today/--plugin 一致）
+  const quickChips = `<button class="chip${logsToday ? ' on' : ''}" data-log-today="1">今天</button>`;
+  const plugChips = (logsPlugins ?? []).slice(0, 6).map((p) =>
+    `<button class="chip${logsPlugin === p ? ' on' : ''}" data-log-plugin="${esc(p)}">${esc(p)}</button>`).join('');
   // 第十九轮⑤：自动清理提示——启动时算过一遍超期条目数（trimAuditLog），页头亮出来
   const trimInfo = window.__zkAuditTrim
     ? `<div class="trim-note">🧹 已自动清理 ${window.__zkAuditTrim} 条超期日志（>90 天；config.toml 可关）</div>` : '';
@@ -5334,7 +5342,7 @@ async function renderLogs() {
     </div>
     ${trimInfo}
     <div class="log-tools">
-      <div class="chips">${chips}</div>
+      <div class="chips">${chips}${quickChips}${plugChips ? `<span class="chip-sep">·</span>${plugChips}` : ''}</div>
       <input id="logQuery" class="log-query" placeholder="过滤：插件 / 动作 / 错误（支持 ms>100 这类数字比较）" value="${esc(logsQuery)}">
       <button class="ghost" id="logCsv" title="把当前过滤结果导出 CSV（时间/插件/动作/决策/耗时/退出码）">⬇ CSV</button>
       <button class="ghost" id="logReload">刷新</button>
@@ -5344,6 +5352,12 @@ async function renderLogs() {
 
   el.logsView.querySelectorAll('[data-log-decision]').forEach((b) => {
     b.addEventListener('click', () => { logsDecision = b.dataset.logDecision; logsPage = 1; renderLogs(); });
+  });
+  el.logsView.querySelectorAll('[data-log-today]').forEach((b) => {
+    b.addEventListener('click', () => { logsToday = !logsToday; logsPage = 1; renderLogs(); });
+  });
+  el.logsView.querySelectorAll('[data-log-plugin]').forEach((b) => {
+    b.addEventListener('click', () => { logsPlugin = logsPlugin === b.dataset.logPlugin ? '' : b.dataset.logPlugin; logsPage = 1; renderLogs(); });
   });
   $('logQuery').addEventListener('change', () => { logsQuery = $('logQuery').value.trim(); logsPage = 1; renderLogs(); });
   $('logReload').addEventListener('click', renderLogs);
@@ -5380,7 +5394,35 @@ async function renderLogs() {
     const params = new URLSearchParams({ file: logsFile, limit: '200' });
     if (logsDecision) params.set('decision', logsDecision);
     if (logsQuery) params.set('q', logsQuery);
+    if (logsPlugin) params.set('plugin', logsPlugin);
     data = await api(`/api/logs?${params}`);
+    // 第九十二轮⑦：客户端「今天」过滤（本地零点锚定，与 CLI --today 同语义）
+    if (logsToday) {
+      const d = new Date(); d.setHours(0, 0, 0, 0);
+      data.entries = (data.entries ?? []).filter((e) => Date.parse(e.ts) >= d.getTime());
+    }
+    // 插件 chip 候选：从当前页数据的插件集合取（去重保序）
+    const prevPlugins = logsPlugins.join(',');
+    logsPlugins = [...new Set((data.entries ?? []).map((e) => e.plugin).filter(Boolean))];
+    if (logsPlugins.join(',') !== prevPlugins) {
+      // 首次拿到集合（或集合变了）：把插件 chip 增补到「今天」chip 之后，再重绑
+      const holder = el.logsView.querySelector('.chips');
+      if (holder) {
+        holder.querySelectorAll('[data-log-plugin]').forEach((n) => n.remove());
+        const frag = document.createDocumentFragment();
+        for (const pl of logsPlugins.slice(0, 6)) {
+          const b = document.createElement('button');
+          b.className = 'chip' + (logsPlugin === pl ? ' on' : '');
+          b.dataset.logPlugin = pl;
+          b.textContent = pl;
+          frag.appendChild(b);
+        }
+        holder.appendChild(frag);
+        holder.querySelectorAll('[data-log-plugin]').forEach((b) => {
+          b.addEventListener('click', () => { logsPlugin = logsPlugin === b.dataset.logPlugin ? '' : b.dataset.logPlugin; logsPage = 1; renderLogs(); });
+        });
+      }
+    }
   } catch (e) {
     $('logList').innerHTML = `<div class="ps-empty" role="status">读日志失败：${esc(e.message)}</div>`;
     return;
