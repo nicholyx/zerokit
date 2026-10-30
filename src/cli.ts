@@ -124,8 +124,10 @@ ${c.bold('示例')}
   zkit run proxy status
   zkit run proxy allow-domain --domain example.com
   zkit plugin add RedMi/proxy
+  echo '{"text":"hi"}' | zkit run quick b64 --stdin-json    # 管道喂参
 
 数据目录 ${c.dim(HOME)}（复制这个目录 = 搬走整套配置和插件）
+${c.dim('退出码：0 成功 / 1 执行失败 / 2 用法错误（脚本里可据此分流）')}
 `;
 
 // ---------------------------------------------------------------- 输出小工具
@@ -684,12 +686,16 @@ async function cmdRun(args: string[]): Promise<number> {
         || a === '--sort' || a === '--pick' || a === '--uniq' || a === '--sum' || a === '--head') { i++; continue; }
     if (a.startsWith('--out=') || a.startsWith('--watch=') || a.startsWith('--share=') || a.startsWith('--jq=') || a.startsWith('--env=') || a.startsWith('--format=')
         || a.startsWith('--sort=') || a.startsWith('--pick=') || a.startsWith('--uniq=') || a.startsWith('--sum=') || a.startsWith('--head=')) continue;
-    if (['--yes', '-y', '--json', '--copy', '--quiet', '--full'].includes(a)) continue;
+    if (['--yes', '-y', '--json', '--copy', '--quiet', '--full', '--stdin-json'].includes(a)) continue;
     // 第七十五轮：--sort -列 的降序值（-内存 不是短旗标，前一个是 --sort 就吞掉）
     if (a.startsWith('-') && !a.startsWith('--') && i > 0 && rest[i - 1] === '--sort') continue;
     argv.push(a);
   }
-  const parsed = parseArgv(action, argv);
+  const parsed0 = parseArgv(action, argv);
+  // 第九十一轮②：--stdin-json 从 stdin 读参数 JSON（脚本管道友好：echo '{"text":"x"}' | zkit run quick.b64 --stdin-json）
+  const parsed = rest.includes('--stdin-json')
+    ? { ...parsed0, values: { ...parsed0.values, ...readStdinJsonArgs() }, errors: parsed0.errors.filter((e) => !e.includes('必填')) }
+    : parsed0;
   if (parsed.help) {
     process.stdout.write(`zkit run ${pluginId} ${actionId}\n  ${action.description}\n\n`);
     for (const f of toCliFlags(action)) {
@@ -707,7 +713,15 @@ async function cmdRun(args: string[]): Promise<number> {
     process.stderr.write(c.dim(`  完整帮助：zkit run ${pluginId} ${actionId} --help\n`));
   };
   if (parsed.errors.length > 0) {
-    for (const e of parsed.errors) process.stderr.write(c.red(`✗ ${e}`) + '\n');
+    for (const e of parsed.errors) {
+      process.stderr.write(c.red(`✗ ${e}`) + '\n');
+      // 第九十一轮⑦：未知参数名给最近建议（复用第三十五轮 suggest）
+      const m = e.match(/^未知参数 "--(.+)"$/);
+      if (m) {
+        const hint = suggestLine(m[1]!, action.params.map((p) => p.name));
+        if (hint) process.stderr.write(c.yellow(`  ${hint}\n`));
+      }
+    }
     paramTable();
     return 2;
   }
@@ -1824,6 +1838,14 @@ async function cmdHistory(args: string[]): Promise<number> {
   // 第六十八轮⑤：--tail N 与位置参数同义但更顺手（且允许 --tail 与默认 10 并存）
   const tailIdx = args.indexOf('--tail');
   const tailN = tailIdx >= 0 && args[tailIdx + 1] ? Number(args[tailIdx + 1]) : undefined;
+  // 第九十一轮⑥：--csv 导出（ts,plugin,action,exitCode,argv；引号转义），喂表格软件/下游脚本
+  if (args.includes('--csv')) {
+    const all = cliX.readHistory().slice(-500).reverse();
+    const esc = (v: string): string => `"${v.replace(/"/g, '""')}"`;
+    process.stdout.write('ts,plugin,action,exitCode,argv\n');
+    for (const e of all) process.stdout.write(`${e.ts},${esc(e.plugin)},${esc(e.action)},${e.exitCode},${esc(e.argv.join(' '))}\n`);
+    return 0;
+  }
   const n = Math.min(tailN || Number(args[0]) || 10, list.length);
   process.stdout.write(c.bold(`最近 ${n} 条（zkit history --rerun N 可重跑）：\n`));
   for (let i = 0; i < n; i++) {
@@ -2826,7 +2848,7 @@ async function cmdWeb(args: string[]): Promise<number> {
   });
 }
 
-const KNOWN_COMMANDS = ['allow', 'bench', 'audit', 'data', 'completion', 'config', 'desktop', 'doctor', 'welcome', 'gc', 'health', 'history', 'help', 'kill', 'last', 'list', 'logs', 'ls', 'man', 'market', 'mcp', 'path', 'plugin', 'ps', 'timers', 'run', 'show', 'stats', 'ui', 'web'];
+const KNOWN_COMMANDS = ['allow', 'bench', 'audit', 'data', 'completion', 'config', 'desktop', 'doctor', 'env', 'welcome', 'gc', 'health', 'history', 'help', 'kill', 'last', 'list', 'logs', 'ls', 'man', 'market', 'mcp', 'path', 'plugin', 'ps', 'timers', 'run', 'show', 'stats', 'ui', 'web', 'which'];
 
 // 第四十六轮②：man——不引依赖的终端命令参考（stdout 全量文本，man zkit 可外部包一层）
 const MAN_PAGE = `zkit(1) -- zerokit 命令行参考
@@ -2887,7 +2909,7 @@ _zkit() {
   case "\$prev" in
     run) COMPREPLY=( \$(compgen -W "$(subsRunPlugins)" -- "\$cur") ); return;;
   esac
-  if [[ "\$cur" == -* ]]; then COMPREPLY=( \$(compgen -W "--json --brief --health --yes --quiet --copy --interactive --help --version" -- "\$cur") ); return; fi
+  if [[ "\$cur" == -* ]]; then COMPREPLY=( \$(compgen -W "--json --brief --health --yes --quiet --copy --interactive --stdin-json --help --version" -- "\$cur") ); return; fi
   COMPREPLY=( \$(compgen -W "${subs}" -- "\$cur") )
 }
 complete -F _zkit zkit
@@ -2926,6 +2948,55 @@ function subsRunPlugins(): string {
   try {
     return listPlugins().map((e) => e.plugin?.id ?? '').filter(Boolean).join(' ');
   } catch { return ''; }
+}
+
+/** 第九十一轮②：--stdin-json 从 stdin 读参数对象（非交互、管道喂参）。坏 JSON 报错不猜。 */
+function readStdinJsonArgs(): Record<string, unknown> {
+  try {
+    const raw = fs.readFileSync(0, 'utf8').trim();
+    if (!raw) { process.stderr.write(c.red('✗ --stdin-json 但 stdin 是空的\n')); process.exit(2); }
+    const obj: unknown = JSON.parse(raw);
+    if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) {
+      process.stderr.write(c.red('✗ --stdin-json 要一个 JSON 对象（键=参数名），收到的是 ' + (Array.isArray(obj) ? '数组' : typeof obj) + '\n'));
+      process.exit(2);
+    }
+    return obj as Record<string, unknown>;
+  } catch (e) {
+    process.stderr.write(c.red(`✗ --stdin-json 解析失败：${(e as Error).message}\n`));
+    process.exit(2);
+  }
+}
+
+// 第九十一轮③④：which/env——脚本里探查动作与环境，不执行
+async function cmdWhich(args: string[]): Promise<number> {
+  const [pluginId, actionId] = args;
+  if (!pluginId || !actionId) { process.stderr.write('用法：zkit which <插件> <动作>\n'); return 2; }
+  let plugin: Plugin;
+  try { plugin = requirePlugin(pluginId); } catch (e) {
+    process.stderr.write(c.red(`✗ ${(e as Error).message}`) + '\n'); return 2;
+  }
+  const action = plugin.actions.find((a) => a.id === actionId);
+  if (!action) { process.stderr.write(c.red(`✗ 插件 ${pluginId} 里没有动作 "${actionId}"\n`)); return 2; }
+  const { buildArgv } = await import('./core/runner.ts');
+  const argv = buildArgv(plugin, action, applyDefaults(action, {}).values).argv;
+  process.stdout.write(`插件目录  ${plugin.dir}\n`);
+  process.stdout.write(`动作      ${pluginId}.${actionId}\n`);
+  process.stdout.write(`风险      ${action.risk}\n`);
+  process.stdout.write(`命令行    ${argv.join(' ')}\n`);
+  process.stdout.write(c.dim('（只解析不执行；参数默认值已代入）\n'));
+  return 0;
+}
+
+function cmdEnv(): number {
+  const home = process.env.ZEROKIT_HOME ?? path.join(os.homedir(), '.zerokit');
+  process.stdout.write(`ZEROKIT_HOME  ${process.env.ZEROKIT_HOME ? `${process.env.ZEROKIT_HOME}（已设置）` : `${home}（默认）`}\n`);
+  process.stdout.write(`平台          ${process.platform} / Node ${process.version}\n`);
+  for (const k of ['ZEROKIT_LANG', 'ZEROKIT_NO_COLOR', 'ZEROKIT_SETTING_*']) {
+    const hit = Object.keys(process.env).filter((x) => x === k || x.startsWith(k.replace(/\*$/, '')));
+    if (hit.length > 0) process.stdout.write(`${k.padEnd(13)} ${hit.map((h) => `${h}=${k.endsWith('*') ? '***' : process.env[h]}`).join('  ')}\n`);
+  }
+  process.stdout.write(c.dim(`\n数据目录删掉即完全重置：rm -rf "${home}"\n`));
+  return 0;
 }
 
 async function main(): Promise<number> {
@@ -2993,6 +3064,10 @@ async function main(): Promise<number> {
       return cmdGc(rest);
     case 'path':
       return cmdPath();
+    case 'which':
+      return await cmdWhich(rest);
+    case 'env':
+      return cmdEnv();
     case 'last':
       return cmdLast(rest);
     case 'history':
