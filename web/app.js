@@ -38,6 +38,7 @@ import { classifyClip, pushClipHistory, clipSuggestions } from './extras.js';
 import { toShareMarkdown, toShareHtml } from './extras.js';
 import { toAiMarkdown, packContext, toMcpConfig, toCurl, toLlmJsonl, watchTrendMarkdown } from './extras.js';
 import { navGroups, emptyState, skeletonRows, resultHeightTier, viewportMode, classifyError, batchSummary } from './extras.js';
+import { errorReport } from './extras.js';
 import { pluginCompare as plugCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags as pluginTagChips, pluginStatCards, installedList, installCommand } from './extras.js';
 import { normalizeTheme, resolveTheme, SHORTCUTS, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, formatNumber, isNumericColumn, sortRows, toCsv, diffResults, dailyTrend, hourlyHeat, dailyReport, virtualWindow, pageSlice, breadcrumb, listStateQuery, parseListState, digitPick, suggestNext, comboLabel, keyHelpList } from './extras.js';
 
@@ -4037,6 +4038,20 @@ document.addEventListener('click', (e) => {
   }
   const retryBtn = e.target.closest?.('[data-fail-retry]');
   if (retryBtn) { e.preventDefault(); const rb = document.querySelector('#runBtn'); rb?.click(); return; }
+  // 第九十四轮④：复制报错——从失败卡读回分类/命令/错误文本，组装含环境三行的完整报告
+  const copyErrBtn = e.target.closest?.('[data-fail-copy]');
+  if (copyErrBtn) {
+    e.preventDefault();
+    const card = copyErrBtn.closest('.fail-card');
+    const kind = card?.dataset.failKind ?? 'unknown';
+    const title = card?.querySelector('.fail-title')?.textContent?.replace(/^\S+\s*✗\s*/, '') ?? '执行失败';
+    const cmdText = card?.closest('#result')?.querySelector('.cmd-line, [id=cardHead] .aid')?.textContent?.trim() ?? (detail ? `zkit run ${detail.plugin.id} ${detail.action.id}` : '');
+    const raw = card?.querySelector('.fail-raw')?.textContent ?? '';
+    const env3 = { platform: navigator.platform || '?', node: window.__zkNodeVer ?? '—', version: window.__zkVersion ?? '' };
+    const text = errorReport(kind, title, cmdText, raw, env3);
+    navigator.clipboard?.writeText(text).then(() => { copyErrBtn.textContent = '已复制'; setTimeout(() => { copyErrBtn.textContent = '📋 复制报错'; }, 1500); }).catch(() => { copyErrBtn.textContent = '复制失败'; });
+    return;
+  }
   const foldBtn = e.target.closest?.('[data-fail-fold]');
   if (foldBtn) {
     const t = document.getElementById(foldBtn.dataset.failFold ?? '');
@@ -4086,20 +4101,53 @@ function renderResult(res) {
   const masked = (t) => (maskState() ? maskSecrets(t) : String(t ?? ''));
   if (res.error) {
     // 第四十八轮②③：失败卡片——分类标题 + 建议步骤 + 同参数重试 + 原文折叠
+    // 第九十四轮②③④⑤⑥⑦：stderr 折叠/下一步按分类/一键报错（含环境三行）/分类徽标/审计带分类/动作名建议
     const cls = classifyError(`${res.error}\n${res.stderr ?? ''}`);
     const errId = `errfold${++resultSeq}`;
     const rawLen = String(res.error).length;
+    // ⑦ 动作名打错建议：报错里含「找不到动作/插件」时从当前清单给近邻
+    let sugLine = '';
+    const mNotFound = /没有|找不到|not found|no such/i.exec(String(res.error));
+    if (mNotFound) {
+      // ⑦ 近邻建议：编辑距离（第三十五轮 suggest 同思路的页面内轻量版）
+      const bad = /"([^"\s]{2,})"/.exec(String(res.error))?.[1] ?? '';
+      if (bad) {
+        const cand = plugins.flatMap((pg) => pg.actions.map((a) => `${pg.id}.${a.id}`));
+        const near = cand
+          .map((ck) => ({ ck, d: lev(bad, ck) }))
+          .sort((a, b) => a.d - b.d)
+          .filter((x) => x.d <= Math.max(2, bad.length / 3))[0];
+        if (near) sugLine = `<div class="fail-sug">💡 ${esc(bad)} → 是不是想敲「${esc(near.ck)}」？</div>`;
+      }
+    }
+    // ② stderr 默认末 5 行，点开全文（保留原文可搜索）
+    let stderrHtml = '';
+    if (res.stderr && String(res.stderr).trim()) {
+      const lines = String(res.stderr).replace(/\n$/, '').split('\n');
+      const tail5 = lines.slice(-5).join('\n');
+      const sid = `errstd${++resultSeq}`;
+      stderrHtml = lines.length > 5
+        ? `<details class="fail-stderr"><summary>stderr（末 5 行 / 共 ${lines.length} 行）</summary><pre class="out" style="color:var(--fg-dim)">${esc(masked(tail5))}</pre><details><summary>展开全文</summary><pre class="out" style="color:var(--fg-dim)">${esc(masked(String(res.stderr)))}</pre></details></details>`
+        : `<details class="fail-stderr" open><summary>stderr</summary><pre class="out" style="color:var(--fg-dim)">${esc(masked(String(res.stderr)))}</pre></details>`;
+    }
+    // ⑤ 环境三行（doctor 同源：平台/Node/版本——从 navigator 与注入版本拿，不另发请求）
+    const env3 = { platform: navigator.platform || navigator.userAgent.split(') ')[0], node: window.__zkNodeVer ?? '—', version: window.__zkVersion ?? '' };
     body += `<div class="fail-card" data-fail-kind="${esc(cls.kind)}">
-      <div class="fail-title">✗ ${esc(cls.title)}</div>
+      <div class="fail-title"><span class="badge fail-kind">${esc(cls.kind)}</span> ✗ ${esc(cls.title)}</div>
       <div class="fail-steps">${cls.steps.map((st) => `<div class="fail-step">→ ${esc(st)}</div>`).join('')}</div>
+      ${sugLine}
       <div class="fail-actions">
         <button class="ghost" data-fail-retry="1">↻ 同参数重试</button>
+        <button class="ghost" data-fail-copy="1" title="分类+命令+环境+stderr 全文，贴 issue 一发入魂">📋 复制报错</button>
         ${rawLen > 200
           ? `<button class="ghost" data-fail-fold="${errId}">展开原始错误（${rawLen} 字符）</button>`
           : ''}
       </div>
       <pre class="out fail-raw ${rawLen > 200 ? 'hidden' : ''}" id="${errId}" style="color:var(--bad)">${esc(masked(res.error))}</pre>
+      ${stderrHtml}
     </div>`;
+    // ⑧ 审计失败条目带分类（fire-and-forget，不打断渲染）
+    try { api('/api/logs', { method: 'POST', body: JSON.stringify({ kind: 'fail-class', plugin: detail?.plugin?.id ?? '', action: detail?.action?.id ?? '', title: cls.title, failKind: cls.kind }) }).catch(() => {}); } catch { /* 静默 */ }
   }
   if (res.render === 'web' && detail) {
     // 插件自己的页面渲染结果：沙箱 iframe，无 allow-same-origin——
@@ -8497,6 +8545,14 @@ window.addEventListener('keydown', (e) => {
 });
 
 // 把内部状态挂出来，便于排查，也方便以后用 CDP 做界面自动化测试
+function lev(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return dp[m][n];
+}
+
 window.__zerokit = {
   // 第六十四轮：剪贴板工作流（截图脚本与自动化验证用）
   __zerokitShowClipSuggest: showClipSuggest,

@@ -2212,6 +2212,23 @@ export function classifyError(text) {
   return { kind: 'unknown', title: '执行失败', steps: ['看下方原始输出；重试一次排除偶发', '反复失败用 zkit doctor 自检'] };
 }
 
+/**
+ * ④⑤一键报错文本：分类标题 + 命令 + 环境三行 + stderr 全文（围栏包裹）。
+ * 贴 issue 一发入魂——报错可搜索、环境不用追问。
+ */
+export function errorReport(kind, title, command, errorText, env = {}) {
+  const fence = '```';
+  const lines = [];
+  lines.push(`# zerokit 执行失败：${title}（${kind}）`);
+  if (command) lines.push(`命令：${command}`);
+  if (env && Object.keys(env).length) lines.push(`环境：${env.platform ?? '?'} · Node ${env.node ?? '?'} · zerokit ${env.version ?? '?'}`);
+  lines.push('');
+  lines.push(fence);
+  lines.push(String(errorText ?? '').trim() || '（无 stderr）');
+  lines.push(fence);
+  return lines.join('\n');
+}
+
 /** ⑤批量执行汇总行：成功 N / 失败 M / 未跑 K（K=planned-已跑数；缺省无未跑段）。 */
 export function batchSummary(done, planned) {
   const ok = done.filter((d) => d.ok).length;
