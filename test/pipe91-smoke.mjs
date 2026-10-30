@@ -22,8 +22,17 @@ for (const sh of ['bash', 'zsh', 'fish']) {
   check(`① ${sh} 补全生成`, r.status === 0 && r.stdout.includes('zkit') && r.stdout.length > 100);
 }
 check('① 补全含新命令 which/env', run(['completion', 'bash']).stdout.includes('which') && run(['completion', 'bash']).stdout.includes('env'));
-check('⑧ bash 语法', spawnSync('bash', ['-n', '/dev/stdin'], { input: run(['completion', 'bash']).stdout }).status === 0);
-check('⑧ zsh 语法', spawnSync('zsh', ['-n', '/dev/stdin'], { input: run(['completion', 'zsh']).stdout }).status === 0);
+// ⑧ 补全脚本语法：临时文件再查（/dev/stdin 的 -n 语义各平台不一；CI runner 可能没装 zsh——缺 shell 只跳过不失败）
+{
+  const { writeFileSync } = await import('node:fs');
+  writeFileSync(path.join(home, 'comp.bash'), run(['completion', 'bash']).stdout);
+  writeFileSync(path.join(home, 'comp.zsh'), run(['completion', 'zsh']).stdout);
+  const hasSh = (sh) => process.platform === 'win32' ? sh === 'bash' : spawnSync('which', [sh], { encoding: 'utf8' }).status === 0;
+  if (hasSh('bash')) check('⑧ bash 语法', spawnSync('bash', ['-n', path.join(home, 'comp.bash')]).status === 0);
+  else console.log('  - bash 不在本机，跳过语法检查');
+  if (hasSh('zsh')) check('⑧ zsh 语法', spawnSync('zsh', ['-n', path.join(home, 'comp.zsh')]).status === 0);
+  else console.log('  - zsh 不在本机，跳过语法检查');
+}
 
 // ② --stdin-json
 {
