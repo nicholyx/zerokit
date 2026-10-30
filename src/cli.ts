@@ -21,6 +21,7 @@ import { type ScaffoldExample, type ScaffoldRuntime, scaffoldPlugin } from './co
 import { applyUpdate, checkUpdate, listUpdateStates } from './core/update.ts';
 import { checkRequires } from './core/resolve.ts';
 import { buildDoctorReport, toHistoryEntry, appendDoctorHistory, readDoctorHistory, diffDoctorHistory, persistCount, doctorSummaryLine } from './core/doctor.ts';
+import { dataInventory, isDataScope, wipePreview, wipeData, dataStats, auditDataEvent, type DataScope } from './core/datamap.ts';
 import { killAllProcesses, killProcess, listProcesses } from './core/runtime.ts';
 import { readSource } from './core/sources.ts';
 import { makeSnapshot, parseSnapshot, restoreSnapshot, diffSnapshot } from './core/migrate.ts';
@@ -2448,6 +2449,71 @@ async function cmdData(args: string[]): Promise<number> {
   const sub = args[0];
   const rest = args.slice(1);
   const watchPath = path.join(HOME_PATH(), 'watch.json');
+  // 第八十八轮：数据与隐私面——inventory/stats/wipe（snapshot/restore 等旧子命令保留在前）
+  const fmtBytes = (n: number): string => (n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KB`);
+  if (sub === 'inventory') {
+    const inv = dataInventory();
+    auditDataEvent('data:read', 'cli', 'inventory');
+    if (rest[0] === '--json') { console.log(JSON.stringify(inv, null, 2)); return 0; }
+    console.log(`数据目录：${HOME}（只列有内容的类）\n`);
+    for (const it of inv.items) {
+      const cnt = it.count >= 0 ? `，${it.count} 条` : '';
+      console.log(`  ${it.scope.padEnd(10)} ${it.what}${cnt}（${fmtBytes(it.bytes)}）`);
+      console.log(`  ${' '.repeat(10)} ${it.file ?? it.dir ?? ''}`);
+    }
+    console.log(`\n合计 ${fmtBytes(inv.totalBytes)}。分类清除：zkit data wipe --scope <类>`);
+    return 0;
+  }
+  if (sub === 'stats') {
+    const st = dataStats();
+    auditDataEvent('data:read', 'cli', 'stats');
+    if (rest[0] === '--json') { console.log(JSON.stringify(st)); return 0; }
+    console.log(`执行历史 ${st.runs} 条（最老 ${st.oldestRunTs ? new Date(st.oldestRunTs).toLocaleString() : '—'}）`);
+    console.log(`插件设置 ${st.settings} 个 · 定时任务 ${st.timers} 个`);
+    console.log(`审计日志 ${fmtBytes(st.auditBytes)}`);
+    return 0;
+  }
+  if (sub === 'wipe') {
+    const si = rest.indexOf('--scope');
+    const scope = (si >= 0 ? rest[si + 1] : '') ?? '';
+    if (!isDataScope(scope)) {
+      console.error(`不认识的 scope「${scope}」。可用：runs | settings | favorites | timers | cache | audit | all`);
+      console.error('提示：favorites 是浏览器 localStorage（UI 侧数据），请在启动器设置抽屉的「数据」分组里清除。');
+      return 2;
+    }
+    const scope2 = scope as DataScope;
+    const targets = wipePreview(scope2);
+    if (targets.length === 0) { console.log('这个类目前没有数据，无需清除。'); return 0; }
+    console.log(`将清除（scope=${scope2}）：`);
+    for (const t of targets) console.log(`  ${t.what}${t.count >= 0 ? `（${t.count} 条）` : ''} — ${t.file ?? t.dir}`);
+    if (!rest.includes('--yes')) {
+      console.log(`\n这是预览。确认执行加 --yes：zkit data wipe --scope ${scope2} --yes`);
+      return 0;
+    }
+    const r = wipeData(scope2);
+    auditDataEvent('data:write', 'cli', `wipe ${scope2}（${r.removed.length} 个文件）`);
+    console.log(`✓ 已清除 ${r.removed.length} 个文件，释放 ${fmtBytes(r.bytes)}。`);
+    return 0;
+  }
+  if (sub === 'export-scope') {
+    const si = rest.indexOf('--scope');
+    const scope = ((si >= 0 ? rest[si + 1] : 'all') ?? 'all');
+    if (!isDataScope(scope)) { console.error(`不认识的 scope「${scope}」`); return 2; }
+    const sc = scope as DataScope;
+    const inv = dataInventory();
+    const picked = sc === 'all' ? inv.items : inv.items.filter((i) => i.scope === sc);
+    // 位置参数只认不是 --scope 值的那个（--scope audit 的 audit 不是文件名）
+    const skip = new Set<number>();
+    rest.forEach((x, i) => { if (x === '--scope') skip.add(i + 1); });
+    const outArg = rest.find((x, i) => i > 0 && !x.startsWith('--') && !skip.has(i)) ?? null;
+    const payload = { app: 'zerokit', scope: sc, exportedAt: new Date().toISOString(), items: picked.map((i) => ({ scope: i.scope, what: i.what, file: i.file ? path.basename(i.file) : undefined, count: i.count, bytes: i.bytes })) };
+    auditDataEvent('data:read', 'cli', `export ${sc}`);
+    const dest = outArg ?? `zerokit-data-${sc}-${new Date().toISOString().slice(0, 10)}.json`;
+    fs.writeFileSync(dest, JSON.stringify(payload, null, 2));
+    console.log(`✓ 已导出清单到 ${dest}（${picked.length} 类）`);
+    console.log('说明：清单导出不含文件内容（隐私面——导出“有什么”，不是数据本身）；完整备份用 data export。');
+    return 0;
+  }
   if (sub === 'export') {
     const watches = fs.existsSync(watchPath) ? JSON.parse(fs.readFileSync(watchPath, 'utf8')) : { watches: [], stops: [] };
     const out = {

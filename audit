@@ -1,0 +1,14 @@
+{
+  "app": "zerokit",
+  "scope": "audit",
+  "exportedAt": "2026-10-29T23:54:39.219Z",
+  "items": [
+    {
+      "scope": "audit",
+      "what": "审计日志（谁在什么时候跑了什么）",
+      "file": "audit.log",
+      "count": 4,
+      "bytes": 785
+    }
+  ]
+}

@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+### Added
+
+- `zkit data inventory`：数据目录清单——每类的用途、条数、大小（人话，不是裸 ls），`--json` 机读
+- `zkit data wipe --scope <类>`：分类清除（runs/settings/timers/cache/audit），预览先行，`--yes` 才动手
+- `zkit data stats`：数据面统计（历史条数/设置数/定时器数/审计大小/最老记录时间）
+- `zkit data export-scope --scope <类>`：分类导出清单（只导「有什么」不导内容——隐私面）
+- 数据访问审计事件：`data:read` / `data:write` 进同一审计管道（caller 标 CLI/UI/MCP/watch）
+- 启动器设置抽屉「分类清除」分组：执行历史/搜索历史/结果快照/定时任务四类，带条数徽标，清前确认
+
+
 （下一版攒着）
 
 ## [0.92.0] - 2026-10-30
