@@ -1237,6 +1237,8 @@ const PREFIX_GROUPS = [
   { prefix: 'zerokit.colvis.', label: '表格列显隐' },
   { prefix: 'zerokit.colw.', label: '表格列宽' },
   { prefix: 'zerokit.profile.', label: '配置档' },
+  // 第九十六轮⑧：布局键也进备份（外观与设置组）
+  { prefix: 'zerokit.layout.', label: '外观与设置' },
 ];
 const OTHER_LABEL = '其它';
 
@@ -2871,4 +2873,39 @@ export function commandWithNote(argvLine, pluginName = '', actionName = '') {
 export function favNote(note) {
   const t = String(note ?? '').trim();
   return t ? t.slice(0, 60) : '';
+}
+
+// ==================== 第九十六轮：布局、手势与记忆 ====================
+
+/** ① 布局预设三档：normal（默认）/wide-list（列表占 44%）/wide-detail（列表 30%） */
+export const LAYOUT_PRESETS = {
+  normal: { label: '常规', listPct: 38 },
+  'wide-list': { label: '宽列表', listPct: 50 },
+  'wide-detail': { label: '宽详情', listPct: 30 },
+};
+
+/** 分栏宽度百分比 → 合法值（26–60 之间钳制，非法回 38） */
+export function clampListPct(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 38;
+  return Math.round(Math.min(60, Math.max(26, n)));
+}
+
+/** 拖拽换算：起拖位置+起拖宽度+当前位移+容器宽 → 新百分比（含钳制） */
+export function dragPct(startX, startPct, curX, containerW) {
+  if (!containerW || containerW < 100) return clampListPct(startPct);
+  const dPct = ((curX - startX) / containerW) * 100;
+  return clampListPct(startPct + dPct);
+}
+
+/** ⑦ Ctrl+滚轮缩放：当前字号档 → 上/下一档（s<m<l，边界不动） */
+const FS_ORDER = ['s', 'm', 'l'];
+export function nextFontScale(cur, dir) {
+  const i = FS_ORDER.indexOf(cur === 's' || cur === 'm' || cur === 'l' ? cur : 'm');
+  return FS_ORDER[Math.min(FS_ORDER.length - 1, Math.max(0, i + (dir > 0 ? 1 : -1)))];
+}
+
+/** ⑧ 布局键归类：layout.* 进备份「外观与设置」组（供 classifyKey 扩展用） */
+export function isLayoutKey(key) {
+  return typeof key === 'string' && (key.startsWith('zerokit.layout.') || key === 'zerokit.font-scale');
 }

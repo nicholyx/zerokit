@@ -1283,3 +1283,14 @@ const failed = results.filter((r) => !r[1]);
 for (const [name] of failed) console.error('FAIL  ' + name);
 console.log(`通过 ${results.length - failed.length} / ${results.length}`);
 if (failed.length) process.exitCode = 1;
+
+// ==================== 第九十六轮：布局、手势与记忆 ====================
+{
+  const m96 = await import('../web/extras.js');
+  check('96① LAYOUT_PRESETS 三档', m96.LAYOUT_PRESETS.normal.listPct === 38 && m96.LAYOUT_PRESETS['wide-list'].listPct === 50 && m96.LAYOUT_PRESETS['wide-detail'].listPct === 30);
+  check('96① clampListPct 钳制 26–60', m96.clampListPct(10) === 26 && m96.clampListPct(90) === 60 && m96.clampListPct('x') === 38 && m96.clampListPct(44.6) === 45);
+  check('96① dragPct 换算+钳制', m96.dragPct(100, 38, 200, 1000) === 48 && m96.dragPct(100, 38, -900, 1000) === 26);
+  check('96⑦ nextFontScale 三档循环边界', m96.nextFontScale('m', 1) === 'l' && m96.nextFontScale('m', -1) === 's' && m96.nextFontScale('l', 1) === 'l' && m96.nextFontScale('s', -1) === 's' && m96.nextFontScale('bad', 1) === 'l');
+  check('96⑧ isLayoutKey', m96.isLayoutKey('zerokit.layout.pct') === true && m96.isLayoutKey('zerokit.font-scale') === true && m96.isLayoutKey('zerokit.runs') === false);
+  check('96⑧ classifyKey 布局进外观组', m96.classifyKey('zerokit.layout.preset') === '外观与设置');
+}
