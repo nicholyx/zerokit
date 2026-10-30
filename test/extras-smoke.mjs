@@ -1281,8 +1281,6 @@ console.log('\n' + '='.repeat(60));
 // ======================= 汇总（必须在所有块之后） =======================
 const failed = results.filter((r) => !r[1]);
 for (const [name] of failed) console.error('FAIL  ' + name);
-console.log(`通过 ${results.length - failed.length} / ${results.length}`);
-if (failed.length) process.exitCode = 1;
 
 // ==================== 第九十六轮：布局、手势与记忆 ====================
 {
@@ -1294,3 +1292,27 @@ if (failed.length) process.exitCode = 1;
   check('96⑧ isLayoutKey', m96.isLayoutKey('zerokit.layout.pct') === true && m96.isLayoutKey('zerokit.font-scale') === true && m96.isLayoutKey('zerokit.runs') === false);
   check('96⑧ classifyKey 布局进外观组', m96.classifyKey('zerokit.layout.preset') === '外观与设置');
 }
+
+// ==================== 第九十七轮：结果再呈现 ====================
+{
+  const m97 = await import('../web/extras.js');
+  check('97① humanCell B→KB/MB', m97.humanCell(1536)?.text === '1.5 KB' && m97.humanCell(1048576)?.text === '1 MB' && m97.humanCell(512) === null);
+  check('97① humanCell ms→s', m97.humanCell(15000)?.text === '15 s' && m97.humanCell(3000)?.text === '3 s' && m97.humanCell(20000)?.text === '20 s' && m97.humanCell(1536)?.text === '1.5 KB');
+  check('97 numericShare 阈值', m97.numericShare([1, 2, 'x']) === 2 / 3 && m97.numericShare(['a', 'b']) === 0);
+  check('97② groupSegments 短段求和', (() => {
+    const rows = [{ a: 'g1', v: 1 }, { a: 'g1', v: 2 }, { a: 'g2', v: 5 }];
+    const g = m97.groupSegments(rows, ['a', 'v']);
+    return g.length === 1 && g[0].value === 'g1' && g[0].agg.kind === 'sum' && g[0].agg.total === 3;
+  })());
+  check('97② groupSegments 长段均值', (() => {
+    const rows = [1, 2, 3, 4, 5].map((v) => ({ a: 'big', v }));
+    const g = m97.groupSegments(rows, ['a', 'v']);
+    return g.length === 1 && g[0].agg.kind === 'avg' && g[0].agg.total === 3;
+  })());
+  check('97② groupSegments 无段（全异）/过短', m97.groupSegments([{ a: 1 }, { a: 2 }], ['a', 'v']).length === 0 && m97.groupSegments([], ['a', 'v']).length === 0);
+  check('97⑦ cellAlign 判型', m97.cellAlign(123) === 'r' && m97.cellAlign('1,234') === 'r' && m97.cellAlign('-5.2%') === 'r' && m97.cellAlign('abc') === 'l' && m97.cellAlign(null) === 'l');
+  check('97③ barShare 比例', m97.barShare(25, 100) === 0.25 && m97.barShare(-5, 100) === 0 && m97.barShare(10, 0) === 0 && m97.barShare(200, 100) === 1);
+}
+
+console.log(`通过 ${results.length - failed.length} / ${results.length}`);
+if (failed.length) process.exitCode = 1;
