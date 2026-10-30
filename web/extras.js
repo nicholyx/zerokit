@@ -2909,3 +2909,76 @@ export function nextFontScale(cur, dir) {
 export function isLayoutKey(key) {
   return typeof key === 'string' && (key.startsWith('zerokit.layout.') || key === 'zerokit.font-scale');
 }
+
+// ==================== 第九十七轮：结果的再呈现与注释 ====================
+
+/** ① 单位人性化：1024 进制 B→KB/MB/GB/TB；1000 进制 ms→s（≥10000ms 才换档）。
+ *  返回 null 表示「不值得换」（原样显示）。 */
+export function humanCell(v) {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return null;
+  const abs = Math.abs(v);
+  // 毫秒优先：整千且 ≥10s——「15 s」比「14.6 KB」对执行耗时列更有意义（整千毫秒是常见档，字节数很少整千）
+  if (abs >= 1000 && v % 1000 === 0) {
+    return { text: `${v / 1000} s`, unit: 's' };
+  }
+  if (abs >= 1024) {
+    // 字节数特征：整数且 ≥1024——B 换算（1024 进制）
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let n = v; let i = 0;
+    while (Math.abs(n) >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+    return { text: `${Math.round(n * 10) / 10} ${units[i]}`, unit: units[i] };
+  }
+  return null;
+}
+
+/** 列是否「数值为主」：≥70% 单元格可解析为有限数字（复用第十六轮 isUnitColumn 阈值口径）。 */
+export function numericShare(values) {
+  const vals = values.filter((x) => x !== null && x !== undefined && x !== '');
+  if (!vals.length) return 0;
+  const n = vals.filter((x) => typeof x === 'number' ? Number.isFinite(x) : Number.isFinite(Number(String(x).replace(/[,\s]/g, ''))));
+  return n.length / vals.length;
+}
+
+/** ② 分组小计段：按首列（cols[0]）连续相同值分段。
+ *  返回 [{value, start, end, agg:{col(列名),kind:'sum'|'avg',total}}|null]。
+ *  段内数值列（≥70% 可解析）才出小计；段长>3 用 avg 否则 sum（长段求和无意义）。 */
+export function groupSegments(rows, cols) {
+  if (!Array.isArray(rows) || rows.length < 3 || !Array.isArray(cols) || cols.length < 2) return [];
+  const first = cols[0];
+  const segs = [];
+  let start = 0;
+  for (let i = 1; i <= rows.length; i++) {
+    const cur = i < rows.length ? String(rows[i]?.[first] ?? '') : null;
+    const prev = String(rows[start]?.[first] ?? '');
+    if (cur === null || cur !== prev) {
+      const len = i - start;
+      if (len >= 2) {
+        let agg = null;
+        for (let c = 1; c < cols.length && !agg; c++) {
+          const name = cols[c];
+          const nums = rows.slice(start, i).map((r) => Number(r?.[name])).filter(Number.isFinite);
+          if (nums.length >= len * 0.7) {
+            agg = { col: name, kind: len > 3 ? 'avg' : 'sum', total: len > 3 ? Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 10) / 10 : nums.reduce((a, b) => a + b, 0) };
+          }
+        }
+        segs.push({ value: prev, start, end: i - 1, agg });
+      }
+      start = i;
+    }
+  }
+  return segs.length ? segs : [];
+}
+
+/** ⑦ 单元格对齐：数值右对齐判据（number 或纯数字串，含千分位/小数/负号/百分号）。 */
+export function cellAlign(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? 'r' : 'l';
+  if (typeof v !== 'string') return 'l';
+  return /^-?[\d,]+(\.\d+)?%?$/.test(v.trim()) ? 'r' : 'l';
+}
+
+/** ③ 迷你条比例：v / max（0–1，负数或 0 给 0，max≤0 给 0）。 */
+export function barShare(v, max) {
+  if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) return 0;
+  if (typeof max !== 'number' || max <= 0) return 0;
+  return Math.min(1, v / max);
+}
