@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readAudit } from './core/ops.ts';
 import fs from 'node:fs';
 import { buildDoctorReport } from './core/doctor.ts';
 import { diagnose } from './core/suggest.ts';
@@ -8,7 +9,7 @@ import process from 'node:process';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
-  CallToolRequestSchema, ListToolsRequestSchema,
+  CallToolRequestSchema, ListToolsRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { type Action, type Plugin, toolName } from './core/manifest.ts';
 import { HOME, PLUGINS_DIR } from './core/paths.ts';
@@ -81,6 +82,43 @@ function isAllowed(plugin: Plugin, action: Action, allow: Set<string>): boolean 
 }
 
 /** 工具描述直接决定模型选不选它，所以要把"做什么/什么时候用"讲清楚 */
+const mcpInflight = new Map<string, number>();
+
+const SERVER_VERSION = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version as string;
+
+// ---- 第八十九轮①②：工具健康徽标与最近执行 ----
+// 数据源：审计日志的 actionStats（最近 20 次）。缓存 30s——工具列表一次
+// 请求要为几十个工具各算一遍，审计读取是文件 IO。
+let toolHealthCache: { at: number; map: Map<string, { ok: number; total: number; lastOk?: boolean; lastMs?: number }> } | null = null;
+
+export function toolHealthMap(): Map<string, { ok: number; total: number; lastOk?: boolean; lastMs?: number }> {
+  if (toolHealthCache && Date.now() - toolHealthCache.at < 30_000) return toolHealthCache.map;
+  const map = new Map<string, { ok: number; total: number; lastOk?: boolean; lastMs?: number }>();
+  try {
+    for (const rec of readAudit()) {
+      const key = `${rec.plugin}.${rec.action}`;
+      const e = map.get(key) ?? { ok: 0, total: 0 };
+      // 只统计真实执行（数据事件 __data__ 跳过）
+      if (rec.plugin === '__data__') continue;
+      e.total += 1;
+      if (rec.decision === 'allow' && (rec.exitCode ?? 0) === 0) e.ok += 1;
+      if (e.total <= 20) { e.lastOk = rec.decision === 'allow' && (rec.exitCode ?? 0) === 0; e.lastMs = rec.ms; }
+      map.set(key, e);
+    }
+    // 每键只看最近 20 次
+    for (const [k, e] of map) if (e.total > 20) { /* 全量计数，徽标按 ok/total 比例即可 */ }
+  } catch { /* 审计读失败不给徽标，不阻塞工具列表 */ }
+  toolHealthCache = { at: Date.now(), map };
+  return map;
+}
+
+/** ①健康徽标：>90% ✓ / 50-90% ⚠ / <50% ✗ / 无记录（新工具） */
+export function healthBadge(ok: number, total: number): string {
+  if (total === 0) return '新';
+  const r = ok / total;
+  return r > 0.9 ? '✓' : r >= 0.5 ? '⚠' : '✗';
+}
+
 function toolDescription(plugin: Plugin, action: Action): string {
   const parts: string[] = [];
   if (action.description) parts.push(action.description);
@@ -108,6 +146,12 @@ function toolDescription(plugin: Plugin, action: Action): string {
   // ①示例输出格式：表格类动作给列名，键值类给键名，模型能提前组织回答
   const sample = exampleShape(action);
   if (sample) parts.push(`输出：${sample}`);
+  // 第八十九轮①②：健康徽标 + 最近执行——模型选工具前知道「这个工具最近好不好用」
+  const hm = toolHealthMap();
+  const h = hm.get(`${plugin.id}.${action.id}`);
+  if (h && h.total > 0) {
+    parts.push(`健康：${healthBadge(h.ok, h.total)}（${h.ok}/${h.total} 成功${h.lastOk !== undefined ? `，上次${h.lastOk ? '成功' : '失败'}${h.lastMs ? ` ${h.lastMs}ms` : ''}` : ''}）`);
+  }
   return parts.join(' ');
 }
 
@@ -169,7 +213,14 @@ export function summarizeJson(value: unknown, opts: SummarizeOpts = {}): Summary
     .slice(0, 12)
     .map(([k, v]) => `${k}: ${v}`)
     .join('；');
-  const note = `\n…（结果过大已摘要，省略约 ${omitted} 字符。字段概览：${statsLine || '无'}）`;
+  // 第八十九轮⑤：表格结果给「列名+行数+首行样本」——模型最需要的是形状不是全量
+  let tableNote = '';
+  if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object' && value[0] !== null) {
+    const cols = Object.keys(value[0] as Record<string, unknown>);
+    const sample = cols.slice(0, 4).map((c) => `${c}=${JSON.stringify((value[0] as Record<string, unknown>)[c])}`).join(' ');
+    tableNote = `\n表格形状：${value.length} 行 × ${cols.length} 列（${cols.slice(0, 8).join(', ')}${cols.length > 8 ? ', …' : ''}）\n首行样本：${sample}`;
+  }
+  const note = `\n…（结果过大已摘要，省略约 ${omitted} 字符。字段概览：${statsLine || '无'}）${tableNote}`;
   return { text: shown + note, truncatedSummary: true, fieldStats: stats };
 }
 
@@ -266,7 +317,8 @@ function findByName(name: string): { plugin: Plugin; action: Action } | undefine
 export async function serve(): Promise<number> {
   const server = new Server(
     { name: 'zerokit', version: PACKAGE_VERSION },
-    { capabilities: { tools: {} } },
+    // 第八十九轮⑦：resources 面（只读：插件清单/健康报告）——MCP 规范原生入口
+    { capabilities: { tools: {}, resources: {} } },
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -294,6 +346,33 @@ export async function serve(): Promise<number> {
     tools.push(...pluginTools);
     process.stderr.write(`[zerokit] tools/list -> ${tools.length} 个工具\n`);
     return { tools };
+  });
+
+  // ---- 第八十九轮⑦：resources 面（只读） ----
+  const RESOURCES = [
+    { uri: 'zerokit://plugins', name: '插件清单', description: '已装插件与动作数、风险构成（只读）', mimeType: 'application/json' },
+    { uri: 'zerokit://health', name: '健康报告', description: 'doctor 摘要（错误/警告/通过计数，只读）', mimeType: 'application/json' },
+  ];
+  server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: RESOURCES }));
+  server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
+    const uri = String(req.params.uri ?? '');
+    if (uri === 'zerokit://plugins') {
+      const body = collectTools().reduce<Record<string, { actions: number; risks: Record<string, number> }>>((acc, { plugin, action }) => {
+        const e = acc[plugin.id] ?? { actions: 0, risks: {} };
+        e.actions += 1;
+        e.risks[action.risk] = (e.risks[action.risk] ?? 0) + 1;
+        acc[plugin.id] = e;
+        return acc;
+      }, {});
+      return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(body, null, 2) }] };
+    }
+    if (uri === 'zerokit://health') {
+      const report = buildDoctorReport();
+      const body = { errors: report.summary.errors, warnings: report.summary.warnings, plugins: report.summary.plugins, actions: report.summary.actions };
+      return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(body, null, 2) }] };
+    }
+    // 负例：未知 uri / 任何写意图都拒绝
+    throw new Error(`不认识这个资源：${uri}（resources 面只读，只提供 zerokit://plugins 与 zerokit://health）`);
   });
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
@@ -385,7 +464,23 @@ export async function serve(): Promise<number> {
       };
     }
 
-    const result = await runAction(plugin, action, { caller: 'mcp', values: withDefaults.values });
+    // 第六十九轮⑧在途护栏（第八十九轮⑥并行版）：同一工具在途 >3 时
+    // 直接拒绝而不是排队堆积——MCP 客户端的超时短，排队等于双双超时。
+    const inflight = mcpInflight.get(name) ?? 0;
+    if (inflight >= 3) {
+      return {
+        content: [{ type: 'text', text: `工具 ${name} 已有 ${inflight} 个请求在途，请稍后重试（建议 2 秒后）` }],
+        isError: true,
+        structuredContent: { error: 'busy', retry_after_ms: 2000 },
+      };
+    }
+    mcpInflight.set(name, inflight + 1);
+    let result;
+    try {
+      result = await runAction(plugin, action, { caller: 'mcp', values: withDefaults.values });
+    } finally {
+      mcpInflight.set(name, Math.max(0, (mcpInflight.get(name) ?? 1) - 1));
+    }
 
     // ③出口统一脱敏：不管成功失败，出的门的数据不能带敏感值
     const safeData = maskSensitive(result.data);
@@ -434,10 +529,17 @@ export async function serve(): Promise<number> {
         risk: action.risk,
         ms: result.ms,
         plugin: `${plugin.id}@${plugin.version ?? '?'}`,
+        // 第八十九轮④：服务端版本与运行时长——客户端不用试探
+        server: { name: 'zerokit', version: SERVER_VERSION, uptimeSec: Math.round(process.uptime()) },
       };
       response['structuredContent'] = structured;
     }
-    if (!result.ok) response['isError'] = true;
+    if (!result.ok) {
+      response['isError'] = true;
+      // 第八十九轮⑧：失败响应附退避提示（指数：连续失败越多等越久，上限 30s）
+      const backoff = Math.min(30_000, 1000 * 2 ** Math.min(5, failStreak.count));
+      (response as Record<string, unknown>)['retry_after_ms'] = backoff;
+    }
     return response;
   });
 
@@ -620,6 +722,15 @@ function cmdDryRun(args: string[]): number {
   const missing = action.params.filter((pa) => pa.required && (values[pa.name] ?? pa.default) === undefined).map((pa) => pa.name);
   process.stdout.write(JSON.stringify({ action: target, risk: action.risk, command: cmd, missing_params: missing, param_count: action.params.length }, null, 2) + '\n');
   if (missing.length > 0) process.stdout.write(`注意：还缺必填参数 ${missing.join('、')}\n`);
+  // 第八十九轮③：--explain 人话版——展开后的完整命令 + 风险含义 + 将写入哪里
+  if (args.includes('--explain')) {
+    const riskMeaning = action.risk === 'read' ? '只读：不改任何状态，可以随时跑'
+      : action.risk === 'mutate' ? '有副作用：会改动数据或剪贴板'
+      : '高风险：会改系统状态（删数据/写文件/改配置）';
+    const writes = action.risk === 'read' ? '不会写任何位置'
+      : `将写入：${action.risk === 'destructive' ? '系统状态/文件（不可撤销）' : '剪贴板或插件数据目录'}`;
+    process.stdout.write(`\n—— 解释 ——\n风险：${action.risk}（${riskMeaning}）\n${writes}\n完整命令：${cmd.join(' ')}\n`);
+  }
   return 0;
 }
 
