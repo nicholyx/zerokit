@@ -1,6 +1,10 @@
 ## [Unreleased]
 
-### Changed
+（下一版攒着）
+
+## [1.12.0] - 2026-10-31
+
+### Added
 
 - 错误知识库双语化：ERROR_BOOK 七类错误与兜底的标题/下一步建议支持语言表注入（classifyError(text, T)）；errorReport 报告头改英文（贴 issue 可搜索）；batchSummary 汇总与结果失败徽标双语；白名单净减 20 行。
 
