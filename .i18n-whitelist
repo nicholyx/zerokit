@@ -921,13 +921,6 @@ panel\.innerHTML = `<div class="ps-head">
 <div class="sub">当前：\$\{cur\.length \? cur\.m
 el\.count\.textContent = `已打标签：\$\{\(actionTa
 panel\.innerHTML = `<div class="ps-head">
-\{ keys: \['↑', '↓'\], what: '在结果里上下选择' \},
-\{ keys: \['Enter'\], what: '打开动作 / 执行' \},
-\{ keys: \['Ctrl', 'Enter'\], what: '直接确认执行
-\{ keys: \['Esc'\], what: '返回上一层 / 清空搜索' \},
-\{ keys: \['\?'\], what: '切到 AI 工作台（在搜索框开头输入
-\{ keys: \['Ctrl', '/'\], what: '打开这份快捷键速查'
-\{ keys: \['Ctrl', 'K'\], what: '聚焦搜索框' \},
 \{ label: '看看我的电脑配置', prompt: '总结一下这台机器的配
 \{ label: '查公网 IP', prompt: '查一下我的公网 IP，并
 \{ label: '最近剪贴板有什么', prompt: '看看剪贴板历史里最近
@@ -1034,18 +1027,6 @@ if \(list\.length <= 1\) return \{ profiles:
 if \(!\(name in \(profiles \?\? \{\}\)\)\) return 
 if \(!\(from in \(profiles \?\? \{\}\)\)\) return 
 if \(v\.name !== from && v\.name in \(profil
-title: '搜索',
-body: '支持中文关键词、拼音全拼、拼音首字母。打「dl」出「代理」、「xt
-title: '执行与结果',
-body: '只读动作点「执行」直接跑；会改动/高风险动作要确认。结果可复制、下
-title: '监控',
-body: '只读动作可设间隔自动重跑：倒计时环显示下次采样、变化格子黄高亮、数
-title: '配置档',
-body: '外观面板里可建多个配置档（工作/个人…）：主题、收藏、参数记忆随档
-title: '数据备份',
-body: '外观面板「数据」分组：全部个性化数据一键导出 JSON（文件名可预
-title: '安全防护',
-body: '危险参数值（rm -rf / 系统目录 / dd 直写）执行前黄条
 : \{ fallback: '结果', now: '刚刚', sec: \(n\) 
 if \(cmd\.group === 'page'\) return '页面';
 if \(cmd\.group === 'op'\) return '操作';
@@ -1054,7 +1035,6 @@ if \(!Array\.isArray\(j\)\) return \{ ok: fals
 if \(bad !== undefined\) return \{ ok: fals
 return \{ installed: installed \|\| '未装', l
 out\.push\(`\$\{pad\}  └ \$\{d\.id\}\$\{d\.installed
-return `命中：\$\{uniq\.join\('·'\)\}`;
 '内存': \['内存', 'memory', 'mem'\],
 '磁盘': \['磁盘', '硬盘', 'disk', '存储'\],
 '网络': \['网络', '网速', 'network', '联网'\],
@@ -1120,22 +1100,6 @@ lines\.push\(String\(errorText \?\? ''\)\.trim\(
 const parts = \[`✓ 成功 \$\{ok\}`\];
 if \(bad\) parts\.push\(`✗ 失败 \$\{bad\}`\);
 if \(skipped\) parts\.push\(`∅ 未跑 \$\{skipped\}
-\{ key: '↑ ↓', what: '在结果间移动（roving focus
-\{ key: 'PgUp / PgDn', what: '翻页跳转（长列表按视口
-\{ key: 'Home / End', what: '跳到第一条 / 最后一条
-\{ key: '1–9', what: '快选第 N 条（选中后回车打开）' \}
-\{ key: 'Alt\+1–9', what: '直开第 N 条' \},
-\{ key: 'Enter', what: '打开选中项' \},
-\{ key: 'Ctrl\+Enter', what: '打开并直接执行' \},
-\{ key: 'Esc', what: '清空搜索 / 逐层关闭浮层' \},
-\{ key: 'T', what: '给当前项打标签（数字键选已有标签）' \},
-\{ key: 'Y / E', what: '结果区：复制 / 导出' \},
-\{ key: '\?', what: '显示本键位表' \},
-\{ key: 'Ctrl\+P / Ctrl\+K', what: '命令面板' \}
-\{ key: 'Ctrl\+/', what: '快捷键速查' \},
-\{ key: 'Ctrl\+Shift\+D', what: '深色 / 浅色一键切
-\{ key: 'Alt\+点击', what: '把动作放进批量篮' \},
-\{ key: 'Alt\+↑ / Alt\+↓', what: '批量篮内移动项的位
 if \(!s\) return \{ kind: 'empty', why: '空'
 if \(/\^\\d\{10\}\$/\.test\(s\)\) return \{ kind: '
 if \(/\^\\d\{13\}\$/\.test\(s\)\) return \{ kind: '
@@ -1231,5 +1195,5 @@ ps-title">定时任务
 清空搜索历史
 '#/logs', '审计日志', '每次执行
 label: '复制 JSON'
-what: '收藏 / 取消收藏当前项'
 const prefix = T\?\.whyLabelPrefix \?\? '命中：';
+key: 'Alt\+点击', whatKey: 'khBasket'

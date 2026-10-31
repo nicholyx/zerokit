@@ -13,7 +13,7 @@ const { keyHelpList } = await import(pathToFileURL(path.join(REPO, 'web/extras.j
 {
   const rows = keyHelpList();
   ok(Array.isArray(rows) && rows.length >= 15, `键位表 ${rows.length} 行`);
-  ok(rows.every((r) => typeof r.key === 'string' && typeof r.what === 'string' && r.key && r.what), '每行有 key+what');
+  ok(rows.every((r) => typeof r.key === 'string' && typeof r.whatKey === 'string' && r.key && r.whatKey), '每行有 key+what');
   ok(rows.some((r) => r.key.includes('PgUp')), '含 PgUp/PgDn');
   ok(rows.some((r) => r.key === 'F'), '含 F 收藏');
   ok(rows.some((r) => r.key === 'T'), '含 T 标签');
