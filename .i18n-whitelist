@@ -27,13 +27,8 @@ timers: \{ key: 'zerokit\.timers', label:
 if \(badge\) badge\.textContent = cnt > 0 \?
 if \(cnt === 0\) \{ el\.count\.textContent = 
 if \(!confirm\(`清除「\$\{meta\.label\}」（共 \$\{cnt\}
-el\.count\.textContent = `✓ 已清除 \$\{meta\.lab
-const raw = prompt\('新配置档名字（以当前状态为基础）：'\);
-const raw = prompt\('重命名当前配置档为：', curProf
 if \(!confirm\(`删除配置档「\$\{curProfileName\(\)\}」
 return localStorage\.getItem\('zerokit\.pro
-el\.count\.textContent = `已新建配置档「\$\{name\}」（
-el\.count\.textContent = `已切换到配置档「\$\{target
 const data = await res\.json\(\)\.catch\(\(\) =
 if \(explain && mi >= 0\) explain\.push\(\[pa
 \[nick \? scoreOne\(nick, token\) \* 1\.2 : 0,
@@ -48,10 +43,6 @@ const dep = p\.requiresOk \? '' : `<span c
 <span class="item-desc1 desc">\$\{smart \? 
 <button class="star\$\{fav \? ' on' : ''\}" 
 sp\.title = '拖拽调节分栏宽度（双击复位）';
-el\.count\.textContent = `分栏 \$\{sp\.dataset\.
-el\.count\.textContent = '分栏已复位';
-el\.count\.textContent = `布局：\$\{LAYOUT_PRES
-el\.count\.textContent = `字号：\$\{\{ s: '小', m
 return `<li class="recent-block"><div cl
 \? `<div class="hist-chips\$\{q\.trim\(\) \? ' 
 \.map\(\(x\) => `<span class="chip-wrap"><bu
@@ -514,7 +505,6 @@ setTimeout\(\(\) => \{ btn\.textContent = '复制
 try \{ await navigator\.clipboard\.writeTex
 catch \{ btn\.textContent = '失败'; \}
 setTimeout\(\(\) => \{ btn\.textContent = '复制
-if \(btn\) \{ btn\.textContent = '已收藏'; btn\.
 const v = window\.prompt\('给这次结果写个注释（≤60 字
 pathRow\.textContent = `已导出：\$\{a\.download\}
 if \(btn\) \{ const t = btn\.textContent; bt
@@ -1002,8 +992,6 @@ if \(g !== lastGroup\) \{ parts\.push\(`<li c
 icon: '⚡', label: `执行 \$\{quick\.plugin\}\.\$\{
 hint: entry \? entry\.action\.title : '（未找到
 act: \(\) => \{ if \(entry\) \{ exitPalette\(\);
-icon: '🕘', label: c, hint: '最近用过', act:
-icon: '🧩', label: p\.name, hint: `插件 · \$
 else if \(c\.go === 'batch'\) \{ if \(detail\)
 navigator\.clipboard\.writeText\(cfg\)\.then\(
 navigator\.clipboard\.writeText\(ctx\)\.then\(
@@ -1175,21 +1163,6 @@ body: '外观面板「数据」分组：全部个性化数据一键导出 JSON�
 title: '安全防护',
 body: '危险参数值（rm -rf / 系统目录 / dd 直写）执行前黄条
 : \{ fallback: '结果', now: '刚刚', sec: \(n\) 
-\{ icon: '⏱', name: '监控', hint: '监控面板 #/w
-\{ icon: '\?', name: '帮助', hint: '使用指南 #/h
-\{ icon: '📈', name: '统计', hint: '使用统计 #/
-\{ icon: '▤', name: '日志', hint: '审计日志 #/l
-\{ icon: '🛍', name: '集市', hint: '插件集市 #/
-\{ icon: '✓', name: '自检', hint: '环境自检 #/d
-\{ icon: '🗂', name: '配置档', hint: '切换配置档（
-\{ icon: '💾', name: '备份', hint: '导出/导入个性
-\{ icon: '⧉', name: '批量', hint: '批量执行模式',
-\{ icon: '◐', name: '外观', hint: '主题与外观设置（
-\{ icon: '📰', name: '简报', hint: '今日简报 #/
-\{ icon: '⌘', name: '工作台', hint: 'AI 工作台'
-\{ icon: '🤖', name: 'MCP 配置', hint: '复制 
-\{ icon: '🧠', name: 'AI 上下文', hint: '打包最
-\{ icon: '☰', name: '设置抽屉', hint: '主题/语言/
 if \(cmd\.group === 'page'\) return '页面';
 if \(cmd\.group === 'op'\) return '操作';
 try \{ j = JSON\.parse\(text\); \} catch \{ re

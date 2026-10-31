@@ -26,10 +26,11 @@ const extras = readFileSync(path.join(PKG_ROOT, 'web/extras.js'), 'utf8');
 {
   const zhBlock = extras.match(/zh: \{([\s\S]*?)\n  \},/)[1];
   const enBlock = extras.match(/en: \{([\s\S]*?)\n  \},/)[1];
-  const keys = (b) => [...b.matchAll(/(\w+):\s*'/g)].map((m) => m[1]);
+  const keys = (b) => [...new Set([...b.matchAll(/([A-Za-z][A-Za-z0-9]*): (?:'[^']*'|\([\w, ]+\) =>)/g)].map((m) => m[1]))].sort();
   const zh = keys(zhBlock), en = keys(enBlock);
   check('③ zh/en 键集一致', JSON.stringify(zh) === JSON.stringify(en));
   check('③ 新键进表（themeHead 等 13 个）', ['themeHead', 'accentHead', 'fontHead', 'aiHead', 'themeSystem', 'themeDark', 'themeLight', 'fontS', 'fontM', 'fontL', 'aiOn', 'aiOff', 'aiToggleTitle', 'langHead'].every((k) => zh.includes(k)));
+  check('③ 第一百零一轮键（命令面板/反馈/收藏）', ['cmdWatch', 'cmdDrawer', 'recentCmd', 'pluginLabel', 'batchHas', 'batchEmpty', 'scopeWiped', 'profileCreated', 'splitReset', 'fontScaleLabel', 'clearSearchBrowse', 'favOn'].every((k) => zh.includes(k)));
 }
 
 // ④ 面板接线：openThemePop 用 t() 不再裸写中文
@@ -41,6 +42,14 @@ const extras = readFileSync(path.join(PKG_ROOT, 'web/extras.js'), 'utf8');
   check('④ 主题面板走 t()', body.includes("t('themeHead')") && body.includes("t('accentHead')") && body.includes("t('fontHead')"));
   check('④ AI 区走 t()', body.includes("t('aiOn')") && body.includes("t('aiOff')") && body.includes("t('aiToggleTitle')"));
   check('④ 面板内无裸中文 head', !/<div class="tp-head">[^<]*[\u4e00-\u9fff]/.test(body));
+}
+
+// 第一百零一轮：命令面板迁移
+{
+  const app = readFileSync(path.join(PKG_ROOT, 'web/app.js'), 'utf8');
+  check('① 命令面板渲染走 t(nameKey)', app.includes("t(c.nameKey)") && app.includes("t(c.hintKey)"));
+  check('① runCommand 稳定 id + zh fallback', app.includes("x.id === name") && app.includes('I18N.zh[x.nameKey]'));
+  check('① cmdhist 存 id', app.includes("pushHistory(readJson('zerokit.cmdhist') ?? [], c.id)"));
 }
 
 // ⑤⑥ 相对时间/空态在英文档（第二十八轮已有 resultTabTitle 英文档——复核仍在）

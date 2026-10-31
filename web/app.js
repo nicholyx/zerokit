@@ -32,7 +32,7 @@ import { HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions } f
 import { profileList, validProfileName, upsertProfile, deleteProfile, renameProfile } from './extras.js';
 import { resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader } from './extras.js';
 import { TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory, looksLikeTimestamp, humanTs, emptyReason, tocFromMd } from './extras.js';
-import { COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory } from './extras.js';
+import { COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, I18N } from './extras.js';
 import { chainFill, batchDedup, chunkWindows, parseBatchList } from './extras.js';
 import { batchCounts, batchCountsLabel, batchStateIcon } from './extras.js';
 import { classifyClip, pushClipHistory, clipSuggestions } from './extras.js';
@@ -409,10 +409,10 @@ function openThemePop() {
       const badge = pop.querySelector(`[data-scope-count="${sc}"]`);
       const n = readJson(meta.key);
       const cnt = n == null ? 0 : Array.isArray(n) ? n.length : typeof n === 'object' ? Object.keys(n).length : 1;
-      if (cnt === 0) { el.count.textContent = `${meta.label}：没有数据`; return; }
-      if (!confirm(`清除「${meta.label}」（共 ${cnt} 条）？此操作不可撤销。`)) return;
+      if (cnt === 0) { el.count.textContent = t('scopeNoData')(meta.label); return; }
+      if (!confirm(t('scopeWipeConfirm')(meta.label, cnt))) return;
       try { localStorage.removeItem(meta.key); } catch { /* 隐私模式 */ }
-      el.count.textContent = `✓ 已清除 ${meta.label} ${cnt} 条`;
+      el.count.textContent = t('scopeWiped')(meta.label, cnt);
       openThemePop(); // 重建面板刷新计数
     });
   });
@@ -425,7 +425,7 @@ function openThemePop() {
     });
   });
   pop.querySelector('[data-profile-new]')?.addEventListener('click', () => {
-    const raw = prompt('新配置档名字（以当前状态为基础）：');
+    const raw = prompt(t('profileNewPrompt'));
     if (raw == null) return;
     const v = validProfileName(raw);
     if (!v.ok) { el.count.textContent = v.error; return; }
@@ -434,7 +434,7 @@ function openThemePop() {
     openThemePop();
   });
   pop.querySelector('[data-profile-rename]')?.addEventListener('click', () => {
-    const raw = prompt('重命名当前配置档为：', curProfileName());
+    const raw = prompt(t('profileRenamePrompt'), curProfileName());
     if (raw == null) return;
     const v = validProfileName(raw);
     if (!v.ok) { el.count.textContent = v.error; return; }
@@ -502,7 +502,7 @@ function currentProfileKeys() {
 function createProfileFromCurrent(name) {
   const next = upsertProfile(loadProfiles(), name, currentProfileKeys());
   saveProfiles(next);
-  el.count.textContent = `已新建配置档「${name}」（以当前状态为基础）`;
+  el.count.textContent = t('profileCreated')(name);
 }
 /** 切换：旧档存回 → 新档整批写回 → 模块级变量重载（不整页刷新，列表与主题就地生效） */
 function switchProfile(name) {
@@ -532,7 +532,7 @@ function switchProfile(name) {
   applyAccent();
   applyFontScale();
   renderList();
-  el.count.textContent = `已切换到配置档「${target}」`;
+  el.count.textContent = t('profileSwitched')(target);
 }
 
 function cycleTheme() {
@@ -858,7 +858,7 @@ function applySplitLayout() {
       if (dragging && sp.dataset.pct) {
         localStorage.setItem('zerokit.layout.pct', sp.dataset.pct);
         localStorage.removeItem('zerokit.layout.preset'); // 手动拖拽覆盖预设
-        el.count.textContent = `分栏 ${sp.dataset.pct}%`;
+        el.count.textContent = t('splitAt')(sp.dataset.pct);
       }
       dragging = null;
     });
@@ -866,7 +866,7 @@ function applySplitLayout() {
       localStorage.removeItem('zerokit.layout.pct');
       localStorage.removeItem('zerokit.layout.preset');
       applySplitLayout();
-      el.count.textContent = '分栏已复位';
+      el.count.textContent = t('splitReset');
     });
     el.stage.insertBefore(sp, el.detailView);
   }
@@ -878,7 +878,7 @@ function setLayoutPreset(id) {
   localStorage.setItem('zerokit.layout.preset', id);
   localStorage.removeItem('zerokit.layout.pct'); // 预设覆盖手动拖拽
   applySplitLayout();
-  el.count.textContent = `布局：${LAYOUT_PRESETS[id].label}`;
+  el.count.textContent = t('layoutLabel')(LAYOUT_PRESETS[id].label);
 }
 
 
@@ -890,7 +890,7 @@ document.addEventListener('wheel', (e) => {
   if (next === cur) return;
   localStorage.setItem('zerokit.font-scale', next);
   document.documentElement.dataset.fontScale = next;
-  el.count.textContent = `字号：${{ s: '小', m: '中', l: '大' }[next]}`;
+  el.count.textContent = t('fontScaleLabel')(t('fontNames')[next]);
   e.preventDefault();
 }, { passive: false });
 
@@ -1259,7 +1259,7 @@ function renderListInner() {
     // 空状态不是死胡同：给出「下一步做什么」的可点建议
     const suggestions = [];
     if (q.trim()) {
-      suggestions.push(`<button class="link" data-sug="clear">清空搜索，浏览全部动作</button>`);
+      suggestions.push(`<button class="link" data-sug="clear">${t('clearSearchBrowse')}</button>`);
       suggestions.push(`<button class="link" data-sug="market">去集市找一个能做这件事的插件</button>`);
       suggestions.push(`<button class="link" data-sug="wb">问 AI 工作台：「${esc(q.trim())}」</button>`);
       // 第五十一轮①：丢词建议——「A B」全灭时，去掉哪个词能救回多少项
@@ -1286,18 +1286,18 @@ function renderListInner() {
     }
     // 第四十七轮⑥：空态文案分级——首访/无插件/无匹配三种情境不同指引
     const firstRun = !localStorage.getItem('zerokit.firstrun');
-    const es = q.trim() ? emptyState('no-match', q.trim())
-      : (!plugins.length ? (firstRun ? emptyState('first-run') : emptyState('no-plugins')) : null);
+    const es = q.trim() ? emptyState('no-match', q, I18N[pickLang(lang)])
+      : (!plugins.length ? (firstRun ? emptyState('first-run', '', I18N[pickLang(lang)]) : emptyState('no-plugins', '', I18N[pickLang(lang)])) : null);
     el.empty.innerHTML = suggestions.length
       ? `<div class="empty-art" aria-hidden="true">${q.trim() ? '🔍' : '🌱'}</div>
-         <div class="empty-title">${es ? esc(es.title) : '这里还空着'}</div>
+         <div class="empty-title">${es ? esc(es.title) : t('emptyHereBlank')}</div>
          <div class="empty-why">${q.trim()
-           ? '可能是词太具体，也可能这个能力还没装进来。'
-           : '装上第一个插件，启动器就会开始认识你的电脑。'}</div>
+           ? t('emptyWhyNoMatch')
+           : t('emptyWhyNoPlugins')}</div>
          <div class="empty-sugs">${suggestions.join('')}</div>`
       : `<div class="empty-art" aria-hidden="true"></div>
          <div class="e-title">${esc(es ? es.title : t('noResult'))}</div>
-         <div class="e-hint">${esc(es ? es.hint : '试试短一点的关键词。')}</div>`;
+         <div class="e-hint">${esc(es ? es.hint : t('emptyNoMatchShort'))}</div>`;
     el.empty.classList.remove('hidden');
     el.empty.querySelectorAll('[data-sug]').forEach((b) => b.addEventListener('click', () => {
       const act2 = b.dataset.sug;
@@ -1422,7 +1422,7 @@ el.list.addEventListener('dblclick', (e) => {
   if (!key) return;
   const i = favorites.indexOf(key);
   if (i >= 0) { favorites.splice(i, 1); el.count.textContent = '已取消收藏'; }
-  else { favorites.push(key); el.count.textContent = '已收藏（双击同款取消）'; }
+  else { favorites.push(key); el.count.textContent = t('favDone'); }
   savePrefs();
   patchItemFav(key);
 });
@@ -4716,7 +4716,7 @@ function renderResult(res) {
     savedList = savedList.slice(0, 50);
     writeJson(PREF.saved, savedList);
     const btn = $('pinRes');
-    if (btn) { btn.textContent = '已收藏'; btn.disabled = true; }
+    if (btn) { btn.textContent = t('favBtnDone'); btn.disabled = true; }
   });
   $('noteRes')?.addEventListener('click', () => {
     const box = $('noteBox');
@@ -7966,11 +7966,12 @@ function showPalette() {
     if (raw.trim().startsWith('>')) {
       const cneedle = raw.trim().slice(1).trim().toLowerCase();
       const recentCmds = (readJson('zerokit.cmdhist') ?? []).map((c) => ({
-        icon: '🕘', label: c, hint: '最近用过', act: () => { runCommand(c); },
+        icon: '🕘', label: c.startsWith('cmd') ? `> ${t((COMMAND_LIST.find((x) => x.id === c) ?? {}).nameKey ?? 'cmdHelp')}` : `> ${c}`, hint: t('recentCmd'),
+        act: () => { runCommand(c); },
       }));
       const cmds = COMMAND_LIST.map((c) => ({
-        icon: c.icon, label: `> ${c.name}`, hint: c.hint,
-        act: () => { runCommand(c.name); },
+        icon: c.icon, label: `> ${t(c.nameKey)}`, hint: t(c.hintKey),
+        act: () => { runCommand(c.id); },
       }));
       const pool = [...recentCmds, ...cmds];
       items = cneedle ? pool.filter((x) => x.label.toLowerCase().includes(cneedle)
@@ -7982,7 +7983,7 @@ function showPalette() {
       act: () => { exitPalette(); openDetail(e.plugin, e.action); },
     }));
     const pluginItems = plugins.map((p) => ({
-      icon: '🧩', label: p.name, hint: `插件 · ${p.id}`,
+      icon: '🧩', label: p.name, hint: `${t('pluginLabel')} · ${p.id}`,
       act: () => { exitPalette(); location.hash = `#/plugins/${encodeURIComponent(p.id)}`; },
     }));
     const all = [...pages.map((x) => ({ ...x, act: (() => { const f = x.act; return () => { pushCmdHist(x.label); exitPalette(); f(); }; })() })),
@@ -8000,12 +8001,14 @@ function showPalette() {
   };
   /** ①②命令执行：解释 go 标记（hash 直跳 / UI 动作），并记入最近命令 */
   const runCommand = (name) => {
-    const c = COMMAND_LIST.find((x) => x.name === name);
+    // 第一百零一轮：优先按稳定 id 匹配；cmdhist 里存过的旧中文名 fallback 按 zh 键值命中
+    const c = COMMAND_LIST.find((x) => x.id === name)
+      ?? COMMAND_LIST.find((x) => (I18N.zh[x.nameKey]) === name);
     if (!c) return;
-    try { localStorage.setItem('zerokit.cmdhist', JSON.stringify(pushHistory(readJson('zerokit.cmdhist') ?? [], name))); } catch { /* 存不进就算了 */ }
+    try { localStorage.setItem('zerokit.cmdhist', JSON.stringify(pushHistory(readJson('zerokit.cmdhist') ?? [], c.id))); } catch { /* 存不进就算了 */ }
     exitPalette();
     if (c.go.startsWith('#')) location.hash = c.go;
-    else if (c.go === 'batch') { if (detail) backToList(); el.count.textContent = batch.length ? `批量篮里已有 ${batch.length} 项，Alt+点击列表项继续加` : '批量模式：按住 Alt 点击列表项加入批量篮'; }
+    else if (c.go === 'batch') { if (detail) backToList(); el.count.textContent = batch.length ? t('batchHas')(batch.length) : t('batchEmpty'); }
     else if (c.go === 'theme') openDrawer();
     else if (c.go === 'drawer') openDrawer();
     else if (c.go === 'workbench') showWorkbench('');
@@ -8316,7 +8319,7 @@ document.addEventListener('keydown', (e) => {
     favorites = toggleFavorite(favorites, key);
     writeJson(PREF.favorites, favorites);
     patchItemFav(key);
-    el.count.textContent = favorites.includes(key) ? `已收藏：${filtered[active].action.title}` : `已取消收藏：${filtered[active].action.title}`;
+    el.count.textContent = favorites.includes(key) ? t('favOn')(filtered[active].action.title) : t('favOff')(filtered[active].action.title);
   } else if ((e.key === 't' || e.key === 'T') && filtered.length && document.activeElement === el.q && !e.ctrlKey && !e.metaKey && !e.altKey) {
     // 第五十二轮⑤：T 键给当前项打标签（弹小面板，数字选）
     e.preventDefault();
