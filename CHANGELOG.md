@@ -1,10 +1,13 @@
 ## [Unreleased]
 
+（下一版攒着）
+
+## [1.13.0] - 2026-11-01
+
 ### Added
 
 - **桌面安装包**：Release 现在附带三平台安装包（macOS Apple Silicon dmg / macOS Intel dmg / Windows x64 NSIS exe），全部在 CI 流水线构建（tauri-action，SHA pin），不在本地打包上传。内核（src/web/plugins/生产依赖）随安装包分发，装完即用（仍需本机 Node ≥ 22.18）。
 
-（下一版攒着）
 
 ## [1.12.0] - 2026-10-31
 
