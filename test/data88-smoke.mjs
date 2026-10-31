@@ -73,7 +73,7 @@ run(['run', 'sysinfo', 'overview']);
   const app = readFileSync(path.join(PKG_ROOT, 'web', 'app.js'), 'utf8');
   check('⑤ UI 四类清除按钮', ['runs', 'searches', 'saved', 'timers'].every((s) => app.includes(`data-scope-wipe="${s}"`)));
   check('⑤ 计数徽标', app.includes('data-scope-count'));
-  check('⑤ 清前确认', app.includes('此操作不可撤销'));
+  check('⑤ 清前确认', app.includes("t('scopeWipeConfirm')") && readFileSync(path.join(PKG_ROOT, 'web', 'extras.js'), 'utf8').includes('不可撤销'));
 }
 
 rmSync(home, { recursive: true, force: true });

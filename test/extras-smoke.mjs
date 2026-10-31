@@ -716,8 +716,10 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
 
 // ---------------- 第二十三轮：结果工作台 ----------------
 check('COMMAND_LIST: 至少 10 个命令且字段齐全', (() => {
+  // 第一百零一轮：name/hint 迁 I18N（nameKey/hintKey），匹配与历史走稳定 id
   return COMMAND_LIST.length >= 10
-    && COMMAND_LIST.every((c) => c.name && c.hint && c.go && c.icon);
+    && COMMAND_LIST.every((c) => c.id && c.nameKey && c.hintKey && c.go && c.icon)
+    && COMMAND_LIST.every((c) => I18N.zh[c.nameKey] && I18N.en[c.nameKey]);
 })());
 check('COMMAND_LIST: 页面命令 go 是 hash，UI 动作是标记', (() => {
   const hashOnes = COMMAND_LIST.filter((c) => c.go.startsWith('#'));

@@ -24,7 +24,7 @@ const { keyHelpList } = await import(pathToFileURL(path.join(REPO, 'web/extras.j
   const app = fs.readFileSync(path.join(REPO, 'web/app.js'), 'utf8');
   ok(app.includes("e.key === 'PageDown'") && app.includes("e.key === 'Home'"), '①②翻页/首尾已在位');
   ok(app.includes("key === 'y'") && app.includes("key === 'e'"), '③结果区 Y/E');
-  ok(app.includes("toggleFavorite(favorites, key)") && app.includes("已收藏："), '④F 收藏');
+  ok(app.includes("toggleFavorite(favorites, key)") && app.includes("t('favOn')"), '④F 收藏');
   ok(app.includes('showTagPanel') && app.includes('data-tg'), '⑤T 标签面板');
   ok(app.includes('batchFocus') && app.includes("e.altKey && (e.key === 'ArrowDown'"), '⑥Alt+↑↓ 篮内移位');
   ok(app.includes('showKeyHelp'), '⑧? 帮助浮层');
