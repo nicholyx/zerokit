@@ -9,7 +9,7 @@ on:
   push:
     tags: ['v*']
 
-# 创建 Release 要写仓库内容，这是本工作流唯一需要的写权限（最小权限原则）
+# 创建 Release / 上传安装包要写仓库内容，这是本工作流需要的写权限（最小权限原则）
 permissions:
   contents: write
 
@@ -72,3 +72,61 @@ jobs:
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
               --title "$TAG" --notes-file "$NOTES" --latest
           fi
+
+  # ---------------------------------------------------------------------
+  # 桌面安装包（第一百零九轮）：tag 触发时在流水线构建三平台安装包并
+  # 上传到 Release assets。安装包绝不本地构建上传——产物必须可溯源到 CI。
+  #   - macOS Apple Silicon（aarch64）+ Intel（x86_64）：dmg 双架构
+  #   - Windows x64：NSIS 安装器（exe）
+  # 内核（src/ web/ plugins/）随 tauri resources 装进包里，用户装完即用
+  # （仍需本机有 Node ≥22.18——首启会引导安装）。
+  desktop-installer:
+    name: 桌面安装包 · ${{ matrix.label }}
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: mac-arm64
+            os: macos-14
+            args: '--target aarch64-apple-darwin'
+          - label: mac-x64
+            os: macos-15-intel
+            args: '--target x86_64-apple-darwin'
+          - label: win-x64
+            os: windows-latest
+            args: ''
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout Repos
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.ref }}
+          persist-credentials: false
+
+      - name: 安装内核生产依赖（打进安装包的 node_modules）
+        run: npm ci --omit=dev --ignore-scripts
+
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          targets: ${{ matrix.label == 'mac-x64' && 'x86_64-apple-darwin' || matrix.label == 'mac-arm64' && 'aarch64-apple-darwin' || '' }}
+
+      - name: Rust 缓存
+        uses: swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # master
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: ${{ matrix.label }}
+
+      - name: 构建安装包并上传
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          projectPath: apps/desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: 'zerokit ${{ github.ref_name }}'
+          releaseDraft: false
+          prerelease: false
+          tauriScript: npx tauri
+          args: ${{ matrix.args }}
