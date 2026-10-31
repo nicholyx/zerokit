@@ -95,6 +95,20 @@ node src/cli.ts mcp allow sysinfo.watch     # 授权某一个
 
 ## 五、可选：原生桌面壳（全局热键 + 托盘）
 
+### 方式 A：直接下载安装包（推荐）
+
+从 [Releases 页面](https://github.com/nicholyx/zerokit/releases/latest) 下载对应平台的安装包：
+
+- **macOS Apple Silicon**（M 系列芯片）：`zerokit_X.Y.Z_aarch64.dmg`
+- **macOS Intel**：`zerokit_X64.dmg`
+- **Windows x64**：NSIS 安装器（`-setup.exe`）
+
+安装包里已经带上内核与全部内置插件，装完开箱即用——**唯一的外部要求是
+本机装有 Node.js ≥ 22.18**（首启时如果找不到会提示安装指引）。
+安装包全部由 CI 流水线构建，与版本 tag 一一对应，不从任何其它渠道分发。
+
+### 方式 B：从源码运行
+
 需要 Rust 工具链（`winget install Rustlang.Rustup` 然后重开终端）。
 
 ```bash

@@ -83,7 +83,15 @@ fn find_core_script() -> Option<PathBuf> {
 
     let mut roots: Vec<PathBuf> = Vec::new();
     if let Ok(exe) = std::env::current_exe() {
-        roots.push(exe);
+        roots.push(exe.clone());
+        // 打包布局（macOS）：exe 在 .app/Contents/MacOS/，resources 在 Contents/Resources/
+        // （tauri.conf.json 的 bundle.resources 把 src/ web/ plugins/ 装进去）
+        if let Some(contents) = exe.parent().and_then(|d| d.parent()) {
+            let cand = contents.join("Resources").join("src").join("server.ts");
+            if cand.is_file() {
+                return Some(cand);
+            }
+        }
     }
     if let Ok(cwd) = std::env::current_dir() {
         roots.push(cwd.join("x"));
