@@ -2982,3 +2982,41 @@ export function barShare(v, max) {
   if (typeof max !== 'number' || max <= 0) return 0;
   return Math.min(1, v / max);
 }
+
+// ==================== 第九十八轮：执行队列与并发可视化 ====================
+
+/** ① 批量计数快照：{total, done, running, queued, failed}。
+ * 状态表 states[i] ∈ 'queued'|'running'|'ok'|'fail'；缺项按 queued 计。 */
+export function batchCounts(states) {
+  const s = Array.isArray(states) ? states : [];
+  const c = { total: s.length, done: 0, running: 0, queued: 0, failed: 0, ok: 0 };
+  for (const st of s) {
+    if (st === 'ok') { c.ok++; c.done++; }
+    else if (st === 'fail') { c.failed++; c.done++; }
+    else if (st === 'running') c.running++;
+    else c.queued++;
+  }
+  return c;
+}
+
+/** ① 计数行文案：「3 排队 / 2 并行 / 5 完成（含 1 失败）」；全完成时「全部 N 项完成（M 失败）」。 */
+export function batchCountsLabel(c) {
+  if (!c || c.total === 0) return '';
+  if (c.done >= c.total) {
+    return c.failed ? `全部 ${c.total} 项完成（${c.failed} 失败）` : `全部 ${c.total} 项完成`;
+  }
+  const parts = [`${c.queued} 排队`, `${c.running} 并行`, `${c.done} 完成`];
+  if (c.failed) parts[2] += `（含 ${c.failed} 失败）`;
+  return parts.join(' / ');
+}
+
+/** ② 单项状态行图标。 */
+export function batchStateIcon(st) {
+  return st === 'ok' ? '✓' : st === 'fail' ? '✗' : st === 'running' ? '▸' : '·';
+}
+
+/** ④ CLI --chain 串跑：把逗号串拆成动作引用列表（trim + 空项过滤）。 */
+export function parseChainSpec(spec) {
+  if (typeof spec !== 'string' || !spec.trim()) return [];
+  return spec.split(',').map((x) => x.trim()).filter(Boolean);
+}

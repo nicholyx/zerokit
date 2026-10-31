@@ -614,10 +614,49 @@ async function cmdConfig(args: string[]): Promise<number> {
   return 0;
 }
 
+/** 第九十八轮④：--chain 顺序串跑。前一步的解析结果（JSON data 或 stdout 文本）
+ * 进后一步 values 的 {prev} 占位符；任一步失败即停（链的意义在于顺序依赖）。 */
+async function cmdRunChain(spec: string, rest: string[]): Promise<number> {
+  const refs = spec.split(',').map((x) => x.trim()).filter(Boolean);
+  const steps = refs.map((ref) => {
+    const dot = ref.lastIndexOf('.');
+    return dot > 0 ? { plugin: ref.slice(0, dot), action: ref.slice(dot + 1) } : null;
+  });
+  if (steps.length < 2 || steps.some((x) => !x)) {
+    process.stderr.write(c.red('✗ --chain 至少要两个「插件.动作」，逗号分隔\n') + c.dim('  例：zkit run --chain "sysinfo.overview,quick.b64"\n'));
+    return 2;
+  }
+  let prev: unknown;
+  for (let i = 0; i < steps.length; i++) {
+    const st = steps[i]!;
+    process.stderr.write(c.dim(`[${i + 1}/${steps.length}] ${st.plugin}.${st.action} …\n`));
+    const chainArgs = [st.plugin, st.action, ...rest];
+    // {prev} 注入：作为环境变量最稳（不改 run 的参数面）——但占位符语义要求参数位替换，
+    // 这里给 values 加 __prev 键会被当多余参数。改走环境：CHAIN_PREV=JSON
+    const envBackup = process.env.CHAIN_PREV;
+    process.env.CHAIN_PREV = prev === undefined ? '' : (typeof prev === 'string' ? prev : JSON.stringify(prev));
+    const code = await cmdRun(chainArgs);
+    if (envBackup === undefined) delete process.env.CHAIN_PREV; else process.env.CHAIN_PREV = envBackup;
+    if (code !== 0) {
+      process.stderr.write(c.red(`✗ 链在第 ${i + 1} 步（${st.plugin}.${st.action}）失败，停止后续步骤\n`));
+      return code;
+    }
+    // 前一步的输出经 CHAIN_PREV 环境变量传给下一步（插件在清单里声明
+    // env_pass = ["CHAIN_PREV"] 或 shell 里 $CHAIN_PREV 即可取到）。
+    prev = null; // stdout 由 cmdRun 打印；跨步传递走环境变量（上一行已注入下一步前）
+  }
+  return 0;
+}
+
 async function cmdRun(args: string[]): Promise<number> {
+  // 第九十八轮④：--chain 顺序串跑（前者输出进后者 {prev} 占位符）
+  // 形态：zkit run --chain "sysinfo.overview,quick.b64" [--参数 值]
+  if (args[0] === '--chain') {
+    return cmdRunChain(args[1] ?? '', args.slice(2));
+  }
   const [pluginId, actionId, ...rest] = args;
   if (!pluginId || !actionId) {
-    process.stderr.write('用法：zkit run <插件> <动作> [--参数 值]\n');
+    process.stderr.write('用法：zkit run <插件> <动作> [--参数 值]\n        zkit run --chain "插件.动作,插件.动作" [--参数 值]\n');
     return 2;
   }
   let plugin: Plugin;

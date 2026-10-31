@@ -31,7 +31,7 @@ import { checkRequires } from './core/resolve.ts';
 import { applyDefaults, coerceParam, toFormFields, toJsonSchema } from './core/schema.ts';
 import { type PublicSetting, publicSettings, SECRET_MASK, writeSettings } from './core/pluginConfig.ts';
 import { dependents, depStates, installDeps, missingDeps } from './core/deps.ts';
-import { buildArgv, chainDisplay, confirmPolicy, displayCommand, runAction } from './core/runner.ts';
+import { buildArgv, chainDisplay, confirmPolicy, displayCommand, runAction , audit } from './core/runner.ts';
 import { buildDoctorReport, toHistoryEntry, appendDoctorHistory, readDoctorHistory, diffDoctorHistory, doctorSummaryLine } from './core/doctor.ts';
 import {
   addMarket, findEntry, installFromMarket, loadMarkets, previewInstall,
@@ -441,6 +441,35 @@ export function createServer(): http.Server {
           exists: fs.existsSync(logPath),
           counts,
           entries: entries.slice(-limit).reverse(),
+        });
+        return;
+      }
+
+      // 第九十八轮⑤：批量完成审计事件——前端批量跑完写一条 batch_done（含各项 ok/ms），
+      // 复用 runner 的 audit()（同步落盘，denied 双写不适用——这是汇总不是拒绝）。
+      if (url.pathname === '/api/batch-done' && req.method === 'POST') {
+        const body = readBody(req).then(async (parsedRaw: Record<string, unknown>) => {
+          try {
+            const parsed = parsedRaw as { items?: { plugin: string; action: string; ok: boolean; ms: number }[] };
+            const items = Array.isArray(parsed.items) ? parsed.items : [];
+            if (!items.length) { json(res, 400, { ok: false, error: 'items 为空' }); return; }
+            const totalMs = items.reduce((s2, it) => s2 + (Number(it.ms) || 0), 0);
+            audit({
+              ts: new Date().toISOString(),
+              plugin: '(batch)',
+              action: 'batch_done',
+              tool: 'launcher',
+              risk: 'mutate',
+              caller: 'ui',
+              decision: 'allow',
+              command: items.map((it) => `${it.plugin}.${it.action}:${it.ok ? 'ok' : 'fail'}`).join(' '),
+              exitCode: items.every((it) => it.ok) ? 0 : 1,
+              ms: totalMs,
+            } as import('./core/runner.ts').AuditRecord);
+            json(res, 200, { ok: true, total: items.length, totalMs });
+          } catch (e) {
+            json(res, 400, { ok: false, error: `请求体解析失败：${String(e)}` });
+          }
         });
         return;
       }
