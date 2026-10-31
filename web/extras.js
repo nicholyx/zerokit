@@ -484,6 +484,25 @@ export const I18N = {
     batchSelected: (n) => `已选 ${n} 项`, batchDups: (n) => `重复 ${n}`,
     moreTip: '更多操作：调用方式 / 配置 / 分享 / 定时 / 监控 / 结果处理', more: '更多',
     invokeWays: '三种调用方式',
+    whyHit: '命中', whyNick: '昵称', whyActionId: '动作ID', whyTitle: '动作名', whyPluginAction: '插件.动作', whyPinyin: '拼音', whyTags: '标签',
+    chainSteps: (n) => `组合 ${n} 步`, smartMatch: '智能匹配', looksLike: (v) => `内容看起来是${v}，可以直接用`,
+    sumOf: '小计', avgLabel: '均值', tfootSum: (sum, avg) => `合计 ${sum} · 均值 ${avg}`,
+    rowsWindowed: (shown, total, page) => `${shown} / ${total} 行（大表只画前 ${page} 行保流畅）`,
+    loadAllRows: (n) => `加载全部 ${n} 行`, rowsTotal: (n) => `共 ${n} 行`, rowsFiltered: (n, total) => `${n} / ${total} 行（筛选中）`,
+    copiedCol: (col, dedup, n) => `已复制列「${col}」${dedup ? '（去重后' : '（'}${n} 行）`,
+    ctxCopyCell: '复制单元格', ctxCopyRow: '复制整行', ctxCopyTable: '复制整表（TSV）', ctxFilterEq: (col, v) => `只看「${col} = ${v}」`,
+    cellUnit: '单元格', rowUnit: '整行', tableUnit: '整表', copiedWhat: (what) => `已复制${what}`, copyDenied: '复制被浏览器拒绝',
+    sortBy: '排序：', sortName: '名称', sortActions: '动作数', sortInstalled: '最近安装',
+    watchDlgTitle: (name) => `监控「${name}」`, watchDlgHelp: '界面开着才会跑。每次采样记录结果，变化会高亮，可在 #/watch 面板聚合查看。',
+    watchRerunEvery: '重跑间隔', watchFailLabel: '连续失败几次自动停（0 = 不停）', watchMatchLabel: '结果包含此串自动停（留空 = 不启用）',
+    watchMatchPh: '如 error / 90%', watchStartBtn: '开始监控', cancel: '取消',
+    importDone: (applied, skipped) => `导入完成：应用 ${applied} 项、跳过 ${skipped} 项，即将刷新…`,
+    cmpDiffCount: (n) => `对比出 ${n} 处差异`, cmpNoKeys: '两条没有可比的键',
+    timerDlgTitle: (name) => `定时执行：${name}`, timerDlgHelp: '界面开着才会跑。只读动作才允许定时（有副作用的自动跑风险太大）。',
+    timerSecLabel: '间隔（秒）', timerPresets: '快捷档位', timerWinLabel: '执行窗口（可空，如 09:00-18:00，窗口外跳过）',
+    timerUseVals: '用当前表单值作为定时参数', timerSaveBtn: (upd) => `${upd ? '更新' : '开始'}定时`,
+    timerMinSec: '间隔至少 10 秒', timerWinBad: '窗口格式应为 HH:MM-HH:MM',
+    whyLabelPrefix: '命中：',
     invokeTip: '这个动作在 CLI / MCP / 深链里怎么调', invoke: '调用方式',
     cfgTip: '这个插件的长期配置（端点、密钥等），保存后立即生效', cfgPlugin: '配置插件',
     qrTip: '生成深链二维码，手机扫码直达这个动作', qr: '二维码',
@@ -690,6 +709,25 @@ export const I18N = {
     batchSelected: (n) => `${n} selected`, batchDups: (n) => `${n} dup`,
     moreTip: 'More actions: invoke / config / share / timers / watch / result tools', more: 'More',
     invokeWays: 'Three ways to invoke',
+    whyHit: 'hit', whyNick: 'nickname', whyActionId: 'action ID', whyTitle: 'action name', whyPluginAction: 'plugin.action', whyPinyin: 'pinyin', whyTags: 'tags',
+    chainSteps: (n) => `chain of ${n} steps`, smartMatch: 'smart match', looksLike: (v) => `content looks like ${v} — ready to use`,
+    sumOf: 'subtotal', avgLabel: 'avg', tfootSum: (sum, avg) => `sum ${sum} · avg ${avg}`,
+    rowsWindowed: (shown, total, page) => `${shown} / ${total} rows (big table renders first ${page} rows for smoothness)`,
+    loadAllRows: (n) => `Load all ${n} rows`, rowsTotal: (n) => `${n} rows in total`, rowsFiltered: (n, total) => `${n} / ${total} rows (filtered)`,
+    copiedCol: (col, dedup, n) => `Column "${col}" copied (${n} rows${dedup ? ', deduped' : ''})`,
+    ctxCopyCell: 'Copy cell', ctxCopyRow: 'Copy row', ctxCopyTable: 'Copy whole table (TSV)', ctxFilterEq: (col, v) => `Only show "${col} = ${v}"`,
+    cellUnit: 'cell', rowUnit: 'row', tableUnit: 'table', copiedWhat: (what) => `${what} copied`, copyDenied: 'Copy rejected by browser',
+    sortBy: 'Sort:', sortName: 'Name', sortActions: 'Actions', sortInstalled: 'Recently installed',
+    watchDlgTitle: (name) => `Watch "${name}"`, watchDlgHelp: 'Runs only while the UI is open. Each sample is recorded, changes get highlighted; see the #/watch panel.',
+    watchRerunEvery: 'Rerun interval', watchFailLabel: 'Auto-stop after N consecutive failures (0 = never)', watchMatchLabel: 'Auto-stop when result contains this string (empty = off)',
+    watchMatchPh: 'e.g. error / 90%', watchStartBtn: 'Start watching', cancel: 'Cancel',
+    importDone: (applied, skipped) => `Import done: ${applied} applied, ${skipped} skipped, refreshing…`,
+    cmpDiffCount: (n) => `${n} differences found`, cmpNoKeys: 'No comparable keys between the two',
+    timerDlgTitle: (name) => `Scheduled run: ${name}`, timerDlgHelp: 'Runs only while the UI is open. Read-only actions only — auto-running side effects is too risky.',
+    timerSecLabel: 'Interval (seconds)', timerPresets: 'Quick presets', timerWinLabel: 'Run window (optional, e.g. 09:00-18:00; skipped outside)',
+    timerUseVals: 'Use current form values as scheduled params', timerSaveBtn: (upd) => `${upd ? 'Update' : 'Start'} schedule`,
+    timerMinSec: 'Interval must be at least 10 seconds', timerWinBad: 'Window format should be HH:MM-HH:MM',
+    whyLabelPrefix: 'matched: ',
     invokeTip: 'How to call this action from CLI / MCP / deep links', invoke: 'Invoke',
     cfgTip: 'Long-lived plugin settings (endpoints, keys); effective immediately', cfgPlugin: 'Plugin settings',
     qrTip: 'QR code of the deep link; scan on phone to jump here', qr: 'QR code',
@@ -2159,11 +2197,12 @@ export function installCommand(p) {
 
 /** ①搜索命中解释：把 explain 分数摊开成人话标签（「命中：动作名·拼音」）。
  * 输入是 scoreEntry 收集的 why 数组 [[label, score, weight], ...]。 */
-export function whyLabel(why) {
+export function whyLabel(why, T) {
   const labels = (why ?? []).map((r) => r[0]).filter(Boolean);
   if (!labels.length) return '';
   const uniq = [...new Set(labels)];
-  return `命中：${uniq.join('·')}`;
+  const prefix = T?.whyLabelPrefix ?? '命中：';
+  return `${prefix}${uniq.join('·')}`;
 }
 
 /** ⑥同义词弱路由：描述型 query 映射到可能的关键词。

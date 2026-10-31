@@ -646,7 +646,7 @@ function scoreEntry(entry, token, explain) {
     for (let i = 0; i < pairs.length; i++) {
       if (pairs[i][0] * pairs[i][1] > m) { m = pairs[i][0] * pairs[i][1]; mi = i; }
     }
-    if (explain && mi >= 0) explain.push([pairs[mi][2] ?? '命中', pairs[mi][0], pairs[mi][1]]);
+    if (explain && mi >= 0) explain.push([pairs[mi][2] ?? t('whyHit'), pairs[mi][0], pairs[mi][1]]);
     return m;
   };
   // 昵称：用户自己起的名字，权重最高——他们叫它什么，搜它就该第一个出来
@@ -656,12 +656,12 @@ function scoreEntry(entry, token, explain) {
 
   // 动作自己这一层：名字里直接命中，"打开这个动作"的意图最明确
   const own = best(
-    [nick ? scoreOne(nick, token) * 1.2 : 0, 1.0, '昵称'],
-    [scoreOne(a.id, token), 1.0, '动作ID'],
-    [scoreOne(a.title, token), 1.05, '动作名'],
-    [scoreOne(entry.hayId, token), 0.9, '插件.动作'],
-    [scorePinyin(entry.py.title, token), 1.05, '拼音'],
-    [atags.length ? scoreOne(atags.join(' '), token) * 0.95 : 0, 1.0, '标签'],
+    [nick ? scoreOne(nick, token) * 1.2 : 0, 1.0, t('whyNick')],
+    [scoreOne(a.id, token), 1.0, t('whyActionId')],
+    [scoreOne(a.title, token), 1.05, t('whyTitle')],
+    [scoreOne(entry.hayId, token), 0.9, t('whyPluginAction')],
+    [scorePinyin(entry.py.title, token), 1.05, t('whyPinyin')],
+    [atags.length ? scoreOne(atags.join(' '), token) * 0.95 : 0, 1.0, t('whyTags')],
   );
   if (own > 0) return own;
 
@@ -792,11 +792,11 @@ function itemHtml(entry, i, showPlugin, query = '') {
     <span class="title">
       <span class="item-line1"><span class="item-name name">${highlightHtml(a.title, query, esc)}${nicknames[key] ? `<i class="nick">（${esc(nicknames[key])}）</i>` : ''}</span>
       ${(actionTags[key] ?? []).map((tg) => `<span class="badge tag">#${esc(tg)}</span>`).join(' ')}
-      ${a.steps?.length ? `<span class="badge">组合 ${a.steps.length} 步</span>` : ''}
-      ${smart ? `<span class="badge smart-badge">智能匹配</span>` : ''}
-      ${!smart && entry.lastWhy?.length ? `<span class="badge why-badge" title="${esc(whyLabel(entry.lastWhy))}">${esc(whyLabel(entry.lastWhy))}</span>` : ''}
+      ${a.steps?.length ? `<span class="badge">${t('chainSteps')(a.steps.length)}</span>` : ''}
+      ${smart ? `<span class="badge smart-badge">${t('smartMatch')}</span>` : ''}
+      ${!smart && entry.lastWhy?.length ? `<span class="badge why-badge" title="${esc(whyLabel(entry.lastWhy, I18N[pickLang(lang)]))}">${esc(whyLabel(entry.lastWhy, I18N[pickLang(lang)]))}</span>` : ''}
       ${dep}</span>
-      <span class="item-desc1 desc">${smart ? `内容看起来是${esc(smart)}，可以直接用` : highlightHtml(a.description || p.summary || '', query, esc)}</span>
+      <span class="item-desc1 desc">${smart ? `${t('looksLike')(esc(smart))}` : highlightHtml(a.description || p.summary || '', query, esc)}</span>
     </span>
     <button class="star${fav ? ' on' : ''}" data-fav="${esc(key)}" title="${fav ? t('unfav') : t('fav')}" aria-label="${fav ? t('unfav') : t('fav')}">${fav ? '★' : '☆'}</button>
     <span class="aid">${esc(a.id)}</span>
@@ -2731,20 +2731,20 @@ function openWatchDialog(plugin, action, key) {
     `<option value="${o.sec}" ${o.sec === 30 ? 'selected' : ''}>${o.label}</option>`).join('');
   overlay.innerHTML = `
     <div class="modal" role="dialog" aria-modal="true">
-      <h3>监控「${esc(action.title)}」</h3>
-      <div class="help">界面开着才会跑。每次采样记录结果，变化会高亮，可在 #/watch 面板聚合查看。</div>
-      <label class="field">重跑间隔
+      <h3>${t('watchDlgTitle')(esc(action.title))}</h3>
+      <div class="help">${t('watchDlgHelp')}</div>
+      <label class="field">${t('watchRerunEvery')}
         <select id="wInterval">${intervalOpts}</select>
       </label>
-      <label class="field">连续失败几次自动停（0 = 不停）
+      <label class="field">${t('watchFailLabel')}
         <input id="wFail" type="number" min="0" max="10" value="3">
       </label>
-      <label class="field">结果包含此串自动停（留空 = 不启用）
-        <input id="wMatch" type="text" placeholder="如 error / 90%">
+      <label class="field">${t('watchMatchLabel')}
+        <input id="wMatch" type="text" placeholder="${t('watchMatchPh')}">
       </label>
       <div class="actions">
-        <button class="primary" id="wStart">开始监控</button>
-        <button class="ghost" id="wCancel">取消</button>
+        <button class="primary" id="wStart">${t('watchStartBtn')}</button>
+        <button class="ghost" id="wCancel">${t('cancel')}</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -3109,17 +3109,17 @@ function openTimerDialog(plugin, action) {
     `<button type="button" class="ghost mini t-preset" data-sec="${p.sec}">${p.label}</button>`).join(' ');
   overlay.innerHTML = `
     <div class="modal" role="dialog" aria-modal="true">
-      <h3>定时执行：${esc(action.title)}</h3>
-      <div class="help">界面开着才会跑。只读动作才允许定时（有副作用的自动跑风险太大）。</div>
-      <div class="field"><label>间隔（秒）</label><input id="tSec" type="number" min="10" step="1" value="${ex?.interval ?? 60}"></div>
-      <div class="field"><label>快捷档位</label><div class="chip-row">${presets}</div></div>
-      <div class="field"><label>执行窗口（可空，如 09:00-18:00，窗口外跳过）</label>
+      <h3>${t('timerDlgTitle')(esc(action.title))}</h3>
+      <div class="help">${t('timerDlgHelp')}</div>
+      <div class="field"><label>${t('timerSecLabel')}</label><input id="tSec" type="number" min="10" step="1" value="${ex?.interval ?? 60}"></div>
+      <div class="field"><label>${t('timerPresets')}</label><div class="chip-row">${presets}</div></div>
+      <div class="field"><label>${t('timerWinLabel')}</label>
         <input id="tWin" type="text" placeholder="09:00-18:00" value="${esc(ex?.win ?? '')}"></div>
-      <div class="field"><label>用当前表单值作为定时参数</label>
+      <div class="field"><label>${t('timerUseVals')}</label>
         <input id="tVals" type="checkbox" ${ex?.values ? '' : 'checked'}></div>
       <div class="modal-actions">
-        <button class="ghost" id="tCancel">取消</button>
-        <button class="primary" id="tSave">${ex ? '更新' : '开始'}定时</button>
+        <button class="ghost" id="tCancel">${t('cancel')}</button>
+        <button class="primary" id="tSave">${t('timerSaveBtn')(!!ex)}</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -3131,8 +3131,8 @@ function openTimerDialog(plugin, action) {
     const sec = Number(overlay.querySelector('#tSec').value);
     const win = overlay.querySelector('#tWin').value.trim();
     const useVals = overlay.querySelector('#tVals').checked;
-    if (!Number.isFinite(sec) || sec < 10) { el.count.textContent = '间隔至少 10 秒'; return; }
-    if (!validWindow(win)) { el.count.textContent = '窗口格式应为 HH:MM-HH:MM'; return; }
+    if (!Number.isFinite(sec) || sec < 10) { el.count.textContent = t('timerMinSec'); return; }
+    if (!validWindow(win)) { el.count.textContent = t('timerWinBad'); return; }
     if (reg[key]) { clearInterval(reg[key].id); delete reg[key]; }
     reg[key] = {
       id: null, interval: sec, win,
@@ -3705,7 +3705,7 @@ function openImportDialog() {
         try { localStorage.setItem(k, v); } catch { /* 私密模式尽力而为 */ }
       }
       overlay.remove();
-      el.count.textContent = `导入完成：应用 ${applied} 项、跳过 ${skipped} 项，即将刷新…`;
+      el.count.textContent = t('importDone')(applied, skipped);
       setTimeout(() => location.reload(), 900);
     });
   };
@@ -4792,7 +4792,7 @@ function renderResult(res) {
       try {
         await navigator.clipboard.writeText(toShareMarkdown(res.data, shareMeta, { full: false }));
         el.count.textContent = '分享文本已复制（Markdown，含执行信息头）';
-      } catch { el.count.textContent = '复制被浏览器拒绝'; }
+      } catch { el.count.textContent = t('copyDenied'); }
     });
   }
   if (res.data !== undefined) {
@@ -5233,8 +5233,8 @@ function renderTable(rows0, tableId = '') {
       const g = gsegs[gi];
       if (g.agg) {
         const cells = visCols.map((c, ci) => ci === 0
-          ? `<td class="gsum-label">└ ${esc(String(g.value))} 小计</td>`
-          : (visCols[ci] === g.agg.col ? `<td class="num gsum">${g.agg.kind === 'avg' ? '均值' : 'Σ'} ${g.agg.total}</td>` : '<td class="gsum-empty"></td>')).join('');
+          ? `<td class="gsum-label">└ ${esc(String(g.value))} ${t('sumOf')}</td>`
+          : (visCols[ci] === g.agg.col ? `<td class="num gsum">${g.agg.kind === 'avg' ? t('avgLabel') : 'Σ'} ${g.agg.total}</td>` : '<td class="gsum-empty"></td>')).join('');
         bodyParts.push(`<tr class="gsum-row">${cells}</tr>`);
       }
       gi++;
@@ -5246,7 +5246,7 @@ function renderTable(rows0, tableId = '') {
     const st = colStats(view, c);
     if (st.kind === 'num') {
       const f = (n) => formatNumber(String(Math.round(n * 100) / 100));
-      return `<td class="num tstat" title="合计 ${f(st.sum)} · 均值 ${f(st.avg)}">${f(st.sum)}<span class="sub"> Σ·x̄${f(st.avg)}<br>${f(st.min)}~${f(st.max)}</span></td>`;
+      return `<td class="num tstat" title="${t('tfootSum')(f(st.sum), f(st.avg))}">${f(st.sum)}<span class="sub"> Σ·x̄${f(st.avg)}<br>${f(st.min)}~${f(st.max)}</span></td>`;
     }
     return `<td class="tstat" title="非空 ${st.count} 条"><span class="sub">${st.count} 条</span></td>`;
   }).join('');
@@ -5270,7 +5270,7 @@ function renderTable(rows0, tableId = '') {
   // 第二十三轮⑤⑥：查询框（与第十六轮筛选行不同：这是整表查询，支持 > < = 数字比较）
   const qbar = `<div class="rquery"><input data-rq="${esc(tableId || 't')}" placeholder="查询：词 或 size>100 …" value="${esc(resultQueryTerms[tableId] ?? '')}" autocomplete="off" spellcheck="false"><span class="sub" data-rqc="${esc(tableId || 't')}">${rq ? `${qrows.length} / ${frows.length} 行` : ''}</span></div>`;
   return `${unitBtns ? `<div class="unit-bar">${unitBtns}</div>` : ''}${gear}${densBtns}${overFields}${qbar}<div class="tbl-wrap density-${dpref}"><table class="grid" data-table="${esc(tableId)}" style="--tbl-row-h:${dens.row};--tbl-pad:${dens.pad};--tbl-fs:${dens.fs}"><thead><tr>${head}</tr>${fRow}</tr></thead><tbody>${body}</tbody><tfoot><tr>${foot}</tr></tfoot></table></div>
-  ${bigTable ? `<div class="tcount"><span class="sub">${viewRows.length} / ${view.length} 行（大表只画前 ${PAGE_ROWS} 行保流畅）</span> <button class="ghost mini" data-loadall="${esc(tableId || 't')}">加载全部 ${view.length} 行</button></div>` : `<div class="tcount sub">${view.length === rows.length ? `共 ${rows.length} 行` : `${view.length} / ${rows.length} 行（筛选中）`}</div>`}`;
+  ${bigTable ? `<div class="tcount"><span class="sub">${t('rowsWindowed')(viewRows.length, view.length, PAGE_ROWS)}</span> <button class="ghost mini" data-loadall="${esc(tableId || 't')}">${t('loadAllRows')(view.length)}</button></div>` : `<div class="tcount sub">${view.length === rows.length ? t('rowsTotal')(rows.length) : t('rowsFiltered')(view.length, rows.length)}</div>`}`;
 }
 
 // 表格排序状态（按 tableId 记，重渲染后保留）
@@ -5315,9 +5315,9 @@ function bindTableSorts(scope) {
         menu.appendChild(b);
       };
       const copy = (text, what) => navigator.clipboard?.writeText(text)
-        .then(() => { el.count.textContent = `已复制${what}`; })
+        .then(() => { el.count.textContent = t('copiedWhat')(what); })
         .catch(() => { el.count.textContent = '复制被浏览器拒绝'; });
-      mk('复制单元格', () => copy(td.textContent.trim(), '单元格'));
+      mk(t('ctxCopyCell'), () => copy(td.textContent.trim(), t('cellUnit')));
       // 第九十七轮⑤：只看这个值——列值等值过滤，一键缩小到当前行同类
       // （小计行不是数据行，不给只看——它的值是聚合出来的）
       if (tblEl && !tr.classList.contains('gsum-row')) {
@@ -5325,7 +5325,7 @@ function bindTableSorts(scope) {
         const cellIdx = [...tr.querySelectorAll('td')].indexOf(td);
         const colName = ths[cellIdx];
         const tblId = tblEl.dataset.table || '';
-        if (colName) mk(`只看「${colName} = ${td.textContent.trim().slice(0, 12)}」`, () => {
+        if (colName) mk(t('ctxFilterEq')(colName, td.textContent.trim().slice(0, 12)), () => {
           const cur = tableFilterTerms[tblId] ?? [];
           const term = String(td.textContent.trim());
           if (!cur.includes(term)) cur.push(term);
@@ -5333,10 +5333,10 @@ function bindTableSorts(scope) {
           refreshResult();
         });
       }
-      mk('复制整行', () => copy(rowText, '整行'));
-      if (tblEl) mk('复制整表（TSV）', () => {
+      mk(t('ctxCopyRow'), () => copy(rowText, t('rowUnit')));
+      if (tblEl) mk(t('ctxCopyTable'), () => {
         const rows = [...tblEl.querySelectorAll('tr')].map((r) => [...r.querySelectorAll('th,td')].map((c) => c.textContent.trim()).join('\t'));
-        copy(rows.join('\n'), '整表');
+        copy(rows.join('\n'), t('tableUnit'));
       });
       const rc = ev.target.closest('table').getBoundingClientRect();
       menu.style.left = `${Math.min(ev.clientX, rc.right - 150)}px`;
@@ -5451,7 +5451,7 @@ function bindTableSorts(scope) {
       if (!Array.isArray(rows0)) return;
       const vals = columnValues(rows0, col, { dedupe: ev.altKey });
       navigator.clipboard?.writeText(vals.join('\n')).then(() => {
-        el.count.textContent = `已复制列「${col}」${ev.altKey ? '（去重后' : '（'}${vals.length} 行）`;
+        el.count.textContent = t('copiedCol')(col, ev.altKey, vals.length);
       }).catch(() => {});
     }));
   });
@@ -6296,11 +6296,11 @@ async function renderPlugins() {
       <h2>插件（${plugins.length}）</h2>
       <span class="sub">来源与版本 · 安装 · 更新</span>
       <span class="head-sort">
-        <label>排序：</label>
+        <label>${t('sortBy')}</label>
         <select id="plugSort">
-          <option value="name"${readJson('zerokit.plugin-sort', 'name') === 'name' ? ' selected' : ''}>名称</option>
-          <option value="actions"${readJson('zerokit.plugin-sort', 'name') === 'actions' ? ' selected' : ''}>动作数</option>
-          <option value="installed"${readJson('zerokit.plugin-sort', 'name') === 'installed' ? ' selected' : ''}>最近安装</option>
+          <option value="name"${readJson('zerokit.plugin-sort', 'name') === 'name' ? ' selected' : ''}>${t('sortName')}</option>
+          <option value="actions"${readJson('zerokit.plugin-sort', 'name') === 'actions' ? ' selected' : ''}>${t('sortActions')}</option>
+          <option value="installed"${readJson('zerokit.plugin-sort', 'name') === 'installed' ? ' selected' : ''}>${t('sortInstalled')}</option>
         </select>
       </span>
     </div>
@@ -7628,7 +7628,7 @@ async function showSaved() {
           <table class="cmp-table"><caption class="sr-only">历史对比</caption><thead><tr><th>键</th><th>较早</th><th>较晚</th></tr></thead><tbody>${html}</tbody></table>`;
         view.prepend(box);
         box.querySelector('#cmpClose').addEventListener('click', () => box.remove());
-        el.count.textContent = rows.length ? `对比出 ${rows.filter((r2) => r2.diff).length} 处差异` : '两条没有可比的键';
+        el.count.textContent = rows.length ? t('cmpDiffCount')(rows.filter((r2) => r2.diff).length) : t('cmpNoKeys');
       }
     }));
     view.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => {
