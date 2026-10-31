@@ -22,9 +22,12 @@ import { fileURLToPath } from 'node:url';
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
 const WRITE = argv.includes('--write');
+// 第九十九轮⑥：--check 干跑校验模式——不写任何文件，只验当前树的健康度
+// （锚存在/五处版本一致/CHANGELOG 无重复版本段）。发布前的第二道保险。
+const CHECK = argv.includes('--check');
 const ver = argv.find((a) => /^\d+\.\d+\.\d+$/.test(a));
-if (!ver) {
-  console.error('用法：node scripts/release-prep.mjs <X.Y.Z> [--write]（不带 --write 为干跑）');
+if (!ver && !CHECK) {
+  console.error('用法：node scripts/release-prep.mjs <X.Y.Z> [--write]（--check 干跑校验不需要版本号）');
   process.exit(2);
 }
 
@@ -34,6 +37,27 @@ const write = (f, s) => fs.writeFileSync(path.join(REPO, f), s);
 
 // ---------- ① CHANGELOG 归档 ----------
 const cl = read('CHANGELOG.md');
+if (CHECK) {
+  // 锚
+  const sh0 = read('START-HERE.md');
+  if (!/<!-- zk-version -->.*?<!-- \/zk-version -->/.test(sh0)) die('--check：START-HERE.md 缺 <!-- zk-version --> 锚');
+  // 五处版本一致
+  const vers = [
+    read('package.json').match(/"version": "([\d.]+)"/)?.[1],
+    read('apps/desktop/src-tauri/tauri.conf.json').match(/"version": "([\d.]+)"/)?.[1],
+    read('apps/desktop/src-tauri/Cargo.toml').match(/version = "([\d.]+)"/)?.[1],
+    (sh0.match(/<!-- zk-version -->.*?<!-- \/zk-version -->/)?.[0] ?? '').match(/v([\d.]+)/)?.[1],
+  ];
+  if (new Set(vers).size !== 1) die(`--check：版本号不一致 ${vers.join(' / ')}`);
+  // CHANGELOG 无重复段
+  const cl0 = read('CHANGELOG.md');
+  for (const m of cl0.matchAll(/^## \[([\d.]+)\] - /gm)) {
+    if ((cl0.match(new RegExp(`^## \\[${m[1]}\\] - `, 'gm')) ?? []).length > 1) die(`--check：CHANGELOG 有重复版本段 [${m[1]}]`);
+  }
+  console.log(`✓ --check 通过：五处版本一致（${vers[0]}）、锚完整、无重复段`);
+  process.exit(0);
+}
+
 // 第五十七轮⑥：目标版本段已存在 = 双段事故的前兆（第五十四轮 tag 打错重发时几乎踩到）——直接拒绝
 if (cl.includes(`## [${ver}] - `)) die(`版本 [${ver}] 的段已存在于 CHANGELOG（重复发布或版本号写错）`);
 // 第六十六轮教训：[Unreleased] 可能含 Added/Fixed 等多段，归档要整段搬走（正则只抓
@@ -80,6 +104,15 @@ const bumps = [
   ['apps/desktop/src-tauri/tauri.conf.json', /"version": "\d+\.\d+\.\d+"/, `"version": "${ver}"`],
   ['apps/desktop/src-tauri/Cargo.toml', /version = "\d+\.\d+\.\d+"/, `version = "${ver}"`],
 ];
+
+// 第九十九轮②：START-HERE 版本行走 HTML 锚（<!-- zk-version -->…<!-- /zk-version -->），
+// 替换锚内内容——与「当前版本 vX。」的人写句式彻底解耦（前三次 release 连挂的根因）。
+const ZK_V_ANCHOR = /<!-- zk-version -->.*?<!-- \/zk-version -->/;
+{
+  const sh = read('START-HERE.md');
+  if (!ZK_V_ANCHOR.test(sh)) die('START-HERE.md 缺少 <!-- zk-version --> 锚（新格式未迁移？）');
+  write('START-HERE.md', sh.replace(ZK_V_ANCHOR, `<!-- zk-version -->当前版本 v${ver}<!-- /zk-version -->`));
+}
 const oldVersions = bumps.map(([f, re]) => re.exec(read(f))?.[0] ?? 'NOT FOUND');
 if (oldVersions.some((v) => v === 'NOT FOUND')) die(`版本号定位失败：${oldVersions.join(', ')}`);
 
@@ -103,8 +136,18 @@ write('apps/desktop/src-tauri/Cargo.lock', lock.replace(lockRe, `$1"${ver}"`));
     ['apps/desktop/src-tauri/tauri.conf.json', new RegExp(`"version": "${ver}"`)],
     ['apps/desktop/src-tauri/Cargo.toml', new RegExp(`version = "${ver}"`)],
     ['apps/desktop/src-tauri/Cargo.lock', new RegExp(`name = "zerokit-desktop"\nversion = "${ver}"`)],
+    ['START-HERE.md', new RegExp(`<!-- zk-version -->当前版本 v${ver}<!-- /zk-version -->`)],
   ];
   for (const [f, re] of checks) if (!re.test(read(f))) die(`写盘后复核失败：${f} 未到 ${ver}`);
-  console.log('✓ 四处版本号写盘复核通过（CI check-docs 再兜一层）');
+  console.log('✓ 五处版本号写盘复核通过（CI check-docs 再兜一层）');
+  // 第九十九轮③：归档条目数守卫——新版本段条目数必须 ≥ 归档前 Unreleased 条目数
+  // （v0.59.0 丢段标题、v1.2.0 cherry-pick 静默丢归档提交，两次事故都是条目变少没拦住）
+  {
+    const after = read('CHANGELOG.md');
+    const seg = after.slice(after.indexOf(`## [${ver}] - `), after.indexOf('\n## [', after.indexOf(`## [${ver}] - `)));
+    const nAfter = (seg.match(/^- /gm) ?? []).length;
+    if (nAfter < entryCount) die(`归档条目守卫失败：新段 ${nAfter} 条 < 归档前 ${entryCount} 条（丢条目了）`);
+    console.log(`✓ 归档条目守卫通过（${nAfter} 条全进新段）`);
+  }
 }
 console.log(`✓ 全部落盘（CHANGELOG + 四处版本号 → ${ver}）`);

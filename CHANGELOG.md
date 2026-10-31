@@ -1,6 +1,11 @@
 ## [Unreleased]
 
-（下一版攒着）
+### Added
+
+- 发布工具自愈：`START-HERE.md` 版本行加 `<!-- zk-version -->` 锚，`release-prep` 锚内替换，句式漂移不再挂 CI（此前连续三个版本挂过）
+- `release-prep --check`：发布前第二道保险——锚存在、五处版本一致、CHANGELOG 无重复版本段
+- `release-prep` 归档条目守卫与写盘复核升级为五处（含 START-HERE 锚内容）
+- `check-docs` 新增锚完整性断言（开闭各一、锚内有版本号）
 
 ## [1.3.0] - 2026-10-31
 
