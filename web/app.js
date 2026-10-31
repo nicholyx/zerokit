@@ -838,7 +838,7 @@ function applySplitLayout() {
   if (!sp) {
     sp = document.createElement('div');
     sp.id = 'zkSplitter';
-    sp.title = '拖拽调节分栏宽度（双击复位）';
+    sp.title = t('tlSplitterTip');
     sp.setAttribute('role', 'separator');
     sp.setAttribute('aria-orientation', 'vertical');
     // 拖拽：记录起拖位置与起始百分比，mousemove 实时换算（dragPct 已含 26–60 钳制）
@@ -1267,7 +1267,7 @@ function renderListInner() {
       const hayEntries = entries.map((e) => ({ hay: `${e.plugin.name} ${e.action.title} ${e.action.description ?? ''} ${(e.action.keywords ?? []).join(' ')}`.toLowerCase() }));
       const sugg = suggestNext(rawTokens, hayEntries);
       if (sugg.length) {
-        suggestions.push('<div class="empty-sug-title">丢一个词试试：</div>');
+        suggestions.push(`<div class="empty-sug-title">${esc(t('sugDropTitle'))}</div>`);
         for (const sg of sugg) {
           suggestions.push(`<button class="link" data-sug="dropword" data-word="${esc(sg.drop)}">去掉「${esc(sg.drop)}」——能救回 ${sg.hit} 项</button>`);
         }
@@ -1694,7 +1694,7 @@ function openDetail(plugin, action, prefill) {
   const key = actionKey(plugin.id, action.id);
   const lastRunNote = lastRun
     ? `<div class="mem-note last-run-note">上次：${lastRun.ok ? '✓ ' + t('runOk') : '✗ ' + t('runFail')} · ${t('minsAgo')(Math.max(1, Math.round((Date.now() - lastRun.ts) / 60000)))}
-        <button class="ghost mini" id="peekLast" title="回看上次结果">回看</button>
+        <button class="ghost mini" id="peekLast" title="${esc(t('tlPeekLast'))}">回看</button>
         ${lastRun.values ? `<button class="ghost mini" id="rerunLast" title="${t('rerunTitle')}">${t('rerun')}</button>` : ''}</div>`
     : '';
 
@@ -1805,7 +1805,7 @@ function openDetail(plugin, action, prefill) {
       return `<div class="field secret-field" data-field="${esc(f.name)}"><label>${esc(f.name)}${req}</label>
         <div class="secret-wrap">
           <input id="f_${esc(f.name)}" type="password"${def} placeholder="${esc(ph)}" autocomplete="off" data-initial="${esc(given0 ?? '')}">
-          <button type="button" class="ghost mini eye" data-eye="${esc(f.name)}" aria-label="显示或隐藏明文" title="显示/隐藏明文">👁</button>
+          <button type="button" class="ghost mini eye" data-eye="${esc(f.name)}" aria-label="显示或隐藏明文" title="${esc(t('tlEye'))}">👁</button>
         </div>${help}
         <div class="field-err hidden" id="${errId}"></div></div>`;
     }
@@ -1829,7 +1829,7 @@ function openDetail(plugin, action, prefill) {
       ${action.risk !== 'read' ? `<div class="risk-explain callout">⚠ 风险等级「${esc(riskText(action.risk))}」是什么意思：只读=只是看、不改任何东西；会改动=会修改文件/配置/服务，执行前想清楚；高风险=可能删除数据或不可逆，确认明白了再执行。</div>` : ''}
       ${note ? `<div class="detail-note">📌 ${esc(note)}</div>` : ''}
       <div class="detail-hotkey">
-        <button class="ghost" id="hkBtn" title="把 F1–F12 里某个键绑给这个动作，全局按一下就打开">⚡ 绑定快捷键</button>
+        <button class="ghost" id="hkBtn" title="${esc(t('tlHkBtn'))}">⚡ 绑定快捷键</button>
         <span class="sub" id="hkHint">${hotkeyFor(favKey) ? `当前绑定：${hotkeyFor(favKey)}` : '未绑定（F1–F12）'}</span>
       </div>
     </div>
@@ -2080,17 +2080,17 @@ function openDetail(plugin, action, prefill) {
     const btn = ev.currentTarget;
     try {
       await navigator.clipboard.writeText(JSON.stringify(def, null, 2));
-      btn.textContent = '✓ 已复制';
+      btn.textContent = t('fbCopied');
       setTimeout(() => { btn.textContent = t('copyJson'); }, 1200);
     } catch {
-      btn.textContent = '复制失败';
+      btn.textContent = t('fbCopyFail');
     }
   });
   // 定时任务（界面内）：只读动作可设间隔自动跑。页面开着才执行——这是刻意边界，
   // 不做后台守护：守护需要常驻进程与错过补跑策略，那是一个服务，不是一个启动器功能。
   $('timerBtn')?.addEventListener('click', () => {
     if (action.risk !== 'read') {
-      el.count.textContent = '只有只读动作能定时执行（有副作用的自动跑风险太大）';
+      el.count.textContent = t('fbTimerReadOnly');
       return;
     }
     // 第三十八轮①②③④：定时任务升级——档位选择 + 执行窗口 + 暂停 + 历史。
@@ -2102,7 +2102,7 @@ function openDetail(plugin, action, prefill) {
   // 与「定时」的区别：定时只是重复跑；监控记录采样、diff 高亮、趋势线、可设停止条件。
   $('watchBtn')?.addEventListener('click', () => {
     if (action.risk !== 'read') {
-      el.count.textContent = '只有只读动作能监控（有副作用的自动跑风险太大）';
+      el.count.textContent = t('fbWatchReadOnly');
       return;
     }
     const reg = watchRegistry();
@@ -2136,7 +2136,7 @@ function openDetail(plugin, action, prefill) {
   $('shareCardBtn')?.addEventListener('click', async () => {
     const last = (runStore[actionKey(plugin.id, action.id)] ?? [])[0];  // 第七十轮修：unshift 语义首位最新
     if (!last) {
-      el.count.textContent = '还没有执行结果，先跑一次再分享';
+      el.count.textContent = t('fbShareNoResult');
       return;
     }
     const card = [
@@ -2147,10 +2147,10 @@ function openDetail(plugin, action, prefill) {
     ].filter(Boolean).join('\n');
     try {
       await navigator.clipboard.writeText(card);
-      el.count.textContent = '分享卡已复制到剪贴板';
+      el.count.textContent = t('fbShareCardDone');
     } catch {
       window.__shareCardFallback = card;
-      el.count.textContent = '复制被拒绝；已暂存（__shareCardFallback）';
+      el.count.textContent = t('fbShareCardFallback') + '__shareCardFallback)';
     }
   });
 
@@ -2188,12 +2188,12 @@ function openDetail(plugin, action, prefill) {
           if (n.value !== '') patch[n.dataset.cfg] = n.value;  // 留空 = 不修改
         });
         const msg = $('cfgMsg');
-        msg.textContent = '保存中…';
+        msg.textContent = t('fbSaving');
         try {
           await api('/api/plugin/config', { method: 'POST', body: { plugin: plugin.id, patch } });
-          msg.textContent = '✓ 已保存，下一次执行立即生效';
+          msg.textContent = t('fbSaved');
         } catch (e) {
-          msg.textContent = `保存失败：${e.message}`;
+          msg.textContent = t('fbSaveFail') + e.message;
         }
       });
     } catch (e) {
@@ -2219,8 +2219,8 @@ function openDetail(plugin, action, prefill) {
     $('copyMcpCfg').addEventListener('click', async (ev) => {
       try {
         await navigator.clipboard.writeText(mcpCfg);
-        ev.currentTarget.textContent = '已复制';
-      } catch { ev.currentTarget.textContent = '复制失败'; }
+        ev.currentTarget.textContent = t('fbCopiedPlain');
+      } catch { ev.currentTarget.textContent = t('fbCopyFail'); }
       setTimeout(() => { ev.currentTarget.textContent = '复制 mcpServers'; }, 1500);
     });
     $('copyInvoke').addEventListener('click', async (ev) => {
@@ -2228,11 +2228,11 @@ function openDetail(plugin, action, prefill) {
       const noted = commandWithNote(text, plugin.name ?? plugin.id, action.title ?? action.id);
       try {
         await navigator.clipboard.writeText(noted);
-        ev.currentTarget.textContent = '已复制';
+        ev.currentTarget.textContent = t('fbCopiedPlain');
       } catch {
-        ev.currentTarget.textContent = '复制失败（非 https 环境）';
+        ev.currentTarget.textContent = t('fbCopyNoHttps');
       }
-      setTimeout(() => { ev.currentTarget.textContent = '复制'; }, 1500);
+      setTimeout(() => { ev.currentTarget.textContent = t('fbCopyPlain'); }, 1500);
     });
   });
   $('backBtn').addEventListener('click', backToList);
@@ -2318,8 +2318,8 @@ function openDetail(plugin, action, prefill) {
     const hash = encodeDeepLink(plugin.id, action.id, vals, action.params ?? []);
     const link = `${location.origin}${location.pathname}${hash}`;
     navigator.clipboard?.writeText(link).then(() => {
-      $('shareBtn').textContent = '已复制链接';
-      setTimeout(() => { $('shareBtn').textContent = '分享'; }, 1500);
+      $('shareBtn').textContent = t('fbCopiedLink');
+      setTimeout(() => { $('shareBtn').textContent = t('fbShare'); }, 1500);
     }).catch(() => { window.__shareLinkFallback = link; alert('复制失败，链接已暂存：\n' + link); });
   });
 
@@ -2506,7 +2506,7 @@ function showDangerNote(field, why, value) {
 async function checkPluginUpdate(p) {
   const btn = document.getElementById('plugUpdateBtn');
   if (!btn) return;
-  btn.textContent = '检查中…';
+  btn.textContent = t('fbChecking');
   try {
     const token = document.querySelector('meta[name=zk-token]')?.content ?? '';
     const r = await fetch('/api/plugin/install', {
@@ -2563,7 +2563,7 @@ function showTimeline() {
   }).join('') : `<div class="help">还没有执行记录——回到列表随便跑一个动作，时间线就会在这里长出来（只保存在本机）。</div>`;
   const fmtDelta = (d, unit = '') => d === null ? '—' : `${d >= 0 ? '+' : ''}${Math.round(d * 100)}%${unit}`;
   el.allowView.innerHTML = `
-    <h2 class="ps-title">时间线</h2>
+    <h2 class="ps-title">${esc(t('psTimeline'))}</h2>
     <div class="tl-week-card card">
       <div class="tl-wc-cell">本周<b>${wc.cur.total}</b> 次 <span class="sub">${fmtDelta(wc.totalDelta)} vs 上周 ${wc.prev.total}</span></div>
       <div class="tl-wc-cell">失败率<b>${Math.round(wc.cur.failRate * 100)}%</b> <span class="sub">${fmtDelta(wc.failDelta)} vs 上周 ${Math.round(wc.prev.failRate * 100)}%</span></div>
@@ -2596,7 +2596,7 @@ function showBrief() {
   const b = dailyBrief(runStore, Date.now());
   const names = Object.fromEntries(entries.map((e) => [actionKey(e.plugin.id, e.action.id), e.action.title]));
   el.allowView.innerHTML = `
-    <h2 class="ps-title">今日简报</h2>
+    <h2 class="ps-title">${esc(t('psBrief'))}</h2>
     <div class="brief-grid">
       <div class="brief-cell">今天执行<b>${b.total}</b>次</div>
       <div class="brief-cell">成功<b class="ok">${b.ok}</b></div>
@@ -2968,12 +2968,12 @@ function showWatchPanel() {
       ${w.stopReason ? `<span class="bad">${esc(w.stopReason)}</span>` : ''}
       <button class="ghost mini" data-wstop="${esc(k)}">停止</button>
       <button class="ghost mini" data-wcsv="${esc(k)}">导出 CSV</button>
-      <button class="ghost mini" data-wmd="${esc(k)}" data-ai="1" title="把采样导出成 Markdown 趋势表（时间/值/变化），贴给 AI 或进文档">趋势 MD</button>
+      <button class="ghost mini" data-wmd="${esc(k)}" data-ai="1" title="${esc(t('tlWmd'))}">趋势 MD</button>
     </div>`;
   }).join('');
   const stopLog = watchStopLog.slice(-5).reverse();
   el.allowView.innerHTML = `
-    <h2 class="ps-title">监控面板</h2>
+    <h2 class="ps-title">${esc(t('psWatch'))}</h2>
     <div class="help">界面开着才会跑；翻到别的动作自动停。在只读动作详情页点「监控」添加。</div>
     ${rows || '<div class="ps-empty" role="status">没有在跑的监控。</div>'}
     ${stopLog.length ? `<div class="watch-stoplog"><div class="sub">最近自动停止：</div>${stopLog.map((l) => `<div class="watch-stoprow bad">${esc(l)}</div>`).join('')}</div>` : ''}`;
@@ -3237,8 +3237,8 @@ function showClipPanel() {
         <span class="clip-kind">${classifyClip(c.text).kind}</span>
         <span class="clip-text" title="${esc(c.text.slice(0, 200))}">${esc(c.text.slice(0, 80))}${c.full > 500 ? ` …（${c.full} 字符）` : ''}</span>
         <span class="clip-at">${new Date(c.at).toLocaleTimeString()}</span>
-        <button class="ghost" data-write="${i}" title="写回剪贴板">↩</button>
-        <button class="ghost" data-del="${i}" title="删除这条" aria-label="删除这条">✕</button>
+        <button class="ghost" data-write="${i}" title="${esc(t('tlWriteBack'))}">↩</button>
+        <button class="ghost" data-del="${i}" title="${esc(t('tlDelItem'))}" aria-label="${esc(t('tlDelItem'))}">✕</button>
       </div>`).join('')
     : '<div class="empty" role="status">还没有剪贴板历史——复制点东西再点 📋 按钮</div>';
   panel.innerHTML = `
@@ -4509,7 +4509,7 @@ function renderResult(res) {
       // 第二十九轮⑨：大结果美化序列化走切片，不阻塞 UI
       const big = JSON.stringify(res.data).length > 262144;
       if (big) {
-        btn.textContent = '序列化中…';
+        btn.textContent = t('fbSerializing');
         text = await chunkedStringify(res.data, null, 2);
       } else text = JSON.stringify(res.data, null, 2);
     }
@@ -4517,18 +4517,18 @@ function renderResult(res) {
     if (ev.altKey) {
       const t = tabById(activeTab);
       text = withNoteHeader(text, t?.note || '', t?.ts);
-      btn.textContent = '已复制(带备注)';
-      try { await navigator.clipboard.writeText(text); } catch { btn.textContent = '复制失败'; }
-      setTimeout(() => { btn.textContent = '复制'; }, 1500);
+      btn.textContent = t('fbCopiedNote');
+      try { await navigator.clipboard.writeText(text); } catch { btn.textContent = t('fbCopyFail'); }
+      setTimeout(() => { btn.textContent = t('fbCopyPlain'); }, 1500);
       return;
     }
     try {
       await navigator.clipboard.writeText(text);
-      btn.textContent = ev.shiftKey ? '已复制(缩进)' : '已复制';
+      btn.textContent = ev.shiftKey ? t('fbCopiedIndent') : t('fbCopiedPlain');
     } catch {
-      btn.textContent = '复制失败';
+      btn.textContent = t('fbCopyFail');
     }
-    setTimeout(() => { btn.textContent = '复制'; }, 1500);
+    setTimeout(() => { btn.textContent = t('fbCopyPlain'); }, 1500);
   });
   $('saveRes')?.addEventListener('click', () => {
     const blob = new Blob([copyText], { type: 'text/plain;charset=utf-8' });
@@ -4549,7 +4549,7 @@ function renderResult(res) {
     a.download = `zerokit-${detail ? `${detail.plugin.id}-${detail.action.id}` : 'result'}-${snap.savedAt.slice(0, 10)}.zkresult.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    el.count.textContent = '快照已导出（.zkresult.json）';
+    el.count.textContent = t('fbSnapshotDone');
   });
   $('mdRes')?.addEventListener('click', () => {
     const title = detail ? `${detail.plugin.name} · ${detail.action.title}` : 'zerokit 结果';
@@ -4561,7 +4561,7 @@ function renderResult(res) {
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     const btn = $('mdRes');
-    if (btn) { btn.textContent = '已导出'; setTimeout(() => { btn.textContent = '导出 Markdown'; }, 1500); }
+    if (btn) { btn.textContent = t('fbExported'); setTimeout(() => { btn.textContent = t('fbExportMd'); }, 1500); }
   });
   // ⑤ 卡内查找：用 Highlight API 的兜底方案——把命中文本包成 <mark>
   $('findInResult')?.addEventListener('keydown', (ev) => {
@@ -4611,7 +4611,7 @@ function renderResult(res) {
         frag.append(rest.slice(last));
         node.replaceWith(frag);
       }
-      $('findCount').textContent = hits ? `${hits} 处` : '没有命中';
+      $('findCount').textContent = hits ? `${hits}${t('fbHits')}` : t('fbNoHits');
       card.dataset.findHits = String(hits);
       card.dataset.findIdx = '0';
       card.querySelector('mark.find-hit')?.scrollIntoView({ block: 'nearest' });
@@ -4625,7 +4625,7 @@ function renderResult(res) {
     const btn = $('cardFold');
     const folded = bodyEl.classList.toggle('hidden');
     find?.classList.toggle('hidden', folded);
-    if (btn) btn.textContent = folded ? '展开' : '收起';
+    if (btn) btn.textContent = folded ? t('fbFold') : t('fbCollapse');
   });
 
   $('termRes')?.addEventListener('click', () => {
@@ -4653,14 +4653,14 @@ function renderResult(res) {
   // 第十七轮⑤⑥：外部接力——编辑器打开 + 打开导出目录（走服务端 API，路径白名单在那边）
   $('editRes')?.addEventListener('click', async (ev) => {
     const btn = ev.currentTarget;
-    btn.textContent = '打开中…';
+    btn.textContent = t('fbOpening');
     try {
       const r = await api('/api/edit', { method: 'POST', body: { text: copyText, name: lastExport?.name ?? (detail ? `${detail.plugin.id}-${detail.action.id}.txt` : 'result.txt') } });
-      el.count.textContent = `已在编辑器打开：${r.file ?? ''}`;
-      btn.textContent = '已打开';
+      el.count.textContent = t('fbOpenedAt') + (r.file ?? '');
+      btn.textContent = t('fbOpened');
     } catch (e) {
-      el.count.textContent = `编辑器打不开：${String(e.message || e).slice(0, 120)}`;
-      btn.textContent = '失败';
+      el.count.textContent = t('fbOpenFail') + String(e.message || e).slice(0, 120);
+      btn.textContent = t('fbFailed');
     }
     setTimeout(() => { const b = $('editRes'); if (b) b.textContent = '编辑器打开'; }, 1600);
   });
@@ -4669,35 +4669,35 @@ function renderResult(res) {
     try {
       const r = await api('/api/open', { method: 'POST', body: (lastExport?.dir || window.__zkExportsDir) ? { target: lastExport?.dir ?? window.__zkExportsDir } : { dir: 'exports' } });
       el.count.textContent = `已在文件管理器打开：${r.opened ?? ''}`;
-      btn.textContent = '已打开';
+      btn.textContent = t('fbOpened');
     } catch (e) {
       el.count.textContent = `目录打不开：${String(e.message || e).slice(0, 120)}`;
-      btn.textContent = '失败';
+      btn.textContent = t('fbFailed');
     }
     setTimeout(() => { const b = $('openDirRes'); if (b) b.textContent = '打开目录'; }, 1600);
   });
   $('mdTableRes')?.addEventListener('click', async (ev) => {
     const btn = ev.currentTarget;
     try { await navigator.clipboard.writeText(markdownTable(res.data)); btn.textContent = '已复制'; }
-    catch { btn.textContent = '失败'; }
+    catch { btn.textContent = t('fbFailed'); }
     setTimeout(() => { btn.textContent = '复制 MD 表'; }, 1500);
   });
   $('tsvRes')?.addEventListener('click', async (ev) => {
     const btn = ev.currentTarget;
     try { await navigator.clipboard.writeText(tsvTable(res.data)); btn.textContent = '已复制'; }
-    catch { btn.textContent = '失败'; }
+    catch { btn.textContent = t('fbFailed'); }
     setTimeout(() => { btn.textContent = '复制 TSV'; }, 1500);
   });
   $('mdTableRes')?.addEventListener('click', async (ev) => {
     const btn = ev.currentTarget;
     try { await navigator.clipboard.writeText(markdownTable(res.data)); btn.textContent = '已复制'; }
-    catch { btn.textContent = '失败'; }
+    catch { btn.textContent = t('fbFailed'); }
     setTimeout(() => { btn.textContent = '复制 MD 表'; }, 1500);
   });
   $('tsvRes')?.addEventListener('click', async (ev) => {
     const btn = ev.currentTarget;
     try { await navigator.clipboard.writeText(tsvTable(res.data)); btn.textContent = '已复制'; }
-    catch { btn.textContent = '失败'; }
+    catch { btn.textContent = t('fbFailed'); }
     setTimeout(() => { btn.textContent = '复制 TSV'; }, 1500);
   });
   $('againRes')?.addEventListener('click', () => submit(false));
@@ -4776,7 +4776,7 @@ function renderResult(res) {
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       const btn = $(btnId);
-      if (btn) { const t = btn.textContent; btn.textContent = '已导出'; setTimeout(() => { btn.textContent = t; }, 1500); }
+      if (btn) { const t = btn.textContent; btn.textContent = t('fbExported'); setTimeout(() => { btn.textContent = t; }, 1500); }
     });
   };
   // 第六十五轮：分享三路——MD 单文件 / HTML 单文件 / 复制分享文本
@@ -4818,8 +4818,8 @@ function renderResult(res) {
     const html = toHtmlTable(res.data, detail ? `${detail.plugin.name} · ${detail.action.title}` : 'zerokit 结果');
     try {
       await navigator.clipboard.writeText(html);
-      ev.currentTarget.textContent = '已复制';
-    } catch { ev.currentTarget.textContent = '复制失败'; }
+      ev.currentTarget.textContent = t('fbCopiedPlain');
+    } catch { ev.currentTarget.textContent = t('fbCopyFail'); }
     setTimeout(() => { const b = $('htmlRes'); if (b) b.textContent = '复制 HTML 表'; }, 1500);
   });
 
@@ -4828,8 +4828,8 @@ function renderResult(res) {
     const md = toAiMarkdown(res, { name: detail ? `${detail.plugin.name} · ${detail.action.title}` : '结果', ts: Date.now() });
     try {
       await navigator.clipboard.writeText(md);
-      ev.currentTarget.textContent = '已复制';
-    } catch { ev.currentTarget.textContent = '复制失败'; }
+      ev.currentTarget.textContent = t('fbCopiedPlain');
+    } catch { ev.currentTarget.textContent = t('fbCopyFail'); }
     setTimeout(() => { const b = $('aiRes'); if (b) b.textContent = '给 AI'; }, 1500);
   });
   // ②：AI 上下文——当前结果 + 最近 3 次执行 + 已装插件摘要，粘进对话免得重新描述
@@ -4845,8 +4845,8 @@ function renderResult(res) {
     });
     try {
       await navigator.clipboard.writeText(ctx);
-      ev.currentTarget.textContent = '已复制';
-    } catch { ev.currentTarget.textContent = '复制失败'; }
+      ev.currentTarget.textContent = t('fbCopiedPlain');
+    } catch { ev.currentTarget.textContent = t('fbCopyFail'); }
     setTimeout(() => { const b = $('ctxRes'); if (b) b.textContent = 'AI 上下文'; }, 1500);
   });
 
@@ -6430,7 +6430,7 @@ async function renderPlugins() {
     box.classList.remove('hidden');
     $('npCreate').addEventListener('click', async () => {
       const id = $('npId').value.trim();
-      if (!id) { $('npMsg').textContent = '先填插件 id'; return; }
+      if (!id) { $('npMsg').textContent = t('fbNeedPluginId'); return; }
       $('npMsg').textContent = '生成中…';
       try {
         const r = await api('/api/plugin/new', {
@@ -6593,7 +6593,7 @@ async function saveSettings(card) {
     patch[name] = value;
   });
   if (Object.keys(patch).length === 0) { msg.textContent = '没有改动'; return; }
-  msg.textContent = '保存中…';
+  msg.textContent = t('fbSaving');
   try {
     const r = await api('/api/plugin/config', {
       method: 'POST', body: { plugin: card.dataset.id, patch },
@@ -6684,7 +6684,7 @@ async function doCheck(card) {
   const foot = card.querySelector('.plug-card-foot');
   const btn = card.querySelector('[data-op="check"]');
   btn.disabled = true;
-  btn.textContent = '检查中…';
+  btn.textContent = t('fbChecking');
   foot.hidden = false;
   foot.innerHTML = '<div class="plug-card-body">正在检查来源处的版本…</div>';
   try {
@@ -6939,13 +6939,13 @@ async function killTarget(ids, btn, all = false) {
     const res = await api('/api/kill', { method: 'POST', body: all ? { all: true } : { ids } });
     const bad = (res.results ?? []).filter((r) => !r.ok);
     if (bad.length) {
-      btn.textContent = '失败';
+      btn.textContent = t('fbFailed');
       btn.title = bad.map((r) => `${r.target}：${r.message}`).join('\n');
       setTimeout(() => { btn.disabled = false; btn.textContent = label; }, 2500);
     }
     setTimeout(renderPs, 400);
   } catch (e) {
-    btn.textContent = '失败';
+    btn.textContent = t('fbFailed');
     btn.title = e.message;
     setTimeout(() => { btn.disabled = false; btn.textContent = label; }, 2500);
   }
