@@ -798,7 +798,7 @@ function itemHtml(entry, i, showPlugin, query = '') {
       ${dep}</span>
       <span class="item-desc1 desc">${smart ? `内容看起来是${esc(smart)}，可以直接用` : highlightHtml(a.description || p.summary || '', query, esc)}</span>
     </span>
-    <button class="star${fav ? ' on' : ''}" data-fav="${esc(key)}" title="${fav ? '取消收藏' : '收藏这个动作'}" aria-label="${fav ? '取消收藏' : '收藏这个动作'}">${fav ? '★' : '☆'}</button>
+    <button class="star${fav ? ' on' : ''}" data-fav="${esc(key)}" title="${fav ? t('unfav') : t('fav')}" aria-label="${fav ? t('unfav') : t('fav')}">${fav ? '★' : '☆'}</button>
     <span class="aid">${esc(a.id)}</span>
     <span class="badge ${esc(a.risk)}">${esc(riskText(a.risk))}</span>
   </li>`;
@@ -1076,7 +1076,7 @@ async function runBatch(retryItems) {
   sum.id = 'batchSummary';
   sum.className = 'batch-summary';
   sum.innerHTML = `
-    <b>${retryItems ? '失败项重跑完成' : '批量执行完成'}（并发 ${conc}）</b>
+    <b>${retryItems ? t('batchRetryDone') : t('batchAllDone')}${t('paren')(conc)}</b>
     <span>${esc(batchSummary(results.map((r) => ({ ok: r.ok })), ordered.length))}</span>
     <span class="sub">总耗时 ${formatMs(totalMs)}</span>
     ${failed ? `<ul class="batch-fails">${results.filter((r) => !r.ok).map((r, i) => `
@@ -1130,19 +1130,19 @@ function renderListInner() {
     const bar = document.createElement('div');
     bar.className = 'batch-bar';
     bar.id = 'batchBar';
-    bar.innerHTML = `已选 ${batch.length} 项${dups.length ? `（<span class="warn">重复 ${dups.length}</span>）` : ''}
-      <button class="ghost mini" id="batchRun" ${batch.length ? '' : 'disabled'} aria-label="顺序执行篮子里的 ${batch.length} 个动作">顺序执行</button>
-      <button class="ghost mini" id="batchDedup" aria-label="去掉同动作同参数的重复项">去重</button>
-      <button class="ghost mini" id="batchExport" aria-label="导出批量清单 JSON">导出清单</button>
-      <button class="ghost mini" id="batchImport" aria-label="导入批量清单 JSON">导入</button>
-      <label class="mini">并发 <input type="number" id="batchConc" min="1" max="8" value="${readJson('zerokit.batchconc', 3)}" style="width:3em"></label>
-      <button class="ghost mini" id="batchClear" aria-label="清空批量篮">清空</button>
-      <span class="help">destructive 排最后</span>
+    bar.innerHTML = `${t('batchSelected')(batch.length)}${dups.length ? `（<span class="warn">${t('batchDups')(dups.length)}</span>）` : ''}
+      <button class="ghost mini" id="batchRun" ${batch.length ? '' : 'disabled'} aria-label="${t('batchRunLabel')(batch.length)}">${t('batchRunSeq')}</button>
+      <button class="ghost mini" id="batchDedup" aria-label="${t('batchDedupLabel')}">${t('batchDedupBtn')}</button>
+      <button class="ghost mini" id="batchExport" aria-label="${t('batchExportLabel')}">${t('batchExportBtn')}</button>
+      <button class="ghost mini" id="batchImport" aria-label="${t('batchImportLabel')}">${t('batchImportBtn')}</button>
+      <label class="mini">${t('batchConc')} <input type="number" id="batchConc" min="1" max="8" value="${readJson('zerokit.batchconc', 3)}" style="width:3em"></label>
+      <button class="ghost mini" id="batchClear" aria-label="${t('batchClearLabel')}">${t('batchClearBtn')}</button>
+      <span class="help">${t('batchDestructiveLast')}</span>
       <ol class="batch-items">${batch.map((b, i) => `
         <li data-bi="${i}" class="${dups.includes(i) ? 'dup' : ''}">${esc(b.action.title)}
-          <button class="ghost mini" data-bup="${i}" title="上移">↑</button>
-          <button class="ghost mini" data-bdown="${i}" title="下移">↓</button>
-          <button class="ghost mini" data-bdel="${i}" title="移出篮子" aria-label="移出篮子">✕</button>
+          <button class="ghost mini" data-bup="${i}" title="${t('moveUp')}">↑</button>
+          <button class="ghost mini" data-bdown="${i}" title="${t('moveDown')}">↓</button>
+          <button class="ghost mini" data-bdel="${i}" title="${t('removeFromBasket')}" aria-label="${t('removeFromBasket')}">✕</button>
         </li>`).join('')}</ol>`;
     el.listView.insertBefore(bar, el.list);
     bar.querySelector('#batchRun').addEventListener('click', runBatch);
@@ -1487,7 +1487,7 @@ function patchItemFav(key) {
     if (btn) {
       btn.classList.toggle('on', on);
       btn.textContent = on ? '★' : '☆';
-      btn.title = on ? '取消收藏' : '收藏这个动作';
+      btn.title = on ? t('unfav') : t('fav');
       btn.setAttribute('aria-label', btn.title);
     }
   });
@@ -1631,7 +1631,7 @@ function openDetail(plugin, action, prefill) {
 
   const steps = Array.isArray(action.steps) ? action.steps : [];
   const chainDry = steps.length ? `
-    <div class="chain-dry"><button class="ghost" id="chainDryBtn">试走一遍（不执行，只推演每步会拿到什么形状）</button>
+    <div class="chain-dry"><button class="ghost" id="chainDryBtn">${t('chainDry')}</button>
       <div id="chainDryOut"></div></div>` : '';
 
   const chainInfo = steps.length ? `
@@ -1651,7 +1651,7 @@ function openDetail(plugin, action, prefill) {
             <div class="chain-body">
               <div class="chain-use">${esc(st.use)} <span class="aid">→ {${esc(st.as)}}</span></div>
               ${paramTxt ? `<div class="chain-params">${paramTxt}</div>` : ''}
-              <div class="chain-src">输入来自：${ref}</div>
+              <div class="chain-src">${t('chainSrc')(ref)}</div>
             </div>
           </div>
           ${i < steps.length - 1 ? '<div class="chain-arrow">↓</div>' : ''}`;
@@ -1664,7 +1664,7 @@ function openDetail(plugin, action, prefill) {
   const mem = paramStore[favKey] ?? {};
   const initial = { ...mem, ...(prefill ?? {}) };
   const memNote = Object.keys(mem).length
-    ? `<div class="mem-note">已带入上次参数 · <button class="link" id="forgetParams">清除记忆</button></div>`
+    ? `<div class="mem-note">${t('memBrought')} · <button class="link" id="forgetParams">${t('memForget')}</button></div>`
     : '';
 
   const aliasKey = actionKey(plugin.id, action.id);
@@ -1673,37 +1673,37 @@ function openDetail(plugin, action, prefill) {
   const whyRows = (action.lastWhy ?? [])
     .map((r) => `<tr><td>${esc(r[0])}</td><td>${r[1].toFixed(2)}</td><td>×${r[2]}</td></tr>`);
   const whyNote = whyRows
-    ? `<div class="mem-note why-note"><b>为什么命中</b><table class="why-table"><tr><th>信号</th><th>分</th><th>权重</th></tr>${whyRows}</table></div>`
+    ? `<div class="mem-note why-note"><b>${t('whyHit')}</b><table class="why-table"><tr><th>${t('whySignal')}</th><th>${t('whyScore')}</th><th>${t('whyWeight')}</th></tr>${whyRows}</table></div>`
     : '';
   const aliasNote = `<div class="mem-note alias-note">别名：
     <input id="aliasInput" placeholder="起个短名（如 top）" value="${esc(aliasName ?? '')}"
       autocomplete="off" spellcheck="false" style="width:9em">
-    <span class="help">之后在搜索框直接输入短名，回车就是这个动作</span></div>
+    <span class="help">${t('aliasHelp')}</span></div>
     <div class="mem-note nick-note">昵称：
     <input id="nickInput" placeholder="给这个动作起个自己的名字" value="${esc(nicknames[nickKey] ?? '')}"
       autocomplete="off" spellcheck="false" style="width:14em">
-    <span class="help">搜索时优先命中；列表里显示在原名旁</span></div>
+    <span class="help">${t('nicknameHelp')}</span></div>
     <div class="mem-note tag-note">标签：
     <input id="atagInput" placeholder="逗号分隔，如：巡检, 报表" value="${esc((actionTags[nickKey] ?? []).join(', '))}"
       autocomplete="off" spellcheck="false" style="width:14em">
-    <span class="help">#标签可搜索，列表里显示</span></div>`;
+    <span class="help">${t('tagsHelp')}</span></div>`;
 
   // 上次结果提示：同动作最近一次执行可一键回看（不是缓存复用——那会让「跑一次」
   // 语义变味；只是给「我刚才是不是跑过这个」一个不用翻历史的入口）
   const lastRun = (runStore[aliasKey] ?? [])[0];  // unshift 语义：首位才是最新一条（第七十轮修：at(-1) 取到最旧）
   const key = actionKey(plugin.id, action.id);
   const lastRunNote = lastRun
-    ? `<div class="mem-note last-run-note">上次：${lastRun.ok ? '✓ 成功' : '✗ 失败'} · ${Math.max(1, Math.round((Date.now() - lastRun.ts) / 60000))} 分钟前
+    ? `<div class="mem-note last-run-note">上次：${lastRun.ok ? '✓ ' + t('runOk') : '✗ ' + t('runFail')} · ${t('minsAgo')(Math.max(1, Math.round((Date.now() - lastRun.ts) / 60000)))}
         <button class="ghost mini" id="peekLast" title="回看上次结果">回看</button>
-        ${lastRun.values ? '<button class="ghost mini" id="rerunLast" title="用上次的参数再跑一次">重跑</button>' : ''}</div>`
+        ${lastRun.values ? `<button class="ghost mini" id="rerunLast" title="${t('rerunTitle')}">${t('rerun')}</button>` : ''}</div>`
     : '';
 
   // 第七十轮⑧：常用组合建议——历史里做完这个动作最常接着做的是哪些（共现统计）
   const coSug = coActions(flattenRuns(runStore), key).filter((c) => c.count >= 2);
   const coNote = coSug.length
     ? `<div class="mem-note co-note">做完这个你常接着：${coSug.map((c, i) =>
-        `<button class="ghost mini" data-co="${esc(c.key)}" title="历史共现 ${c.count} 次">${esc(actionTitleOf(c.key) || c.key)}（${c.count}）</button>`).join(' ')}
-        <span class="dim">（历史共现 ≥2 次）</span></div>`
+        `<button class="ghost mini" data-co="${esc(c.key)}" title="${t('coOccur')(c.count)}">${esc(actionTitleOf(c.key) || c.key)}（${c.count}）</button>`).join(' ')}
+        <span class="dim">${t('coOccurHint')}</span></div>`
     : '';
 
   // sparkline：这个动作近 20 次的耗时走势（成功点线、失败点红），有历史才画
@@ -1725,20 +1725,20 @@ function openDetail(plugin, action, prefill) {
   })();
   const trendHtml = numericFields.length
     ? `<div class="hist-trend">${numericFields.map((f) => {
-        const t = runTrend(runHist, f);
-        if (!t) return '';
-        return `<span class="trend-chip" data-trend-field="${esc(f)}" title="最近 ${t.points.length} 次 ${esc(f)}：均值 ${t.avg.toFixed(1)} · 最好 ${t.best} · 最差 ${t.worst}">${esc(f)} <b>${t.points.at(-1).v}</b> <i>(${t.points.length}次 均值${t.avg.toFixed(1)})</i></span>`;
+        const tr = runTrend(runHist, f);
+        if (!tr) return '';
+        return `<span class="trend-chip" data-trend-field="${esc(f)}" title="${t('trendTip')(tr.points.length, f, tr.avg.toFixed(1), tr.best, tr.worst)}">${esc(f)} <b>${tr.points.at(-1).v}</b> <i>${t('trendN')(tr.points.length, tr.avg.toFixed(1))}</i></span>`;
       }).join('')}</div>`
     : '';
   const dur = durationStats(runHist.filter((r) => typeof r.ms === 'number').map((r) => r.ms));
   const durHtml = dur
-    ? `<span class="dur-chip" title="耗时分布：最快 ${formatMs(dur.min)} · P50 ${formatMs(dur.p50)} · P95 ${formatMs(dur.p95)} · 最慢 ${formatMs(dur.max)}">⏱ P50 ${formatMs(dur.p50)} · P95 ${formatMs(dur.p95)}</span>`
+    ? `<span class="dur-chip" title="${t('durTip')(formatMs(dur.min), formatMs(dur.p50), formatMs(dur.p95), formatMs(dur.max))}">⏱ P50 ${formatMs(dur.p50)} · P95 ${formatMs(dur.p95)}</span>`
     : '';
   const fr = failureRate(runHist, 10);
   const frHtml = fr.total >= 3 && fr.rate > 0.3
-    ? `<div class="warn-chip" role="status">⚠ 最近 ${fr.total} 次里失败 ${fr.fails} 次（${Math.round(fr.rate * 100)}%）——这个动作最近不太稳，看看错误分类卡里的建议</div>`
+    ? `<div class="warn-chip" role="status">t('failWarn')(fr.total, fr.fails, Math.round(fr.rate * 100))</div>`
     : '';
-  const cmpBtn = runHist.length >= 2 ? '<button class="ghost mini" id="cmpLast" title="当前结果与上一次对比（第二十三轮 resultCompare）">⇄ 与上次对比</button>' : '';
+  const cmpBtn = runHist.length >= 2 ? `<button class="ghost mini" id="cmpLast" title="${t('cmpLastTip')}">⇄ ${t('cmpLast')}</button>` : '';
   const historyPanel = (trendHtml || durHtml || frHtml || cmpBtn)
     ? `<div class="hist-panel">${frHtml}${trendHtml}<div class="hist-meta">${durHtml}${cmpBtn}</div></div>`
     : '';
@@ -1753,7 +1753,7 @@ function openDetail(plugin, action, prefill) {
           const i = pts.indexOf(p);
           return `<circle cx="${((i / Math.max(1, pts.length - 1)) * w).toFixed(1)}" cy="${(h - (p.ms / maxMs) * (h - 4) - 2).toFixed(1)}" r="2.2" fill="var(--bad, #e5484d)"/>`;
         }).join('');
-        return `<span class="spark" title="近 ${runHist.length} 次耗时走势（最高 ${formatMs(maxMs)}）"><svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}"><path d="${path}" fill="none" stroke="var(--accent, #5aa9ff)" stroke-width="1.5"/>${dots}</svg></span>`;
+        return `<span class="spark" title="${t('sparkTip')(runHist.length, formatMs(maxMs))}"><svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}"><path d="${path}" fill="none" stroke="var(--accent, #5aa9ff)" stroke-width="1.5"/>${dots}</svg></span>`;
       })()
     : '';
 
@@ -1770,7 +1770,7 @@ function openDetail(plugin, action, prefill) {
       .filter((v) => String(v) !== String(effectiveInitial[f.name] ?? ''));
     const histChips = hist.length
       ? `<div class="param-hist" data-hist="${esc(f.name)}">${hist.map((v) =>
-          `<button type="button" class="ghost mini chip" data-histfill="${esc(f.name)}" data-val="${esc(String(v))}" title="点击填入这个历史值">${esc(String(v).length > 24 ? String(v).slice(0, 24) + '…' : String(v))}</button>`).join('')}</div>`
+          `<button type="button" class="ghost mini chip" data-histfill="${esc(f.name)}" data-val="${esc(String(v))}" title="${t('histFillTip')}">${esc(String(v).length > 24 ? String(v).slice(0, 24) + '…' : String(v))}</button>`).join('')}</div>`
       : '';
     // ③ 智能占位：无值无默认时按类型给形状提示（placeholder 不进提交值）
     const given0 = effectiveInitial[f.name] !== undefined ? effectiveInitial[f.name] : f.default;
@@ -1817,14 +1817,14 @@ function openDetail(plugin, action, prefill) {
   el.detailView.innerHTML = `
     <div class="detail-head">
       <h2>${esc(action.title)}<button class="star big${fav ? ' on' : ''}" id="favBtn"
-        title="${fav ? '取消收藏' : '收藏这个动作'}" aria-label="${fav ? '取消收藏' : '收藏这个动作'}">${fav ? '★' : '☆'}</button></h2>
+        title="${fav ? t('unfav') : t('fav')}" aria-label="${fav ? t('unfav') : t('fav')}">${fav ? '★' : '☆'}</button></h2>
       <div class="meta">${esc(plugin.name)} · ${esc(action.id)} ·
         <span class="badge ${esc(action.risk)}">${esc(riskText(action.risk))}</span>
-        ${steps.length ? `<span class="badge">组合 ${steps.length} 步</span>` : ''}
+        ${steps.length ? `<span class="badge">${t('chainN')(steps.length)}</span>` : ''}
         <span class="badge">${esc(action.tool)}</span>
         ${sparkline}
       </div>
-      <div class="desc">${esc(action.description || '（这个动作没写说明）')}</div>
+      <div class="desc">${esc(action.description || t('noDesc'))}</div>
       ${historyPanel}
       ${action.risk !== 'read' ? `<div class="risk-explain callout">⚠ 风险等级「${esc(riskText(action.risk))}」是什么意思：只读=只是看、不改任何东西；会改动=会修改文件/配置/服务，执行前想清楚；高风险=可能删除数据或不可逆，确认明白了再执行。</div>` : ''}
       ${note ? `<div class="detail-note">📌 ${esc(note)}</div>` : ''}
@@ -1845,22 +1845,22 @@ function openDetail(plugin, action, prefill) {
     <div id="runHistory" class="run-history"></div>
     <div class="actions action-tier">
       <button class="primary run-main" id="runBtn">▶ 执行</button>
-      <button class="ghost" id="previewBtn" title="先看真正会执行的命令行（密钥打码），再决定跑不跑">预览命令</button>
+      <button class="ghost" id="previewBtn" title="${t('previewTip')}">${t('previewCmd')}</button>
       <button class="ghost" id="backBtn">返回</button>
       <div class="more-wrap" id="moreWrap">
-        <button class="ghost" id="moreBtn" title="更多操作：调用方式 / 配置 / 分享 / 定时 / 监控 / 结果处理" aria-haspopup="menu" aria-expanded="false">⋯ 更多</button>
+        <button class="ghost" id="moreBtn" title="${t('moreTip')}" aria-haspopup="menu" aria-expanded="false">⋯ ${t('more')}</button>
         <div class="more-pop hidden" id="morePop" role="menu">
-          <button class="ghost more-item" id="invokeBtn" role="menuitem" title="这个动作在 CLI / MCP / 深链里怎么调">⌨ 调用方式</button>
-          ${plugin.settings?.length ? '<button class="ghost more-item" id="cfgBtn" role="menuitem" title="这个插件的长期配置（端点、密钥等），保存后立即生效">⚙ 配置插件</button>' : ''}
-          <button class="ghost more-item" id="qrBtn" role="menuitem" title="生成深链二维码，手机扫码直达这个动作">▦ 二维码</button>
-          <button class="ghost more-item" id="shareBtn" role="menuitem" title="复制带当前参数的完整深链">🔗 分享深链</button>
-          <button class="ghost more-item" id="timerBtn" role="menuitem" title="只读动作按间隔自动执行（界面开着才跑）">⏲ 定时</button>
-          <button class="ghost more-item" id="watchBtn" role="menuitem" title="监控模式：自动重跑+变更追踪+倒计时环（#/watch 聚合面板）">◎ 监控</button>
-          <button class="ghost more-item" id="maskBtn" role="menuitem" title="结果里的 token/密钥/长十六进制串默认打码——切换显示明文">🕶 脱敏切换</button>
-          <button class="ghost more-item" id="purgeBtn" role="menuitem" title="清除当前结果与本地运行历史（含参数记忆），审计日志不动">🧹 清除痕迹</button>
-          <button class="ghost more-item" id="shareCardBtn" role="menuitem" title="把这次结果生成一张摘要卡（复制到剪贴板）">🪪 分享卡</button>
-          <button class="ghost more-item" id="copyJsonBtn" role="menuitem" title="复制动作定义 JSON（写文档 / 分享给他人用）">📋 复制 JSON</button>
-          <button class="ghost more-item" id="resetBtn" role="menuitem" title="把所有参数清回清单默认值">↺ 恢复默认</button>
+          <button class="ghost more-item" id="invokeBtn" role="menuitem" title="${t('invokeTip')}">⌨ ${t('invoke')}</button>
+          ${plugin.settings?.length ? `<button class="ghost more-item" id="cfgBtn" role="menuitem" title="${t('cfgTip')}">⚙ ${t('cfgPlugin')}</button>` : ''}
+          <button class="ghost more-item" id="qrBtn" role="menuitem" title="${t('qrTip')}">▦ ${t('qr')}</button>
+          <button class="ghost more-item" id="shareBtn" role="menuitem" title="${t('shareLinkTip')}">🔗 ${t('shareLink')}</button>
+          <button class="ghost more-item" id="timerBtn" role="menuitem" title="${t('timerTip')}">⏲ ${t('timer')}</button>
+          <button class="ghost more-item" id="watchBtn" role="menuitem" title="${t('watchTip')}">◎ ${t('watch')}</button>
+          <button class="ghost more-item" id="maskBtn" role="menuitem" title="${t('maskTip')}">🕶 ${t('maskToggle')}</button>
+          <button class="ghost more-item" id="purgeBtn" role="menuitem" title="${t('purgeTip')}">🧹 ${t('purge')}</button>
+          <button class="ghost more-item" id="shareCardBtn" role="menuitem" title="${t('shareCardTip')}">🪪 ${t('shareCard')}</button>
+          <button class="ghost more-item" id="copyJsonBtn" role="menuitem" title="${t('copyJsonTip')}">📋 ${t('copyJson')}</button>
+          <button class="ghost more-item" id="resetBtn" role="menuitem" title="${t('resetTip')}">↺ ${t('resetDefaults')}</button>
         </div>
       </div>
     </div>
@@ -2081,7 +2081,7 @@ function openDetail(plugin, action, prefill) {
     try {
       await navigator.clipboard.writeText(JSON.stringify(def, null, 2));
       btn.textContent = '✓ 已复制';
-      setTimeout(() => { btn.textContent = '复制 JSON'; }, 1200);
+      setTimeout(() => { btn.textContent = t('copyJson'); }, 1200);
     } catch {
       btn.textContent = '复制失败';
     }
@@ -2207,7 +2207,7 @@ function openDetail(plugin, action, prefill) {
     // 第三十七轮③：调用方式弹窗追加 MCP 配置段——AI 客户端接入一步到位
     const mcpCfg = toMcpConfig('node', '/path/to/zerokit/src/mcp.ts');
     $('invokeBox').innerHTML = `<div class="cmd-box">
-      <div class="cmd-box-head">三种调用方式</div>
+      <div class="cmd-box-head">${t('invokeWays')}</div>
       <pre>${esc(text)}</pre>
       <button class="ghost" id="copyInvoke">复制</button>
     </div>
@@ -2244,7 +2244,7 @@ function openDetail(plugin, action, prefill) {
     const btn = $('favBtn');
     btn.textContent = on ? '★' : '☆';
     btn.classList.toggle('on', on);
-    btn.title = on ? '取消收藏' : '收藏这个动作';
+    btn.title = on ? t('unfav') : t('fav');
   });
   $('forgetParams')?.addEventListener('click', () => {
     delete paramStore[favKey];
@@ -2889,14 +2889,14 @@ function renderWatchBar() {
   const remain = Math.max(0, (w.deadline ?? Date.now()) - Date.now());
   const pct = Math.round((remain / (w.interval * 1000)) * 100);
   bar.innerHTML = `
-    <span class="badge">⏱ 监控中</span>
-    <span>每 ${esc(intervalLabel(w.interval))} · 已采样 ${w.runs} 次 · 变更 ${w.changes} 次</span>
+    <span class="badge">⏱ ${t('watching')}</span>
+    <span>${t('watchEvery')(intervalLabel(w.interval), w.runs, w.changes)}</span>
     <svg class="watch-ring" viewBox="0 0 36 36" width="22" height="22" aria-hidden="true">
       <circle class="ring-bg" cx="18" cy="18" r="15.9"></circle>
-      <circle class="ring-fg" cx="18" cy="18" r="15.9" style="stroke-dasharray:${pct} 100" title="下次执行倒计时"></circle>
+      <circle class="ring-fg" cx="18" cy="18" r="15.9" style="stroke-dasharray:${pct} 100" title="${t('nextRunIn')}"></circle>
     </svg>
     <span class="sub">${Math.ceil(remain / 1000)}s</span>
-    <button class="ghost mini" id="watchStopBtn">停止</button>`;
+    <button class="ghost mini" id="watchStopBtn">${t('stop')}</button>`;
   bar.querySelector('#watchStopBtn')?.addEventListener('click', () => {
     stopWatch(key);
     renderWatchBar();
@@ -3761,7 +3761,7 @@ function renderRunHistory(plugin, action) {
     const hint = $('diffPickHint');
     if (hint) hint.textContent = picks.length === 2
       ? `已选第 ${picks[0] + 1}、${picks[1] + 1} 条（从上往下数）——再点一次任意已选条目取消`
-      : `已选 ${picks.length}/2 条`;
+      : t('picked2')(picks.length);
     if (picks.length === 2) {
       const [ia, ib] = picks;
       if (list[ia]?.data !== undefined && list[ib]?.data !== undefined) showResultDiff(list[ia].data, list[ib].data, { slotA: ia, slotB: ib });
@@ -3858,7 +3858,7 @@ function renderUndoHint(plugin, action) {
     <div class="help">zerokit 不会猜测怎么撤销——每个插件改的东西不同。如果需要回退：
       ① 打开<a href="#" id="undoLogs" class="link">审计日志</a>确认刚才实际执行了什么；
       ② 用对应的恢复手段（备份、插件自带的还原动作、或系统工具）手动处理。
-      下次执行前，可以先用「预览命令」看清楚再跑。</div>`;
+      ${t('deniedHint')}</div>`;
   box.prepend(hint);
   hint.querySelector('#undoLogs').addEventListener('click', (e) => {
     e.preventDefault();
@@ -4417,7 +4417,7 @@ function renderResult(res) {
         if (!series) continue;
         const spark = document.createElement('span');
         spark.className = 'watch-spark';
-        spark.title = `最近 ${series.length} 次趋势`;
+        spark.title = t('recentTrendN')(series.length);
         spark.innerHTML = miniSparkSvg(series);
         host.appendChild(spark);
       }
@@ -4455,39 +4455,39 @@ function renderResult(res) {
   const copyText = res.data !== undefined ? JSON.stringify(res.data, null, 2) : (res.stdout ?? '');
   box.innerHTML = `
     <div class="card">
-      <div class="card-head" id="cardHead" title="点这里折叠 / 展开结果">${head}${slowBadge}
+      <div class="card-head" id="cardHead" title="${t('foldToggle')}">${head}${slowBadge}
         <span style="margin-left:auto" class="aid">${esc(res.command || '')}</span>
-        <button class="ghost" id="cardFold" title="折叠 / 展开结果">收起</button>
+        <button class="ghost" id="cardFold" title="${t('foldToggle')}">${t('foldUp')}</button>
       </div>
       <div class="result-tools">
-        <button class="ghost" id="copyRes" title="复制结果；Shift=美化 JSON；Alt=带备注与时间">复制</button>
-        <button class="ghost" id="snapRes" title="导出 .zkresult 快照（含元数据；对方可导入回放）">📦 快照</button>
-        <button class="ghost" id="saveRes" title="把结果存成文本文件">下载</button>
-        <button class="ghost" id="mdRes" title="导出成 Markdown（表格/代码块），方便贴进文档或 Issue">导出 Markdown</button>
-        <button class="ghost" id="shareMdRes" title="导出分享 Markdown 单文件（含执行信息折叠头，贴 Issue/文档即用）">⧉ 分享 MD</button>
-        <button class="ghost" id="shareHtmlRes" title="导出分享 HTML 单文件（内联样式，双击浏览器直接看，无外链）">⧉ 分享 HTML</button>
-        <button class="ghost" id="shareCopyRes" title="复制分享文本（Markdown，含元数据头；超过 50KB 自动截断）">⧉ 复制分享</button>
-        ${res.data !== undefined ? `<button class="ghost" id="csvRes" title="导出成 CSV，Excel / Numbers 直接打开">导出 CSV</button>
-        <button class="ghost" id="jsonRes" title="导出成 JSON，给脚本接着处理">导出 JSON</button>
-        ${toJsonl(res.data) ? `<button class="ghost" id="jsonlRes" title="导出 JSONL（每行一个 JSON，jq / ndjson 友好）">导出 JSONL</button>
-        <button class="ghost" id="llmRes" data-ai="1" title="导出 LLM 批处理 JSONL（每行 {input,expected}，补上期望值就是评测集）">LLM JSONL</button>` : ''}` : ''}
-        ${Array.isArray(res.data) && res.data.length && typeof res.data[0] === 'object' ? `<button class="ghost" id="mdTableRes" title="复制为 Markdown 表格（数字列右对齐）">复制 MD 表</button>
-        <button class="ghost" id="tsvRes" title="复制为 TSV（Excel/Numbers 直接粘贴）">复制 TSV</button>
-        <button class="ghost" id="htmlRes" title="复制为 HTML 表格（贴进邮件/文档带格式）">复制 HTML 表</button>` : ''}
-        <button class="ghost" id="aiRes" data-ai="1" title="复制为 LLM 友好的 Markdown（表格/属性行+动作名+时间）——直接粘进 AI 对话">给 AI</button>
-        <button class="ghost" id="ctxRes" data-ai="1" title="打包当前结果+最近执行+插件清单成一段上下文，粘给 AI 免得重新描述">AI 上下文</button>
-        <button class="ghost" id="termRes" title="终端模式查看：等宽字体、自动滚到底（进入后 w=换行开关 t=顶 b=底）">终端</button>
-        <button class="ghost" id="editRes" title="把结果文本丢给外部编辑器（ZEROKIT_EDITOR 环境变量，没配用系统默认）">编辑器打开</button>
-        <button class="ghost" id="againRes" title="用同样的参数再跑一次">再跑一次</button>
-        <button class="ghost" id="pinRes" title="把这条结果钉进收藏夹（#/saved），重启后还在">收藏</button>
-        <button class="ghost" id="noteRes" title="给这次执行写一句备注（本机保存）">备注</button>
+        <button class="ghost" id="copyRes" title="${t('copyResTip')}">${t('copy')}</button>
+        <button class="ghost" id="snapRes" title="${t('snapTip')}">📦 ${t('snapshot')}</button>
+        <button class="ghost" id="saveRes" title="${t('saveTip')}">${t('download')}</button>
+        <button class="ghost" id="mdRes" title="${t('mdTip')}">${t('exportMd')}</button>
+        <button class="ghost" id="shareMdRes" title="${t('shareMdTip')}">⧉ ${t('shareMd')}</button>
+        <button class="ghost" id="shareHtmlRes" title="${t('shareHtmlTip')}">⧉ ${t('shareHtml')}</button>
+        <button class="ghost" id="shareCopyRes" title="${t('shareCopyTip')}">⧉ ${t('shareCopy')}</button>
+        ${res.data !== undefined ? `<button class="ghost" id="csvRes" title="${t('csvTip')}">${t('exportCsv')}</button>
+        <button class="ghost" id="jsonRes" title="${t('jsonTip')}">${t('exportJson')}</button>
+        ${toJsonl(res.data) ? `<button class="ghost" id="jsonlRes" title="${t('jsonlTip')}">${t('exportJsonl')}</button>
+        <button class="ghost" id="llmRes" data-ai="1" title="${t('llmTip')}">${t('llmJsonl')}</button>` : ''}` : ''}
+        ${Array.isArray(res.data) && res.data.length && typeof res.data[0] === 'object' ? `<button class="ghost" id="mdTableRes" title="${t('mdTableTip')}">${t('copyMdTable')}</button>
+        <button class="ghost" id="tsvRes" title="${t('tsvTip')}">${t('copyTsv')}</button>
+        <button class="ghost" id="htmlRes" title="${t('htmlTip')}">${t('copyHtmlTable')}</button>` : ''}
+        <button class="ghost" id="aiRes" data-ai="1" title="${t('aiTip')}">${t('forAi')}</button>
+        <button class="ghost" id="ctxRes" data-ai="1" title="${t('ctxTip')}">${t('aiContext')}</button>
+        <button class="ghost" id="termRes" title="${t('termTip')}">${t('terminal')}</button>
+        <button class="ghost" id="editRes" title="${t('editTip')}">${t('openEditor')}</button>
+        <button class="ghost" id="againRes" title="${t('againTip')}">${t('runAgain')}</button>
+        <button class="ghost" id="pinRes" title="${t('pinTip')}">${t('pin')}</button>
+        <button class="ghost" id="noteRes" title="${t('noteTip')}">${t('note')}</button>
         <span class="ms">${esc(ms)}</span>
       </div>
       <div class="card-body">${srcNote}${watchNote}${body}</div>
       <div class="export-path sub hidden" role="status" style="padding:2px 10px"> </div>
-      <div class="export-actions hidden" style="padding:0 10px 6px"><button class="ghost mini" id="openDirRes" title="在系统文件管理器里打开导出目录">打开目录</button></div>
+      <div class="export-actions hidden" style="padding:0 10px 6px"><button class="ghost mini" id="openDirRes" title="${t('openDirTip')}">${t('openDir')}</button></div>
       <div class="card-find">
-        <input id="findInResult" type="text" placeholder="在结果里找…（实时高亮，Enter 下一个）" autocomplete="off" spellcheck="false">
+        <input id="findInResult" type="text" placeholder="${t('findInRes')}" autocomplete="off" spellcheck="false">
         <span class="sub" id="findCount"></span>
       </div>
       <div id="noteBox" class="note-box hidden">
@@ -6454,7 +6454,7 @@ async function renderPlugins() {
   const syncBatch = () => {
     const n = el.plugView.querySelectorAll('.plug-sel:checked').length;
     batchBtn.disabled = n === 0;
-    batchNote.textContent = n ? `已选 ${n} 个` : '';
+    batchNote.textContent = n ? t('pickedN')(n) : '';
   };
   selAll.addEventListener('change', () => {
     el.plugView.querySelectorAll('.plug-sel').forEach((c) => { c.checked = selAll.checked; });

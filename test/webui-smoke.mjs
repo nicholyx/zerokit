@@ -204,7 +204,7 @@ async function get(p, raw = false) {
     appJs.text.includes('aria-live="polite"') && appJs.text.includes('role="status">动作完成'),
     'aria-live 或播报缺失');
   check('a11y：星标按钮带 aria-label',
-    appJs.text.includes("aria-label=\"${fav ? '取消收藏' : '收藏这个动作'}\""),
+    appJs.text.includes("aria-label=\"${fav ? t('unfav') : t('fav')}\""),
     '星标 aria-label 缺失');
   check('a11y：抽屉开合按钮带 aria-label',
     /id="drawerBtn"[^>]*aria-label/.test(indexHtml) || /aria-label[^>]*id="drawerBtn"/.test(indexHtml),

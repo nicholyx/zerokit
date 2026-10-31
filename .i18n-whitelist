@@ -49,20 +49,17 @@ return `<li class="recent-block"><div cl
 if \(btn\) \{ btn\.disabled = true; btn\.text
 const j = await r\.json\(\)\.catch\(\(\) => \(\{ 
 if \(btn\) \{ btn\.disabled = false; btn\.tex
-<b>\$\{retryItems \? '失败项重跑完成' : '批量执行完成'\}（
 <span class="sub">总耗时 \$\{formatMs\(totalMs
 <li data-fail="\$\{i\}" title="\$\{esc\(classi
 <button class="ghost mini" id="batchRetr
 <button class="ghost mini" id="batchSumC
 el\.count\.textContent = `别名「\$\{el\.q\.value\.
-bar\.innerHTML = `已选 \$\{batch\.length\} 项\$\{d
 <button class="ghost mini" id="batchRun"
 <button class="ghost mini" id="batchDedu
 <button class="ghost mini" id="batchExpo
 <button class="ghost mini" id="batchImpo
 <label class="mini">并发 <input type="numb
 <button class="ghost mini" id="batchClea
-<span class="help">destructive 排最后</span
 <button class="ghost mini" data-bup="\$\{i
 <button class="ghost mini" data-bdown="\$
 <button class="ghost mini" data-bdel="\$\{
@@ -93,38 +90,29 @@ loadRecent\(\)\.length > 0 \? '最近使用优先' : ''\]
 if \(i >= 0\) \{ favorites\.splice\(i, 1\); el
 else \{ favorites\.push\(key\); el\.count\.tex
 el\.count\.textContent = existed \? `已在篮子里：
-btn\.title = on \? '取消收藏' : '收藏这个动作';
 el\.count\.textContent = `\$\{filtered\.lengt
 ✗ 缺少依赖：\$\{esc\(plugin\.missingDeps\.join\(', 
 <div class="chain-dry"><button class="gh
 \? '动作参数 \+ 内置占位符'
 : `上一步结果 \{\$\{esc\(steps\[i - 1\]\.as\)\}\} / \{pr
-<div class="chain-src">输入来自：\$\{ref\}</div>
-\? `<div class="mem-note">已带入上次参数 · <butt
 \? `<div class="mem-note why-note"><b>为什么
 const aliasNote = `<div class="mem-note 
 <input id="aliasInput" placeholder="起个短名
-<span class="help">之后在搜索框直接输入短名，回车就是这个动作
 <div class="mem-note nick-note">昵称：
 <input id="nickInput" placeholder="给这个动作
-<span class="help">搜索时优先命中；列表里显示在原名旁</sp
 <div class="mem-note tag-note">标签：
 <input id="atagInput" placeholder="逗号分隔，
-<span class="help">#标签可搜索，列表里显示</span></
 \? `<div class="mem-note last-run-note">上
 <button class="ghost mini" id="peekLast"
 \$\{lastRun\.values \? '<button class="ghost
 \? `<div class="mem-note co-note">做完这个你常接
 `<button class="ghost mini" data-co="\$\{e
-<span class="dim">（历史共现 ≥2 次）</span></di
 return `<span class="trend-chip" data-tr
-\? `<span class="dur-chip" title="耗时分布：最快
 \? `<div class="warn-chip" role="status">
 const cmpBtn = runHist\.length >= 2 \? '<b
 return `<span class="spark" title="近 \$\{r
 `<button type="button" class="ghost mini
 <button type="button" class="ghost mini 
-title="\$\{fav \? '取消收藏' : '收藏这个动作'\}" aria-
 \$\{steps\.length \? `<span class="badge">组合
 <div class="desc">\$\{esc\(action\.descripti
 \$\{action\.risk !== 'read' \? `<div class="
@@ -181,7 +169,6 @@ msg\.textContent = '保存中…';
 msg\.textContent = '✓ 已保存，下一次执行立即生效';
 msg\.textContent = `保存失败：\$\{e\.message\}`;
 box\.innerHTML = `<div class="help" style
-<div class="cmd-box-head">三种调用方式</div>
 <button class="ghost" id="copyInvoke">复制
 <div class="cmd-box-head">MCP 配置（贴进 Clau
 <button class="ghost" id="copyMcpCfg">复制
@@ -191,7 +178,6 @@ setTimeout\(\(\) => \{ ev\.currentTarget\.text
 ev\.currentTarget\.textContent = '已复制';
 ev\.currentTarget\.textContent = '复制失败（非 h
 setTimeout\(\(\) => \{ ev\.currentTarget\.text
-btn\.title = on \? '取消收藏' : '收藏这个动作';
 bar\.innerHTML = `<b>📋 \$\{esc\(m\.reason\)\}<
 <button type="button" class="ghost mini"
 <button type="button" class="ghost mini"
@@ -241,7 +227,6 @@ el\.modeLabel\.textContent = '时间线';
 \.map\(\(sm\) => String\(sm\.err \?\? '未知错误'\)\.sl
 body: `⚠ \$\{w\.title\} 连续失败 \$\{failStreakNow
 body: `⇄ \$\{w\.title\} 结果有变化（第 \$\{w\.changes\}
-<span class="badge">⏱ 监控中</span>
 <span>每 \$\{esc\(intervalLabel\(w\.interval\)\)
 <circle class="ring-fg" cx="18" cy="18" 
 <button class="ghost mini" id="watchStop
@@ -366,7 +351,6 @@ box\.innerHTML = `<div class="run-head">最
 navigator\.clipboard\.writeText\(cmd\)\.then\(
 el\.count\.textContent = '已回填该次参数';
 \? `已选第 \$\{picks\[0\] \+ 1\}、\$\{picks\[1\] \+ 1\} 条
-: `已选 \$\{picks\.length\}/2 条`;
 else alert\('这两次记录没存结果数据（可能是老记录），重跑一次后再对比
 alert\('这两次记录没存结果数据（可能是老记录），重跑一次后再对比。'\);
 if \(rows0\.length < 2\) \{ el\.count\.textCon
@@ -383,7 +367,6 @@ if \(hint\) hint\.textContent = '未绑定（F1–F12
 <div class="help">zerokit 不会猜测怎么撤销——每个插件
 ① 打开<a href="#" id="undoLogs" class="lin
 ② 用对应的恢复手段（备份、插件自带的还原动作、或系统工具）手动处理。
-下次执行前，可以先用「预览命令」看清楚再跑。</div>`;
 <div class="cmd-box-head">完成后接着跑（第 \$\{cha
 <div class="help">下一步的参数里可用 <code>\{resul
 <button class="ghost mini" id="chainEnd"
@@ -428,7 +411,6 @@ body \+= `<div class="cmd-line">输出过长已截断，完
 if \(!body\) body = `<div class="help">（没有
 const tocHtml = toc\.length \? `<nav class
 watchNote = `<div class="watch-diff-note
-spark\.title = `最近 \$\{series\.length\} 次趋势`;
 spark\.title = `首行「\$\{col\}」最近 \$\{series\.len
 <div class="card-head" id="cardHead" tit
 <button class="ghost" id="cardFold" titl
@@ -727,7 +709,6 @@ if \(!id\) \{ \$\('npMsg'\)\.textContent = '先填插
 \$\('npMsg'\)\.textContent = '生成中…';
 \$\('npMsg'\)\.innerHTML = `✓ \$\{esc\(r\.messag
 \$\('npMsg'\)\.textContent = `失败：\$\{e\.message
-batchNote\.textContent = n \? `已选 \$\{n\} 个` 
 batchNote\.textContent = `正在检查 \$\{ids\.leng
 batchNote\.textContent = `完成：\$\{updated\} 个
 shareBtn\.textContent = '已复制';
@@ -1069,7 +1050,6 @@ langSystem: 'System', langZh: '中文', lang
 \{ id: 'copyTable', label: '复制表格（TSV）', n
 \{ id: 'copyMarkdown', label: '复制为 Markdo
 \{ id: 'csv', label: '导出 CSV', needs: 'ta
-\{ id: 'copyJson', label: '复制 JSON', need
 \{ id: 'copyText', label: '复制纯文本', needs:
 out\.push\(\{ depth, key: isArray \? `\[\$\{k\}\]
 if \(f\.required && empty\) \{ errs\.push\(\{ n
@@ -1213,7 +1193,6 @@ if \(skipped\) parts\.push\(`∅ 未跑 \$\{skipped\}
 \{ key: 'Enter', what: '打开选中项' \},
 \{ key: 'Ctrl\+Enter', what: '打开并直接执行' \},
 \{ key: 'Esc', what: '清空搜索 / 逐层关闭浮层' \},
-\{ key: 'F', what: '收藏 / 取消收藏当前项' \},
 \{ key: 'T', what: '给当前项打标签（数字键选已有标签）' \},
 \{ key: 'Y / E', what: '结果区：复制 / 导出' \},
 \{ key: '\?', what: '显示本键位表' \},
@@ -1316,4 +1295,6 @@ ps-title">定时任务
 定时任务', hint
 清空搜索历史
 '#/logs', '审计日志', '每次执行
+label: '复制 JSON'
+what: '收藏 / 取消收藏当前项'
 
