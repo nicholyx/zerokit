@@ -26,12 +26,12 @@ check('① 兜底有下一步', classifyError('x').steps.length >= 2);
 
 // ④⑤ errorReport 组装
 {
-  const r = errorReport('not-found', '文件或目录不存在', 'zkit run quick b64', 'Error: ENOENT', { platform: 'darwin', node: '22.20.0', version: '0.98.0' });
-  check('④ 标题行含 kind', r.startsWith('# zerokit 执行失败：文件或目录不存在（not-found）'));
-  check('④ 命令行', r.includes('命令：zkit run quick b64'));
-  check('⑤ 环境三行', r.includes('环境：darwin · Node 22.20.0 · zerokit 0.98.0'));
+  const r = errorReport('not-found', 'File or directory not found', 'zkit run quick b64', 'Error: ENOENT', { platform: 'darwin', node: '22.20.0', version: '0.98.0' });
+  check('④ 标题行含 kind', r.startsWith('# zerokit failed: File or directory not found (not-found)'));
+  check('④ 命令行', r.includes('Command: zkit run quick b64'));
+  check('⑤ 环境三行', r.includes('Env: darwin · Node 22.20.0 · zerokit 0.98.0'));
   check('④ stderr 围栏', r.includes('```') && r.includes('Error: ENOENT'));
-  check('④ 空 stderr 兜底', errorReport('k', 't', '', '').includes('（无 stderr）'));
+  check('④ 空 stderr 兜底', errorReport('k', 't', '', '').includes('(no stderr)'));
 }
 
 // ⑥ CLI 分类徽标：缺必填参数（用法错误）+ 不存在插件

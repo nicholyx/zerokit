@@ -1077,10 +1077,10 @@ async function runBatch(retryItems) {
   sum.className = 'batch-summary';
   sum.innerHTML = `
     <b>${retryItems ? t('batchRetryDone') : t('batchAllDone')}${t('paren')(conc)}</b>
-    <span>${esc(batchSummary(results.map((r) => ({ ok: r.ok })), ordered.length))}</span>
+    <span>${esc(batchSummary(results.map((r) => ({ ok: r.ok })), ordered.length, I18N[pickLang(lang)]))}</span>
     <span class="sub">总耗时 ${formatMs(totalMs)}</span>
     ${failed ? `<ul class="batch-fails">${results.filter((r) => !r.ok).map((r, i) => `
-      <li data-fail="${i}" title="${esc(classifyError(r.error || '失败').title + '：' + String(r.error || '失败').slice(0, 120))}">✗ ${esc(r.entry.action.title)}（${esc(r.entry.plugin.name)}）</li>`).join('')}</ul>
+      <li data-fail="${i}" title="${esc(classifyError(r.error || '失败', I18N[pickLang(lang)]).title + '：' + String(r.error || '失败').slice(0, 120))}">✗ ${esc(r.entry.action.title)}（${esc(r.entry.plugin.name)}）</li>`).join('')}</ul>
       <button class="ghost mini" id="batchRetry">只重跑失败的（${failed} 项）</button>` : ''}
     <button class="ghost mini" id="batchSumClose">关闭</button>`;
   el.listView.insertBefore(sum, el.list);
@@ -2819,7 +2819,7 @@ function scheduleWatch(key, sec) {
       // 第四十八轮⑧：自动停带失败原因摘要——最近一次失败给分类，不只「已停」
       const lastBad = [...w.samples].reverse().find((sm) => !sm.ok);
       const why = stop === 'stop-fail'
-        ? (lastBad ? `（最近失败：${classifyError(lastBad.err ?? '').title}）` : '')
+        ? (lastBad ? `（最近失败：${classifyError(lastBad.err ?? '', I18N[pickLang(lang)]).title}）` : '')
         : `（命中停止串「${w.matchStr}」）`;
       w.stopReason = `${stop === 'stop-fail' ? t('watchAutoFail')(w.failStreak) : t('watchAutoMatch')}${why}`;
       watchStopLog.push(w.stopReason);
@@ -4243,7 +4243,7 @@ function renderResult(res) {
   const rNote = rNoteKey ? (resultNotes[rNoteKey] ?? '') : '';
   const head = (res.ok
     ? `<span class="ok">✓ 成功</span><span class="sr-only" role="status">动作完成，${res.ms !== undefined ? `耗时 ${formatMs(res.ms)}` : '无耗时数据'}</span>`
-    : `<span class="bad">✗ 失败</span><span class="sr-only" role="status">动作失败${res.error ? '：' + esc(String(res.error).slice(0, 80)) : ''}</span>`)
+    : `<span class="bad">${esc(t('rsFailBadge'))}</span><span class="sr-only" role="status">${esc(t('rsActionFail'))}${res.error ? ': ' + esc(String(res.error).slice(0, 80)) : ''}</span>`)
     + (rNote ? ` <span class="rnote" title="双击标题区修改注释">📝 ${esc(rNote)}</span>` : '');
   // 统一毫秒展示 + 「慢于平常」：超该动作历史 P95 才亮（历史 ≥3 次才参与判断）
   const ms = res.ms !== undefined ? formatMs(res.ms) : '';
@@ -4264,7 +4264,7 @@ function renderResult(res) {
   if (res.error) {
     // 第四十八轮②③：失败卡片——分类标题 + 建议步骤 + 同参数重试 + 原文折叠
     // 第九十四轮②③④⑤⑥⑦：stderr 折叠/下一步按分类/一键报错（含环境三行）/分类徽标/审计带分类/动作名建议
-    const cls = classifyError(`${res.error}\n${res.stderr ?? ''}`);
+    const cls = classifyError(`${res.error}\n${res.stderr ?? ''}`, I18N[pickLang(lang)]);
     const errId = `errfold${++resultSeq}`;
     const rawLen = String(res.error).length;
     // ⑦ 动作名打错建议：报错里含「找不到动作/插件」时从当前清单给近邻
@@ -5917,7 +5917,7 @@ function renderMarketPreviewBox() {
       });
       const head = r.ok
         ? `<span class="ok">✓ 成功 · ${esc(String(r.ms ?? ''))} ms</span>`
-        : `<span class="bad">✗ 失败</span>`;
+        : `<span class="bad">${esc(t('rsFailBadge'))}</span>`;
       const bodyText = r.error
         ? `<pre class="out" style="color:var(--bad)">${esc(r.error)}</pre>`
         : (r.stdout ? `<pre class="out">${esc(r.stdout)}</pre>` : (r.stderr ? `<pre class="out">${esc(r.stderr)}</pre>` : '<div class="help">（没有输出）</div>'));
