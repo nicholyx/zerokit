@@ -34,6 +34,7 @@ import { resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader } 
 import { TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory, looksLikeTimestamp, humanTs, emptyReason, tocFromMd } from './extras.js';
 import { COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory } from './extras.js';
 import { chainFill, batchDedup, chunkWindows, parseBatchList } from './extras.js';
+import { batchCounts, batchCountsLabel, batchStateIcon } from './extras.js';
 import { classifyClip, pushClipHistory, clipSuggestions } from './extras.js';
 import { toShareMarkdown, toShareHtml } from './extras.js';
 import { toAiMarkdown, packContext, toMcpConfig, toCurl, toLlmJsonl, watchTrendMarkdown } from './extras.js';
@@ -998,17 +999,39 @@ function renderListTools(base, q) {
  * 每项用已记忆的参数（参数记忆参数不存在时用默认值），失败不阻断后面的项。 */
 async function runBatch(retryItems) {
   const source = retryItems ?? batch;
-  if (!source.length) return;
+  if (!source.length) return; // 第八项：空队列守卫（按钮禁用是第一道，这里是第二道）
   // destructive 排最后：失败不至于挡住只读项
   const ordered = [...source].sort((a, b) =>
     (a.action.risk === 'destructive' ? 1 : 0) - (b.action.risk === 'destructive' ? 1 : 0));
   const results = [];
   const btn = document.getElementById('batchRun');
   if (btn) { btn.disabled = true; btn.textContent = '执行中…'; }
-  const runOne = async (entry) => {
+  // 第九十八轮①②：逐项状态表 + 实时计数条（执行期间插在列表顶上，每项一行可点）
+  const states = ordered.map(() => 'queued');
+  let prog = document.getElementById('batchProgress');
+  if (retryItems && prog) prog.remove();
+  prog = document.createElement('div');
+  prog.id = 'batchProgress';
+  prog.className = 'batch-progress';
+  el.listView.insertBefore(prog, el.list);
+  const paint = () => {
+    const c = batchCounts(states);
+    prog.innerHTML = `
+      <div class="bp-counts" role="status">${esc(batchCountsLabel(c))}</div>
+      <div class="bp-rows">${ordered.map((e, i) => `
+        <div class="bp-row st-${states[i]}" data-bp="${i}">
+          <span class="bp-ic">${batchStateIcon(states[i])}</span>
+          <span class="bp-name">${esc(e.action.title)}</span>
+          <span class="bp-src">${esc(e.plugin.name)}</span>
+          <span class="bp-ms">${states[i] === 'ok' || states[i] === 'fail' ? formatMs(results[i]?.ms || 0) : ''}</span>
+        </div>`).join('')}</div>`;
+  };
+  paint();
+  const runOne = async (entry, i) => {
     const key = actionKey(entry.plugin.id, entry.action.id);
     const values = paramStore[key] ?? {};
     const payload = { plugin: entry.plugin.id, action: entry.action.id, values };
+    states[i] = 'running'; paint();
     try {
       const r = await fetch('/api/run', {
         method: 'POST',
@@ -1024,12 +1047,26 @@ async function runBatch(retryItems) {
   // 第二十五轮⑧：并发窗口——窗口内并行、窗口间串行（1=纯串行，默认 3）
   const conc = Math.max(1, Math.min(8, Number(readJson('zerokit.batchconc', 3)) || 3));
   for (const win of chunkWindows(ordered.length, conc)) {
-    const rs = await Promise.all(win.map((i) => runOne(ordered[i])));
-    results.push(...rs);
+    // 第七项：失败不中断——窗口内逐项落状态，窗口间不因失败短路
+    const rs = await Promise.all(win.map((i) => runOne(ordered[i], i).then((r) => {
+      results[i] = r; states[i] = r.ok ? 'ok' : 'fail'; paint(); return r;
+    })));
+    results.push(...[]);
+    void rs;
   }
   if (btn) { btn.disabled = false; btn.textContent = '顺序执行'; }
   if (!retryItems) { batch = []; renderList(); }
   else renderList();
+  // 进度条使命完成：撤掉，换汇总卡
+  document.getElementById('batchProgress')?.remove();
+  // 第五项：批量完成写审计事件 batch_done（server 落 audit.log，审计页可查）
+  fetch('/api/batch-done', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-zk-token': TOKEN },
+    body: JSON.stringify({ items: ordered.map((e, i) => ({
+      plugin: e.plugin.id, action: e.action.id, ok: results[i]?.ok ?? false, ms: results[i]?.ms ?? 0,
+    })) }),
+  }).catch(() => {}); // 审计失败不挡汇总展示
   // 汇总卡片：成功 N / 失败 M / 总耗时，失败项可点开
   const ok = results.filter((r) => r.ok).length;
   const failed = results.length - ok;
@@ -1094,7 +1131,7 @@ function renderListInner() {
     bar.className = 'batch-bar';
     bar.id = 'batchBar';
     bar.innerHTML = `已选 ${batch.length} 项${dups.length ? `（<span class="warn">重复 ${dups.length}</span>）` : ''}
-      <button class="ghost mini" id="batchRun" aria-label="顺序执行篮子里的 ${batch.length} 个动作">顺序执行</button>
+      <button class="ghost mini" id="batchRun" ${batch.length ? '' : 'disabled'} aria-label="顺序执行篮子里的 ${batch.length} 个动作">顺序执行</button>
       <button class="ghost mini" id="batchDedup" aria-label="去掉同动作同参数的重复项">去重</button>
       <button class="ghost mini" id="batchExport" aria-label="导出批量清单 JSON">导出清单</button>
       <button class="ghost mini" id="batchImport" aria-label="导入批量清单 JSON">导入</button>
@@ -6862,7 +6899,12 @@ async function renderPs() {
       </div>
     </div>`).join('');
 
+  // 第九十八轮③：批量执行进行中——面板顶部给队列摘要（复用 batchProgress DOM 的状态数据不可得，
+  // 直接读 DOM：进度条在列表页。这里显示的是 ps 自己的视角：托管进程里批量项可见）
+  const bp = document.getElementById('batchProgress');
+  const bpHtml = bp ? `<div class="ps-batch-note" role="status">📋 批量执行进行中——进度详情在<a href="#/" class="lnk">列表页</a></div>` : '';
   el.psView.innerHTML = `
+    ${bpHtml}
     <div class="ps-head">
       <h2>运行中（${total}）</h2>
       <span class="sub">每 2 秒自动刷新</span>

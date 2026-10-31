@@ -1950,3 +1950,16 @@ td.gsum-label { font-weight: 600; }
 /* ⑥ 首列钉住：宽表横滚时首列 sticky（父容器 .tbl-wrap overflow:auto） */
 .tbl-wrap table thead th:nth-child(1), .tbl-wrap table tbody td:nth-child(1) { position: sticky; left: 0; background: var(--bg, #16181d); z-index: 1; }
 .tbl-wrap table tbody tr:hover td:nth-child(1) { background: color-mix(in srgb, var(--fg) 7%, var(--bg, #16181d)); }
+
+/* ==================== 第九十八轮：执行队列与并发可视化 ==================== */
+.batch-progress { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 0 0 10px; background: var(--bg-soft); }
+.batch-progress .bp-counts { font-weight: 600; font-size: 13px; margin-bottom: 6px; }
+.batch-progress .bp-row { display: flex; gap: 8px; align-items: center; padding: 3px 0; font-size: 12.5px; color: var(--fg-dim); }
+.batch-progress .bp-row.st-ok { color: var(--fg); }
+.batch-progress .bp-row.st-fail .bp-name { color: var(--danger); }
+.batch-progress .bp-row.st-running .bp-ic { color: var(--accent); }
+.batch-progress .bp-ic { width: 14px; text-align: center; }
+.batch-progress .bp-name { flex: 0 0 auto; }
+.batch-progress .bp-src { flex: 1; color: var(--fg-dim); font-size: 11.5px; }
+.batch-progress .bp-ms { font-variant-numeric: tabular-nums; }
+.ps-batch-note { padding: 8px 12px; margin-bottom: 10px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 12%, transparent); font-size: 13px; }
