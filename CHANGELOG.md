@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+（下一版攒着）
+
+## [1.3.1] - 2026-10-31
+
 ### Added
 
 - 发布工具自愈：`START-HERE.md` 版本行加 `<!-- zk-version -->` 锚，`release-prep` 锚内替换，句式漂移不再挂 CI（此前连续三个版本挂过）
