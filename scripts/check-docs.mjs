@@ -86,5 +86,15 @@ const bad = (msg) => { console.log(`✗ ${msg}`); problems.push(msg); };
   if (problems.length === 0) console.log('✓ cookbook 命令与 --help 一致');
 }
 
+// 第九十九轮⑦：START-HERE 版本锚完整性——有开必有合，锚内必须有版本号
+{
+  const sh = fs.readFileSync(path.join(ROOT, 'START-HERE.md'), 'utf8');
+  const opens = (sh.match(/<!-- zk-version -->/g) ?? []).length;
+  const closes = (sh.match(/<!-- \/zk-version -->/g) ?? []).length;
+  if (opens !== 1 || closes !== 1) bad(`START-HERE 版本锚不完整：${opens} 开 / ${closes} 闭（应各 1）`);
+  else if (!/<!-- zk-version -->.*v\d+\.\d+\.\d+.*<!-- \/zk-version -->/.test(sh)) bad('START-HERE 版本锚内没有版本号');
+  if (problems.length === 0 || !problems.some((p2) => p2.includes('版本锚'))) console.log('✓ START-HERE 版本锚完整');
+}
+
 if (problems.length > 0) { console.log(`有 ${problems.length} 处问题`); process.exit(1); }
 console.log('文档巡检全部通过');

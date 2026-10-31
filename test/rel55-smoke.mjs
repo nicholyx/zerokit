@@ -17,6 +17,8 @@ const sh = (cmd, args, opts = {}) => { try { return { code: 0, out: execFileSync
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'rel55-'));   // Windows 没有 /tmp
   const cp = (f) => { const dst = path.join(tmp, f); fs.mkdirSync(path.dirname(dst), { recursive: true }); fs.cpSync(path.join(REPO, f), dst); };
   ['CHANGELOG.md', 'package.json', 'scripts/release-prep.mjs', 'scripts/check-docs.mjs', 'apps/desktop/src-tauri/tauri.conf.json', 'apps/desktop/src-tauri/Cargo.toml', 'apps/desktop/src-tauri/Cargo.lock'].forEach(cp);
+  // 第九十九轮起 release-prep 还要写 START-HERE 版本锚——fixture 补一份带锚的
+  fs.writeFileSync(path.join(tmp, 'START-HERE.md'), '<!-- zk-version -->当前版本 v0.0.1<!-- /zk-version -->\n');
   // 注入一个有条目的 Unreleased（工具的输入契约）
   const withEntries = '## [Unreleased]\n\n### Added\n\n- 测试条目一\n- 测试条目二\n\n## [0.0.1] - 2020-01-01\n\n### Added\n\n- 旧条目\n';
   fs.writeFileSync(path.join(tmp, 'CHANGELOG.md'), withEntries);
