@@ -23,7 +23,6 @@ const dep = p\.requiresOk \? '' : `<span c
 \$\{smart \? `<span class="badge smart-badg
 <span class="item-desc1 desc">\$\{smart \? 
 <button class="star\$\{fav \? ' on' : ''\}" 
-sp\.title = '拖拽调节分栏宽度（双击复位）';
 return `<li class="recent-block"><div cl
 \? `<div class="hist-chips\$\{q\.trim\(\) \? ' 
 \.map\(\(x\) => `<span class="chip-wrap"><bu
@@ -51,9 +50,7 @@ el\.count\.textContent = `\$\{filtered\.lengt
 suggestions\.push\(`<button class="link" d
 suggestions\.push\(`<button class="link" d
 suggestions\.push\(`<button class="link" d
-suggestions\.push\('<div class="empty-sug-
 suggestions\.push\(`<button class="link" d
-suggestions\.push\('<div class="empty-sug-
 suggestions\.push\(`<button class="link" d
 suggestions\.push\(`<button class="link" d
 <div class="empty-title">\$\{es \? esc\(es\.t
@@ -119,42 +116,28 @@ box\.innerHTML = `<div class="help" style
 \$\{refs\.length \? `会引用 \$\{refs\.map\(\(r\) => `
 \$\{filled\.length \? `；\$\{filled\.length\} 个参数
 out\.innerHTML = `<div class="cmd-box"><d
-btn\.textContent = '✓ 已复制';
 setTimeout\(\(\) => \{ btn\.textContent = '复制
-btn\.textContent = '复制失败';
-el\.count\.textContent = '只有只读动作能定时执行（有副作用
-el\.count\.textContent = '只有只读动作能监控（有副作用的自
 <h3>扫码直达这个动作</h3>
 <div class="actions"><button class="ghos
-el\.count\.textContent = '还没有执行结果，先跑一次再分享'
 `结果：\$\{last\.ok \? '✓ 成功' : '✗ 失败'\}　耗时 \$\{la
 last\.stdout \? `输出：\$\{String\(last\.stdout\)\.
 `来自 zerokit · \$\{new Date\(last\.ts\)\.toLoca
-el\.count\.textContent = '分享卡已复制到剪贴板';
-el\.count\.textContent = '复制被拒绝；已暂存（__shar
 box\.innerHTML = '<div class="help">读取配置中
 if \(!r\.settings\?\.length\) \{ box\.innerHTML
 <div class="cmd-box-head">插件配置 · \$\{esc\(p
 <span class="plug-setting-note">\$\{x\.set 
 placeholder="\$\{x\.secret && x\.set \? '已设置（
 <div class="actions"><button class="prim
-msg\.textContent = '保存中…';
-msg\.textContent = '✓ 已保存，下一次执行立即生效';
-msg\.textContent = `保存失败：\$\{e\.message\}`;
 box\.innerHTML = `<div class="help" style
 <button class="ghost" id="copyInvoke">复制
 <div class="cmd-box-head">MCP 配置（贴进 Clau
 <button class="ghost" id="copyMcpCfg">复制
-ev\.currentTarget\.textContent = '已复制';
 \} catch \{ ev\.currentTarget\.textContent =
 setTimeout\(\(\) => \{ ev\.currentTarget\.text
-ev\.currentTarget\.textContent = '已复制';
-ev\.currentTarget\.textContent = '复制失败（非 h
 setTimeout\(\(\) => \{ ev\.currentTarget\.text
 bar\.innerHTML = `<b>📋 \$\{esc\(m\.reason\)\}<
 <button type="button" class="ghost mini"
 <button type="button" class="ghost mini"
-\$\('shareBtn'\)\.textContent = '已复制链接';
 setTimeout\(\(\) => \{ \$\('shareBtn'\)\.textCon
 \}\)\.catch\(\(\) => \{ window\.__shareLinkFallb
 lastResult = \{ ok: rec\.ok, ms: rec\.ms, d
@@ -173,13 +156,11 @@ btn\.textContent = '检查失败（稍后再试）';
 el\.modeLabel\.textContent = '时间线';
 <div class="tl-head" data-tlday="\$\{g\.day
 \}\)\.join\(''\) : `<div class="help">还没有执行记录
-<h2 class="ps-title">时间线</h2>
 <div class="tl-wc-cell">本周<b>\$\{wc\.cur\.to
 <div class="tl-wc-cell">失败率<b>\$\{Math\.rou
 <h3>时段分布</h3>
 <div class="tl-hbars">\$\{hours\.map\(\(n, h\)
 \$\{tops\.length \? `<div class="tl-tops car
-<h2 class="ps-title">今日简报</h2>
 <div class="brief-cell">今天执行<b>\$\{b\.total
 <div class="brief-cell">成功<b class="ok">
 <div class="brief-cell">失败<b class="\$\{b\.
@@ -211,7 +192,6 @@ el\.modeLabel\.textContent = '性能';
 <button class="ghost mini" data-wstop="\$
 <button class="ghost mini" data-wcsv="\$\{
 <button class="ghost mini" data-wmd="\$\{e
-<h2 class="ps-title">监控面板</h2>
 <div class="help">界面开着才会跑；翻到别的动作自动停。在只读动
 \$\{rows \|\| '<div class="ps-empty" role="s
 \$\{stopLog\.length \? `<div class="watch-st
@@ -219,8 +199,6 @@ if \(!w \|\| !w\.samples\.length\) \{ el\.count\.
 if \(!w \|\| !w\.samples\.length\) \{ el\.count\.
 navigator\.clipboard\.writeText\(md\)\.then\(\(
 <button class="ghost mini" data-try="\$\{e
-<h2 class="ps-title">使用指南</h2>
-<div class="help">启动器能做什么、怎么上手，都在这一页。每段都
 t\.history = trimHistory\(\[\.\.\.\(t\.history \?
 if \(!e\) throw new Error\('动作不在了（插件被卸载？）'\)
 if \(!Number\.isFinite\(sec\) \|\| sec < 10\) \{
@@ -393,55 +371,34 @@ spark\.title = `首行「\$\{col\}」最近 \$\{series\.len
 <input id="noteInput" type="text" placeh
 <button class="primary" id="noteSave">保存
 <div class="rmeta sub" role="contentinfo
-btn\.textContent = '序列化中…';
-btn\.textContent = '已复制\(带备注\)';
 try \{ await navigator\.clipboard\.writeTex
 setTimeout\(\(\) => \{ btn\.textContent = '复制
-btn\.textContent = ev\.shiftKey \? '已复制\(缩进\)
-btn\.textContent = '复制失败';
 setTimeout\(\(\) => \{ btn\.textContent = '复制
-el\.count\.textContent = '快照已导出（\.zkresult\.
 const title = detail \? `\$\{detail\.plugin\.
-if \(btn\) \{ btn\.textContent = '已导出'; setT
 \$\('findCount'\)\.textContent = hits \? `\$\{h
-if \(btn\) btn\.textContent = folded \? '展开'
-btn\.textContent = '打开中…';
-el\.count\.textContent = `已在编辑器打开：\$\{r\.file
-btn\.textContent = '已打开';
-el\.count\.textContent = `编辑器打不开：\$\{String\(
-btn\.textContent = '失败';
 setTimeout\(\(\) => \{ const b = \$\('editRes'
 el\.count\.textContent = `已在文件管理器打开：\$\{r\.op
-btn\.textContent = '已打开';
 el\.count\.textContent = `目录打不开：\$\{String\(e
-btn\.textContent = '失败';
 setTimeout\(\(\) => \{ const b = \$\('openDirR
 try \{ await navigator\.clipboard\.writeTex
-catch \{ btn\.textContent = '失败'; \}
 setTimeout\(\(\) => \{ btn\.textContent = '复制
 try \{ await navigator\.clipboard\.writeTex
-catch \{ btn\.textContent = '失败'; \}
 setTimeout\(\(\) => \{ btn\.textContent = '复制
 try \{ await navigator\.clipboard\.writeTex
-catch \{ btn\.textContent = '失败'; \}
 setTimeout\(\(\) => \{ btn\.textContent = '复制
 try \{ await navigator\.clipboard\.writeTex
-catch \{ btn\.textContent = '失败'; \}
 setTimeout\(\(\) => \{ btn\.textContent = '复制
 const v = window\.prompt\('给这次结果写个注释（≤60 字
 pathRow\.textContent = `已导出：\$\{a\.download\}
 if \(btn\) \{ const t = btn\.textContent; bt
 el\.count\.textContent = '分享文本已复制（Markdown
 const html = toHtmlTable\(res\.data, detai
-ev\.currentTarget\.textContent = '已复制';
 \} catch \{ ev\.currentTarget\.textContent =
 setTimeout\(\(\) => \{ const b = \$\('htmlRes'
 const md = toAiMarkdown\(res, \{ name: det
-ev\.currentTarget\.textContent = '已复制';
 \} catch \{ ev\.currentTarget\.textContent =
 setTimeout\(\(\) => \{ const b = \$\('aiRes'\);
 current: \{ res, name: detail \? `\$\{detail
-ev\.currentTarget\.textContent = '已复制';
 \} catch \{ ev\.currentTarget\.textContent =
 setTimeout\(\(\) => \{ const b = \$\('ctxRes'\)
 <h3>结果对比\$\{pairMode \? '（自选两次）' : '（上一次 → 
@@ -647,7 +604,6 @@ return `<div class="usage-panel"><div cl
 <option value="node">Node\.js（零依赖，推荐）</op
 <option value="python">Python（要装 python）
 <button class="primary" id="npCreate">生成
-if \(!id\) \{ \$\('npMsg'\)\.textContent = '先填插
 \$\('npMsg'\)\.textContent = '生成中…';
 \$\('npMsg'\)\.innerHTML = `✓ \$\{esc\(r\.messag
 \$\('npMsg'\)\.textContent = `失败：\$\{e\.message
@@ -664,7 +620,6 @@ const note = s\.source === 'default' \? '默
 <div class="plug-settings-head">设置项 <spa
 <button class="primary" data-op="save-se
 if \(Object\.keys\(patch\)\.length === 0\) \{ m
-msg\.textContent = '保存中…';
 if \(r\.ok === false\) throw new Error\(r\.er
 msg\.textContent = '保存失败：' \+ e\.message;
 box\.innerHTML = '<div class="plug-card">
@@ -721,8 +676,6 @@ const bpHtml = bp \? `<div class="ps-batc
 <span class="badge">未运行</span>
 <div class="actions"><button class="prim
 btn\.textContent = '结束中…';
-btn\.textContent = '失败';
-btn\.textContent = '失败';
 note\.textContent = '（已恢复上次会话——重新加载页面后对话还
 <span class="wb-model" id="wbModel">正在检查
 <button class="ghost" id="wbReset">新会话</
