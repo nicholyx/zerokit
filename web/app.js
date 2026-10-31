@@ -774,7 +774,7 @@ function saveCollapsed(set) {
 function itemHtml(entry, i, showPlugin, query = '') {
   const a = entry.action;
   const p = entry.plugin;
-  const dep = p.requiresOk ? '' : `<span class="badge destructive">缺依赖</span>`;
+  const dep = p.requiresOk ? '' : `<span class="badge destructive">${t('missingDeps')}</span>`;
   const smart = filteredSmart.get(entry.order);
   const key = actionKey(p.id, a.id);
   const fav = isFavorite(favorites, key);
@@ -948,18 +948,18 @@ function recentBlockHtml() {
       <span class="r-when">${esc(new Date(r.ts).toLocaleString())}</span>
     </div>`;
   }).join('');
-  return `<li class="recent-block"><div class="recent-title">最近执行</div>${inner}</li>`;
+  return `<li class="recent-block"><div class="recent-title">${t('recentHead')}</div>${inner}</li>`;
 }
 
 /** 列表上方的筛选与搜索历史：筛选算的是「当前搜索结果」里的分布。 */
 function renderListTools(base, q) {
   const count = (id) => filterActions(base, id, favorites).length;
   const chips = FILTERS.map((f) => `<button class="chip${listFilter === f.id ? ' on' : ''}"
-    data-filter="${f.id}">${f.label}<b>${count(f.id)}</b></button>`).join('');
+    data-filter="${f.id}">${(I18N[pickLang(lang)].filterLabels ?? I18N.zh.filterLabels)[f.id] ?? f.label}<b>${count(f.id)}</b></button>`).join('');
   // 第二十七轮⑧：搜索历史不再只在空 q 时显示——输入态也给（回填替换当前词），
   // 上限 8 条由 pushSearch 维护
   const hist = searchHistory.length
-    ? `<div class="hist-chips${q.trim() ? ' while-typing' : ''}"><span class="hist-label">最近搜索</span>${searchHistory
+    ? `<div class="hist-chips${q.trim() ? ' while-typing' : ''}"><span class="hist-label">${t('recentSearchLabel')}</span>${searchHistory
       .map((x) => `<span class="chip-wrap"><button class="chip quiet" data-hist="${esc(x)}">${esc(x)}</button><button class="chip-x" data-hist-x="${esc(x)}" title="删掉这条记录" aria-label="删掉这条搜索记录">✕</button></span>`).join('')}
       <button class="chip quiet" id="clearHist">清空</button></div>`
     : '';
@@ -1260,8 +1260,8 @@ function renderListInner() {
     const suggestions = [];
     if (q.trim()) {
       suggestions.push(`<button class="link" data-sug="clear">${t('clearSearchBrowse')}</button>`);
-      suggestions.push(`<button class="link" data-sug="market">去集市找一个能做这件事的插件</button>`);
-      suggestions.push(`<button class="link" data-sug="wb">问 AI 工作台：「${esc(q.trim())}」</button>`);
+      suggestions.push(`<button class="link" data-sug="market">${t('sugMarket')(q.trim())}</button>`);
+      suggestions.push(`<button class="link" data-sug="wb">${t('sugAskAi')(esc(q.trim()))}</button>`);
       // 第五十一轮①：丢词建议——「A B」全灭时，去掉哪个词能救回多少项
       const rawTokens = stripStopwords(q.trim().toLowerCase().split(/\s+/).filter(Boolean));
       const hayEntries = entries.map((e) => ({ hay: `${e.plugin.name} ${e.action.title} ${e.action.description ?? ''} ${(e.action.keywords ?? []).join(' ')}`.toLowerCase() }));
@@ -1275,7 +1275,7 @@ function renderListInner() {
       // 第二十二轮③：无结果时给「试试这些」——只读动作直达，新用户有路可走
       const picks = emptySearchSuggestions(entries, 5);
       if (picks.length) {
-        suggestions.push('<div class="empty-sug-title">试试这些（都是只读、安全）：</div>');
+        suggestions.push(`<div class="empty-sug-title">${t('sugTryThese')}</div>`);
         for (const p of picks) {
           suggestions.push(`<button class="link" data-sug="go" data-go="${esc(p.key)}">${esc(p.plugin)} · ${esc(p.title)}</button>`);
         }
@@ -1330,7 +1330,7 @@ function renderListInner() {
       if (!groups.has(id)) groups.set(id, []);
       groups.get(id).push([entry, i]);
     });
-    el.list.innerHTML = (sortMode === 'recent' ? '<li class="sort-note">按最近使用排序（m 键切回插件序）</li>' : '')
+    el.list.innerHTML = (sortMode === 'recent' ? `<li class="sort-note">${t('sortNoteRecent')}</li>` : '')
       + (listFilter === 'all' ? recentBlockHtml() : '')
       + [...groups.entries()].map(([id, items]) => {
       const p = items[0][0].plugin;
@@ -1339,7 +1339,7 @@ function renderListInner() {
       // 第二十二轮④：悬停可见风险构成——一行 title 说清这个插件只读/会改/高危各几个
       const riskTally = { read: 0, mutate: 0, destructive: 0 };
       for (const [entry2] of items) riskTally[entry2.action.risk] = (riskTally[entry2.action.risk] || 0) + 1;
-      const riskTip = `动作数 ${items.length}：只读 ${riskTally.read || 0}、会改动 ${riskTally.mutate || 0}、高风险 ${riskTally.destructive || 0}（点击整行折叠/展开）`;
+      const riskTip = t('riskTip')(items.length, riskTally.read || 0, riskTally.mutate || 0, riskTally.destructive || 0);
       return `<li class="group-head${isCollapsed ? ' collapsed' : ''}" data-group="${esc(id)}" title="${esc(riskTip)}">
           <span class="g-arrow">${isCollapsed ? '▸' : '▾'}</span>
           <span class="g-name">${esc(p.name)}</span>
@@ -2772,7 +2772,7 @@ function openWatchDialog(plugin, action, key) {
     scheduleWatch(key, sec);
     updateWatchTitle();
     renderWatchBar();
-    el.count.textContent = `监控已开启：每 ${intervalLabel(sec)} 重跑一次（#/watch 面板聚合查看）`;
+    el.count.textContent = t('watchStarted')(intervalLabel(sec));
     // 立即采第一次样（不等第一个间隔），结果同样入序列——diff 要有基线
     submit(false).then(() => {
       const w2 = watchRegistry()[key];
@@ -2821,7 +2821,7 @@ function scheduleWatch(key, sec) {
       const why = stop === 'stop-fail'
         ? (lastBad ? `（最近失败：${classifyError(lastBad.err ?? '').title}）` : '')
         : `（命中停止串「${w.matchStr}」）`;
-      w.stopReason = `监控已自动停：${stop === 'stop-fail' ? `连续 ${w.failStreak} 次失败` : '结果命中了停止串'}${why}`;
+      w.stopReason = `${stop === 'stop-fail' ? t('watchAutoFail')(w.failStreak) : t('watchAutoMatch')}${why}`;
       watchStopLog.push(w.stopReason);
       // ⑤ 停止记录持久化（原因+时间），导入导出带着走
       const stops = readJson('zerokit.watch-stops', []);
@@ -2865,13 +2865,13 @@ function notifyWatchChange(w, prev, next) {
       watchAlertAt[w.title] = now;
       const errs = (w.samples ?? []).filter((sm) => !sm.ok).slice(-3)
         .map((sm) => String(sm.err ?? '未知错误').slice(0, 60));
-      new Notification('zerokit 监控告警', {
+      new Notification(t('watchAlertTitle'), {
         body: `⚠ ${w.title} 连续失败 ${failStreakNow} 次（累计 ${fails}）：\n${errs.join('\n')}`,
         tag: `zk-watch-alert-${w.title}`,
       });
       return;
     }
-    new Notification('zerokit 监控', {
+    new Notification(t('watchNotifyTitle'), {
       body: `⇄ ${w.title} 结果有变化（第 ${w.changes} 次）`,
       tag: `zk-watch-${w.title}`,
     });
@@ -2900,7 +2900,7 @@ function renderWatchBar() {
   bar.querySelector('#watchStopBtn')?.addEventListener('click', () => {
     stopWatch(key);
     renderWatchBar();
-    el.count.textContent = '监控已停止';
+    el.count.textContent = t('watchStopped');
   });
   // 倒计时每秒刷一次环（只重画 bar，不重跑动作）
   clearTimeout(renderWatchBar._tick);
