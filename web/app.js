@@ -275,52 +275,52 @@ function openThemePop() {
   // 第四十七轮：themePop 常驻抽屉（drawer 内非 hidden），改为纯渲染不再做开合切换
   const choice = normalizeTheme(localStorage.getItem(PREF.theme));
   pop.innerHTML = `
-    <div class="tp-head">主题</div>
+    <div class="tp-head">${t('themeHead')}</div>
     <div class="tp-row">
-      ${[['system', '跟随系统'], ['dark', '深色'], ['light', '浅色']].map(([id, label]) => `
+      ${[['system', t('themeSystem')], ['dark', t('themeDark')], ['light', t('themeLight')]].map(([id, label]) => `
         <button data-theme-choice="${id}" class="${choice === id ? 'on' : ''}">${label}</button>`).join('')}
     </div>
-    <div class="tp-head">强调色</div>
+    <div class="tp-head">${t('accentHead')}</div>
     <div class="tp-swatches">
       ${ACCENTS.map((a) => `<button data-accent="${a.id}" title="${esc(a.label)}"
         style="background:${a.color}" class="${normalizeAccent(accent) === a.id ? 'on' : ''}"></button>`).join('')}
     </div>
-    <div class="tp-head">字体大小</div>
+    <div class="tp-head">${t('fontHead')}</div>
     <div class="tp-row">
-      ${[['s', '小'], ['m', '中'], ['l', '大']].map(([id, label]) => `
+      ${[['s', t('fontS')], ['m', t('fontM')], ['l', t('fontL')]].map(([id, label]) => `
         <button data-font="${id}" class="${(localStorage.getItem('zerokit.font-scale') || 'm') === id ? 'on' : ''}">${label}</button>`).join('')}
     </div>
-    <div class="tp-head">语言 Language</div>
+    <div class="tp-head">${t('langHead')}</div>
     <div class="tp-row">
       ${[['system', t('langSystem')], ['zh', t('langZh')], ['en', t('langEn')]].map(([id, label]) => `
         <button data-lang-choice="${id}" class="${langPref === id ? 'on' : ''}">${label}</button>`).join('')}
     </div>
-    <div class="tp-head">AI 辅助</div>
+    <div class="tp-head">${t('aiHead')}</div>
     <div class="tp-row">
-      <button data-ai-toggle="${aiAssistOn() ? 'on' : 'off'}" class="${aiAssistOn() ? 'on' : ''}" title="关闭后隐藏所有 AI 相关按钮（给 AI / AI 上下文 / curl / MCP 配置）——本机不留 AI 使用痕迹于界面">${aiAssistOn() ? '已开启' : '已关闭'}</button>
+      <button data-ai-toggle="${aiAssistOn() ? 'on' : 'off'}" class="${aiAssistOn() ? 'on' : ''}" title="${t('aiToggleTitle')}">${aiAssistOn() ? t('aiOn') : t('aiOff')}</button>
     </div>
-    <div class="tp-head">数据</div>
+    <div class="tp-head">${t('dataHead')}</div>
     <div class="tp-row tp-backup">
-      <button data-backup="export" title="把所有个性化数据（收藏、历史、参数记忆、外观设置）打包成 JSON 下载">⬇ 导出数据</button>
-      <button data-backup="import" title="从备份 JSON 恢复：可预览、可选择类别、合并不覆盖">⬆ 导入数据</button>
-      <button data-backup="purge" title="清除本地结果与运行历史（含参数记忆），审计日志不动">🧹 清除痕迹</button>
+      <button data-backup="export" title="${t('exportTitle')}">${t('exportData')}</button>
+      <button data-backup="import" title="${t('importTitle')}">${t('importData')}</button>
+      <button data-backup="purge" title="${t('purgeTitle')}">${t('purgeData')}</button>
     </div>
-    <div class="tp-head">分类清除（第八十八轮）</div>
+    <div class="tp-head">${t('wipeHead')}</div>
     <div class="tp-row tp-scope-wipe">
-      <button data-scope-wipe="runs" title="只清执行历史（localStorage zerokit.runs），收藏与设置不动">🕘 执行历史 <span data-scope-count="runs"></span></button>
-      <button data-scope-wipe="searches" title="只清搜索历史">🔍 搜索历史 <span data-scope-count="searches"></span></button>
-      <button data-scope-wipe="saved" title="只清保存的结果快照">💾 结果快照 <span data-scope-count="saved"></span></button>
-      <button data-scope-wipe="timers" title="只清定时任务">⏲ 定时任务 <span data-scope-count="timers"></span></button>
+      <button data-scope-wipe="runs" title="${t('wipeRunsTitle')}">${t('wipeRuns')} <span data-scope-count="runs"></span></button>
+      <button data-scope-wipe="searches" title="${t('wipeSearchesTitle')}">${t('wipeSearches')} <span data-scope-count="searches"></span></button>
+      <button data-scope-wipe="saved" title="${t('wipeSavedTitle')}">${t('wipeSaved')} <span data-scope-count="saved"></span></button>
+      <button data-scope-wipe="timers" title="${t('wipeTimersTitle')}">${t('wipeTimers')} <span data-scope-count="timers"></span></button>
     </div>
-    <div class="tp-head">配置档 <small class="tp-profile-cur">${esc(curProfileName())}</small></div>
+    <div class="tp-head">${t('profileHead')} <small class="tp-profile-cur">${esc(curProfileName())}</small></div>
     <div class="tp-row tp-profiles">
       ${panelProfileNames().map((n) => `
-        <button data-profile="${esc(n)}" class="${n === curProfileName() ? 'on' : ''}" title="切换到此配置档">${esc(n)}</button>`).join('')}
-      <button data-profile-new="1" title="以当前状态为基础新建配置档">＋ 新建</button>
+        <button data-profile="${esc(n)}" class="${n === curProfileName() ? 'on' : ''}" title="${t('profileSwitchTitle')}">${esc(n)}</button>`).join('')}
+      <button data-profile-new="1" title="${t('profileNewTitle')}">${t('profileNew')}</button>
     </div>
     <div class="tp-row tp-profiles-actions">
-      <button data-profile-rename="1" title="重命名当前配置档">✏ 重命名</button>
-      <button data-profile-del="1" title="删除当前配置档（至少保留一个）">🗑 删除</button>
+      <button data-profile-rename="1" title="${t('profileRenameTitle')}">${t('profileRename')}</button>
+      <button data-profile-del="1" title="${t('profileDelTitle')}">${t('profileDel')}</button>
     </div>`;
   pop.classList.remove('hidden');
   // 选中后就地更新高亮，不重建 DOM、也不收起面板：重建会让本次点击的目标

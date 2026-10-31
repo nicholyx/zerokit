@@ -61,6 +61,14 @@ else
 fi
 
 # a11y 静态扫描（第六十六轮）：已知反模式正则盘点
+echo "=== i18n 扫描 ==="
+if node scripts/i18n-scan.mjs; then
+  echo "OK    i18n（硬编码中文白名单无新增）"
+else
+  echo "FAIL  i18n（新增硬编码中文未登记——迁入 web/extras.js I18N 表，勿加白名单）"
+  fail=1
+fi
+
 if node scripts/a11y-scan.mjs; then
   echo "OK    a11y 扫描（web/ 已知反模式）"
 else
