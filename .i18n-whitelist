@@ -27,7 +27,6 @@ timers: \{ key: 'zerokit\.timers', label:
 if \(badge\) badge\.textContent = cnt > 0 \?
 if \(cnt === 0\) \{ el\.count\.textContent = 
 if \(!confirm\(`清除「\$\{meta\.label\}」（共 \$\{cnt\}
-if \(!confirm\(`删除配置档「\$\{curProfileName\(\)\}」
 return localStorage\.getItem\('zerokit\.pro
 const data = await res\.json\(\)\.catch\(\(\) =
 if \(explain && mi >= 0\) explain\.push\(\[pa
@@ -152,7 +151,6 @@ bc\.setAttribute\('aria-label', '路径'\);
 bar\.innerHTML = `<span class="help">用上次的
 `<button class="chip" data-pset="\$\{i\}" t
 if \(el\.detailView\?\.dataset\.formDirty ===
-box\.innerHTML = '<div class="help">读取中…<
 <div class="cmd-box-head">将要执行\$\{r\.masked
 <pre>\$\{esc\(r\.command \|\| '（这个动作没有命令）'\)\}</
 \$\{r\.hasPlaceholders \? '<div class="help"
@@ -208,7 +206,6 @@ if \(typed !== null\) alert\('输入的动作名不一致，已取消
 <div class="help">递归删除、系统目录、格式化磁盘这类操作不可逆
 <button class="ghost" id="dangerBack">回去
 <button class="warn-btn" id="dangerGo">仍
-btn\.textContent = '检查中…';
 if \(!remote\) \{ btn\.textContent = '集市里没有这
 if \(String\(remote\) === String\(p\.version\)
 btn\.textContent = `集市有新版 \$\{remote\}（当前 \$\{
@@ -220,7 +217,6 @@ el\.modeLabel\.textContent = '时间线';
 <h2 class="ps-title">时间线</h2>
 <div class="tl-wc-cell">本周<b>\$\{wc\.cur\.to
 <div class="tl-wc-cell">失败率<b>\$\{Math\.rou
-<div class="tl-wc-cell">平均耗时<b>\$\{wc\.cur\.
 <h3>时段分布</h3>
 <div class="tl-hbars">\$\{hours\.map\(\(n, h\)
 \$\{tops\.length \? `<div class="tl-tops car
@@ -228,7 +224,6 @@ el\.modeLabel\.textContent = '时间线';
 <div class="brief-cell">今天执行<b>\$\{b\.total
 <div class="brief-cell">成功<b class="ok">
 <div class="brief-cell">失败<b class="\$\{b\.
-<div class="brief-cell">平均耗时<b>\$\{b\.avgMs
 \$\{b\.top\.length \? `<h3 class="plug-home-h
 <div class="run-row"><span class="run-wh
 </div>` : '<div class="ps-empty" role="s
@@ -279,7 +274,6 @@ navigator\.clipboard\.writeText\(md\)\.then\(\(
 <div class="help">启动器能做什么、怎么上手，都在这一页。每段都
 t\.history = trimHistory\(\[\.\.\.\(t\.history \?
 if \(!e\) throw new Error\('动作不在了（插件被卸载？）'\)
-new Notification\('zerokit 定时任务失败', \{ bod
 <h3>定时执行：\$\{esc\(action\.title\)\}</h3>
 <div class="help">界面开着才会跑。只读动作才允许定时（有副作用
 <div class="field"><label>间隔（秒）</label><
@@ -306,7 +300,6 @@ el\.modeLabel\.textContent = '📋 剪贴板';
 <button class="ghost" id="clipBack">返回</
 try \{ await navigator\.clipboard\.writeTex
 catch \{ el\.count\.textContent = '写剪贴板被浏览器
-<h2 class="ps-title">定时任务</h2>
 <div class="help">界面开着才会跑（关掉页面即停）。在只读动作详
 <button class="ghost mini" id="timersExp
 <button class="ghost mini" id="timersImp
@@ -565,11 +558,8 @@ pop\.innerHTML = `<div class="pop-title">
 const chips = \[\['', '全部'\], \['allow', '允许
 const quickChips = `<button class="chip\$
 \? `<div class="trim-note">🧹 已自动清理 \$\{win
-<h2>审计日志 <span class="aid">\$\{logsFile ==
-<span class="sub">每次执行、被拒、失败都在这里；只在本机 ~/
 <input id="logQuery" class="log-query" p
 <button class="ghost" id="logCsv" title=
-<button class="ghost" id="logReload">刷新<
 <button class="ghost" id="logFile">\$\{log
 <div id="logList" class="log-list"><div 
 if \(!es\.length\) \{ el\.count\.textContent =
@@ -582,7 +572,6 @@ el\.count\.textContent = `已导出 \$\{es\.length\}
 <button class="ghost mini" data-pg="\$\{Ma
 : `<div class="ps-empty" role="status">\$
 el\.doctorView\.innerHTML = `<div class="p
-<span class="sub">解释器、插件依赖、必填配置——有问题的直接给
 <div class="log-tools"><button class="gh
 <div id="docBody"><div class="ps-empty" 
 \$\('docBody'\)\.innerHTML = `<div class="ps
@@ -768,7 +757,6 @@ if \(!r\.ok\) throw new Error\(r\.message \|\|
 \? `<br><span class="ok">已补装依赖：\$\{esc\(r\.de
 \? `<br><span style="color:var\(--bad\)">仍缺
 \$\('pvOk'\)\.textContent = '确认安装';
-btn\.textContent = '检查中…';
 foot\.innerHTML = '<div class="plug-card-
 foot\.innerHTML = `<div class="plug-card-
 c\.addedActions\?\.length \? `<span class="o
@@ -851,24 +839,11 @@ btn\.textContent = '发送';
 <section class="dash-card"><h3>🕘 最近执行</
 <section class="dash-card"><h3>⏱ 监控</h3>
 <section class="dash-card"><h3>📊 今日</h3
-<div class="ps-head"><h2>使用统计</h2>
 <span class="sub">全部来自本机执行记录，不上传任何数据</sp
-<div class="doc-line stat-big"><b>\$\{tota
-<div class="doc-line stat-big"><b>\$\{rate
-<div class="doc-line stat-big"><b>\$\{avgM
-<h3 class="plug-home-h">最活跃的插件</h3>
-<div class="usage-row stat-top-plugin" d
-<span class="usage-n">\$\{n\} 次</span></div
 <h3 class="plug-home-h">近 7 天</h3>
-<div class="trend-col" title="\$\{esc\(d\.da
 <h3 class="plug-home-h">一天中的什么时候在用</h3>
-<div class="heat-cell" title="\$\{b\.hour\}:
 <h3 class="plug-home-h">一次跑多久（毫秒分布）</h3>
-<div class="heat-cell" title="\$\{b\.label\}
 \$\{total === 0 \? '<div class="ps-empty" r
-<h3 class="plug-home-h">偏好备份</h3>
-<div class="help">收藏、备注、别名、标签、快捷键、主题——全部
-换电脑或清浏览器数据前，先导出一份 JSON；导入时只认 zerokit\. 开头
 <button class="ghost" id="prefsExport">导
 <button class="ghost" id="prefsImport">导
 <h3 class="plug-home-h">偏好快照（两组切换）</h3>
@@ -964,7 +939,6 @@ el\.count\.textContent = '检测到 dev 插件清单变更——
 \{ icon: '🔑', label: 'MCP 授权', hint: '哪些
 \{ icon: 'NetBar', label: '仪表盘', hint: '收
 \{ icon: '📈', label: '使用统计', hint: '总执行数
-\{ icon: '⏱', label: '定时任务', hint: '管理界面内
 \{ icon: '📋', label: '剪贴板历史', hint: '最近复
 \{ icon: '👁', label: '监控面板', hint: '自动重跑
 \{ icon: '📰', label: '今日简报', hint: '跑了多少
@@ -979,7 +953,6 @@ el\.count\.textContent = '检测到 dev 插件清单变更——
 \{ icon: '🀄', label: '语言：中文', hint: '界面切
 \{ icon: '🅐', label: '语言：English', hint:
 \{ icon: '📤', label: '导出备份', hint: '下载全部
-\{ icon: '🗑', label: '清空搜索历史', hint: '删除
 <input id="paletteQ" type="text" placeho
 <div class="palette-foot">↑↓ 选择 · Enter 
 </li>`\)\.join\(''\) \|\| '<li class="palette-
@@ -1004,7 +977,6 @@ return `<h3>功能键（按一下直达）</h3>
 \['#/ps', '运行中', '看正在跑的进程与服务'\],
 \['#/plugins', '插件管理', '安装 / 更新 / 卸载 / 配置
 \['#/market', '插件集市', '浏览并一键安装'\],
-\['#/logs', '审计日志', '每次执行、被拒、失败'\],
 \['#/doctor', '环境自检', '解释器 / 依赖 / 配置问题'\],
 \['#/mcp', 'MCP 授权', '允许 AI 调用哪些动作'\],
 \['#/stats', '使用统计', '总执行数 / 成功率 / 近 7 天趋
@@ -1335,3 +1307,13 @@ aria-label="读剪贴板并识别内容">剪贴板</button>
 <span class="foot-link" id="guideBtn" ti
 # I18N 表本身（中文的家）
 已开启定时执行：每
+<div class="tl-wc-cell">平均耗时<b>\$\{wc\.cur\.avgMs \? f
+<div class="brief-cell">平均耗时<b>\$\{b\.avgMs\}ms</b></div>
+读取中…
+检查中…
+定时任务失败
+ps-title">定时任务
+定时任务', hint
+清空搜索历史
+'#/logs', '审计日志', '每次执行
+
