@@ -85,7 +85,6 @@ suggestions\.push\(`<button class="link" d
 <div class="e-hint">\$\{esc\(es \? es\.hint :
 el\.list\.innerHTML = \(sortMode === 'recen
 const dep = p\.requiresOk \? '' : `<span c
-const riskTip = `动作数 \$\{items\.length\}：只读 
 <span class="g-meta">\$\{esc\(p\.id\)\} · <spa
 <span class="g-meta">\$\{items\.length\} 个命中
 \? `\$\{filtered\.length\} / \$\{entries\.length
@@ -244,17 +243,13 @@ el\.modeLabel\.textContent = '时间线';
 <button class="ghost" id="wCancel">取消</b
 \? \(lastBad \? `（最近失败：\$\{classifyError\(last
 : `（命中停止串「\$\{w\.matchStr\}」）`;
-w\.stopReason = `监控已自动停：\$\{stop === 'stop-
 \.map\(\(sm\) => String\(sm\.err \?\? '未知错误'\)\.sl
-new Notification\('zerokit 监控告警', \{
 body: `⚠ \$\{w\.title\} 连续失败 \$\{failStreakNow
-new Notification\('zerokit 监控', \{
 body: `⇄ \$\{w\.title\} 结果有变化（第 \$\{w\.changes\}
 <span class="badge">⏱ 监控中</span>
 <span>每 \$\{esc\(intervalLabel\(w\.interval\)\)
 <circle class="ring-fg" cx="18" cy="18" 
 <button class="ghost mini" id="watchStop
-el\.count\.textContent = '监控已停止';
 el\.modeLabel\.textContent = '性能';
 <div class="pane-head"><h2>性能</h2>
 <button class="ghost mini" data-perf-ref
@@ -1339,5 +1334,4 @@ aria-label="读剪贴板并识别内容">剪贴板</button>
 <span class="foot-link" id="helpBtn" tit
 <span class="foot-link" id="guideBtn" ti
 # I18N 表本身（中文的家）
-监控已开启：每
 已开启定时执行：每

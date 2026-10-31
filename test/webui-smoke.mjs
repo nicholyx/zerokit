@@ -231,7 +231,7 @@ async function get(p, raw = false) {
     appJs.text.includes('risk-explain') && appJs.text.includes('是什么意思'),
     '风险说明条缺失');
   check('帮助：分组头悬停提示（动作数与风险构成）',
-    appJs.text.includes('riskTally') && appJs.text.includes('只读 ${riskTally.read || 0}'),
+    appJs.text.includes('riskTally') && appJs.text.includes("t('riskTip')"),
     '分组头 title 缺失');
 
   // 第二十八轮：国际化——静态断言
