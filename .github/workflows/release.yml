@@ -106,8 +106,10 @@ jobs:
           ref: ${{ github.ref }}
           persist-credentials: false
 
-      - name: 安装内核生产依赖（打进安装包的 node_modules）
-        run: npm ci --omit=dev --ignore-scripts
+      - name: 安装内核生产依赖与 tauri CLI
+        run: |
+          npm ci --omit=dev --ignore-scripts
+          npm install --no-save @tauri-apps/cli@2
 
       - name: 安装 Rust 工具链
         uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
@@ -128,5 +130,5 @@ jobs:
           releaseName: 'zerokit ${{ github.ref_name }}'
           releaseDraft: false
           prerelease: false
-          tauriScript: npx tauri
+          tauriScript: npx --no-install tauri
           args: ${{ matrix.args }}
