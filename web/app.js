@@ -399,7 +399,7 @@ function openThemePop() {
       : typeof n === 'object' ? Object.keys(n).length
       : 1;
     const badge = pop.querySelector(`[data-scope-count="${sc}"]`);
-    if (badge) badge.textContent = cnt > 0 ? `（${cnt}）` : '（空）';
+    if (badge) badge.textContent = cnt > 0 ? `（${cnt}）` : `（${t('emptyParen')}）`;
   }
   pop.querySelectorAll('[data-scope-wipe]').forEach((b) => {
     b.addEventListener('click', () => {
@@ -960,8 +960,8 @@ function renderListTools(base, q) {
   // 上限 8 条由 pushSearch 维护
   const hist = searchHistory.length
     ? `<div class="hist-chips${q.trim() ? ' while-typing' : ''}"><span class="hist-label">${t('recentSearchLabel')}</span>${searchHistory
-      .map((x) => `<span class="chip-wrap"><button class="chip quiet" data-hist="${esc(x)}">${esc(x)}</button><button class="chip-x" data-hist-x="${esc(x)}" title="删掉这条记录" aria-label="删掉这条搜索记录">✕</button></span>`).join('')}
-      <button class="chip quiet" id="clearHist">清空</button></div>`
+      .map((x) => `<span class="chip-wrap"><button class="chip quiet" data-hist="${esc(x)}">${esc(x)}</button><button class="chip-x" data-hist-x="${esc(x)}" title="${t('histDelTip')}" aria-label="${t('histDelTip')}">✕</button></span>`).join('')}
+      <button class="chip quiet" id="clearHist">${t('clearAll')}</button></div>`
     : '';
   el.listTools.innerHTML = `<div class="chips">${chips}</div>${hist}`;
   el.listTools.querySelectorAll('[data-filter]').forEach((b) => {
@@ -3013,15 +3013,16 @@ function showHelpPanel() {
   el.listView.classList.add('hidden');
   el.detailView.classList.add('hidden');
   if (location.hash !== '#/help') history.replaceState(null, '', '#/help');
-  const sections = HELP_TOPICS.map((t) => `
-    <div class="help-topic" id="help-${esc(t.id)}">
-      <h3>${esc(t.title)}</h3>
-      <p>${esc(t.body)}</p>
-      <button class="ghost mini" data-try="${esc(t.tryHash)}" title="跳到这个功能试一下">去试用 →</button>
+  const tr = makeT(lang);
+  const sections = HELP_TOPICS.map((tp) => `
+    <div class="help-topic" id="help-${esc(tp.id)}">
+      <h3>${esc(tr(tp.titleKey))}</h3>
+      <p>${esc(tr(tp.bodyKey))}</p>
+      <button class="ghost mini" data-try="${esc(tp.tryHash)}" title="${esc(tr('helpTryTip'))}">${esc(tr('helpTry'))} →</button>
     </div>`).join('');
   el.allowView.innerHTML = `
-    <h2 class="ps-title">使用指南</h2>
-    <div class="help">启动器能做什么、怎么上手，都在这一页。每段都有「去试用」直达。</div>
+    <h2 class="ps-title">${esc(tr('helpTitle'))}</h2>
+    <div class="help">${esc(tr('helpIntro'))}</div>
     ${sections}`;
   showPanelAnimated(el.allowView);
   el.allowView.querySelectorAll('[data-try]').forEach((b) => {
@@ -8434,7 +8435,7 @@ function showShortcuts() {
       <div class="keys">
         ${SHORTCUTS.map((s) => `<div class="key-row">
           <span class="key-combo">${s.keys.map((k) => `<kbd>${esc(k)}</kbd>`).join('')}</span>
-          <span class="key-what">${esc(s.what)}</span>
+          <span class="key-what">${esc(t(s.whatKey))}</span>
         </div>`).join('')}
       </div>
       ${(() => {
@@ -8648,6 +8649,12 @@ function applyHash() {
     return;
   }
 
+  // 第二十二轮⑤：#/help 帮助页（applyHash 侧补——此前只有 hashchange 侧有，刷新深链落回列表）
+  if ((location.hash || '') === '#/help') {
+    showHelpPanel();
+    return;
+  }
+
   // #/doctor  环境自检
   if ((location.hash || '') === '#/doctor') {
     showDoctor();
@@ -8786,6 +8793,12 @@ window.addEventListener('hashchange', () => {
     return;
   }
   if (!detail) applyHash();
+  // 第一百零六轮修：从面板（#/help 等）把 hash 改回列表态（#/ 或 #/?..）时，
+  // applyHash 对列表态是 fallthrough（无分支）——面板不会自己收掉，列表被盖住。
+  if (!/#\/[\w.-]+/.test(location.hash || '#/')) {
+    hidePanels();
+    renderList();
+  }
 });
 
 
@@ -8894,6 +8907,11 @@ function applyLang(rerender = false) {
       if (n.tagName === 'INPUT' && n.type !== 'button') n.placeholder = v; else n.textContent = v;
     }
   });
+  // 第一百零六轮④：title 属性同机制（悬停提示也要跟语言）
+  document.querySelectorAll('[data-i18n-title]').forEach((n) => {
+    const v = I18N_TEXT(n.getAttribute('data-i18n-title'));
+    if (v != null) n.title = v;
+  });
   const run = $('runBtn');
   if (run) run.textContent = t('run');
   refreshModeLabel();
@@ -8927,7 +8945,8 @@ function I18N_TEXT(k) {
     footerSaved: t('modeSaved'), footerTimers: t('modeTimers'), footerBrief: t('modeBrief'),
     footerLogs: t('modeLogs'), footerDoctor: t('modeDoctor'), footerShortcuts: t('shortcuts'),
     footerGuide: t('modeHelp'),
-    drawerLang: t('drawerLang'), drawerLogs: t('drawerLogs'), drawerDoctor: t('drawerDoctor'),
+    drawerLang: t('drawerLang'), drawerLogs: t('drawerLogs'),
+    drawerImportSnapTitle: t('drawerImportSnapTitle'), footerSavedTitle: t('footerSavedTitle'), shortcutsTitle: t('shortcutsTitle'), drawerDoctor: t('drawerDoctor'),
     drawerSaved: t('drawerSaved'), drawerImportSnap: t('drawerImportSnap'), drawerTimers: t('drawerTimers'),
     drawerBrief: t('drawerBrief'), drawerHelp: t('drawerHelp'),
   };
@@ -9104,7 +9123,7 @@ function showKeyHelp() {
   panel.className = 'tag-panel overlay-panel';
   panel.id = 'keyHelp';
   panel.innerHTML = `<div class="ps-head"><h3>键盘流</h3><button class="ghost mini" id="khClose">✕</button></div>
-    <table class="kh-table"><tbody>${rows.map((r) => `<tr><td><kbd>${esc(r.key)}</kbd></td><td>${esc(r.what)}</td></tr>`).join('')}</tbody></table>`;
+    <table class="kh-table"><tbody>${rows.map((r) => `<tr><td><kbd>${esc(r.key)}</kbd></td><td>${esc(t(r.whatKey))}</td></tr>`).join('')}</tbody></table>`;
   document.body.appendChild(panel);
   const close = () => panel.remove();
   panel.querySelector('#khClose').addEventListener('click', close);
