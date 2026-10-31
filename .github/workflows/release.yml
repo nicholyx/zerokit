@@ -112,6 +112,7 @@ jobs:
       - name: 安装 Rust 工具链
         uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
+          toolchain: stable
           targets: ${{ matrix.label == 'mac-x64' && 'x86_64-apple-darwin' || matrix.label == 'mac-arm64' && 'aarch64-apple-darwin' || '' }}
 
       # 刻意不用 Rust 缓存（zizmor: cache-poisoning）：这是发布工作流，
