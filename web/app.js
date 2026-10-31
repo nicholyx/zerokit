@@ -387,10 +387,10 @@ function openThemePop() {
   });
   // ---- 第八十八轮⑤：分类清除（UI 侧 localStorage 类；文件侧走 CLI data wipe） ----
   const uiScopes = {
-    runs: { key: 'zerokit.runs', label: '执行历史' },
-    searches: { key: 'zerokit.searches', label: '搜索历史' },
-    saved: { key: 'zerokit.saved-results', label: '结果快照' },
-    timers: { key: 'zerokit.timers', label: '定时任务' },
+    runs: { key: 'zerokit.runs', label: t('scopeRuns') },
+    searches: { key: 'zerokit.searches', label: t('scopeSearches') },
+    saved: { key: 'zerokit.saved-results', label: t('scopeSaved') },
+    timers: { key: 'zerokit.timers', label: t('scopeTimers') },
   };
   for (const [sc, meta] of Object.entries(uiScopes)) {
     const n = readJson(meta.key);
@@ -448,7 +448,7 @@ function openThemePop() {
   pop.querySelector('[data-profile-del]')?.addEventListener('click', () => {
     const r = deleteProfile(loadProfiles(), curProfileName(), curProfileName());
     if (r.error) { el.count.textContent = r.error; return; }
-    if (!confirm(`删除配置档「${curProfileName()}」？该档的外观/收藏/参数记忆将一并删除。`)) return;
+    if (!confirm(t('profileDelConfirm')(curProfileName()))) return;
     saveProfiles(r.profiles);
     localStorage.setItem('zerokit.profile.cur', r.current);
     switchProfile(r.current);
@@ -2992,7 +2992,7 @@ function showWatchPanel() {
     a.download = `watch-${w.pluginId}-${w.actionId}-${Date.now()}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
-    el.count.textContent = `已导出 ${w.samples.length} 次采样 CSV`;
+    el.count.textContent = t('watchCsvDone')(w.samples.length);
   }));
   // 第三十七轮⑥：采样 → Markdown 趋势表（数值列环比用 cellDiff 文本）
   el.allowView.querySelectorAll('[data-wmd]').forEach((b) => b.addEventListener('click', () => {
@@ -3299,7 +3299,7 @@ function showTimers() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = name; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
-    ev.currentTarget.textContent = '已导出';
+    ev.currentTarget.textContent = t('exportedDone');
     setTimeout(() => { ev.currentTarget.textContent = '导出 JSON'; }, 1200);
   });
   const fileBtn = el.allowView.querySelector('#timersFile');
@@ -3645,7 +3645,7 @@ function exportBackup() {
   a.download = backupFilename();
   a.click();
   URL.revokeObjectURL(url);
-  el.count.textContent = `已导出 ${backup.meta.keyCount} 个键（${backup.meta.bytes} 字符）→ ${backupFilename()}`;
+  el.count.textContent = t('backupExported')(backup.meta.keyCount, backup.meta.bytes, backupFilename());
 }
 
 /** 导入三步：选文件 → parseBackup 校验 → 分组预览+勾选 → mergeBackup 合并写回并重载 */
@@ -5616,29 +5616,29 @@ function logRowHtml(e, i) {
 }
 
 async function renderLogs() {
-  const chips = [['', '全部'], ['allow', '允许'], ['deny', '被拒'], ['error', '失败']]
+  const chips = [['', t('logAll')], ['allow', t('logAllow')], ['deny', t('logDeny')], ['error', t('logError')]]
     .map(([id, label]) => `<button class="chip${logsDecision === id ? ' on' : ''}" data-log-decision="${id}">${label}</button>`).join('');
   // 第九十二轮⑦：快捷过滤 chip——今天 + 插件（语义与 CLI --today/--plugin 一致）
-  const quickChips = `<button class="chip${logsToday ? ' on' : ''}" data-log-today="1">今天</button>`;
+  const quickChips = `<button class="chip${logsToday ? ' on' : ''}" data-log-today="1">${t('logToday')}</button>`;
   const plugChips = (logsPlugins ?? []).slice(0, 6).map((p) =>
     `<button class="chip${logsPlugin === p ? ' on' : ''}" data-log-plugin="${esc(p)}">${esc(p)}</button>`).join('');
   // 第十九轮⑤：自动清理提示——启动时算过一遍超期条目数（trimAuditLog），页头亮出来
   const trimInfo = window.__zkAuditTrim
-    ? `<div class="trim-note">🧹 已自动清理 ${window.__zkAuditTrim} 条超期日志（>90 天；config.toml 可关）</div>` : '';
+    ? `<div class="trim-note">🧹 ${t('logTrimmed')(window.__zkAuditTrim)}</div>` : '';
   el.logsView.innerHTML = `
     <div class="ps-head">
-      <h2>审计日志 <span class="aid">${logsFile === 'audit' ? 'audit.log' : 'denied.log'}</span></h2>
-      <span class="sub">每次执行、被拒、失败都在这里；只在本机 ~/.zerokit/logs/</span>
+      <h2>${t('logsTitle')} <span class="aid">${logsFile === 'audit' ? 'audit.log' : 'denied.log'}</span></h2>
+      <span class="sub">${t('logsSub')}</span>
     </div>
     ${trimInfo}
     <div class="log-tools">
       <div class="chips">${chips}${quickChips}${plugChips ? `<span class="chip-sep">·</span>${plugChips}` : ''}</div>
-      <input id="logQuery" class="log-query" placeholder="过滤：插件 / 动作 / 错误（支持 ms>100 这类数字比较）" value="${esc(logsQuery)}">
-      <button class="ghost" id="logCsv" title="把当前过滤结果导出 CSV（时间/插件/动作/决策/耗时/退出码）">⬇ CSV</button>
-      <button class="ghost" id="logReload">刷新</button>
-      <button class="ghost" id="logFile">${logsFile === 'audit' ? '看被拒记录' : '看全部记录'}</button>
+      <input id="logQuery" class="log-query" placeholder="${t('logFilterPh')}" value="${esc(logsQuery)}">
+      <button class="ghost" id="logCsv" title="${t('logCsvTitle')}">⬇ CSV</button>
+      <button class="ghost" id="logReload">${t('logReload')}</button>
+      <button class="ghost" id="logFile">${logsFile === 'audit' ? t('logShowDenied') : t('logShowAll')}</button>
     </div>
-    <div id="logList" class="log-list"><div class="ps-empty" role="status">读取中…</div></div>`;
+    <div id="logList" class="log-list"><div class="ps-empty" role="status">${t('loading')}</div></div>`;
 
   el.logsView.querySelectorAll('[data-log-decision]').forEach((b) => {
     b.addEventListener('click', () => { logsDecision = b.dataset.logDecision; logsPage = 1; renderLogs(); });
@@ -5766,10 +5766,10 @@ function exitDoctor() {
 }
 
 async function renderDoctor() {
-  el.doctorView.innerHTML = `<div class="ps-head"><h2>环境自检</h2>
-      <span class="sub">解释器、插件依赖、必填配置——有问题的直接给修复命令</span></div>
-    <div class="log-tools"><button class="ghost" id="docReload">重新检查</button></div>
-    <div id="docBody"><div class="ps-empty" role="status">检查中…</div></div>`;
+  el.doctorView.innerHTML = `<div class="ps-head"><h2>${t('doctorTitle')}</h2>
+      <span class="sub">${t('doctorSub')}</span></div>
+    <div class="log-tools"><button class="ghost" id="docReload">${t('doctorReload')}</button></div>
+    <div id="docBody"><div class="ps-empty" role="status">${t('doctorChecking')}</div></div>`;
   $('docReload').addEventListener('click', renderDoctor);
 
   let r;
@@ -7359,26 +7359,26 @@ function showStats() {
   const avgMs = total ? Math.round(runs.reduce((s, r) => s + (r.ms ?? 0), 0) / total) : 0;
 
   view.innerHTML = `
-    <div class="ps-head"><h2>使用统计</h2>
-      <span class="sub">全部来自本机执行记录，不上传任何数据</span></div>
+    <div class="ps-head"><h2>${t('statsTitle')}</h2>
+      <span class="sub">${t('statsPrivacy')}</span></div>
     <div class="doc-grid">
-      <div class="doc-line stat-big"><b>${total}</b><span>总执行次数</span></div>
-      <div class="doc-line stat-big"><b>${rate}%</b><span>成功率（${okCount} 成功）</span></div>
-      <div class="doc-line stat-big"><b>${avgMs} ms</b><span>平均耗时</span></div>
+      <div class="doc-line stat-big"><b>${total}</b><span>${t('statsTotal')}</span></div>
+      <div class="doc-line stat-big"><b>${rate}%</b><span>${t('statsOkRate')(okCount, total)}</span></div>
+      <div class="doc-line stat-big"><b>${avgMs} ms</b><span>${t('statsAvgMs')}</span></div>
     </div>
     ${top.length ? `
-    <h3 class="plug-home-h">最活跃的插件</h3>
+    <h3 class="plug-home-h">${t('statsTop')}</h3>
     <div class="usage-block">
       ${top.map(([pid, n]) => `
-        <div class="usage-row stat-top-plugin" data-plugin="${esc(pid)}" title="点开插件主页">
+        <div class="usage-row stat-top-plugin" data-plugin="${esc(pid)}" title="${t('statsOpenPlugHome')}">
           <span class="usage-name">${esc(pid)}</span>
           <span class="usage-bar"><i style="width:${Math.round((n / maxTop) * 100)}%"></i></span>
-          <span class="usage-n">${n} 次</span></div>`).join('')}
+          <span class="usage-n">${t('statsRunsN')(n)}</span></div>`).join('')}
     </div>` : ''}
-    <h3 class="plug-home-h">近 7 天</h3>
+    <h3 class="plug-home-h">${t('statsLast7')}</h3>
     <div class="usage-block trend">
       ${trend.map((d) => `
-        <div class="trend-col" title="${esc(d.day)}：${d.total} 次（失败 ${d.fail}）">
+        <div class="trend-col" title="${esc(d.day)}：${t('statsRunsFail')(d.total, d.fail)}">
           <div class="trend-bars">
             <i class="trend-ok" style="height:${Math.round(((d.total - d.fail) / maxDay) * 60)}px"></i>
             ${d.fail ? `<i class="trend-fail" style="height:${Math.max(3, Math.round((d.fail / maxDay) * 60))}px"></i>` : ''}
@@ -7387,38 +7387,38 @@ function showStats() {
         </div>`).join('')}
     </div>
     ${total ? `
-    <h3 class="plug-home-h">一天中的什么时候在用</h3>
+    <h3 class="plug-home-h">${t('statsWhen')}</h3>
     <div class="usage-block heat-row">
       ${(() => {
         const heat = hourlyHeat(runs);
         const maxH = Math.max(1, ...heat.map((x) => x.total));
         return heat.map((b) => `
-          <div class="heat-cell" title="${b.hour}:00 — ${b.total} 次">
+          <div class="heat-cell" title="${b.hour}:00 — ${t('statsRunsN')(b.total)}">
             <i style="height:${Math.max(2, Math.round((b.total / maxH) * 32))}px"></i>
             <span>${b.hour}</span>
           </div>`).join('');
       })()}
     </div>` : ''}
     ${total ? `
-    <h3 class="plug-home-h">一次跑多久（毫秒分布）</h3>
+    <h3 class="plug-home-h">${t('statsMsDist')}</h3>
     <div class="usage-block">
       ${(() => {
         const hist = msHistogram(runs.map((r) => r.ms ?? 0));
         const maxC = Math.max(1, ...hist.map((x) => x.count));
         const totalR = runs.length || 1;
         return hist.map((b) => `
-          <div class="heat-cell" title="${b.label}ms：${b.count} 次（占 ${Math.round((b.count / totalR) * 100)}%）">
+          <div class="heat-cell" title="${b.label}ms：${t('statsRunsShare')(b.count, Math.round((b.count / totalR) * 100))}">
             <i style="height:${Math.max(2, Math.round((b.count / maxC) * 32))}px"></i>
             <span>${b.label}</span>
             <em class="heat-count">${b.count || ''}</em>
           </div>`).join('');
       })()}
     </div>` : ''}
-    ${total === 0 ? '<div class="ps-empty" role="status">还没有执行记录——随便跑一个只读动作，这里就会开始长出来。</div>' : ''}
-    <h3 class="plug-home-h">偏好备份</h3>
+    ${total === 0 ? `<div class="ps-empty" role="status">${t('statsEmpty')}——${t('statsEmptyHint')}。</div>` : ''}
+    <h3 class="plug-home-h">${t('statsBackupTitle')}</h3>
     <div class="cmd-box prefs-box">
-      <div class="help">收藏、备注、别名、标签、快捷键、主题——全部只存在这台机器的浏览器里。
-        换电脑或清浏览器数据前，先导出一份 JSON；导入时只认 zerokit. 开头的键。</div>
+      <div class="help">${t('statsBackupWhat')}——${t('statsAllLocal')}。
+        ${t('statsBackupHow')('.')}</div>
       <div class="actions">
         <button class="ghost" id="prefsExport">导出偏好</button>
         <button class="ghost" id="prefsImport">导入偏好</button>
@@ -8927,6 +8927,9 @@ function I18N_TEXT(k) {
     footerSaved: t('modeSaved'), footerTimers: t('modeTimers'), footerBrief: t('modeBrief'),
     footerLogs: t('modeLogs'), footerDoctor: t('modeDoctor'), footerShortcuts: t('shortcuts'),
     footerGuide: t('modeHelp'),
+    drawerLang: t('drawerLang'), drawerLogs: t('drawerLogs'), drawerDoctor: t('drawerDoctor'),
+    drawerSaved: t('drawerSaved'), drawerImportSnap: t('drawerImportSnap'), drawerTimers: t('drawerTimers'),
+    drawerBrief: t('drawerBrief'), drawerHelp: t('drawerHelp'),
   };
   return map[k] ?? null;
 }
