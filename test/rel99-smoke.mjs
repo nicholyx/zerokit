@@ -14,6 +14,9 @@ const home = mkdtempSync(path.join(tmpdir(), 'r99-'));
 const tree = path.join(home, 'tree');
 mkdirSync(tree, { recursive: true });
 cpSync(PKG_ROOT, tree, { recursive: true, filter: (src) => !src.includes('node_modules') && !src.includes('.git') });
+// fixture 用自造的干净 CHANGELOG（真实仓库的 [Unreleased] 在 release 分支上已被归档清空，
+// 且历史上已有 1.4.0 段——干跑同版本会误报「重复段」。造一个只有旧版本的干净输入。）
+writeFileSync(path.join(tree, 'CHANGELOG.md'), '## [Unreleased]\n\n### Added\n\n- 测试条目一\n- 测试条目二\n\n## [0.0.1] - 2020-01-01\n\n### Added\n\n- 旧条目\n');
 // release-prep 的正则假定真实 JSON 格式（冒号后空格）——规范化版本行，避免 echo 紧凑格式干扰
 {
   const fs2 = { read: (f) => readFileSync(path.join(tree, f), 'utf8'), write: (f, s2) => writeFileSync(path.join(tree, f), s2) };
