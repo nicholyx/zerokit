@@ -9,14 +9,13 @@ on:
   push:
     tags: ['v*']
 
-# 创建 Release / 上传安装包要写仓库内容，这是本工作流需要的写权限（最小权限原则）
-permissions:
-  contents: write
-
 jobs:
   release:
     name: 生成发布说明并发布
     runs-on: ubuntu-latest
+    permissions:
+      # 创建/编辑 Release 只需要 contents: write，下沉到 job 级（zizmor: excessive-permissions）
+      contents: write
     steps:
       - name: Checkout Repos
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -83,6 +82,9 @@ jobs:
   desktop-installer:
     name: 桌面安装包 · ${{ matrix.label }}
     needs: release
+    permissions:
+      # 向 Release 上传安装包资产
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -112,11 +114,8 @@ jobs:
         with:
           targets: ${{ matrix.label == 'mac-x64' && 'x86_64-apple-darwin' || matrix.label == 'mac-arm64' && 'aarch64-apple-darwin' || '' }}
 
-      - name: Rust 缓存
-        uses: swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # master
-        with:
-          workspaces: apps/desktop/src-tauri
-          key: ${{ matrix.label }}
+      # 刻意不用 Rust 缓存（zizmor: cache-poisoning）：这是发布工作流，
+      # 产物会分发给最终用户，宁可每次全量编译也不用可被其它工作流污染的缓存。
 
       - name: 构建安装包并上传
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0
