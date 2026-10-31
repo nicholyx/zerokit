@@ -547,6 +547,8 @@ export const I18N = {
     psBrief: '今日简报',
     psWatch: '监控面板',
     sugDropTitle: '丢一个词试试：',
+    rsFailBadge: '✗ 失败', rsActionFail: '动作失败',
+    bsOk: '成功', bsFail: '失败', bsSkip: '未跑',
 helpTry: '去试用', helpTitle: '使用指南', helpIntro: '启动器能做什么、怎么上手，都在这一页。每段都有「去试用」直达。', helpTryTip: '跳到这个功能试一下',
 helpSearchTitle: '搜索', helpSearchBody: '支持中文关键词、拼音全拼、拼音首字母。打「dl」出「代理」、「xtxx」出「系统信息」。空格分词是多词 AND（每个词都要命中）。数字可直接选第 N 项。',
     helpRunTitle: '执行与结果', helpRunBody: '只读动作点「执行」直接跑；会改动/高风险动作要确认。结果可复制、下载、重跑，表格结果支持排序/筛选/列显隐/单位换算，还能跨两次执行做合并视图与逐格 diff。',
@@ -832,6 +834,8 @@ helpSearchTitle: '搜索', helpSearchBody: '支持中文关键词、拼音全拼
     psBrief: 'Today',
     psWatch: 'Watch Panel',
     sugDropTitle: 'Drop a word and try again:',
+    rsFailBadge: '✗ failed', rsActionFail: 'Action failed',
+    bsOk: 'ok', bsFail: 'failed', bsSkip: 'skipped',
 helpTry: 'Try it', helpTitle: 'User Guide', helpIntro: 'What the launcher can do and how to get started — all on this page. Every section has a direct try-it link.', helpTryTip: 'Jump to this feature and try it',
 helpSearchTitle: 'Search', helpSearchBody: 'Chinese keywords, full pinyin, or pinyin initials all work. Type "dl" for the proxy, "xtxx" for system info. Space-separated terms are AND-ed. Numbers pick the Nth result directly.',
     helpRunTitle: 'Run & results', helpRunBody: 'Read-only actions run instantly; mutating/high-risk ones ask first. Results can be copied, downloaded, re-run; tables support sorting, filtering, column visibility, unit conversion, merged views and cell-level diffs.',
@@ -2713,36 +2717,54 @@ export function viewportMode(width) {
  * kind 与 src/core/suggest.ts 的 DIAG_RULES 对齐（UI 侧补两类：非零退出/解析失败）。
  */
 export const ERROR_BOOK = [
-  { kind: 'timeout', test: /timed? ?out|ETIMEDOUT|超时/i,
-    title: '执行超时',
-    steps: ['等一会再试；插件清单里可用 timeout 声明更长超时', '网络类动作先确认代理环境变量'] },
-  { kind: 'not-found', test: /ENOENT|no such file|找不到文件/i,
-    title: '文件或目录不存在',
-    steps: ['检查路径拼写；插件的工作目录是它自己的安装目录', '辅助文件路径写进清单 cwd 或参数'] },
-  { kind: 'permission', test: /permission denied|EACCES|EPERM/i,
-    title: '没有权限',
-    steps: ['chmod +x <脚本>（Windows：icacls）', '确认 ~/.zerokit 归当前用户'] },
-  { kind: 'not-executable', test: /ENOEXEC|not executable|不是可执行文件/i,
-    title: '文件在但跑不起来',
-    steps: ['脚本缺执行位：chmod +x', '跨平台插件用 {python} 或自带 .bat'] },
-  { kind: 'command-not-found', test: /command not found|is not recognized as|无法将.+识别为/i,
-    title: '依赖的程序没装',
-    steps: ['zkit doctor 列出各插件缺的运行时', '装完重跑 doctor 确认'] },
-  { kind: 'exit-nonzero', test: /exit(ed)? (with )?(code )?[1-9]\d*/i,
-    title: '程序报错退出（非零退出码）',
-    steps: ['看下方原始输出定位报错行', '同参数重试一次排除偶发'] },
-  { kind: 'parse-fail', test: /JSON|parse|解析/i,
-    title: '输出解析失败',
-    steps: ['插件声明了 output="json" 但实际没吐合法 JSON', '用 zkit run --out json 看原始 stdout'] },
+  { kind: 'timeout', test: /timed? ?out|ETIMEDOUT|超时/i },
+  { kind: 'not-found', test: /ENOENT|no such file|找不到文件/i },
+  { kind: 'permission', test: /permission denied|EACCES|EPERM/i },
+  { kind: 'not-executable', test: /ENOEXEC|not executable|不是可执行文件/i },
+  { kind: 'command-not-found', test: /command not found|is not recognized as|无法将.+识别为/i },
+  { kind: 'exit-nonzero', test: /exit(ed)? (with )?(code )?[1-9]\d*/i },
+  { kind: 'parse-fail', test: /JSON|parse|解析/i },
 ];
 
+/**
+ * 错误知识库文案表（第一百零八轮双语化）：kind → {title, steps}。
+ * T 传 I18N[pickLang(lang)] 形态的语言表；缺键回退 zh。
+ */
+export const ERROR_BOOK_TEXT = {
+  zh: {
+    timeout: { title: '执行超时', steps: ['等一会再试；插件清单里可用 timeout 声明更长超时', '网络类动作先确认代理环境变量'] },
+    'not-found': { title: '文件或目录不存在', steps: ['检查路径拼写；插件的工作目录是它自己的安装目录', '辅助文件路径写进清单 cwd 或参数'] },
+    permission: { title: '没有权限', steps: ['chmod +x <脚本>（Windows：icacls）', '确认 ~/.zerokit 归当前用户'] },
+    'not-executable': { title: '文件在但跑不起来', steps: ['脚本缺执行位：chmod +x', '跨平台插件用 {python} 或自带 .bat'] },
+    'command-not-found': { title: '依赖的程序没装', steps: ['zkit doctor 列出各插件缺的运行时', '装完重跑 doctor 确认'] },
+    'exit-nonzero': { title: '程序报错退出（非零退出码）', steps: ['看下方原始输出定位报错行', '同参数重试一次排除偶发'] },
+    'parse-fail': { title: '输出解析失败', steps: ['插件声明了 output="json" 但实际没吐合法 JSON', '用 zkit run --out json 看原始 stdout'] },
+    unknown: { title: '执行失败', steps: ['看下方原始输出；重试一次排除偶发', '反复失败用 zkit doctor 自检'] },
+  },
+  en: {
+    timeout: { title: 'Timed out', steps: ['Wait a moment and retry; declare a longer timeout in the plugin manifest if needed', 'For network actions check proxy environment variables first'] },
+    'not-found': { title: 'File or directory not found', steps: ['Check the path spelling; a plugin working directory is its own install directory', 'Put auxiliary file paths in the manifest cwd or params'] },
+    permission: { title: 'Permission denied', steps: ['chmod +x <script> (Windows: icacls)', 'Make sure ~/.zerokit belongs to the current user'] },
+    'not-executable': { title: 'File exists but cannot run', steps: ['Script missing the execute bit: chmod +x', 'Cross-platform plugins should use {python} or ship a .bat'] },
+    'command-not-found': { title: 'Required program not installed', steps: ['zkit doctor lists missing runtimes per plugin', 'Re-run doctor after installing to confirm'] },
+    'exit-nonzero': { title: 'Program exited with an error (non-zero exit code)', steps: ['Look at the raw output below to locate the failing line', 'Retry once with the same params to rule out a flake'] },
+    'parse-fail': { title: 'Output parse failure', steps: ['The plugin declared output="json" but did not produce valid JSON', 'Use zkit run --out json to see raw stdout'] },
+    unknown: { title: 'Run failed', steps: ['Check the raw output below; retry once to rule out a flake', 'Repeated failures: run zkit doctor'] },
+  },
+};
+
 /** ①把错误文本（stderr/error message）映射到知识库条目；认不出给通用兜底。 */
-export function classifyError(text) {
+export function classifyError(text, T) {
   const raw = String(text ?? '');
+  const table = (T && ERROR_BOOK_TEXT.en === T) ? ERROR_BOOK_TEXT.en : ERROR_BOOK_TEXT.zh;
   for (const e of ERROR_BOOK) {
-    if (e.test.test(raw)) return { kind: e.kind, title: e.title, steps: e.steps };
+    if (e.test.test(raw)) {
+      const x = table[e.kind] ?? ERROR_BOOK_TEXT.zh[e.kind];
+      return { kind: e.kind, title: x.title, steps: x.steps };
+    }
   }
-  return { kind: 'unknown', title: '执行失败', steps: ['看下方原始输出；重试一次排除偶发', '反复失败用 zkit doctor 自检'] };
+  const u = table.unknown ?? ERROR_BOOK_TEXT.zh.unknown;
+  return { kind: 'unknown', title: u.title, steps: u.steps };
 }
 
 /**
@@ -2752,24 +2774,24 @@ export function classifyError(text) {
 export function errorReport(kind, title, command, errorText, env = {}) {
   const fence = '```';
   const lines = [];
-  lines.push(`# zerokit 执行失败：${title}（${kind}）`);
-  if (command) lines.push(`命令：${command}`);
-  if (env && Object.keys(env).length) lines.push(`环境：${env.platform ?? '?'} · Node ${env.node ?? '?'} · zerokit ${env.version ?? '?'}`);
+  lines.push(`# zerokit failed: ${title} (${kind})`);
+  if (command) lines.push(`Command: ${command}`);
+  if (env && Object.keys(env).length) lines.push(`Env: ${env.platform ?? '?'} · Node ${env.node ?? '?'} · zerokit ${env.version ?? '?'}`);
   lines.push('');
   lines.push(fence);
-  lines.push(String(errorText ?? '').trim() || '（无 stderr）');
+  lines.push(String(errorText ?? '').trim() || '(no stderr)');
   lines.push(fence);
   return lines.join('\n');
 }
 
 /** ⑤批量执行汇总行：成功 N / 失败 M / 未跑 K（K=planned-已跑数；缺省无未跑段）。 */
-export function batchSummary(done, planned) {
+export function batchSummary(done, planned, T) {
   const ok = done.filter((d) => d.ok).length;
   const bad = done.length - ok;
   const skipped = planned !== undefined ? Math.max(0, planned - done.length) : 0;
-  const parts = [`✓ 成功 ${ok}`];
-  if (bad) parts.push(`✗ 失败 ${bad}`);
-  if (skipped) parts.push(`∅ 未跑 ${skipped}`);
+  const parts = [`✓ ${(T && T.bsOk) || '成功'} ${ok}`];
+  if (bad) parts.push(`✗ ${(T && T.bsFail) || '失败'} ${bad}`);
+  if (skipped) parts.push(`∅ ${(T && T.bsSkip) || '未跑'} ${skipped}`);
   return parts.join(' · ');
 }
 

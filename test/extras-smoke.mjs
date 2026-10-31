@@ -1316,5 +1316,22 @@ for (const [name] of failed) console.error('FAIL  ' + name);
   check('97③ barShare 比例', m97.barShare(25, 100) === 0.25 && m97.barShare(-5, 100) === 0 && m97.barShare(10, 0) === 0 && m97.barShare(200, 100) === 1);
 }
 
+// 第一百零八轮：classifyError 语言表参数（ERROR_BOOK_TEXT zh/en）
+{
+  const { classifyError, ERROR_BOOK_TEXT } = await import('../web/extras.js');
+  const zh = classifyError('ETIMEDOUT after 5000ms');
+  check('108① zh 默认中文标题', zh.title === '执行超时' && zh.kind === 'timeout');
+  const en = classifyError('ETIMEDOUT after 5000ms', ERROR_BOOK_TEXT.en);
+  check('108① en 表英文标题', en.title === 'Timed out' && en.kind === 'timeout');
+  const en2 = classifyError('node:command not found', ERROR_BOOK_TEXT.en);
+  check('108① en command-not-found', en2.title === 'Required program not installed');
+  const zhUn = classifyError('weird stuff', ERROR_BOOK_TEXT.zh);
+  const enUn = classifyError('weird stuff', ERROR_BOOK_TEXT.en);
+  check('108② unknown 兜底双语', zhUn.title === '执行失败' && enUn.title === 'Run failed');
+  check('108① 表结构对齐', Object.keys(ERROR_BOOK_TEXT.zh).length === Object.keys(ERROR_BOOK_TEXT.en).length);
+}
+
 console.log(`通过 ${results.length - failed.length} / ${results.length}`);
-if (failed.length) process.exitCode = 1;
+if (failed.length) 
+
+process.exitCode = 1;
