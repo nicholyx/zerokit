@@ -3,37 +3,19 @@
 # 界面可见文案应逐步迁入 web/extras.js 的 I18N 表并从本表移除。
 # 新增代码不允许追加本表（CI 会挂），迁入 I18N 后删对应行。
 if \(!list\.includes\('默认'\) && \(curProfileN
-\$\{\[\['system', '跟随系统'\], \['dark', '深色'\], \[
-\$\{\[\['s', '小'\], \['m', '中'\], \['l', '大'\]\]\.m
 <button data-ai-toggle="\$\{aiAssistOn\(\) \?
-<div class="tp-head">数据</div>
-<button data-backup="export" title="把所有个
-<button data-backup="import" title="从备份 
-<button data-backup="purge" title="清除本地结
-<div class="tp-head">分类清除（第八十八轮）</div>
-<button data-scope-wipe="runs" title="只清
 <button data-scope-wipe="searches" title
-<button data-scope-wipe="saved" title="只
 <button data-scope-wipe="timers" title="
-<div class="tp-head">配置档 <small class="t
 <button data-profile="\$\{esc\(n\)\}" class="
-<button data-profile-new="1" title="以当前状
-<button data-profile-rename="1" title="重
-<button data-profile-del="1" title="删除当前
-runs: \{ key: 'zerokit\.runs', label: '执行历
 searches: \{ key: 'zerokit\.searches', lab
 saved: \{ key: 'zerokit\.saved-results', l
 timers: \{ key: 'zerokit\.timers', label: 
 if \(badge\) badge\.textContent = cnt > 0 \?
 if \(cnt === 0\) \{ el\.count\.textContent = 
-if \(!confirm\(`清除「\$\{meta\.label\}」（共 \$\{cnt\}
 return localStorage\.getItem\('zerokit\.pro
 const data = await res\.json\(\)\.catch\(\(\) =
 if \(explain && mi >= 0\) explain\.push\(\[pa
 \[nick \? scoreOne\(nick, token\) \* 1\.2 : 0,
-\[scoreOne\(a\.id, token\), 1\.0, '动作ID'\],
-\[scoreOne\(a\.title, token\), 1\.05, '动作名'\],
-\[scoreOne\(entry\.hayId, token\), 0\.9, '插件\.
 \[scorePinyin\(entry\.py\.title, token\), 1\.0
 \[atags\.length \? scoreOne\(atags\.join\(' '\)
 const dep = p\.requiresOk \? '' : `<span c
@@ -58,7 +40,6 @@ el\.count\.textContent = `别名「\$\{el\.q\.value\.
 <button class="ghost mini" id="batchDedu
 <button class="ghost mini" id="batchExpo
 <button class="ghost mini" id="batchImpo
-<label class="mini">并发 <input type="numb
 <button class="ghost mini" id="batchClea
 <button class="ghost mini" data-bup="\$\{i
 <button class="ghost mini" data-bdown="\$
@@ -76,8 +57,6 @@ suggestions\.push\('<div class="empty-sug-
 suggestions\.push\(`<button class="link" d
 suggestions\.push\(`<button class="link" d
 <div class="empty-title">\$\{es \? esc\(es\.t
-\? '可能是词太具体，也可能这个能力还没装进来。'
-: '装上第一个插件，启动器就会开始认识你的电脑。'\}</div>
 <div class="e-hint">\$\{esc\(es \? es\.hint :
 el\.list\.innerHTML = \(sortMode === 'recen
 const dep = p\.requiresOk \? '' : `<span c
@@ -95,7 +74,6 @@ el\.count\.textContent = `\$\{filtered\.lengt
 <div class="chain-dry"><button class="gh
 \? '动作参数 \+ 内置占位符'
 : `上一步结果 \{\$\{esc\(steps\[i - 1\]\.as\)\}\} / \{pr
-\? `<div class="mem-note why-note"><b>为什么
 const aliasNote = `<div class="mem-note 
 <input id="aliasInput" placeholder="起个短名
 <div class="mem-note nick-note">昵称：
@@ -104,16 +82,12 @@ const aliasNote = `<div class="mem-note
 <input id="atagInput" placeholder="逗号分隔，
 \? `<div class="mem-note last-run-note">上
 <button class="ghost mini" id="peekLast"
-\$\{lastRun\.values \? '<button class="ghost
 \? `<div class="mem-note co-note">做完这个你常接
 `<button class="ghost mini" data-co="\$\{e
 return `<span class="trend-chip" data-tr
 \? `<div class="warn-chip" role="status">
-const cmpBtn = runHist\.length >= 2 \? '<b
-return `<span class="spark" title="近 \$\{r
 `<button type="button" class="ghost mini
 <button type="button" class="ghost mini 
-\$\{steps\.length \? `<span class="badge">组合
 <div class="desc">\$\{esc\(action\.descripti
 \$\{action\.risk !== 'read' \? `<div class="
 <button class="ghost" id="hkBtn" title="
@@ -123,7 +97,6 @@ return `<span class="spark" title="近 \$\{r
 <button class="ghost" id="backBtn">返回</b
 <button class="ghost" id="moreBtn" title
 <button class="ghost more-item" id="invo
-\$\{plugin\.settings\?\.length \? '<button cla
 <button class="ghost more-item" id="qrBt
 <button class="ghost more-item" id="shar
 <button class="ghost more-item" id="time
@@ -214,20 +187,12 @@ el\.modeLabel\.textContent = '时间线';
 <div class="run-row"><span class="run-wh
 </div>` : '<div class="ps-empty" role="s
 : '<span class="help">收藏动作后会钉在这里（最多 5 个）
-<h3>监控「\$\{esc\(action\.title\)\}」</h3>
-<div class="help">界面开着才会跑。每次采样记录结果，变化会高亮
-<label class="field">重跑间隔
-<label class="field">连续失败几次自动停（0 = 不停）
-<label class="field">结果包含此串自动停（留空 = 不启用）
 <input id="wMatch" type="text" placehold
-<button class="primary" id="wStart">开始监控
-<button class="ghost" id="wCancel">取消</b
 \? \(lastBad \? `（最近失败：\$\{classifyError\(last
 : `（命中停止串「\$\{w\.matchStr\}」）`;
 \.map\(\(sm\) => String\(sm\.err \?\? '未知错误'\)\.sl
 body: `⚠ \$\{w\.title\} 连续失败 \$\{failStreakNow
 body: `⇄ \$\{w\.title\} 结果有变化（第 \$\{w\.changes\}
-<span>每 \$\{esc\(intervalLabel\(w\.interval\)\)
 <circle class="ring-fg" cx="18" cy="18" 
 <button class="ghost mini" id="watchStop
 el\.modeLabel\.textContent = '性能';
@@ -251,7 +216,6 @@ el\.modeLabel\.textContent = '性能';
 \$\{rows \|\| '<div class="ps-empty" role="s
 \$\{stopLog\.length \? `<div class="watch-st
 if \(!w \|\| !w\.samples\.length\) \{ el\.count\.
-el\.count\.textContent = `已导出 \$\{w\.samples\.
 if \(!w \|\| !w\.samples\.length\) \{ el\.count\.
 navigator\.clipboard\.writeText\(md\)\.then\(\(
 <button class="ghost mini" data-try="\$\{e
@@ -259,14 +223,6 @@ navigator\.clipboard\.writeText\(md\)\.then\(\(
 <div class="help">启动器能做什么、怎么上手，都在这一页。每段都
 t\.history = trimHistory\(\[\.\.\.\(t\.history \?
 if \(!e\) throw new Error\('动作不在了（插件被卸载？）'\)
-<h3>定时执行：\$\{esc\(action\.title\)\}</h3>
-<div class="help">界面开着才会跑。只读动作才允许定时（有副作用
-<div class="field"><label>间隔（秒）</label><
-<div class="field"><label>快捷档位</label><d
-<div class="field"><label>执行窗口（可空，如 09:0
-<div class="field"><label>用当前表单值作为定时参数</
-<button class="ghost" id="tCancel">取消</b
-<button class="primary" id="tSave">\$\{ex 
 if \(!Number\.isFinite\(sec\) \|\| sec < 10\) \{
 if \(!validWindow\(win\)\) \{ el\.count\.textCo
 <div class="cs-head">📋 剪贴板识别：\$\{kind\.toU
@@ -288,7 +244,6 @@ catch \{ el\.count\.textContent = '写剪贴板被浏览器
 <div class="help">界面开着才会跑（关掉页面即停）。在只读动作详
 <button class="ghost mini" id="timersExp
 <button class="ghost mini" id="timersImp
-ev\.currentTarget\.textContent = '已导出';
 setTimeout\(\(\) => \{ ev\.currentTarget\.text
 if \(!r\.ok\) \{ el\.count\.textContent = `导入失
 el\.count\.textContent = `导入完成：新增 \$\{added\}
@@ -330,7 +285,6 @@ const why = WHY\[action\.risk\] \?\? '未知风险等级。
 if \(btn\) btn\.textContent = maskState\(\) \?
 if \(!confirm\('清除当前结果与本地运行历史（含参数记忆）？\\n\\n不
 el\.count\.textContent = '已清除：当前结果 \+ 运行历史数
-el\.count\.textContent = `已导出 \$\{backup\.met
 el\.count\.textContent = `导入失败：\$\{parsed\.er
 const g = classifyKey\(k\) \?\? '\(跳过\)';
 <h3>导入备份</h3>
@@ -340,7 +294,6 @@ const g = classifyKey\(k\) \?\? '\(跳过\)';
 <div class="confirm-explain">合并策略：同名数据以备
 <button class="ghost" id="impCancel">取消<
 <button class="primary" id="impOk">导入</b
-el\.count\.textContent = `导入完成：应用 \$\{applie
 box\.innerHTML = '<div class="run-empty">
 box\.innerHTML = `<div class="run-head">最
 <button class="ghost" data-rerun>重跑</but
@@ -479,7 +432,6 @@ const v = window\.prompt\('给这次结果写个注释（≤60 字
 pathRow\.textContent = `已导出：\$\{a\.download\}
 if \(btn\) \{ const t = btn\.textContent; bt
 el\.count\.textContent = '分享文本已复制（Markdown
-\} catch \{ el\.count\.textContent = '复制被浏览器
 const html = toHtmlTable\(res\.data, detai
 ev\.currentTarget\.textContent = '已复制';
 \} catch \{ ev\.currentTarget\.textContent =
@@ -516,7 +468,6 @@ return `<tr><td>\$\{esc\(k\)\}</td><td\$\{num\}
 const title = clip \? ` title="\$\{esc\(val\.
 \? `<td class="gsum-label">└ \$\{esc\(String
 : \(visCols\[ci\] === g\.agg\.col \? `<td clas
-return `<td class="num tstat" title="合计 
 return `<td class="tstat" title="非空 \$\{st
 return `<span class="unit-conv" data-uco
 const fRow = `<tr class="tfilter" aria-l
@@ -527,19 +478,11 @@ const qbar = `<div class="rquery"><input
 \$\{bigTable \? `<div class="tcount"><span 
 \.then\(\(\) => \{ el\.count\.textContent = `已复
 \.catch\(\(\) => \{ el\.count\.textContent = '复
-mk\('复制单元格', \(\) => copy\(td\.textContent\.tr
-if \(colName\) mk\(`只看「\$\{colName\} = \$\{td\.te
-mk\('复制整行', \(\) => copy\(rowText, '整行'\)\);
-if \(tblEl\) mk\('复制整表（TSV）', \(\) => \{
-copy\(rows\.join\('\\n'\), '整表'\);
-el\.count\.textContent = `已复制列「\$\{col\}」\$\{ev
 pop\.innerHTML = `<div class="pop-title">
 <div class="actions"><button class="ghos
 <pre>\$\{esc\(mtext\(e\['command'\] \?\? '（无动作）'
 <div class="log-extra">决策 \$\{esc\(String\(e
-const chips = \[\['', '全部'\], \['allow', '允许
 const quickChips = `<button class="chip\$
-\? `<div class="trim-note">🧹 已自动清理 \$\{win
 <input id="logQuery" class="log-query" p
 <button class="ghost" id="logCsv" title=
 <button class="ghost" id="logFile">\$\{log
@@ -663,7 +606,6 @@ el\.plugView\.innerHTML = `<div class="ps-
 <div class="actions"><button class="prim
 <h2>插件（\$\{plugins\.length\}）</h2>
 <span class="sub">来源与版本 · 安装 · 更新</span>
-<label>排序：</label>
 <option value="name"\$\{readJson\('zerokit\.
 <option value="actions"\$\{readJson\('zerok
 <option value="installed"\$\{readJson\('zer
@@ -820,10 +762,6 @@ btn\.textContent = '发送';
 <section class="dash-card"><h3>🕘 最近执行</
 <section class="dash-card"><h3>⏱ 监控</h3>
 <section class="dash-card"><h3>📊 今日</h3
-<span class="sub">全部来自本机执行记录，不上传任何数据</sp
-<h3 class="plug-home-h">近 7 天</h3>
-<h3 class="plug-home-h">一天中的什么时候在用</h3>
-<h3 class="plug-home-h">一次跑多久（毫秒分布）</h3>
 \$\{total === 0 \? '<div class="ps-empty" r
 <button class="ghost" id="prefsExport">导
 <button class="ghost" id="prefsImport">导
@@ -865,7 +803,6 @@ if \(a\.key !== c\.key\) \{ el\.count\.textCont
 box\.innerHTML = `<div class="ps-head"><h
 <button class="ghost mini" id="cmpClose"
 <table class="cmp-table"><caption class=
-el\.count\.textContent = rows\.length \? `对比
 view\.innerHTML = `<div class="ps-empty" 
 <div class="ps-head"><h2>MCP 授权</h2>
 <span class="sub">有副作用的动作默认拒绝 AI 调用；在这里显
@@ -1156,8 +1093,6 @@ title: '先装几个插件',
 hint: '插件是能力包。点右上「集市」浏览，或终端跑 plugin bund
 title: '一个插件都没有',
 hint: '终端跑 plugin bundled 装自带示例，或去集市找。装完
-title: `没有匹配「\$\{q \|\| ''\}」的动作`,
-hint: '试试短一点的关键词（拼音也行）；或者 Esc 清空搜索回到全部。'
 \{ kind: 'timeout', test: /timed\? \?out\|ET
 title: '执行超时',
 steps: \['等一会再试；插件清单里可用 timeout 声明更长超时', 
@@ -1297,4 +1232,4 @@ ps-title">定时任务
 '#/logs', '审计日志', '每次执行
 label: '复制 JSON'
 what: '收藏 / 取消收藏当前项'
-
+const prefix = T\?\.whyLabelPrefix \?\? '命中：';
