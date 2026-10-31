@@ -106,8 +106,14 @@ jobs:
           ref: ${{ github.ref }}
           persist-credentials: false
 
-      - name: 安装内核生产依赖（打进安装包的 node_modules）
-        run: npm ci --omit=dev --ignore-scripts
+      - name: 安装依赖（tauri CLI 由 lockfile 锁定，构建用完即剪掉）
+        run: |
+          npm ci --ignore-scripts
+          npx --no-install tauri --version
+        # 注意：先全量装（含 devDeps 的 tauri CLI）再构建；构建后 resources 打包的是
+        # 全量 node_modules——@tauri-apps/cli 只在构建期需要，进包无害但多 ~40MB。
+        # 体积优化留给后续：构建完 npm prune --omit=dev 再重打 resources 不可行
+        # （tauri-action 一步完成），故接受全量入包。
 
       - name: 安装 Rust 工具链
         uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
@@ -128,5 +134,5 @@ jobs:
           releaseName: 'zerokit ${{ github.ref_name }}'
           releaseDraft: false
           prerelease: false
-          tauriScript: npx tauri
+          tauriScript: npx --no-install tauri
           args: ${{ matrix.args }}
