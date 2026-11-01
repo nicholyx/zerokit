@@ -2110,6 +2110,16 @@ function cmdLogs(args: string[]): number {
   const tailIdx = args.indexOf('--tail');
   const tail = tailIdx >= 0 ? Number(args[tailIdx + 1] ?? 30) : 30;
   const follow = args.includes('--follow') || args.includes('-f');
+  // 第一百一十三轮⑧：--plugin 过滤（与 UI 插件 chip 同语义）；--since 7d/30d/today 对齐时间范围档
+  const plugIdx = args.indexOf('--plugin');
+  const plugFilter = plugIdx >= 0 ? String(args[plugIdx + 1] ?? '') : '';
+  const sinceIdx = args.indexOf('--since');
+  const sinceArg = sinceIdx >= 0 ? String(args[sinceIdx + 1] ?? '') : '';
+  const sinceFloor = (() => {
+    if (sinceArg === 'today') { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); }
+    if (sinceArg === '7d' || sinceArg === '30d') return Date.now() - (sinceArg === '7d' ? 7 : 30) * 86400e3;
+    return -Infinity;
+  })();
   const file = path.join(LOG_DIR, args[0] === 'denied' ? 'denied.log' : 'audit.log');
   if (!fs.existsSync(file)) {
     process.stdout.write(c.dim(`还没有日志：${file}\n`));
@@ -2129,7 +2139,18 @@ function cmdLogs(args: string[]): number {
     }
   };
   const lines = fs.readFileSync(file, 'utf8').trimEnd().split('\n');
-  for (const line of lines.slice(-tail)) printLine(line);
+  // 过滤在 JSON 层做（printLine 解析同一条记录两遍不值当——这里只判能不能过）
+  const passes = (r: { plugin?: string; ts?: string }) => {
+    if (plugFilter && r.plugin !== plugFilter) return false;
+    if (sinceFloor > -Infinity && Date.parse(r.ts ?? '') < sinceFloor) return false;
+    return true;
+  };
+  const filtered: string[] = [];
+  for (const line of lines) {
+    try { if (passes(JSON.parse(line))) filtered.push(line); } catch { filtered.push(line); }
+  }
+  if (plugFilter || sinceArg) process.stdout.write(c.dim(`过滤：${plugFilter ? `插件=${plugFilter} ` : ''}${sinceArg ? `时间=${sinceArg}` : ''}，命中 ${filtered.length} / ${lines.length} 条\n`));
+  for (const line of filtered.slice(-tail)) printLine(line);
   // ③--follow：从文件尾开始盯新增行（轮询 500ms——audit 是低频流，inotify 不值得引）
   if (follow) {
     process.stdout.write(c.dim('-- 跟读中（Ctrl+C 退出）--\n'));
