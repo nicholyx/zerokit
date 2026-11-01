@@ -16,10 +16,41 @@
     display: inline-block; margin-right: 8px; animation: pulse 1s infinite alternate;
   }
   @keyframes pulse { from { opacity: .35 } to { opacity: 1 } }
+  .hint { margin-top: 10px; font-size: 12px; color: #565e6b; }
+  /* 无 Node / 版本过旧引导页（第一百一十轮）：内核起不来时壳把这段显示出来。
+     内容由 Rust 侧 window.eval 注入（show_guide），这里只是版式。 */
+  .guide { max-width: 560px; text-align: left; line-height: 1.8; display: none; }
+  .guide h2 { color: #f0685f; font-size: 15px; margin: 0 0 10px; }
+  .guide .cmd {
+    display: block; background: #161a20; border: 1px solid #2a3038;
+    border-radius: 6px; padding: 8px 12px; margin: 6px 0;
+    font: 12.5px ui-monospace, Menlo, Consolas, monospace; color: #9ecbff;
+    white-space: pre-wrap; word-break: break-all; cursor: pointer;
+  }
+  .guide .cmd:hover { border-color: #5aa9ff; }
+  .guide .tip { color: #565e6b; font-size: 12px; margin-top: 12px; }
+  .guide a { color: #5aa9ff; }
 </style>
 </head>
 <body>
   <!-- 这个文件只在「内核还没起来」时短暂显示。窗口真正加载的是本地内核的地址。 -->
-  <div class="box"><span class="dot"></span>正在启动 zerokit 内核…</div>
+  <div class="box" id="boot">
+    <span class="dot"></span>正在启动 zerokit 内核…
+    <div class="hint" id="ver"></div>
+  </div>
+  <!-- 无 Node / 版本过旧时的引导（默认隐藏，Rust 侧注入） -->
+  <div class="guide" id="guide"></div>
+  <script>
+    // 版本号由 Rust 侧注入 window.__ZK_VERSION（有则显示）；点命令即复制
+    if (window.__ZK_VERSION) document.getElementById('ver').textContent = 'v' + window.__ZK_VERSION;
+    document.addEventListener('click', function (e) {
+      var t = e.target.closest('.cmd');
+      if (t && navigator.clipboard) {
+        navigator.clipboard.writeText(t.textContent.trim());
+        t.style.outline = '1px solid #5aa9ff';
+        setTimeout(function () { t.style.outline = ''; }, 500);
+      }
+    });
+  </script>
 </body>
 </html>

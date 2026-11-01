@@ -112,11 +112,38 @@ fn find_core_script() -> Option<PathBuf> {
     None
 }
 
+/// 拿 node 的版本号（"v22.18.0" → (22, 18)）。跑不起来返回 None——
+/// 版本探测失败不拦启动（宁可试一把让内核自己报，也不误杀好环境）。
+fn node_major_minor(node: &Path) -> Option<(u32, u32)> {
+    let out = Command::new(node).arg("--version").output().ok()?;
+    let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    let nums: Vec<u32> = text
+        .trim_start_matches('v')
+        .split('.')
+        .filter_map(|p| p.parse().ok())
+        .collect();
+    match (nums.first(), nums.get(1)) {
+        (Some(ma), Some(mi)) => Some((*ma, *mi)),
+        _ => None,
+    }
+}
+
+/// 内核要求的最低 Node 版本（与 package.json engines 一致）。
+const NODE_MIN: (u32, u32) = (22, 18);
+
 /// 拉起内核，返回它监听的地址、子进程句柄、以及 stdin（必须一直握着）
 fn start_core() -> Result<(String, Child, Option<std::process::ChildStdin>), String> {
-    let node = find_node().ok_or_else(|| {
-        "找不到 node。请先安装 Node.js：winget install OpenJS.NodeJS.LTS".to_string()
-    })?;
+    let node = find_node().ok_or_else(|| "guide:missing-node".to_string())?;
+    if let Some(ver) = node_major_minor(&node) {
+        if ver < NODE_MIN {
+            return Err(format!(
+                "guide:node-too-old\n{}\n{}.{}",
+                node.display(),
+                ver.0,
+                ver.1
+            ));
+        }
+    }
     let script = find_core_script().ok_or_else(|| {
         format!(
             "找不到内核入口 src/server.ts。\n找过的位置从这些目录往上六级。\n\
@@ -305,6 +332,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn node_version_floor() {
+        // 第一百一十轮⑤：最低版本门槛本身是约定，先把它钉死
+        assert!(NODE_MIN >= (22, 18));
+    }
+
+    #[test]
+    fn node_major_minor_parses() {
+        // 版本字符串解析走真实 node（CI 三平台都有 node）
+        let node = find_node();
+        if let Some(n) = node {
+            let v = node_major_minor(&n);
+            assert!(v.is_some(), "真实 node 应解析出版本");
+            let (ma, _) = v.unwrap();
+            assert!(ma >= 16, "CI/开发机的 node 不该这么老");
+        }
+        // find_node 找不到的极端环境（极少数容器）跳过——不该挂测试
+    }
+
+    #[test]
     fn hotkey_parse_roundtrip() {
         assert!(parse_hotkey("Alt+Space").is_some());
         assert!(parse_hotkey("Ctrl+Alt+Z").is_some());
@@ -365,6 +411,64 @@ fn save_window_geom(app: &AppHandle) {
 }
 
 /// 在窗口里显示一条错误（内核没起来时用）
+/// 引导页（第一百一十轮④⑤）：无 Node / 版本过旧时，不只报一行错，
+/// 给平台对应的安装命令（可点击复制）与官网链接。错误串约定：
+///   guide:missing-node            —— 一个 node 都没找到
+///   guide:node-too-old\n路径\n主.次 —— 找到了但低于 22.18
+fn show_guide(app: &AppHandle, detail: &str) {
+    let Some(window) = app.get_webview_window("main") else { return };
+    let (title, body) = if detail.starts_with("guide:missing-node") {
+        (
+            "这台电脑还没有 Node.js",
+            format!(
+                "zerokit 的内核需要 Node.js ≥ {}.{}。装好之后重新打开 zerokit 即可。\n\n{}",
+                NODE_MIN.0,
+                NODE_MIN.1,
+                if cfg!(target_os = "windows") {
+                    "在 PowerShell 里运行（点一下就复制）："
+                } else if cfg!(target_os = "macos") {
+                    "在终端里运行（点一下就复制）："
+                } else {
+                    "在终端里运行（点一下就复制）："
+                }
+            ),
+        )
+    } else {
+        // guide:node-too-old\n<路径>\n<主.次>
+        let parts: Vec<&str> = detail.split('\n').collect();
+        let found = parts.get(1).unwrap_or(&"");
+        let ver = parts.get(2).unwrap_or(&"?");
+        (
+            "Node.js 版本太旧",
+            format!(
+                "找到了 {}（版本 {}），但内核需要 ≥ {}.{}。\n\n升级命令（点一下就复制）：",
+                found, ver, NODE_MIN.0, NODE_MIN.1
+            ),
+        )
+    };
+    let cmd = if cfg!(target_os = "windows") {
+        "winget install OpenJS.NodeJS.LTS"
+    } else if cfg!(target_os = "macos") {
+        "brew install node@22"
+    } else {
+        "# Debian/Ubuntu：sudo apt install nodejs npm（发行版太旧时用 nvm 装 22）"
+    };
+    let esc = |t: &str| serde_json::to_string(t).unwrap_or_default();
+    let js = format!(
+        "var b=document.getElementById('boot');if(b)b.style.display='none';\
+         var g=document.getElementById('guide');\
+         g.innerHTML='<h2>{}</h2><p>{}</p><span class=\"cmd\">{}</span>\
+         <div class=\"tip\">或到 <a href=\"https://nodejs.org\" target=\"_blank\">nodejs.org</a> 下载 LTS 安装包。装好后重新打开 zerokit。</div>';\
+         g.style.display='block';",
+        esc(&title).trim_matches('"'),
+        esc(&body).trim_matches('"').replace("\\n", "<br>"),
+        cmd,
+    );
+    let _ = window.eval(js);
+    let _ = window.show();
+    let _ = window.set_focus();
+}
+
 fn show_error(app: &AppHandle, message: &str) {
     let Some(window) = app.get_webview_window("main") else {
         return;
@@ -394,8 +498,15 @@ fn main() {
             // 先把窗口建出来指向「启动中」占位页，再拉内核——
             // 这样即使内核起得慢，用户也能立刻看到反应，而不是点了没动静。
             // ④窗口记忆：上次关时的位置尺寸优先于默认居中。
+            // ③启动屏版本号：占位页显示当前壳版本（tauri context 的 package version）
+            let shell_version = app.package_info().version.to_string();
             let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                 .title("zerokit")
+                // ③版本注入要在页面任何脚本跑之前——initialization_script 正是干这个的
+                .initialization_script(&format!(
+                    "window.__ZK_VERSION = {};",
+                    serde_json::to_string(&shell_version).unwrap_or_default()
+                ))
                 .min_inner_size(520.0, 360.0)
                 .decorations(false)
                 .always_on_top(true)
@@ -614,6 +725,7 @@ fn main() {
                         let _ = window.eval(init);
                     }
                 }
+                Err(message) if message.starts_with("guide:") => show_guide(&handle, &message),
                 Err(message) => show_error(&handle, &message),
             });
 
