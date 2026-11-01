@@ -90,7 +90,7 @@ try {
   const plugDir = path.join(HOME, 'plugins', 'quick');
   check('④ .zk-integrity.json 落盘', fs.existsSync(path.join(plugDir, '.zk-integrity.json')));
   const v1 = run(['plugin', 'verify', 'quick']);
-  check('⑤ 装后 verify 通过', v1.status === 0 && v1.stdout.includes('完整'), v1.stdout);
+  check('⑤ 装后 verify 通过', v1.status === 0 && v1.stdout.includes('完整'), `status=${v1.status} OUT:${v1.stdout} ERR:${v1.stderr}`);
 
   // 篡改装好的文件 → verify 暴露
   fs.appendFileSync(path.join(plugDir, 'quick.mjs'), '\n# tampered\n');

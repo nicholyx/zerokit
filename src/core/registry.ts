@@ -5,6 +5,8 @@ import { type Plugin, loadPlugin } from './manifest.ts';
 import { BUNDLED_PLUGINS_DIR, PLUGINS_DIR, ensureDirs } from './paths.ts';
 import { adaptUtoolsPlugin, looksLikeUtoolsPlugin } from './utools.ts';
 import { type PluginSource, readSource, writeSource } from './sources.ts';
+import { writeInstallSnapshot } from './snapshot117.ts';
+const ZK_VERSION = (() => { try { return JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')).version as string; } catch { return '0.0.0'; } })();
 
 /** 插件发现与装卸。插件就是 PLUGINS_DIR 下的一个个目录，目录即插件、复制即迁移。 */
 
@@ -93,6 +95,9 @@ export function installBundled(): string[] {
         type: 'bundled', installedAt: new Date().toISOString(), installedVersion: version,
       });
     } catch { /* 来源写不进去不影响安装 */ }
+    // 第一百一十七轮②：批量 bundled 同样装即快照（目录名可能≠插件 id，按清单 id 写）
+    const pid = loadPlugin(src).plugin?.id ?? name;
+    writeInstallSnapshot(PLUGINS_DIR, pid, ZK_VERSION);
     installed.push(name);
   }
   return installed;
@@ -167,6 +172,9 @@ export function addFromDir(source: string, opts: InstallOptions = {}): AddResult
     }
   }
   if (hadOld) fs.rmSync(backup, { recursive: true, force: true });
+  // 第一百一十七轮①③：装即快照——所有走 addFromDir 的安装/升级（market/git/dir/replace）
+  // 统一落 .zk-integrity.json，verify/doctor 的供应链复验从此对这些插件也生效。
+  writeInstallSnapshot(PLUGINS_DIR, result.plugin.id, ZK_VERSION);
   const note = utools ? '（按 uTools 插件兼容层运行）' : '';
   const verb = hadOld ? '已更新' : '已安装';
   return { ok: true, id: result.plugin.id, dir: dst, message: `${verb} ${result.plugin.name}${note}`, warnings: result.warnings };
@@ -203,6 +211,8 @@ export function installBundledPlugin(id: string): { ok: boolean; message: string
   try {
     writeSource(dst, { type: 'bundled', installedAt: new Date().toISOString(), installedVersion: version });
   } catch { /* 来源写不进去不影响安装 */ }
+  // 第一百一十七轮②：bundled 路径同写快照（示例插件此前永远 noSnapshot）
+  writeInstallSnapshot(PLUGINS_DIR, id, ZK_VERSION);
   return { ok: true, message: `已安装自带的 ${id}` };
 }
 
