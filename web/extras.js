@@ -411,7 +411,34 @@ export function dailyReport(runs, { pluginNames = new Map() } = {}) {
  * 动作/插件的名称与描述来自清单（作者的语言），不翻译——机器翻译插件描述
  * 只会制造困惑。框架文案 ~40 条先到位，其余后续轮次增量迁移。
  */
+// 第一百一十九轮①②④：面板一句话说明 + 上手清单（纯数据层，渲染在 app.js）
+export const PANEL_DESC_KEYS = {
+  logs: 'panelDescLogs', stats: 'panelDescStats', doctor: 'panelDescDoctor',
+  market: 'panelDescMarket', watch: 'panelDescWatch', brief: 'panelDescBrief',
+  perf: 'panelDescPerf', help: 'panelDescHelp',
+};
+export const TOUR_STEPS = [
+  { id: 'first-run', doneKey: 'zerokit.firstrun', labelKey: 'tourFirstRun' },
+  { id: 'fav', doneKey: 'zerokit.tour.fav', labelKey: 'tourFav' },
+  { id: 'theme', doneKey: 'zerokit.tour.theme', labelKey: 'tourTheme' },
+  { id: 'watch', doneKey: 'zerokit.tour.watch', labelKey: 'tourWatch' },
+];
+export function tourProgress(steps, storage) {
+  const done = steps.filter((st) => storage.getItem(st.doneKey) !== null).length;
+  return { done, total: steps.length, complete: done === steps.length };
+}
+export function helpFilter(topics, q) {
+  if (!q || !q.trim()) return topics;
+  const needle = q.trim().toLowerCase();
+  return topics.filter((tp) => JSON.stringify(tp).toLowerCase().includes(needle));
+}
+
 export const I18N = {
+  panelDescLogs: '每次执行与被拒的记录都在这里——筛决策、筛插件、导出 CSV/JSON。',
+  panelDescStats: '使用统计：哪些动作最常跑、成功率与耗时分布，一眼看清主力工具。',
+  panelDescDoctor: '环境与供应链体检：缺依赖、清单问题、完整性复验，条条带解法。',
+  panelDescMarket: '插件集市：浏览、搜索、预览再安装，装完这里就是升级入口。',
+  panelDescBrief: '每日简报：今天跑了什么、成功多少、最快最慢，30 秒回顾。',
   zh: {
   storageUsage: '存储占用',
   storageStat: (size, keys) => `存储占用: ${size}（${keys} 键）`,
@@ -706,8 +733,40 @@ helpSearchTitle: '搜索', helpSearchBody: '支持中文关键词、拼音全拼
     aiOn: '已开启', aiOff: '已关闭',
     aiToggleTitle: '关闭后隐藏所有 AI 相关按钮（给 AI / AI 上下文 / curl / MCP 配置）——本机不留 AI 使用痕迹于界面',
     langHead: '语言 Language',
+  trendUp: (n, d) => `最近 7 天 ${n} 次，比上一周多 ${d} 次 ↑`,
+  trendDown: (n, d) => `最近 7 天 ${n} 次，比上一周少 ${d} 次 ↓`,
+  trendFlat: (n) => `最近 7 天 ${n} 次，与上一周持平`,
+  cheatTitle: '内置插件速查',
+  panelDescLogs: '每次执行与被拒的记录都在这里——筛决策、筛插件、导出 CSV/JSON。',
+  panelDescStats: '使用统计：哪些动作最常跑、成功率与耗时分布，一眼看清主力工具。',
+  panelDescDoctor: '环境与供应链体检：缺依赖、清单问题、完整性复验，条条带解法。',
+  panelDescMarket: '插件集市：浏览、搜索、预览再安装，装完这里就是升级入口。',
+  panelDescWatch: '监控面板：正在盯的动作、采样与变更，跑着的不用守在旁边。',
+  panelDescBrief: '每日简报：今天跑了什么、成功多少、最快最慢，30 秒回顾。',
+  panelDescPerf: '性能面板：渲染次数、耗时与缓存命中，怀疑卡的时候看这里。',
+  panelDescHelp: '帮助中心：三分钟上手、按主题速查、全部内置插件的一句话用途。',
+  tourFirstRun: '跑通第一个动作',
+  tourFav: '收藏一个常用动作',
+  tourTheme: '换一次主题外观',
+  tourWatch: '开一次监控',
+  tourTitle: '三分钟上手',
+  helpSearchPh: '搜主题…'
   },
   en: {
+  panelDescLogs: 'Every run and denial lands here — filter by decision or plugin, export CSV/JSON.',
+  panelDescStats: 'Usage stats: most-run actions, success rate and latency at a glance.',
+  panelDescDoctor: 'Environment & supply-chain checkup: missing deps, manifest issues, integrity — each with a fix.',
+  panelDescMarket: 'Plugin market: browse, search, preview before install; the upgrade entry too.',
+  panelDescWatch: 'Watch panel: actions being monitored, samples and changes — no need to babysit.',
+  panelDescBrief: 'Daily brief: what ran today, success counts, fastest and slowest in 30 seconds.',
+  panelDescPerf: 'Perf panel: render counts, latency and cache hits — check here when it feels slow.',
+  panelDescHelp: 'Help center: three-minute tour, topic lookup, one-liners for every bundled plugin.',
+  tourFirstRun: 'Run your first action',
+  tourFav: 'Favorite an action',
+  tourTheme: 'Switch the theme once',
+  tourWatch: 'Start a watch once',
+  tourTitle: 'Three-minute tour',
+  helpSearchPh: 'Search topics…',
   storageUsage: 'Storage',
   storageStat: (size, keys) => `Storage: ${size} (${keys} keys)`,
   storageTitle: 'Total bytes of zerokit.* keys (read-only; clean up via backup/wipe)',
@@ -773,7 +832,7 @@ helpSearchTitle: '搜索', helpSearchBody: '支持中文关键词、拼音全拼
     sortNoteRecent: 'Sorted by recent use (press m for plugin order)',
     recentHead: 'Recent runs',
     recentSearchLabel: 'Recent searches',
-    filterLabels: { all: 'All', fav: 'Favorites', 'has-params': 'With params', 'no-params': 'No params', read: 'Read', mutate: 'Mutating', destructive: 'High risk' },
+    filterLabels: { all: 'All', fav: 'Favorites', 'has-params': 'With params', 'no-params': 'No params', read: 'Read', mutate: 'Mutating', destructive: 'High risk', },
     sugMarket: (q) => 'Find a plugin for this in the market',
     sugAskAi: (q) => `Ask the AI workbench: "${q}"`,
     sugTryThese: 'Try these (all read-only, safe):',
@@ -999,6 +1058,10 @@ helpSearchTitle: 'Search', helpSearchBody: 'Chinese keywords, full pinyin, or pi
     aiOn: 'On', aiOff: 'Off',
     aiToggleTitle: 'Hide all AI-related buttons when off — no AI traces left in the UI',
     langHead: '语言 Language',
+  trendUp: (n, d) => `Last 7 days: ${n} runs, +${d} vs previous week ↑`,
+  trendDown: (n, d) => `Last 7 days: ${n} runs, -${d} vs previous week ↓`,
+  trendFlat: (n) => `Last 7 days: ${n} runs, flat vs previous week`,
+  cheatTitle: 'Bundled plugins at a glance',
   },
 };
 
