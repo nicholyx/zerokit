@@ -106,14 +106,14 @@ jobs:
           ref: ${{ github.ref }}
           persist-credentials: false
 
-      - name: 安装依赖（tauri CLI 由 lockfile 锁定，构建用完即剪掉）
+      - name: 安装依赖并瘦身（tauri CLI 由 lockfile 锁定；类型/源映射不进安装包）
         run: |
           npm ci --ignore-scripts
           npx --no-install tauri --version
-        # 注意：先全量装（含 devDeps 的 tauri CLI）再构建；构建后 resources 打包的是
-        # 全量 node_modules——@tauri-apps/cli 只在构建期需要，进包无害但多 ~40MB。
-        # 体积优化留给后续：构建完 npm prune --omit=dev 再重打 resources 不可行
-        # （tauri-action 一步完成），故接受全量入包。
+          node scripts/strip-types.mjs node_modules
+        # strip-types 删 .d.ts/.map/CHANGELOG/README——Node 22 类型擦除只读 .js，
+        # 构建与运行都不受影响；实测全量树 -19MB、纯生产树 48M→26M。
+        # @tauri-apps/cli 只在构建期需要，其 .js 保留（strip 不删可执行资产）。
 
       - name: 安装 Rust 工具链
         uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master

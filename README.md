@@ -210,7 +210,7 @@ mcp-allow.json      已授权给 AI 调用的有副作用动作
 - 插件开发闭环（脚手架 / lint 十级体检 / 文档生成 / pack 分发）
 - 发布工具化（release-prep 自检归档）与三平台 CI
 
-测试：`node scripts/test-all.mjs`（46 个文件 1409 项断言，不联网、不花钱）。
+测试：`node scripts/test-all.mjs`（70 个文件 1858 项断言，不联网、不花钱）。
 基准：`node scripts/bench.mjs`。
 
 还没有的：OS 级能力（读活动窗口/模拟键鼠）、插件签名与来源校验——详见账本「待办」。

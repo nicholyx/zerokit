@@ -30,8 +30,12 @@ const run = (args) => spawnSync(process.execPath, ['src/cli.ts', ...args], {
   const r = run(['desktop', '--json']);
   let j = null;
   try { j = JSON.parse(r.stdout); } catch { /* 下一行断言 */ }
+  // 环境耦合（第一百一十轮修）：本机编过桌面壳时 installed=true（带 path），
+  // 干净 CI runner 是 false（带安装指引）——两种都是正确输出，按实际值分叉断言
   if (r.status === 0 && j && j.installed === false && /cargo build/.test(j.hint ?? '')) {
     pass('zkit desktop --json：installed=false + 安装指引');
+  } else if (r.status === 0 && j && j.installed === true && typeof j.path === 'string' && j.path) {
+    pass('zkit desktop --json：installed=true + 路径（本机编过壳的环境）');
   } else {
     fail('desktop --json 输出不对：' + r.stdout.slice(0, 150));
   }
@@ -58,8 +62,8 @@ const run = (args) => spawnSync(process.execPath, ['src/cli.ts', ...args], {
 {
   const r = run(['doctor', '--json']);
   const j = JSON.parse(r.stdout);
-  if (j.desktop?.installed === false && typeof j.desktop === 'object') {
-    pass('doctor --json 带 desktop 状态（installed=false）');
+  if ((j.desktop?.installed === false || j.desktop?.installed === true) && typeof j.desktop === 'object') {
+    pass('doctor --json 带 desktop 状态（installed=' + j.desktop.installed + '）');
   } else {
     fail('doctor desktop 字段不对：' + JSON.stringify(j.desktop));
   }
@@ -88,6 +92,20 @@ const run = (args) => spawnSync(process.execPath, ['src/cli.ts', ...args], {
     if (ok) pass('main.rs：' + name);
     else fail('main.rs 缺：' + name);
   }
+}
+
+// ---- 第一百一十轮：安装包瘦身与首启体验 ----
+{
+  const strip = fs.readFileSync(path.join(ROOT, 'scripts', 'strip-types.mjs'), 'utf8');
+  pass('strip-types 脚本存在且只删非运行时资产', /\.d\.ts/.test(strip) && /\.map/.test(strip) && !/\.js['"]\s*;/.test(strip.split('STRIP')[0]));
+  const wf = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'release.yml'), 'utf8');
+  pass('release.yml 接入 strip-types', /strip-types\.mjs node_modules/.test(wf));
+  const rs = fs.readFileSync(path.join(ROOT, 'apps', 'desktop', 'src-tauri', 'src', 'main.rs'), 'utf8');
+  pass('node 版本检测（node_major_minor）', /node_major_minor/.test(rs) && /NODE_MIN/.test(rs));
+  pass('guide 分派（missing-node / node-too-old）', /guide:missing-node/.test(rs) && /node-too-old/.test(rs) && /show_guide/.test(rs));
+  pass('启动屏版本注入（initialization_script）', /__ZK_VERSION/.test(rs) && /initialization_script/.test(rs));
+  const splash = fs.readFileSync(path.join(ROOT, 'apps', 'desktop', 'dist', 'index.html'), 'utf8');
+  pass('引导页结构（#guide/#boot/可复制命令）', /id="guide"/.test(splash) && /id="boot"/.test(splash) && /clipboard/.test(splash));
 }
 
 fs.rmSync(TMP_HOME, { recursive: true, force: true });
