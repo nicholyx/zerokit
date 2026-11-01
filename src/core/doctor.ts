@@ -239,10 +239,10 @@ function checkPlugin(entry: ReturnType<typeof listPlugins>[number]): DoctorPlugi
 
   const view = resolveSettings(p);
   if (view.error) {
-    problems.push({ level: 'error', text: `设置项读不出来：${view.error}` });
+    problems.push({ level: 'error', text: `设置项读不出来：${view.error}`, hint: 'settings/<id>.json 损坏——删掉该文件后用 zkit config 重设，或从备份导入' });
   }
   for (const bad of view.invalid) {
-    problems.push({ level: 'error', text: `设置项 ${bad.name} 的值不合法：${bad.error}` });
+    problems.push({ level: 'error', text: `设置项 ${bad.name} 的值不合法：${bad.error}`, hint: 'zkit config <插件> <名> <新值> 覆写，或 zkit config --stdin 批量改' });
   }
   if (view.missing.length > 0) {
     problems.push({

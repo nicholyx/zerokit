@@ -41,7 +41,7 @@ console.log('polish95-smoke');
   check('② 首跑引导四步含仪表盘', app.includes("t: '仪表盘'") && app.includes('NetBar'));
   check('② 定位副标题', app.includes('插件是能力包：一份清单，四个面'));
   // 空态文案都含下一步动作（「——」后的引导句）——抽三处关键面板
-  check('① 定时空态带指引', app.includes('没有定时任务。在只读动作详情页点「定时」添加'));
+  check('① 定时空态带指引', app.includes('「⏲ 定时」设间隔'));
   check('① 收藏空态带指引', app.includes('还没有收藏——跑一次动作，在结果工具条里点「收藏」'));
   check('① 监控空态带指引', app.includes('没有在跑的监控'));
   check('① 日志空态带指引', app.includes('还没有日志——执行一次动作就会写进来'));

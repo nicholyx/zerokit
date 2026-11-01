@@ -626,6 +626,30 @@ close();
 // ---------------------------------------------------------------- 收尾
 
 const failed = results.filter(([, ok]) => !ok);
+
+// ---- 第一百一十九轮：主题帮助与示例内容 ----
+{
+  const js119 = fs.readFileSync(path.join(PKG_ROOT, 'web', 'app.js'), 'utf8');
+  const ex119 = fs.readFileSync(path.join(PKG_ROOT, 'web', 'extras.js'), 'utf8');
+  for (const k of ['logs','stats','doctor','market','watch','brief','perf','help']) {
+    check(`一一九①面板描述条 ${k}`, js119.includes(`panelDescBar('${k}'`));
+  }
+  check('一一九②tour 清单渲染', js119.includes('tourProgress(TOUR_STEPS') && js119.includes('data-tour-step'));
+  check('一一九②TOUR_STEPS 四步', (ex119.match(/doneKey:/g) || []).length >= 4);
+  check('一一九③插件速查卡', js119.includes('pluginCheat'));
+  const i18nSeg = ex119.slice(ex119.indexOf('const I18N'));
+  for (const k of ['panelDescLogs','panelDescHelp','tourFirstRun','helpSearchPh']) {
+    check(`一一九④I18N 双语 ${k}`, i18nSeg.split(`${k}: '`).length >= 3);
+  }
+  check('一一九⑤监控空态教一步', js119.includes('点「◎ 监控」选间隔'));
+  check('一一九⑤定时空态教一步', js119.includes('「⏲ 定时」设间隔'));
+  check('一一九⑥help 搜索接线', js119.includes('data-help-search') && js119.includes('helpFilter(HELP_TOPICS'));
+  const dt = fs.readFileSync(path.join(PKG_ROOT, 'src', 'core', 'doctor.ts'), 'utf8');
+  const pushes = dt.split('problems.push(').slice(1);
+  check('一一九⑦doctor hint 覆盖 ≥10/12', pushes.filter((x) => x.includes('hint:')).length >= 10);
+  check('一一九⑧stats 7 天趋势', js119.includes('wcTxt') && js119.includes('weekCompare(runs)'));
+}
+
 console.log(`\n${'='.repeat(60)}\n通过 ${results.length - failed.length} / ${results.length}`);
 if (failed.length > 0) {
   console.log('失败项：');

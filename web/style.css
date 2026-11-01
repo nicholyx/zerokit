@@ -2005,3 +2005,28 @@ td.gsum-label { font-weight: 600; }
   padding: 1px 7px;
   flex: none;
 }
+
+/* 第一百一十九轮：主题帮助与示例内容 */
+.panel-desc {
+  margin: 2px 0 10px;
+  color: var(--fg-dim, #8b93a1);
+  font-size: 12.5px;
+  line-height: 1.55;
+  padding: 6px 10px;
+  border-left: 3px solid var(--accent, #4f8cff);
+  background: color-mix(in srgb, var(--accent, #4f8cff) 6%, transparent);
+  border-radius: 0 6px 6px 0;
+}
+.tour-card, .cheat-card {
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 10px 0;
+}
+.tour-card h3, .cheat-card h3 { margin: 0 0 6px; font-size: 14px; }
+.tour-card ul, .cheat-card ul { list-style: none; padding: 0; margin: 0; }
+.tour-step { padding: 3px 0; font-size: 13px; }
+.tour-step.done { color: var(--fg-dim, #8b93a1); text-decoration: line-through; }
+.cheat-card li { padding: 2px 0; font-size: 12.5px; }
+.cheat-card a { color: var(--accent, #4f8cff); }
+[data-theme="dark"] .panel-desc { background: color-mix(in srgb, var(--accent, #4f8cff) 10%, transparent); }

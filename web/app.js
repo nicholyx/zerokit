@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch } from './extras.js';
+import { humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -2687,6 +2687,12 @@ function showTimeline() {
   });
 }
 
+
+// 第一百一十九轮①：面板一句话说明条（空数据时由调用方换引导文案）
+function panelDescBar(key, extra = '') {
+  return `<div class="panel-desc" data-panel-desc="${key}">${t('panelDesc' + key.charAt(0).toUpperCase() + key.slice(1))}${extra}</div>`;
+}
+
 function showBrief() {
   hidePanels();
   mode = 'brief';
@@ -2698,6 +2704,7 @@ function showBrief() {
   const names = Object.fromEntries(entries.map((e) => [actionKey(e.plugin.id, e.action.id), e.action.title]));
   el.allowView.innerHTML = `
     <h2 class="ps-title">${esc(t('psBrief'))}</h2>
+    ${panelDescBar('brief')}
     <div class="brief-grid">
       <div class="brief-cell">今天执行<b>${b.total}</b>次</div>
       <div class="brief-cell">成功<b class="ok">${b.ok}</b></div>
@@ -3036,6 +3043,7 @@ function showPerfPanel() {
   pane.innerHTML = `
     <div class="pane-head"><h2>性能</h2>
       <button class="ghost mini" data-perf-refresh>重新测量</button></div>
+    ${panelDescBar('perf')}
     <div class="stat-cards">
       <div class="stat-card"><div class="stat-num">${perfStats.listItems}</div><div class="stat-label">列表项数</div></div>
       <div class="stat-card"><div class="stat-num">${perfStats.listMs} ms</div><div class="stat-label">列表渲染耗时</div></div>
@@ -3078,9 +3086,10 @@ function showWatchPanel() {
   }).join('');
   const stopLog = watchStopLog.slice(-5).reverse();
   el.allowView.innerHTML = `
+  ${panelDescBar('watch')}
     <h2 class="ps-title">${esc(t('psWatch'))}</h2>
     <div class="help">界面开着才会跑；翻到别的动作自动停。在只读动作详情页点「监控」添加。</div>
-    ${rows || '<div class="ps-empty" role="status">没有在跑的监控。</div>'}
+    ${rows || '<div class="ps-empty" role="status">没有在跑的监控——打开任一<b>只读</b>动作详情页点「◎ 监控」选间隔即可开始，跑着的不用守在旁边。</div>'}
     ${stopLog.length ? `<div class="watch-stoplog"><div class="sub">最近自动停止：</div>${stopLog.map((l) => `<div class="watch-stoprow bad">${esc(l)}</div>`).join('')}</div>` : ''}`;
   showPanelAnimated(el.allowView);
   el.allowView.querySelectorAll('[data-wstop]').forEach((b) => b.addEventListener('click', () => {
@@ -3128,8 +3137,38 @@ function showHelpPanel() {
   el.allowView.innerHTML = `
     <h2 class="ps-title">${esc(tr('helpTitle'))}</h2>
     <div class="help">${esc(tr('helpIntro'))}</div>
+    <input id="helpSearch" type="search" placeholder="${esc(t('helpSearchPh'))}" data-help-search style="max-width:340px;margin:6px 0;width:100%">
+    ${(function tourCard() {
+      const prog = tourProgress(TOUR_STEPS, localStorage);
+      const rows = TOUR_STEPS.map((st) => {
+        const done = localStorage.getItem(st.doneKey) !== null;
+        return `<li class="tour-step${done ? ' done' : ''}" data-tour-step="${st.id}">${done ? '✅' : '⬜'} ${esc(t(st.labelKey))}</li>`;
+      }).join('');
+      return `<div class="tour-card" id="tourCard" data-tour="${prog.done}/${prog.total}">
+        <h3>${esc(t('tourTitle'))}（${prog.done}/${prog.total}）</h3>
+        <ul>${rows}</ul>
+      </div>`;
+    })()}
+    ${(function pluginCheat() {
+      const rows = entries.map((e) => `<li><a href="#/plugins/${esc(e.plugin.id)}">${esc(e.plugin.name)}</a>——${esc((e.action && e.action.summary) || e.plugin.summary || '')}</li>`).join('');
+      return `<div class="cheat-card" id="pluginCheat"><h3>${esc(t('cheatTitle'))}</h3><ul>${rows.slice(0, 4000)}</ul></div>`;
+    })()}
     ${sections}`;
   showPanelAnimated(el.allowView);
+
+  // 第一百一十九轮⑥：帮助搜索——按关键词过滤主题
+  const hs = el.allowView.querySelector('[data-help-search]');
+  if (hs && !hs.dataset.bound) {
+    hs.dataset.bound = '1';
+    hs.addEventListener('input', () => {
+      const q = hs.value;
+      const needle = q.trim().toLowerCase();
+      el.allowView.querySelectorAll('.help-topic').forEach((node) => {
+        node.classList.toggle('hidden', !!needle && !node.textContent.toLowerCase().includes(needle));
+      });
+    });
+  }
+
   el.allowView.querySelectorAll('[data-try]').forEach((b) => {
     b.addEventListener('click', () => {
       const h = b.dataset.try || '#/';
@@ -3453,7 +3492,7 @@ function renderTimersRows() {
       <button class="ghost mini" data-stop="${esc(k)}">停止</button>
     </div>`;
   }).join('');
-  host.innerHTML = rows || '<div class="ps-empty" role="status">没有定时任务。在只读动作详情页点「定时」添加。</div>';
+  host.innerHTML = rows || '<div class="ps-empty" role="status">没有定时任务——在只读动作详情页点「⏲ 定时」设间隔，到点自动跑并出结果。</div>';
   host.querySelectorAll('[data-trun]').forEach((b) => b.addEventListener('click', () => {
     fireTimer(b.dataset.trun, 'manual').then(() => renderTimersRows());
   }));
@@ -5750,6 +5789,7 @@ async function renderLogs() {
       <h2>${t('logsTitle')} <span class="aid">${logsFile === 'audit' ? 'audit.log' : 'denied.log'}</span></h2>
       <span class="sub">${t('logsSub')}</span>
     </div>
+    ${panelDescBar('logs')}
     ${trimInfo}
     <div class="log-tools">
       <div class="chips">${chips}${quickChips}${plugChips ? `<span class="chip-sep">·</span>${plugChips}` : ''}</div>
@@ -5908,6 +5948,7 @@ function exitDoctor() {
 async function renderDoctor() {
   el.doctorView.innerHTML = `<div class="ps-head"><h2>${t('doctorTitle')}</h2>
       <span class="sub">${t('doctorSub')}</span></div>
+  ${panelDescBar('doctor')}
     <div class="log-tools"><button class="ghost" id="docReload">${t('doctorReload')}</button></div>
     <div id="docBody"><div class="ps-empty" role="status">${t('doctorChecking')}</div></div>`;
   $('docReload').addEventListener('click', renderDoctor);
@@ -6164,6 +6205,7 @@ async function renderMarket() {
       <h2>集市（${marketData.markets.length} 个 · ${marketData.total ?? 0} 个插件）</h2>
       <span class="sub">任何 git 仓库 + market.json 都能当集市</span>
     </div>
+  ${panelDescBar('market')}
     <div class="plug-install">
       <input id="marketSrc" placeholder="添加集市：git 地址、owner/repo 或本地目录，回车添加"
              autocomplete="off" spellcheck="false">
@@ -7490,6 +7532,14 @@ function showStats() {
   runs.sort((a, b) => b.ts - a.ts);
   const total = runs.length;
   const okCount = runs.filter((r) => r.ok).length;
+  // 第一百一十九轮⑧：最近 7 天一句话趋势
+  const wc7 = weekCompare(runs);
+  const tw = wc7.cur.total, pw = wc7.prev.total;
+  const wcTxt = tw > pw
+    ? t('trendUp')(tw, tw - pw)
+    : tw < pw
+      ? t('trendDown')(tw, pw - tw)
+      : t('trendFlat')(tw);
   const rate = total ? Math.round((okCount / total) * 100) : 0;
   const byPlugin = new Map();
   for (const r of runs) {
@@ -7505,6 +7555,7 @@ function showStats() {
   view.innerHTML = `
     <div class="ps-head"><h2>${t('statsTitle')}</h2>
       <span class="sub">${t('statsPrivacy')}</span></div>
+    ${panelDescBar('stats', `<div class="stat-trend">${wcTxt}</div>`)}
     <div class="doc-grid">
       <div class="doc-line stat-big"><b>${total}</b><span>${t('statsTotal')}</span></div>
       <div class="doc-line stat-big"><b>${rate}%</b><span>${t('statsOkRate')(okCount, total)}</span></div>
