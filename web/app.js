@@ -54,6 +54,8 @@ const el = {
   psView: $('psView'), psBtn: $('psBtn'), psCount: $('psCount'), clipBtn: $('clipBtn'),
   logsView: $('logsView'), doctorView: $('doctorView'), listTools: $('listTools'),
   allowView: $('allowView'),
+  updateBar: $('updateBar'), updateText: $('updateText'), updateLink: $('updateLink'),
+  updateLater: $('updateLater'), updateDismiss: $('updateDismiss'),
   devView: $('devView'), dashView: $('dashView'), dashBtn: $('dashBtn'),
   plugView: $('plugView'), plugBtn: $('plugBtn'), plugCount: $('plugCount'),
   marketView: $('marketView'), marketBtn: $('marketBtn'), marketCount: $('marketCount'),
@@ -9141,3 +9143,37 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
   }
 });
+
+
+// ---------------------------------------------------------------------------
+// 第一百一十一轮③④⑤：应用新版本提示条
+// 启动时查一次 /api/update-check（本地 24h 节流 + 「稍后」三天），有新版出
+// 非阻塞提示条。检查失败静默——升级提示永远不该打断使用。
+// ---------------------------------------------------------------------------
+const UPDATE_TS_KEY = 'zerokit.update.lastCheck';
+const UPDATE_LATER_KEY = 'zerokit.update.remindAt';
+function maybeCheckAppUpdate() {
+  try {
+    const now = Date.now();
+    const last = Number(localStorage.getItem(UPDATE_TS_KEY) ?? '0');
+    const remind = Number(localStorage.getItem(UPDATE_LATER_KEY) ?? '0');
+    if (now - last < 24 * 60 * 60 * 1000) return;   // 今天查过
+    if (remind && now < remind) return;              // 用户说了三天后再说
+    localStorage.setItem(UPDATE_TS_KEY, String(now));
+    fetch('/api/update-check').then((r) => r.json()).then((c) => {
+      if (!c || c.available !== true || !c.latest) return;
+      el.updateText.textContent = `${t('updateAvailablePre')}${c.latest}${t('updateAvailablePost')}`;
+      el.updateLink.href = `https://github.com/nicholyx/zerokit/releases/tag/v${c.latest}`;
+      el.updateBar.classList.remove('hidden');
+      el.updateDismiss.onclick = () => el.updateBar.classList.add('hidden');
+      el.updateLater.onclick = () => {
+        localStorage.setItem(UPDATE_LATER_KEY, String(Date.now() + 3 * 24 * 60 * 60 * 1000));
+        el.updateBar.classList.add('hidden');
+        count(t('updateLaterDone'));
+      };
+    }).catch(() => { /* 静默：断网不该弹东西 */ });
+  } catch { /* localStorage 不可用也静默 */ }
+}
+
+// 启动时查一次新版本（放在函数定义之后——模块级 const 有 TDZ，提前调用会被 catch 静默吞掉）
+maybeCheckAppUpdate();

@@ -367,7 +367,7 @@ export async function serve(): Promise<number> {
       return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(body, null, 2) }] };
     }
     if (uri === 'zerokit://health') {
-      const report = buildDoctorReport();
+      const report = await buildDoctorReport();
       const body = { errors: report.summary.errors, warnings: report.summary.warnings, plugins: report.summary.plugins, actions: report.summary.actions };
       return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(body, null, 2) }] };
     }
@@ -379,7 +379,7 @@ export async function serve(): Promise<number> {
     const name = req.params.name;
     // 第八十轮⑦：内建工具在此分流，不进插件 runner
     if (name === 'zerokit_welcome') {
-      const report = buildDoctorReport();
+      const report = await buildDoctorReport();
       const pyInstall = process.platform === 'win32' ? 'winget install Python.Python.3.13'
         : process.platform === 'darwin' ? 'brew install python' : 'sudo apt install python3';
       const starter = process.platform === 'win32' ? 'sysinfo.overview'

@@ -33,6 +33,7 @@ import { type PublicSetting, publicSettings, SECRET_MASK, writeSettings } from '
 import { dependents, depStates, installDeps, missingDeps } from './core/deps.ts';
 import { buildArgv, chainDisplay, confirmPolicy, displayCommand, runAction , audit } from './core/runner.ts';
 import { buildDoctorReport, toHistoryEntry, appendDoctorHistory, readDoctorHistory, diffDoctorHistory, doctorSummaryLine } from './core/doctor.ts';
+import { evalAppUpdate, fetchLatestRelease, readCurrentVersion } from './core/appupdate.ts';
 import {
   addMarket, findEntry, installFromMarket, loadMarkets, previewInstall,
   readIndex, refreshMarket, removeMarket,
@@ -570,9 +571,26 @@ export function createServer(): http.Server {
         json(res, 200, { stamp });
         return;
       }
+      if (url.pathname === '/api/update-check' && req.method === 'GET') {
+        // 第一百一十一轮③：前端启动时查一次新版本（前端自己 24h 节流，这里每次真查——
+        // 只有前端决定要不要调）。失败静默 200+latest:null——升级提示不该打扰使用。
+        const current = readCurrentVersion(path.join(process.cwd(), 'package.json'));
+        const rel = await fetchLatestRelease();
+        const check = evalAppUpdate(current, 'github', rel, process.platform, process.arch);
+        json(res, 200, {
+          current: check.current,
+          latest: check.latest,
+          available: check.available,
+          downloadUrl: check.downloadUrl,
+          assetName: check.assetName,
+          platform: `${process.platform}-${process.arch}`,
+          reason: check.reason ?? null,
+        });
+        return;
+      }
       if (url.pathname === '/api/doctor' && req.method === 'GET') {
         // 第八十四轮①④⑥：与 CLI --json 同源——汇总行、最近 5 次历史、对比一并给前端
-        const report = buildDoctorReport();
+        const report = await buildDoctorReport();
         const passed = report.tools.filter((t) => t.ok).length
           + report.plugins.filter((pl) => pl.problems.length === 0).length;
         const entry = toHistoryEntry(report, passed);
