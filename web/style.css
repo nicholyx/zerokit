@@ -1984,3 +1984,24 @@ td.gsum-label { font-weight: 600; }
 .bp-row.st-running { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .batch-import-ta { width: 100%; min-height: 120px; font: inherit; font-size: 12px; margin: 6px 0; }
 .batch-import-pop { position: absolute; right: 8px; top: 100%; z-index: 60; width: min(520px, 92vw); padding: 10px; display: flex; flex-direction: column; }
+
+
+/* 第一百一十八轮 */
+/* ⑦ 长参数表单滚动时动作名吸顶（详情头不跟丢；背景不透防字叠字） */
+.detail-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg);
+  border-bottom: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+}
+/* ③ 结果页签总数徽标（横向滚动后还剩几个一眼可见） */
+.rtab-count {
+  align-self: center;
+  font-size: 11px;
+  color: var(--fg-dim);
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+  border-radius: 9px;
+  padding: 1px 7px;
+  flex: none;
+}
