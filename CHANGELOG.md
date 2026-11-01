@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+（下一版攒着）
+
+## [1.21.0] - 2026-11-02
+
 ### Added
 
 - 装时快照统一：addFromDir（集市/git/本地目录）与 bundled 安装全部写 `.zk-integrity.json`（此前只有 toolpack unpack 写）——verify/doctor 复验覆盖从部分插件到全部
@@ -11,7 +15,6 @@
 
 - `plugin pack` 打包时把本机安装来源记录 `.zerokit-source.json` 一并打进 zip——unpack 后 verify 永远报「被删除」，属包装内容污染
 
-（下一版攒着）
 
 ## [1.20.0] - 2026-11-02
 
