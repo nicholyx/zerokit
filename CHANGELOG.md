@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+### Added
+
+- 应用自更新检查：`zkit update --check|--apply`（GitHub Releases 渠道；apply 只下载安装包到临时目录并给安装指引，绝不静默替换）与 `--json` 机读形态
+- 启动器新版本提示条：内核 `/api/update-check` + 前端 24h 节流（「稍后」三天后再提醒、✕ 本次会话不再弹），检查失败静默不打扰
+- `doctor` 报告当前版本/最新版本一对（`app.current`/`app.latest`，latest 走 5 分钟缓存不拖慢体检）
+
 （下一版攒着）
 
 ## [1.14.0] - 2026-11-01

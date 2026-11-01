@@ -30,6 +30,14 @@
     </div>
   </header>
 
+  <!-- 第一百一十一轮③④：新版本提示条（非阻塞；可关闭本次会话不再弹/三天后再提醒） -->
+  <div id="updateBar" class="update-bar hidden">
+    <span id="updateText"></span>
+    <a id="updateLink" href="#" target="_blank" rel="noopener" data-i18n="updateView">查看</a>
+    <button class="ubtn" id="updateLater" data-i18n="updateLaterBtn" data-i18n-title="updateLaterTitle">稍后</button>
+    <button class="ubtn" id="updateDismiss" data-i18n="updateDismissBtn" data-i18n-title="updateDismissTitle" aria-label="dismiss update notice">✕</button>
+  </div>
+
   <!-- 第四十七轮②：管理入口统一抽屉（原顶栏主题/语言按钮收进来，顶栏只留执行类） -->
   <div id="drawerMask" class="drawer-mask hidden"></div>
   <aside id="drawer" class="drawer drawer-pop hidden" aria-label="设置与管理">

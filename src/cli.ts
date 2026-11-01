@@ -19,6 +19,7 @@ import {
 } from './core/registry.ts';
 import { type ScaffoldExample, type ScaffoldRuntime, scaffoldPlugin } from './core/scaffold.ts';
 import { applyUpdate, checkUpdate, listUpdateStates } from './core/update.ts';
+import { type AppUpdateCheck, evalAppUpdate, fetchLatestRelease, readCurrentVersion } from './core/appupdate.ts';
 import { checkRequires } from './core/resolve.ts';
 import { buildDoctorReport, toHistoryEntry, appendDoctorHistory, readDoctorHistory, diffDoctorHistory, persistCount, doctorSummaryLine } from './core/doctor.ts';
 import { dataInventory, isDataScope, wipePreview, wipeData, dataStats, auditDataEvent, type DataScope } from './core/datamap.ts';
@@ -1608,7 +1609,7 @@ async function cmdWelcome(): Promise<number> {
   const fsmod = await import('node:fs');
   const marker = HOME + '/.welcomed';
   const first = !fsmod.existsSync(marker);
-  const report = buildDoctorReport();
+  const report = await buildDoctorReport();
 
   // ③ 分级摘要：✓/⚠/✗ 一行总览（回访也看这行）
   const errs = report.summary.errors;
@@ -1664,8 +1665,68 @@ async function cmdWelcome(): Promise<number> {
   return errs > 0 ? 1 : 0;
 }
 
+/**
+ * zkit update --check|--apply [--json]：应用本体版本检查与安装包下载。
+ * 检查走 GitHub releases/latest（8s 超时，失败静默带原因）；apply 只下载
+ * 到临时目录并打印安装指引——绝不静默替换，安装器行为交还用户。
+ */
+async function cmdUpdate(rest: string[]): Promise<number> {
+  const flagJson = rest.includes('--json');
+  const mode = rest.includes('--apply') ? 'apply' : 'check';
+  const pkgJson = path.join(process.cwd(), 'package.json');
+  const current = readCurrentVersion(pkgJson);
+  const rel = await fetchLatestRelease();
+  const check: AppUpdateCheck = evalAppUpdate(current, 'github', rel, process.platform, process.arch);
+  if (flagJson) {
+    process.stdout.write(JSON.stringify({
+      current: check.current,
+      latest: check.latest,
+      available: check.available,
+      downloadUrl: check.downloadUrl,
+      assetName: check.assetName,
+      platform: `${process.platform}-${process.arch}`,
+      reason: check.reason ?? null,
+    }) + '\n');
+    return 0;
+  }
+  if (!check.latest) {
+    process.stdout.write(c.dim(`当前 ${current}；检查新版本失败（${check.reason ?? '未知'}）——网络问题不影响使用\n`));
+    return 0;
+  }
+  if (!check.available) {
+    process.stdout.write(c.dim(`当前 ${current} 已是最新（渠道最新 ${check.latest}）\n`));
+    return 0;
+  }
+  process.stdout.write(`有新版本：${c.green(check.latest)}（当前 ${current}）\n`);
+  if (check.downloadUrl) {
+    process.stdout.write(`  安装包：${check.assetName}\n  下载：${check.downloadUrl}\n`);
+    if (mode === 'apply') {
+      process.stdout.write(c.dim('  正在下载到临时目录…\n'));
+      const dest = path.join(os.tmpdir(), `zerokit-${check.latest}-${check.assetName}`);
+      try {
+        const res = await fetch(check.downloadUrl);
+        if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+        const buf = Buffer.from(await res.arrayBuffer());
+        fs.writeFileSync(dest, buf);
+        process.stdout.write(`  已下载：${dest}（${(buf.length / 1048576).toFixed(1)} MB）\n`);
+        process.stdout.write(c.green(process.platform === 'win32'
+          ? '  双击运行安装程序完成升级。\n'
+          : '  打开 dmg 拖入「应用程序」完成升级。\n'));
+      } catch (e) {
+        process.stdout.write(c.yellow(`  下载失败（${e instanceof Error ? e.message : '未知'}），可直接从上面的下载地址手动获取\n`));
+        return 1;
+      }
+    } else {
+      process.stdout.write(c.dim('  运行 zkit update --apply 下载安装包\n'));
+    }
+  } else {
+    process.stdout.write(c.dim(`  ${check.reason ?? '本平台暂无安装包'}；npm 用户：npm i -g zerokit@latest\n`));
+  }
+  return 0;
+}
+
 async function cmdDoctor(): Promise<number> {
-  const report = buildDoctorReport();
+  const report = await buildDoctorReport();
   // ⑨最近错误计数：审计里的 deny/非零退出——「环境没坏但一直在失败」要浮出来
   const auditView = readAuditDetailed();
   const recentErrs = recentErrors(auditView.records, 50);
@@ -1705,6 +1766,7 @@ async function cmdDoctor(): Promise<number> {
       diff,
       recentErrors: { last24h, total: recentErrs.length },
       tools: report.tools.map((t) => ({ name: t.name, ok: t.ok, version: t.version ?? null, path: t.path ?? null })),
+      app: report.app,
       dirs: report.dirs,
       desktop: report.desktop,
       orphanTimerKeys: report.orphanTimerKeys,
@@ -1749,6 +1811,8 @@ async function cmdDoctor(): Promise<number> {
   }
   // 第八十四轮①：三级汇总行置顶——先给全局结论再看明细
   process.stdout.write(`  ${doctorSummaryLine(report, passedCount)}\n`);
+  // 第一百一十一轮⑤：版本对（检查失败只显当前，不添乱）
+  if (report.app.latest) process.stdout.write(c.dim(`  版本：当前 ${report.app.current} / 最新 ${report.app.latest}（zkit update 查看升级）\n`));
   // 第八十四轮④：最近 5 次体检趋势（新→旧）
   if (fullHistory.length >= 2) {
     const trend = fullHistory.slice(0, 5).map((e) => `✗${e.errors}/⚠${e.warnings}`).join(' → ');
@@ -3142,6 +3206,8 @@ async function main(): Promise<number> {
       return cmdKill(rest);
     case 'welcome':
       return cmdWelcome();
+    case 'update':
+      return cmdUpdate(rest);
     case 'doctor':
       return cmdDoctor();
     case 'desktop':

@@ -9,6 +9,8 @@ import process from 'node:process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { HOME, PLUGINS_DIR } from './paths.ts';
+import path from 'node:path';
+import { fetchLatestRelease, readCurrentVersion } from './appupdate.ts';
 import { checkRequires, resolveTool } from './resolve.ts';
 import { findPlugin, listPlugins } from './registry.ts';
 import { verifyInstalled } from './distro.ts';
@@ -51,6 +53,8 @@ export interface DoctorReport {
     noSnapshot: string[]; // 老插件无装时快照
   };
   node: { version: string; execPath: string };
+  /** 应用版本对：current=本地 package.json；latest=渠道最新（检查失败 null） */
+  app: { current: string; latest: string | null };
   tools: DoctorTool[];
   dirs: { home: string; plugins: string };
   plugins: DoctorPlugin[];
@@ -300,7 +304,7 @@ function checkPlugin(entry: ReturnType<typeof listPlugins>[number]): DoctorPlugi
   };
 }
 
-export function buildDoctorReport(): DoctorReport {
+export async function buildDoctorReport(): Promise<DoctorReport> {
   // 第八十四轮②：先读上一次历史（本次结果稍后才落盘，不能把自己算进去）
   const historyBefore = readDoctorHistory();
   const tools: DoctorTool[] = [{ name: 'node', ok: true, version: process.version, path: process.execPath }];
@@ -364,6 +368,13 @@ export function buildDoctorReport(): DoctorReport {
   return {
     integrity,
     node: { version: process.version, execPath: process.execPath },
+    // 第一百一十一轮⑤：当前版本/最新版本一对。latest 走 5 分钟缓存——
+    // doctor 是常用命令，不能每次都被 8s 网络超时拖住；缓存过期就后台刷新，
+    // 本次先给旧值（没有就 null，界面显示「检查失败」而不是卡住）。
+    app: {
+      current: readCurrentVersion(path.join(process.cwd(), 'package.json')),
+      latest: await cachedLatestVersion(),
+    },
     tools,
     dirs: { home: HOME, plugins: PLUGINS_DIR },
     desktop: { installed: shell.installed, path: shell.path, hotkey },
@@ -377,4 +388,18 @@ export function buildDoctorReport(): DoctorReport {
       warnings,
     },
   };
+}
+
+
+// ---------------------------------------------------------------------------
+// 应用最新版本的 5 分钟缓存（doctor 不被网络拖住）
+// ---------------------------------------------------------------------------
+let latestVerCache: { at: number; ver: string | null } | null = null;
+async function cachedLatestVersion(): Promise<string | null> {
+  const now = Date.now();
+  if (latestVerCache && now - latestVerCache.at < 5 * 60 * 1000) return latestVerCache.ver;
+  // 缓存缺失/过期：并发下只发一次请求；失败给 null（下次 doctor 再试）
+  const ver = (await fetchLatestRelease())?.tag_name?.replace(/^v/, '') ?? null;
+  latestVerCache = { at: now, ver };
+  return ver;
 }
