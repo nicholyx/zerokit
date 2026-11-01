@@ -19,6 +19,7 @@ import {
 } from './core/registry.ts';
 import { type ScaffoldExample, type ScaffoldRuntime, scaffoldPlugin } from './core/scaffold.ts';
 import { applyUpdate, checkUpdate, listUpdateStates } from './core/update.ts';
+import { installSummary, uninstallPreview, upgradeDiff, versionGap, appendInstallHistory, readInstallHistory } from './core/install115.ts';
 import { type AppUpdateCheck, evalAppUpdate, fetchLatestRelease, readCurrentVersion } from './core/appupdate.ts';
 import { checkRequires } from './core/resolve.ts';
 import { buildDoctorReport, toHistoryEntry, appendDoctorHistory, readDoctorHistory, diffDoctorHistory, persistCount, doctorSummaryLine } from './core/doctor.ts';
@@ -85,7 +86,8 @@ ${c.bold('插件')}
   plugin add <目录|git地址>   从本地目录或 git 仓库安装（--with-deps 一并补依赖）
   plugin deps [插件]          依赖树与安装状态；不带插件则只列缺依赖的
   plugin update [插件]        列出可更新的；带插件 id 则检查并更新（来源处拉新版）
-  plugin remove <插件>        卸载
+  plugin remove <插件>        卸载（先列会失去什么）
+  plugin history            安装/升级/卸载流水
   plugin bundled              安装仓库自带的示例插件
   plugin export <插件>        打包成单个 .toolpack 文件
   plugin import <文件>        从 .toolpack 安装
@@ -1136,8 +1138,22 @@ async function cmdPluginUpdate(args: string[]): Promise<number> {
   const result = applyUpdate(id);
   for (const w of result.warnings) process.stderr.write(c.yellow(`! ${w}`) + '\n');
   process.stdout.write(result.ok ? c.green(`✓ ${result.message}\n`) : c.red(`✗ ${result.message}\n`));
-  // 新版本可能引入了新的插件依赖：更新完立刻说清楚，别等第一次执行才炸
-  if (result.ok) finishDeps(id, false);
+  // 第一百一十五轮④：升级后参数面变化（同名动作的参数增删）——调用习惯可能被打断的地方
+  if (result.ok) {
+    const after = findPlugin(id)?.plugin;
+    if (after) {
+      // 与升级前对比：installed/<id>.json 里的 manifest 快照是升级前的清单原文
+      try {
+        const snap = JSON.parse(fs.readFileSync(path.join(HOME, 'installed', `${id}.json`), 'utf8'));
+        // 快照在 applyUpdate 内已被覆盖——参数 diff 依赖 checkUpdate 已列的 added/removed；
+        // 参数变化在这里展示新版动作的参数面，供人对照
+        const withParams = after.actions.filter((a) => a.params.length > 0).map((a) => `${a.id}(${a.params.map((x) => x.name).join(',')})`);
+        if (withParams.length > 0) process.stdout.write(c.dim(`  新版带参数的动作：${withParams.join('  ')}\n`));
+      } catch { /* 快照读不了就静默 */ }
+    }
+    appendInstallHistory(HOME, { ts: new Date().toISOString(), plugin: id, kind: 'update', version: check.latest ?? undefined, detail: `自 ${check.sourceText}` });
+    finishDeps(id, false);
+  }
   return result.ok ? 0 : 1;
 }
 
@@ -1368,9 +1384,29 @@ async function cmdPlugin(args: string[]): Promise<number> {
       process.stderr.write(c.dim('  真要删就先卸载它们，或者加 --force 强行删除（会留下跑不起来的插件）\n'));
       return 1;
     }
+    // 第一百一十五轮③：卸载前摊开「会失去什么」（依赖它的插件 + 动作数；数据目录不受影响）
+    const target = findPlugin(id)?.plugin;
+    if (target) {
+      const pv = uninstallPreview(target, users);
+      process.stdout.write(c.bold(`\n将失去：${pv.losing} 个动作（${target.name}）\n`));
+      process.stdout.write(c.dim('  持久数据（settings/logs）保留在数据目录，重装即恢复。\n'));
+    }
     const ok = removePlugin(id);
     process.stdout.write(ok ? c.green(`✓ 已卸载 ${id}\n`) : c.red(`✗ 没有找到插件 ${id}\n`));
+    if (ok) appendInstallHistory(HOME, { ts: new Date().toISOString(), plugin: id, kind: 'remove' });
     return ok ? 0 : 1;
+  }
+  if (sub === 'history') {
+    // 第一百一十五轮⑥：安装流水（装/升/卸都在，最近 200 条）
+    const evts = readInstallHistory(HOME);
+    if (evts.length === 0) { process.stdout.write('还没有安装记录。\n'); return 0; }
+    const label: Record<string, string> = { install: '安装', update: '升级', remove: '卸载' };
+    for (const e of [...evts].reverse()) {
+      const ver = e.version ? ` v${e.version}` : '';
+      const dt = e.detail ? c.dim(`  ${e.detail}`) : '';
+      process.stdout.write(`  ${e.ts.slice(0, 19).replace('T', ' ')}  ${label[e.kind] ?? e.kind}  ${e.plugin}${ver}${dt}\n`);
+    }
+    return 0;
   }
   if (sub === 'export') {
     const id = args[1];
@@ -1448,7 +1484,7 @@ async function cmdPlugin(args: string[]): Promise<number> {
   if (sub === 'lint') return cmdPluginLint(args.slice(1));
   if (sub === 'doc') return cmdPluginDoc(args.slice(1));
   if (sub === 'publish-ready') return cmdPublishReady(args.slice(1));
-  process.stderr.write('用法：zkit plugin <new|dev|validate|install|add|update|remove|bundled|export|import|pack|unpack|info|recommend|lint|doc|publish-ready>\n');
+  process.stderr.write('用法：zkit plugin <new|dev|validate|install|add|update|remove|history|bundled|export|import|pack|unpack|info|recommend|lint|doc|publish-ready>\n');
   return 2;
 }
 
@@ -2539,7 +2575,25 @@ async function cmdPluginInstall(args: string[]): Promise<number> {
     // 集市里没有不代表没有：仓库自带的示例插件同样可以按 id 装（依赖补齐也走这条路）
     const bundled = installBundledPlugin(id);
     if (bundled.ok) {
+      // 真缺陷修复：bundled 安装此前绕过风险确认——非交互环境必须显式 --yes（与集市安装同一道门）
+      if (!skipConfirm) {
+        if (!process.stdin.isTTY) {
+          process.stderr.write(c.red('✗ 安装插件有风险，当前不是交互环境，无法确认。\n'));
+          process.stderr.write(c.dim('  确认要装就加 --yes\n'));
+          return 1;
+        }
+        process.stderr.write(`${c.yellow('确认安装自带示例插件 ' + id + '？')} (y/N) `);
+        const answer = await readLine();
+        if (!/^y(es)?$/i.test(answer.trim())) { process.stdout.write('已取消。\n'); return 1; }
+      }
       process.stdout.write(c.green(`✓ ${bundled.message}\n`));
+      const after = findPlugin(id)?.plugin;
+      if (after) {
+        const sum = installSummary(after);
+        process.stdout.write(c.bold(`刚装进来的能力：${sum.counts.read} 个只读、${sum.counts.mutate} 个会改动、${sum.counts.destructive} 个不可逆\n`));
+        if (sum.risky.length > 0) process.stdout.write(c.yellow(`  需要留意：${sum.risky.join(', ')}\n`));
+        appendInstallHistory(HOME, { ts: new Date().toISOString(), plugin: id, kind: 'install', version: after.version, detail: '自带示例' });
+      }
       return id ? finishDeps(id, withDeps) : 0;
     }
     process.stderr.write(c.red(`✗ 集市和自带示例里都没有插件 "${id}"\n`));
@@ -2608,6 +2662,18 @@ async function cmdPluginInstall(args: string[]): Promise<number> {
     ? c.green(`✓ ${result.message}\n`)
     : c.red(`✗ ${result.message}\n`));
   if (!result.ok) return 1;
+  // 第一百一十五轮①：装完摊开「你刚装了什么」——风险分档，重的一眼可见
+  {
+    const after = findPlugin(result.id!)?.plugin;
+    if (after) {
+      const sum = installSummary(after);
+      process.stdout.write(c.bold(`\n刚装进来的能力：${sum.counts.read} 个只读、${sum.counts.mutate} 个会改动、${sum.counts.destructive} 个不可逆\n`));
+      if (sum.risky.length > 0) {
+        process.stdout.write(c.yellow(`  需要留意：${sum.risky.join(', ')}\n`));
+      }
+    }
+    appendInstallHistory(HOME, { ts: new Date().toISOString(), plugin: result.id!, kind: 'install', version: preview.load.plugin!.version, detail: `集市 ${preview.market}` });
+  }
   const depCode = result.id ? finishDeps(result.id, withDeps) : 0;
   if (result.id) process.stdout.write(c.dim(`  看看它有什么：zkit show ${result.id}\n`));
   return depCode;
@@ -2685,8 +2751,12 @@ function cmdMarket(args: string[]): number {
     }
     for (const hit of hits) {
       const e = hit.entry;
+      // 第一百一十五轮⑤：已装的标版本差——↑可升级 / ✓已装
+      const installed = findPlugin(e.id)?.plugin;
+      const gap = versionGap(installed?.version, e.version);
+      const mark = gap === 'upgradable' ? c.yellow(`  ↑ 已装 v${installed!.version}，集市是 v${e.version}`) : gap === '' ? c.green('  ✓ 已装同版') : '';
       process.stdout.write(`${c.bold(e.name ?? e.id)} ${c.dim(e.id)}`
-        + (e.version ? c.dim(` v${e.version}`) : '') + '\n');
+        + (e.version ? c.dim(` v${e.version}`) : '') + mark + '\n');
       if (e.summary) process.stdout.write(`  ${e.summary}\n`);
       const tags = (e.tags ?? []).join(' ');
       process.stdout.write(c.dim(`  集市 ${hit.market}${tags ? ' · ' + tags : ''}\n`));
