@@ -20,6 +20,7 @@ import {
 import { type ScaffoldExample, type ScaffoldRuntime, scaffoldPlugin } from './core/scaffold.ts';
 import { applyUpdate, checkUpdate, listUpdateStates } from './core/update.ts';
 import { installSummary, uninstallPreview, upgradeDiff, versionGap, appendInstallHistory, readInstallHistory } from './core/install115.ts';
+import { fullUpgradeDiff, rugpullCheck } from './core/update116.ts';
 import { type AppUpdateCheck, evalAppUpdate, fetchLatestRelease, readCurrentVersion } from './core/appupdate.ts';
 import { checkRequires } from './core/resolve.ts';
 import { buildDoctorReport, toHistoryEntry, appendDoctorHistory, readDoctorHistory, diffDoctorHistory, persistCount, doctorSummaryLine } from './core/doctor.ts';
@@ -1087,6 +1088,12 @@ async function cmdPluginUpdate(args: string[]): Promise<number> {
     return 0;
   }
 
+  // 第一百一十六轮①②③：升级前先把「现在的它」整个抓下来——升级一旦落盘，
+  // 旧清单就没了，diff/rug-pull 都要在覆盖前算好
+  const curEntry = findPlugin(id);
+  const curPlugin = curEntry?.plugin;
+  const dryRun = args.includes('--dry-run');
+
   const check = checkUpdate(id);
   if (!check.source) {
     process.stderr.write(c.red(`✗ ${id}：${check.reason ?? '无法更新'}\n`));
@@ -1119,6 +1126,35 @@ async function cmdPluginUpdate(args: string[]): Promise<number> {
       process.stdout.write(c.dim(`  有 ${dependents.length} 个插件依赖它（${dependents.join(', ')}）；如果一起升级，先升本插件（拓扑序：${order.join(' → ')}）。\n`));
     } else if (myPos >= 0) {
       process.stdout.write(c.dim('  无插件依赖它，升级顺序无关。\n'));
+    }
+  }
+
+  // 第一百一十六轮④：dry-run —— 拉新版清单对比后直接返回，不落盘
+  // （对 market 来源，本地索引有远端清单的副本 previewInstall 可直接摊开）
+  {
+    const preview = previewInstall(id, (check.source as { market?: string }).market);
+    const nextPlugin = preview?.load.plugin;
+    if (curPlugin && nextPlugin) {
+      const fd = fullUpgradeDiff(curPlugin, nextPlugin);
+      if (fd.added.length) process.stdout.write(c.green(`  新增动作：${fd.added.join(', ')}\n`));
+      if (fd.removed.length) process.stdout.write(c.yellow(`  移除动作：${fd.removed.join(', ')}\n`));
+      for (const pc of fd.paramChanged) {
+        process.stdout.write(c.yellow(`  参数变化 ${pc.action}：+${pc.addedParams.join(',')} -${pc.removedParams.join(',')}\n`));
+      }
+      for (const rc of fd.riskChanged) {
+        process.stdout.write(c.red(`  ⚠ 风险升级 ${rc.action}：${rc.from} → ${rc.to}\n`));
+      }
+      const rug = rugpullCheck(curPlugin, nextPlugin);
+      if (rug.suspicious) {
+        process.stdout.write(c.red(`  ⚠ 执行体大换血：${rug.swapped.join(', ')}（动作名没变、命令全换——确认这不是 rug-pull 再升级）\n`));
+      }
+      if (dryRun) {
+        process.stdout.write(c.dim('\n（--dry-run：以上是升级会带来的变化，未落盘。）\n'));
+        return 0;
+      }
+    } else if (dryRun) {
+      process.stdout.write(c.dim('（--dry-run：这个来源拿不到远端清单预览，跳过对比。）\n'));
+      return 0;
     }
   }
 
@@ -1398,7 +1434,10 @@ async function cmdPlugin(args: string[]): Promise<number> {
   }
   if (sub === 'history') {
     // 第一百一十五轮⑥：安装流水（装/升/卸都在，最近 200 条）
-    const evts = readInstallHistory(HOME);
+    let evts = readInstallHistory(HOME);
+    // 第一百一十六轮⑥：--plugin <id> 只看这一个插件的流水
+    const pIdx = args.indexOf('--plugin');
+    if (pIdx >= 0 && args[pIdx + 1]) evts = evts.filter((e) => e.plugin === args[pIdx + 1]);
     if (evts.length === 0) { process.stdout.write('还没有安装记录。\n'); return 0; }
     const label: Record<string, string> = { install: '安装', update: '升级', remove: '卸载' };
     for (const e of [...evts].reverse()) {
@@ -1980,7 +2019,11 @@ async function cmdDoctor(): Promise<number> {
   if (report.integrity.tampered.length || report.integrity.missingFiles.length || report.integrity.noSnapshot.length) {
     process.stdout.write(c.bold('\n供应链完整性\n'));
     for (const id of report.integrity.tampered) {
+      // 第一百一十六轮⑧：清单被手改单独点名——改命令比改资源文件危险得多
+      const v = verifyInstalled(id);
+      const tomlTouched = v.changed.some((f) => f === 'plugin.toml');
       process.stdout.write(c.red(`  ✗ ${id} 内容与装时不一致（被改动）——重装或找作者确认\n`));
+      if (tomlTouched) process.stdout.write(c.red(`    ⚠ plugin.toml 被手改过：动作/风险声明可能与装时不同，以作者发布版为准\n`));
     }
     for (const id of report.integrity.missingFiles) {
       process.stdout.write(c.red(`  ✗ ${id} 有文件被删除\n`));

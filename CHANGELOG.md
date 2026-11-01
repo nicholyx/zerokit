@@ -1,5 +1,18 @@
 ## [Unreleased]
 
+### Added
+
+- `plugin update --dry-run`：升级前摊开完整 diff——新增/移除动作、参数增删、风险升级、执行体大换血警示，未落盘直接返回
+- 升级确认前展示完整 diff（此前只有动作名增删；同名动作的风险升级 read→mutate→destructive 单列 ⚠ 警示）
+- rug-pull 检测：同名动作执行体（run 命令）被整体替换 ≥60% 且 ≥2 个时提示「动作名没变、命令全换」
+- `plugin history --plugin <id>`：只看单个插件的装/升/卸流水
+- doctor 供应链段点名 `plugin.toml 被手改过`（与装时快照对照，改清单比改资源文件危险得多）
+- `upgradeDiff` 家族三纯函数（fullUpgradeDiff/rugpullCheck/manifestDrift，src/core/update116.ts）
+
+### Fixed
+
+- 升级 diff 此前排在确认门之后（非交互环境永远看不到就要 --yes）——挪到确认之前，人看着 diff 决定
+
 （下一版攒着）
 
 ## [1.19.0] - 2026-11-02
