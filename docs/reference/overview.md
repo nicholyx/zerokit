@@ -408,3 +408,4 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 - 第一百零九轮（v1.13.0）：发布安装包——Release 附带三平台安装包（macOS ARM dmg / macOS Intel dmg / Windows NSIS），tauri-action 流水线构建，内核（src/web/plugins/生产依赖）随包分发装完即用（Issue #371）
 - 第一百一十轮（v1.14.0）：安装包瘦身——strip-types 构建期剥离类型资产（dmg -18%/exe -13%）、无 Node 引导页、node<22.18 拦截、启动屏版本号（Issue #376）
 - 第一百一十一轮（v1.15.0）：升级与更新体验——zkit update --check/--apply、启动器新版本提示条（24h 节流+稍后三天）、doctor 版本对（Issue #379）
+- 第一百一十二轮：搜索记忆化/stagger 门控/轮询视图守卫/虚拟窗口防回归断言（perf112-smoke 14 项，全量 1895）

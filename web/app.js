@@ -683,6 +683,16 @@ function scoreEntry(entry, token, explain) {
 }
 
 function search(query) {
+  const mk = `${entriesVersion}|${query}`;
+  const hit = searchMemo.get(mk);
+  if (hit) return hit;
+  const r = searchCompute(query);
+  if (searchMemo.size > 200) searchMemo.clear();
+  searchMemo.set(mk, r);
+  return r;
+}
+
+function searchCompute(query) {
   const content = query.trim();
   const sniffed = detectContent(content);
   // 第二十七轮⑥：剥掉「看看/帮我」这类虚词——它们对任何动作都不命中，
@@ -785,7 +795,7 @@ function itemHtml(entry, i, showPlugin, query = '') {
   // 第六十九轮③：参数摘要 tooltip（与 risk-dot 的 title 分工：点上是风险，行尾摘要参数）
   // 前端动作对象用的是清单层翻译后的 fields（name/type/required），正好对上 paramsHint 入参
   const phint = paramsHint(a.fields ?? a.params ?? []);
-  return `<li class="item${i === active ? ' active' : ''}${smart ? ' smart' : ''}${fav ? ' fav' : ''}${i < 10 ? ' zk-stagger' : ''}" data-i="${i}" data-key="${esc(key)}" role="option"
+  return `<li class="item${i === active ? ' active' : ''}${smart ? ' smart' : ''}${fav ? ' fav' : ''}${i < 10 && allowListStagger ? ' zk-stagger' : ''}" data-i="${i}" data-key="${esc(key)}" role="option"
     style="${i < 10 ? `animation-delay:${i * 18}ms` : ''}"
     ${phint ? `title="${esc(phint)}"` : ''}
     aria-selected="${i === active ? 'true' : 'false'}" tabindex="${i === active ? 0 : -1}">
@@ -6441,7 +6451,7 @@ async function renderPlugins() {
         });
         $('npMsg').innerHTML = `✓ ${esc(r.message)}。生成了 ${r.files.length} 个文件，去命令行改 <code>${esc(String(r.dir))}</code> 下的文件即生效；也可以 <a class="link" href="#/plugins">刷新插件列表</a> 看到它。`;
         plugins = (await api('/api/plugins')).plugins ?? [];
-        entries = buildEntries(plugins);
+        entries = buildEntries(plugins); entriesVersion++;
         renderPlugins();
         box.classList.remove('hidden');   // renderPlugins 会重建 DOM，把表单补回来
       } catch (e) {
@@ -6870,6 +6880,10 @@ async function renderPs() {
   const runningProcs = procs.filter((p) => p.running);
   const total = runningProcs.length + runningServices.length;
   updateStatusPill(total);
+
+  // 第一百一十二轮⑦：不在「运行中」视图时只更新状态胶囊——2s 轮询不该
+  // 对隐藏的 psView 做 innerHTML 解析（大列表滚动时的隐形重排来源）
+  if (mode !== 'ps') return;
 
   const procHtml = runningProcs.map((p) => `
     <div class="ps-item">
@@ -8390,6 +8404,11 @@ el.clipBtn.addEventListener('click', async () => {
 // 第二十九轮①：搜索防抖（150ms）+ rAF 合帧。
 // 每键全量重算 search()+renderList() 在大列表下会掉帧；防抖让连续击键只算最后一次，
 // rAF 保证同帧内多次触发只画一次。搜索计时进 perfStats 供 #/perf 展示。
+// 第一百一十二轮③：stagger 只在「首进/切视图/重载」播放；搜索重排/筛选切换不重放
+let allowListStagger = true;
+// 第一百一十二轮②：搜索结果按 (query, 列表版本) 记忆——同词重打直接命中缓存
+let entriesVersion = 0;
+const searchMemo = new Map();
 let searchDebounceTimer = 0;
 let searchRaf = 0;
 const perfStats = { listItems: 0, listMs: 0, searchMs: 0, lastRenderAt: 0, renderCount: 0 };
@@ -8417,7 +8436,9 @@ el.q.addEventListener('input', () => {
     searchRaf = requestAnimationFrame(() => {
       searchRaf = 0;
       active = 0;
+      allowListStagger = false;   // 搜索重排不重放入场动画
       renderList();
+      allowListStagger = true;    // 恢复默认：下次视图切换仍播
     });
   }, 150);
 });
@@ -8546,7 +8567,7 @@ async function load(notify) {
   try {
     const data = await api('/api/plugins');
     plugins = data.plugins || [];
-    entries = buildEntries(plugins);
+    entries = buildEntries(plugins); entriesVersion++;
     if (notify) { active = 0; }
     renderList();
     refreshPsCount();   // 顺手把「运行中」徽标更新一下
