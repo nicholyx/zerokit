@@ -100,7 +100,7 @@ export function verifyInstalled(id: string): IntegrityCheck {
     const abs = path.join(dir, rel);
     const stat = fs.statSync(abs);
     if (stat.isDirectory()) { for (const c of fs.readdirSync(abs)) walk(rel ? path.join(rel, c) : c); return; }
-    if (rel === SNAPSHOT_FILE || rel === INTEGRITY_FILE || rel.split(path.sep).includes('node_modules') || rel.endsWith('.DS_Store')) return;
+    if (rel === SNAPSHOT_FILE || rel === INTEGRITY_FILE || rel === '.zerokit-source.json' || rel.split(path.sep).includes('node_modules') || rel.endsWith('.DS_Store')) return;
     disk.add(rel.split(path.sep).join('/'));
   };
   walk('');
@@ -289,6 +289,9 @@ export function packPluginWithManifest(id: string, outDir?: string): PackResult 
       if (rel.includes('node_modules' + path.sep) || rel.endsWith('.DS_Store')) return;
       if (rel.startsWith('settings' + path.sep) && !rel.endsWith('.example')) return;
       if (rel === SNAPSHOT_FILE) return;   // 装时快照不进包（各机器各装各的）
+      // .zerokit-source.json 是本机安装来源记录，不属于分发内容——
+      // 带进包会让 unpack 后 verify 报「被删除」（装后 CLI 按本机来源处理它）
+      if (rel === '.zerokit-source.json') return;
       files.push({ name: rel.split(path.sep).join('/'), data: fs.readFileSync(abs) });
     }
   };

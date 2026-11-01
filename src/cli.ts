@@ -1399,6 +1399,8 @@ async function cmdPlugin(args: string[]): Promise<number> {
       : addFromDir(source, {
         // 本地目录也记来源：update 时如实提示「去源目录改完重新 add」而不是瞎猜
         source: { type: 'dir', installedAt: new Date().toISOString(), installedVersion: '' },
+        // 第一百一十七轮③：--replace 显式升级（备份式替换，快照随之重建）
+        replace: args.includes('--replace'),
       });
     for (const w of result.warnings) process.stderr.write(c.yellow(`! ${w}`) + '\n');
     process.stdout.write(result.ok ? c.green(`✓ ${result.message}\n`) : c.red(`✗ ${result.message}\n`));
