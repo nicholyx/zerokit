@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine } from './extras.js';
+import { humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -281,6 +281,19 @@ function trapFocus(container, { onClose } = {}) {
   return { release };
 }
 
+function refreshStorageStat() {
+  // 第一百一十八轮⑤：localStorage 只读统计——收藏/历史/配置档攒了多少一眼可见
+  let bytes = 0, keys = 0;
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i) ?? '';
+    if (!k.startsWith('zerokit.')) continue;
+    keys += 1;
+    bytes += (localStorage.getItem(k) ?? '').length;
+  }
+  const row = document.querySelector('[data-storage-stat]');
+  if (row) row.textContent = t('storageStat')(humanCell(bytes) || bytes + ' B', keys);
+}
+
 function openThemePop() {
   const pop = $('themePop');
   if (!pop) return;
@@ -312,6 +325,7 @@ function openThemePop() {
       <button data-ai-toggle="${aiAssistOn() ? 'on' : 'off'}" class="${aiAssistOn() ? 'on' : ''}" title="${t('aiToggleTitle')}">${aiAssistOn() ? t('aiOn') : t('aiOff')}</button>
     </div>
     <div class="tp-head">${t('dataHead')}</div>
+    <div class="tp-row tp-storage" data-storage-stat title="${t('storageTitle')}"></div>
     <div class="tp-row tp-backup">
       <button data-backup="export" title="${t('exportTitle')}">${t('exportData')}</button>
       <button data-backup="import" title="${t('importTitle')}">${t('importData')}</button>
@@ -467,6 +481,7 @@ function openThemePop() {
     pop.classList.add('hidden');
     openThemePop();
   });
+  refreshStorageStat();
 }
 
 // ---------------------------------------------------------------- 第二十一轮：配置档存取
@@ -1058,7 +1073,7 @@ async function runBatch(retryItems) {
     try {
       const r = await fetch('/api/run', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-zk-token': TOKEN },
+        headers: { 'content-type': 'application/json', 'x-zerokit-token': TOKEN },
         body: JSON.stringify(payload),
       });
       const j = await r.json().catch(() => ({ ok: false, error: '响应不是 JSON' }));
@@ -1098,14 +1113,15 @@ async function runBatch(retryItems) {
     wi++;
   }
   if (btn) { btn.disabled = false; btn.textContent = '顺序执行'; }
-  if (!retryItems) { batch = []; renderList(); }
-  else renderList();
+  // 第一百一十八轮④：整篮跑完清空并收起浮条（汇总卡承担展示；重跑失败项路径保留浮条继续勾选）
+  if (!retryItems) { batch = []; }
+  renderList();
   // 进度条使命完成：撤掉，换汇总卡
   document.getElementById('batchProgress')?.remove();
   // 第五项：批量完成写审计事件 batch_done（server 落 audit.log，审计页可查）
   fetch('/api/batch-done', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-zk-token': TOKEN },
+    headers: { 'content-type': 'application/json', 'x-zerokit-token': TOKEN },
     body: JSON.stringify({ items: ordered.map((e, i) => ({
       plugin: e.plugin.id, action: e.action.id, ok: results[i]?.ok ?? false, ms: results[i]?.ms ?? 0,
     })) }),
@@ -3000,6 +3016,10 @@ function renderWatchBar() {
 function showPerfPanel() {
   hidePanels();
   mode = 'perf';
+  // 第一百一十八轮⑧：面板开着时每 2s 重读 perfStats——此前打开瞬间是快照，
+  // 之后跑再多次动作数字都停在旧值，看着像坏了
+  clearInterval(perfTimer);
+  perfTimer = setInterval(() => { if (mode === 'perf') showPerfPanel(); else clearInterval(perfTimer); }, 2000);
   el.modeLabel.textContent = '性能';
   el.listView.classList.add('hidden');
   el.detailView.classList.add('hidden');
@@ -4090,7 +4110,9 @@ function renderTabBar() {
       <span class="rtab-note" data-rn="${esc(t.id)}" title="写备注" aria-label="写备注">✎</span>
       <span class="rtab-x" data-rx="${esc(t.id)}" title="关闭" aria-label="关闭">✕</span>
     </button>`).join('')
-    + (resultTabs.length >= 2 ? '<button class="rtab rtab-cmp ghost" data-rcmp title="选两个页签并排对比">⇄ 对比</button>' : '');
+    + (resultTabs.length >= 2 ? '<button class="rtab rtab-cmp ghost" data-rcmp title="选两个页签并排对比">⇄ 对比</button>' : '')
+    // 第一百一十八轮③：页签多到横向滚动时给个总数徽标（横向滚动后不知道还有几个）
+    + (resultTabs.length > 4 ? `<span class="rtab-count" title="${t('rtabCount')(resultTabs.length)}">${resultTabs.length}</span>` : '');
   if (!bar.dataset.roving) {
     bar.dataset.roving = '1';
     bar.addEventListener('keydown', (e) => {
@@ -4131,12 +4153,18 @@ function renderTabBar() {
       el.count.textContent = t.note ? '备注已保存' : '备注已清空';
     });
     // ④固定：右键切换 pinned——固定页签不会被新结果挤出
+    // 第一百一十八轮②：右键顺带复制备注（有备注时）
     b.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       const t = tabById(tid);
       if (!t) return;
       t.pinned = !t.pinned;
       renderTabBar();
+      if (t.note) {
+        void navigator.clipboard?.writeText(`// ${t.note}\n${JSON.stringify(t.res?.data ?? t.res ?? '', null, 2)}`).catch(() => {});
+        el.count.textContent = t.pinned ? t('pinnedNoteCopied') : t('unpinnedNoteCopied');
+        return;
+      }
       el.count.textContent = t.pinned ? '已固定（不会被挤出）' : '已取消固定';
     });
   });
@@ -8511,6 +8539,7 @@ const searchMemo = new Map();
 let searchDebounceTimer = 0;
 let searchRaf = 0;
 const perfStats = { listItems: 0, listMs: 0, searchMs: 0, lastRenderAt: 0, renderCount: 0 };
+let perfTimer = 0; // 第一百一十八轮⑧：#/perf 自动刷新句柄
 
 // 第四十二轮⑨：热点入口打 perf 标签——Performance 面板/面板页都能对上时间线
 function perfMark(name) {

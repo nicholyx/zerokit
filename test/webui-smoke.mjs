@@ -606,6 +606,23 @@ close();
     assert('⑧空态插画暗色', css.includes('[data-theme="dark"] .empty-art'));
   }
 
+  // 第一百一十八轮：运行时细节（静态源码断言）
+  {
+    const assert = (name, cond) => check('一一八:' + name, cond);
+    const js = fs.readFileSync(path.join(PKG_ROOT, 'web/app.js'), 'utf8');
+    const css = fs.readFileSync(path.join(PKG_ROOT, 'web/style.css'), 'utf8');
+    const extrasSrc = fs.readFileSync(path.join(PKG_ROOT, 'web/extras.js'), 'utf8');
+    assert('⑧ perf 面板自动刷新', js.includes('perfTimer') && js.includes('setInterval(() => { if (mode ==='));
+    assert('⑤ 存储统计行', js.includes('refreshStorageStat') && js.includes('data-storage-stat') && extrasSrc.includes('storageUsage'));
+    assert('③ 页签总数徽标', js.includes('rtab-count') && css.includes('.rtab-count'));
+    assert('② 右键固定带复制备注', js.includes("t('pinnedNoteCopied')") && extrasSrc.includes('pinnedNoteCopied:'));
+    assert('⑦ 详情头吸顶', css.includes('.detail-head') && /\.detail-head\s*\{[^}]*position: sticky/.test(css));
+    assert('④ 批量完成收起浮条', js.includes('整篮跑完清空并收起浮条'));
+    assert('⑥ Home/End 首尾跳转（既有）', js.includes("e.key === 'Home'") && js.includes("e.key === 'End'"));
+    assert('Fixed 批量 token 头名', !js.includes("'x-zk-token'") && js.includes("'x-zerokit-token': TOKEN"));
+    assert('Fixed shouldPauseBatch 导入', /import \{[^}]*shouldPauseBatch[^}]*\} from '\.\/extras\.js'/.test(js));
+  }
+
 // ---------------------------------------------------------------- 收尾
 
 const failed = results.filter(([, ok]) => !ok);

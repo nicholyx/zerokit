@@ -413,6 +413,12 @@ export function dailyReport(runs, { pluginNames = new Map() } = {}) {
  */
 export const I18N = {
   zh: {
+  storageUsage: '存储占用',
+  storageStat: (size, keys) => `存储占用: ${size}（${keys} 键）`,
+  storageTitle: 'zerokit.* 键的总字节占用（只读统计，清理走备份/擦除）',
+  rtabCount: (n) => `共 ${n} 个结果页签`,
+  pinnedNoteCopied: '已固定（备注已复制）',
+  unpinnedNoteCopied: '已取消固定（备注已复制）',
     modeCommand: '命令', modePlugins: '插件', modeMarket: '集市', modeStats: '统计',
     modeBrief: '简报', modeWatch: '监控', modeHelp: '帮助', modeTimers: '定时',
     modeLogs: '日志', modeDoctor: '自检', modePs: '运行中', modeWorkbench: '工作台',
@@ -702,6 +708,12 @@ helpSearchTitle: '搜索', helpSearchBody: '支持中文关键词、拼音全拼
     langHead: '语言 Language',
   },
   en: {
+  storageUsage: 'Storage',
+  storageStat: (size, keys) => `Storage: ${size} (${keys} keys)`,
+  storageTitle: 'Total bytes of zerokit.* keys (read-only; clean up via backup/wipe)',
+  rtabCount: (n) => `${n} result tabs`,
+  pinnedNoteCopied: 'Pinned (note copied)',
+  unpinnedNoteCopied: 'Unpinned (note copied)',
     modeCommand: 'Commands', modePlugins: 'Plugins', modeMarket: 'Market', modeStats: 'Stats',
     modeBrief: 'Brief', modeWatch: 'Watch', modeHelp: 'Help', modeTimers: 'Timers',
     modeLogs: 'Logs', modeDoctor: 'Doctor', modePs: 'Running', modeWorkbench: 'Workbench',
