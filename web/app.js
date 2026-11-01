@@ -97,6 +97,16 @@ const PREF = {
 let favorites = [];
 let paramStore = {};
 let runStore = {};
+// 第一百一十四轮①：批量篮按动作分份（切动作互不污染）。batchMap 是真身；
+// batch 作为「当前动作的篮子」视图保留（历史代码大量引用 batch.length/push/splice）。
+const batchMap = new Map();   // actionKey -> entry[]
+let batchCurKey = '';
+function curBatch() {
+  if (!batchCurKey) return [];
+  let arr = batchMap.get(batchCurKey);
+  if (!arr) { arr = []; batchMap.set(batchCurKey, arr); }
+  return arr;
+}
 let batch = [];        // 批量篮：Alt+点击加入的 entry 列表（{plugin, action}）
 let savedList = [];   // 收藏的结果（本机）
 let notesStore = {};  // 执行备注：actionKey -> { text, ts }
@@ -1010,7 +1020,8 @@ function renderListTools(base, q) {
 /** 批量顺序执行：逐个跑篮子里的动作（destructive 排最后），完成后弹汇总卡片。
  * 每项用已记忆的参数（参数记忆参数不存在时用默认值），失败不阻断后面的项。 */
 async function runBatch(retryItems) {
-  const source = retryItems ?? batch;
+  const source = Array.isArray(retryItems) ? retryItems : batch;   // 防御：事件对象/undefined 都回落整篮
+
   if (!source.length) return; // 第八项：空队列守卫（按钮禁用是第一道，这里是第二道）
   // destructive 排最后：失败不至于挡住只读项
   const ordered = [...source].sort((a, b) =>
@@ -1031,7 +1042,7 @@ async function runBatch(retryItems) {
     prog.innerHTML = `
       <div class="bp-counts" role="status">${esc(batchCountsLabel(c))}</div>
       <div class="bp-rows">${ordered.map((e, i) => `
-        <div class="bp-row st-${states[i]}" data-bp="${i}">
+        <div class="bp-row st-${states[i]}" data-bp="${i}"${results[i]?.error ? ` title="${esc(String(results[i].error).slice(0, 140))}"` : ''}>
           <span class="bp-ic">${batchStateIcon(states[i])}</span>
           <span class="bp-name">${esc(e.action.title)}</span>
           <span class="bp-src">${esc(e.plugin.name)}</span>
@@ -1058,13 +1069,33 @@ async function runBatch(retryItems) {
   };
   // 第二十五轮⑧：并发窗口——窗口内并行、窗口间串行（1=纯串行，默认 3）
   const conc = Math.max(1, Math.min(8, Number(readJson('zerokit.batchconc', 3)) || 3));
+  // 第一百一十四轮⑦：暂停标记——「跑完当前项后停」：窗口边界检查，
+  // 已并发的窗口跑完，未开始的不再进。暂停按钮挂在进度条上。
+  let paused = false;
+  const pauseBtn = document.createElement('button');
+  pauseBtn.className = 'ghost mini bp-pause';
+  pauseBtn.textContent = '⏸ 暂停';
+  pauseBtn.onclick = () => {
+    paused = !paused;
+    pauseBtn.textContent = paused ? '▶ 继续' : '⏸ 暂停';
+    pauseBtn.classList.toggle('paused', paused);
+  };
+  prog.appendChild(pauseBtn);
+  let wi = 0;
   for (const win of chunkWindows(ordered.length, conc)) {
+    if (shouldPauseBatch(paused, wi)) {
+      // 暂停中：挂起等继续（200ms 轮询——队列场景不需要更细）
+      await new Promise((r) => setTimeout(r, 200));
+      wi--;   // 本窗口没跑，回退重进循环
+      continue;
+    }
     // 第七项：失败不中断——窗口内逐项落状态，窗口间不因失败短路
     const rs = await Promise.all(win.map((i) => runOne(ordered[i], i).then((r) => {
       results[i] = r; states[i] = r.ok ? 'ok' : 'fail'; paint(); return r;
     })));
     results.push(...[]);
     void rs;
+    wi++;
   }
   if (btn) { btn.disabled = false; btn.textContent = '顺序执行'; }
   if (!retryItems) { batch = []; renderList(); }
@@ -1122,6 +1153,22 @@ function renderList() {
   }
 }
 
+// 第一百一十四轮⑤：批量导入落地（剪贴板与文件共用）——不存在的动作跳过并计数
+function applyBatchImport(parsed) {
+  let added = 0;
+  for (const it of parsed.items) {
+    const entry = entries.find((en) => en.plugin.id === it.plugin && en.action.id === it.action);
+    if (entry) {
+      batch.push({ plugin: entry.plugin, action: entry.action });
+      if (it.values && Object.keys(it.values).length) paramStore[actionKey(it.plugin, it.action)] = it.values;
+      added += 1;
+    }
+  }
+  if (batchCurKey) batchMap.set(batchCurKey, batch);
+  renderList();
+  el.count.textContent = `导入了 ${added} 项（${parsed.items.length - added} 个动作不存在）`;
+}
+
 function renderListInner() {
   const aliasHit = aliasEntry(el.q.value);
   if (aliasHit && el.q.value.trim()) {
@@ -1157,8 +1204,19 @@ function renderListInner() {
           <button class="ghost mini" data-bdel="${i}" title="${t('removeFromBasket')}" aria-label="${t('removeFromBasket')}">✕</button>
         </li>`).join('')}</ol>`;
     el.listView.insertBefore(bar, el.list);
-    bar.querySelector('#batchRun').addEventListener('click', runBatch);
+    // 点击监听不能直传 runBatch——Event 会当第一参（retryItems）误入「重跑失败项」路径
+    bar.querySelector('#batchRun').addEventListener('click', () => runBatch());
     bar.querySelector('#batchClear').addEventListener('click', () => { batch = []; renderList(); });
+  bar.querySelector('#batchExport')?.addEventListener('click', () => {
+    const lines = batchToLines(batch.map((e) => ({
+      plugin: e.plugin.id, action: e.action.id,
+      values: paramStore[actionKey(e.plugin.id, e.action.id)] ?? {},
+    })));
+    navigator.clipboard?.writeText(lines).then(
+      () => count(`已复制 ${batch.length} 项清单（行格式）`),
+      () => count('复制失败：浏览器剪贴板不可用'),
+    );
+  });
     // ④排序：↑↓ 按钮交换相邻项（destructive 排序仍由 runBatch 兜底）
     bar.querySelectorAll('[data-bup]').forEach((btn2) => btn2.addEventListener('click', () => {
       const i = Number(btn2.dataset.bup);
@@ -1179,7 +1237,7 @@ function renderListInner() {
       renderList();
       el.count.textContent = '已去掉重复项';
     });
-    // ⑦导出清单
+    // ⑦导出清单（第一百一十四轮⑥：下载 JSON 之外再复制行格式——可贴可分享可回导）
     bar.querySelector('#batchExport')?.addEventListener('click', () => {
       const list = batch.map((b) => ({ plugin: b.plugin.id, action: b.action.id, values: paramStore[actionKey(b.plugin.id, b.action.id)] ?? {} }));
       const blob = new Blob([JSON.stringify(list, null, 2)], { type: 'application/json' });
@@ -1188,9 +1246,20 @@ function renderListInner() {
       a.download = exportFilename('batch', 'json');
       a.click();
       URL.revokeObjectURL(a.href);
+      navigator.clipboard?.writeText(batchToLines(list)).then(
+        () => { el.count.textContent = `已下载 JSON，并复制 ${list.length} 项行格式清单`; },
+        () => { el.count.textContent = '已下载 JSON（剪贴板不可用，行格式未复制）'; },
+      );
     });
-    // ⑦导入清单
-    bar.querySelector('#batchImport')?.addEventListener('click', () => {
+    // ⑦导入清单（第一百一十四轮⑤：先试剪贴板——粘过清单的人多点一下就进；没有再走文件）
+    bar.querySelector('#batchImport')?.addEventListener('click', async () => {
+      try {
+        const clip = await navigator.clipboard?.readText();
+        if (clip && /\n|\[/.test(clip) && /^[\s"#\[{\w]/.test(clip) && (clip.includes('=') || clip.includes('"action"'))) {
+          const pre = parseBatchList(clip);
+          if (pre.ok) { applyBatchImport(pre); return; }
+        }
+      } catch { /* 无剪贴板权限走文件 */ }
       const inp = document.createElement('input');
       inp.type = 'file'; inp.accept = '.json,application/json';
       inp.addEventListener('change', async () => {
@@ -1198,17 +1267,7 @@ function renderListInner() {
         if (!text) return;
         const parsed = parseBatchList(text);
         if (!parsed.ok) { el.count.textContent = `导入失败：${parsed.error}`; return; }
-        let added = 0;
-        for (const it of parsed.items) {
-          const entry = entries.find((en) => en.plugin.id === it.plugin && en.action.id === it.action);
-          if (entry) {
-            batch.push({ plugin: entry.plugin, action: entry.action });
-            paramStore[actionKey(it.plugin, it.action)] = it.values ?? {};
-            added += 1;
-          }
-        }
-        renderList();
-        el.count.textContent = `导入了 ${added} 项（${parsed.items.length - added} 个动作不存在）`;
+        applyBatchImport(parsed);
       });
       inp.click();
     });
@@ -1470,8 +1529,13 @@ function bindListItems(q) {
       const entry = filtered[Number(node.dataset.i)];
       if (entry) {
         const k = actionKey(entry.plugin.id, entry.action.id);
+        // 第一百一十四轮①：浏览态加篮 = 开（或续用）这个动作的篮——curKey 为空或不同时换篮
+        if (batchCurKey && batchCurKey !== k) {
+          batch = [];   // 旧篮留在 batchMap，换新篮从空开始
+        }
+        if (!batchCurKey) batchCurKey = k;
         const existed = batch.some((x) => actionKey(x.plugin.id, x.action.id) === k);
-        if (!existed) batch.push(entry);
+        if (!existed) { batch.push(entry); batchMap.set(batchCurKey, batch); }
         // 第二十五轮：篮子内容变了就要重渲染浮条
         renderList();
         el.count.textContent = existed ? `已在篮子里：${entry.action.title}` : `已加入批量篮：${entry.action.title}（共 ${batch.length} 项）`;
@@ -1622,6 +1686,9 @@ function actionTitleOf(key) {
 
 function openDetail(plugin, action, prefill) {
   detail = { plugin, action };
+  // 第一百一十四轮①：切到新动作 = 换一份篮子（旧篮子留在 batchMap，回来还在）
+  const nk = actionKey(plugin.id, action.id);
+  if (nk !== batchCurKey) { batchCurKey = nk; syncBatchView(); }
   // 第十八轮①：切到别的动作，旧监控自动停（一次只盯一个）
   for (const k of Object.keys(watchRegistry())) {
     if (k !== actionKey(plugin.id, action.id)) stopWatch(k);
@@ -2406,6 +2473,12 @@ function openDetail(plugin, action, prefill) {
     node.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') submit(false); });
   });
   el.detailView.querySelector('input, select')?.focus();
+}
+
+// 第一百一十四轮①：batch 视图与 batchMap 当前份同步（换动作后调用）
+function syncBatchView() {
+  batch = curBatch();
+  renderList();
 }
 
 function backToList() {
@@ -8870,6 +8943,9 @@ function lev(a, b) {
 }
 
 window.__zerokit = {
+  // 第一百一十四轮：批量调试/截图断言出口
+  __batchState: () => ({ curKey: batchCurKey, baskets: [...batchMap.keys()], curLen: curBatch().length }),
+
   // 第六十四轮：剪贴板工作流（截图脚本与自动化验证用）
   __zerokitShowClipSuggest: showClipSuggest,
   __zerokitShowClipPanel: showClipPanel,

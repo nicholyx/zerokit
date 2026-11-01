@@ -846,13 +846,15 @@ check('chunkWindows: 1=纯串行 / size 兜底≥1', (() => {
 })());
 check('parseBatchList: 合法清单/坏 JSON/缺字段', (() => {
   const ok = parseBatchList('[{"plugin":"sysinfo","action":"overview","values":{}}]');
-  const badJson = parseBatchList('not json');
   const noAction = parseBatchList('[{"plugin":"sysinfo"}]');
+  // 第一百一十四轮：双格式——非 JSON 文本按行格式解析（'not json' 是合法的「插件 动作」两列，
+  // 动作不存在由 CLI/导入端报；真正的 JSON 坏条目仍在此拦截）
+  const asLines = parseBatchList('not json');
   return ok.ok === true && ok.items.length === 1
-    && badJson.ok === false && badJson.error.includes('JSON')
+    && asLines.ok === true && asLines.items[0].plugin === 'not' && asLines.items[0].action === 'json'
     && noAction.ok === false && noAction.error.includes('plugin/action');
 })());
-check('parseBatchList: 非数组拒绝', parseBatchList('{"a":1}').ok === false);
+check('parseBatchList: 非数组 JSON 拒绝', parseBatchList('{"a":1}').ok === false);
 
 // ---------------- 第二十六轮：插件生态体验 ----------------
 check('pluginCompare: 动作数/风险构成/依赖', (() => {

@@ -19,13 +19,16 @@ const { filterAudit, AUDIT_RANGES, auditLine } = await import('../web/extras.js'
 // 造 5 条记录：今天×3（含 deny/error）、7天前×1、40天前×1
 const DAY = 86400e3;
 const now = Date.now();
+// 「今天」的三条锚本地零点 +1h/+2h/+3h——不随测试跑的时刻漂移（午夜边界：now-2h 可能已是昨天）
+const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+const m0 = midnight.getTime();
 const iso = (t) => new Date(t).toISOString();
 const recs = [
-  { ts: iso(now - 3600e3), plugin: 'sysinfo', action: 'overview', decision: 'allow', ms: 30, command: 'node sysinfo.mjs' },
-  { ts: iso(now - 7200e3), plugin: 'quick', action: 'b64', decision: 'allow', ms: 20, command: 'node quick.mjs b64', error: '' },
-  { ts: iso(now - 2 * 3600e3), plugin: 'quick', action: 'fail', decision: 'deny', ms: 0, command: 'node quick.mjs fail', error: '被拒：未授权' },
-  { ts: iso(now - 7 * DAY - 3600e3), plugin: 'sysinfo', action: 'old', decision: 'allow', ms: 1, command: 'x' },
-  { ts: iso(now - 40 * DAY), plugin: 'sysinfo', action: 'ancient', decision: 'allow', ms: 1, command: 'x' },
+  { ts: iso(m0 + 3600e3), plugin: 'sysinfo', action: 'overview', decision: 'allow', ms: 30, command: 'node sysinfo.mjs' },
+  { ts: iso(m0 + 7200e3), plugin: 'quick', action: 'b64', decision: 'allow', ms: 20, command: 'node quick.mjs b64', error: '' },
+  { ts: iso(m0 + 3 * 3600e3), plugin: 'quick', action: 'fail', decision: 'deny', ms: 0, command: 'node quick.mjs fail', error: '被拒：未授权' },
+  { ts: iso(m0 - 3 * DAY), plugin: 'sysinfo', action: 'old', decision: 'allow', ms: 1, command: 'x' },   // 7d 窗内（3 天前）
+  { ts: iso(m0 - 40 * DAY), plugin: 'sysinfo', action: 'ancient', decision: 'allow', ms: 1, command: 'x' },  // 30d 窗外
 ];
 
 // ① filterAudit 时间范围

@@ -617,6 +617,108 @@ async function cmdConfig(args: string[]): Promise<number> {
 
 /** 第九十八轮④：--chain 顺序串跑。前一步的解析结果（JSON data 或 stdout 文本）
  * 进后一步 values 的 {prev} 占位符；任一步失败即停（链的意义在于顺序依赖）。 */
+/**
+ * 第一百一十四轮⑧：zkit run --batch <file> —— 清单批量执行。
+ * 文件格式与启动器导入同源（parseBatchList 双认：JSON 数组或 `插件 动作 key=value` 行）。
+ * 每项独立执行并打一行结果；失败不中断，末尾汇总；退出码=有失败则 1。
+ */
+/** 第一百一十四轮⑧：清单双格式解析（CLI 内联版，与 web/extras.js parseBatchList 语义一致——
+ * core 不 import 前端模块；两份实现由 batch114-smoke 的交叉用例锁定一致）。 */
+function parseBatchListCli(text: string): { ok: true; items: { plugin: string; action: string; values: Record<string, string> }[] } | { ok: false; error: string } {
+  const trimmed = (text ?? '').trim();
+  if (!trimmed) return { ok: false, error: '清单为空' };
+  try {
+    const j = JSON.parse(trimmed);
+    if (Array.isArray(j)) {
+      const bad = j.find((x: unknown) => !x || typeof x !== 'object' || !(x as { plugin?: string }).plugin || !(x as { action?: string }).action);
+      if (bad !== undefined) return { ok: false, error: '存在缺少 plugin/action 的条目' };
+      return { ok: true, items: (j as { plugin: string; action: string; values?: Record<string, string> }[]).map((x) => ({ plugin: x.plugin, action: x.action, values: x.values ?? {} })) };
+    }
+  } catch { /* JSON 解析失败：落到行格式 */ }
+  const items: { plugin: string; action: string; values: Record<string, string> }[] = [];
+  const lines = trimmed.split('\n');
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li]!.trim();
+    if (!line || line.startsWith('#')) continue;
+    const toks = [...line.matchAll(/[\w.-]+="[^"]*"|"[^"]*"|\S+/g)].map((m) => m[0]!);
+    if (toks.length < 2) return { ok: false, error: `第 ${li + 1} 行：至少要有 插件 动作 两列` };
+    const values: Record<string, string> = {};
+    const kv = toks.slice(2);
+    for (let ki = 0; ki < kv.length; ki++) {
+      const tok = kv[ki]!;
+      const eq = tok.indexOf('=');
+      let k: string; let v: string;
+      if (eq > 0) {
+        k = tok.slice(0, eq); v = tok.slice(eq + 1);
+      } else if (tok.startsWith('--') && ki + 1 < kv.length) {
+        // 旗标形态 --key value：与 CLI 用法一致（与 extras.parseBatchList 同语义，测试交叉锁定）
+        k = tok.slice(2); v = kv[ki + 1]!; ki++;
+      } else {
+        return { ok: false, error: `第 ${li + 1} 行：参数 "${tok}" 缺 =（写 key=value 或 --key value）` };
+      }
+      if (v.startsWith('"') && v.endsWith('"') && v.length >= 2) v = v.slice(1, -1);
+      values[k] = v;
+    }
+    items.push({ plugin: toks[0]!, action: toks[1]!, values });
+  }
+  if (!items.length) return { ok: false, error: '没有有效条目（全是注释或空行）' };
+  return { ok: true, items };
+}
+
+async function cmdRunBatch(file: string, rest: string[]): Promise<number> {
+  if (!file || file.startsWith('--')) {
+    process.stderr.write('用法：zkit run --batch <清单文件> [--yes] [--quiet]\n        清单：每行「插件 动作 key=value ...」或 JSON 数组\n');
+    return 2;
+  }
+  let text: string;
+  try {
+    text = fs.readFileSync(path.resolve(file), 'utf8');
+  } catch (e) {
+    process.stderr.write(c.red(`✗ 读不了清单文件：${(e as Error).message}`) + '\n');
+    return 2;
+  }
+  const parsed = parseBatchListCli(text);
+  if (!parsed.ok) {
+    process.stderr.write(c.red(`✗ 清单无效：${parsed.error}`) + '\n');
+    return 2;
+  }
+  const yes = rest.includes('--yes') || rest.includes('-y');
+  const quiet = rest.includes('--quiet');
+  let ok = 0; let fail = 0;
+  for (const [idx, it] of parsed.items.entries()) {
+    const label = `${it.plugin}.${it.action}`;
+    try {
+      const pl = requirePlugin(it.plugin);
+      const act = pl.actions.find((a) => a.id === it.action);
+      if (!act) throw new Error(`插件 ${it.plugin} 里没有动作 ${it.action}`);
+      // destructive 沿用全局确认策略（TUI 逐项提示，取消计入失败不中断）
+      const policy = confirmPolicy(act.risk);
+      if (!yes) {
+        const { buildArgv, displayCommand } = await import('./core/runner.ts');
+        const command = displayCommand(buildArgv(pl, act, it.values ?? {}).redacted);
+        if (!(await confirmRun(pl, it.action, policy, command))) {
+          fail++;
+          if (!quiet) process.stdout.write(c.yellow(`⏸ [${idx + 1}/${parsed.items.length}] ${label}：用户取消\n`));
+          continue;
+        }
+      }
+      const outcome = await runAction(pl, act, { caller: 'cli', values: it.values ?? {} });
+      if (outcome.ok) {
+        ok++;
+        if (!quiet) process.stdout.write(c.green(`✓ [${idx + 1}/${parsed.items.length}] ${label} (${outcome.ms}ms)\n`));
+      } else {
+        fail++;
+        if (!quiet) process.stdout.write(c.red(`✗ [${idx + 1}/${parsed.items.length}] ${label}：${outcome.stderr?.slice(0, 120) || outcome.error || '失败'}\n`));
+      }
+    } catch (e) {
+      fail++;
+      if (!quiet) process.stdout.write(c.red(`✗ [${idx + 1}/${parsed.items.length}] ${label}：${(e as Error).message}\n`));
+    }
+  }
+  process.stdout.write(`批量完成：成功 ${ok} / 失败 ${fail} / 共 ${parsed.items.length}\n`);
+  return fail > 0 ? 1 : 0;
+}
+
 async function cmdRunChain(spec: string, rest: string[]): Promise<number> {
   const refs = spec.split(',').map((x) => x.trim()).filter(Boolean);
   const steps = refs.map((ref) => {
@@ -654,6 +756,10 @@ async function cmdRun(args: string[]): Promise<number> {
   // 形态：zkit run --chain "sysinfo.overview,quick.b64" [--参数 值]
   if (args[0] === '--chain') {
     return cmdRunChain(args[1] ?? '', args.slice(2));
+  }
+  // 第一百一十四轮⑧：--batch <file> 从清单文件批量跑（行格式与 JSON 双认，与启动器导入同语义）
+  if (args[0] === '--batch') {
+    return cmdRunBatch(args[1] ?? '', args.slice(2));
   }
   const [pluginId, actionId, ...rest] = args;
   if (!pluginId || !actionId) {
