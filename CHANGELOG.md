@@ -1,5 +1,18 @@
 ## [Unreleased]
 
+### Added
+
+- 安装成功摘要：装完立刻摊开「N 个只读、N 个会改动、N 个不可逆」与需留意的动作清单（CLI `plugin install`，集市与自带示例两条路径一致）
+- `plugin history`：安装/升级/卸载流水（`logs/installed-history.json`，最近 200 条）
+- 卸载预览：`plugin remove` 先列出将失去的动作数与反向依赖，并说明持久数据保留
+- 市场搜索版本差：已装插件在 `market search` 结果里标 `✓ 已装同版` / `↑ 可升级`
+- 升级后参数面提示与新版流水记录（`plugin update` 成功后）
+- `upgradeDiff` 等六个安装体验纯函数（src/core/install115.ts）
+
+### Fixed
+
+- 自带示例插件（bundled）安装此前绕过风险确认，非交互环境直接装上——现与集市安装走同一道 `--yes` 门
+
 （下一版攒着）
 
 ## [1.18.0] - 2026-11-02
