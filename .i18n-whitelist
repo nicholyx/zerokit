@@ -1158,3 +1158,20 @@ updateLink.*data-i18n="updateView"
 updateLater.*data-i18n="updateLaterBtn"
 logJson.*JSON
 id: '.*zh: '.*en: '.*
+已下载 JSON，并复制
+已下载 JSON（剪贴板不可用
+导入了.*项（
+清单无效：
+batchImportBtn
+pauseBtn\.textContent = '⏸ 暂停'
+paused \? '▶ 继续' : '⏸ 暂停'
+项清单（行格式）
+复制失败：浏览器剪贴板不可用
+error: '清单为空'
+至少要有 插件 动作 两列
+参数 ".*" 缺 =
+全是注释或空行
+placeholder = '每行
+粘贴 JSON 数组
+batchImportLabel
+batchExportLabel

@@ -580,7 +580,7 @@ helpSearchTitle: '搜索', helpSearchBody: '支持中文关键词、拼音全拼
     batchDedupLabel: '去掉同动作同参数的重复项', batchDedupBtn: '去重',
     batchExportLabel: '导出批量清单 JSON', batchExportBtn: '导出清单',
     batchImportLabel: '导入批量清单 JSON', batchImportBtn: '导入',
-    batchConc: '并发', batchClearLabel: '清空批量篮', batchClearBtn: '清空',
+    batchConc: '并发', batchClearLabel: '清空批量篮', batchClearBtn: '清空', batchImportBtn: '导入清单', batchImportLabel: '粘贴或从文件导入批量清单（行格式/JSON 双认）', batchExportBtn: '导出清单', batchExportLabel: '下载 JSON 并复制行格式清单',
     batchDestructiveLast: 'destructive 排最后', moveUp: '上移', moveDown: '下移',
     removeFromBasket: '移出篮子', paren: (v) => `（并发 ${v}）`,
     batchRetryDone: '失败项重跑完成', batchAllDone: '批量执行完成',
@@ -868,7 +868,7 @@ helpSearchTitle: 'Search', helpSearchBody: 'Chinese keywords, full pinyin, or pi
     batchDedupLabel: 'Drop duplicates with same action and params', batchDedupBtn: 'Dedup',
     batchExportLabel: 'Export basket list as JSON', batchExportBtn: 'Export list',
     batchImportLabel: 'Import basket list from JSON', batchImportBtn: 'Import',
-    batchConc: 'Concurrency', batchClearLabel: 'Clear the basket', batchClearBtn: 'Clear',
+    batchConc: 'Concurrency', batchClearLabel: 'Clear the basket', batchClearBtn: 'Clear', batchImportBtn: 'Import list', batchImportLabel: 'Import batch list from clipboard or file (line format or JSON)', batchExportBtn: 'Export list', batchExportLabel: 'Download JSON and copy line-format list',
     batchDestructiveLast: 'destructive runs last', moveUp: 'Move up', moveDown: 'Move down',
     removeFromBasket: 'Remove from basket', paren: (v) => ` (concurrency ${v})`,
     batchRetryDone: 'Failed-item rerun done', batchAllDone: 'Batch run done',
@@ -2219,12 +2219,65 @@ export function chunkWindows(n, size) {
 
 /** ⑦批量清单导入校验：数组且每项有 plugin/action 才算合法。返回 {ok, items|error} */
 export function parseBatchList(text) {
+  // 第一百一十四轮⑤：双格式——JSON 数组（老格式）或 `plugin action key=value ...` 行格式
+  // （每行一组参数，与 batchToLines 导出成对，可手写可分享）。JSON 先试，失败按行解析。
+  const trimmed = (text ?? '').trim();
+  if (!trimmed) return { ok: false, error: '清单为空' };
   let j;
-  try { j = JSON.parse(text); } catch { return { ok: false, error: '不是合法 JSON' }; }
-  if (!Array.isArray(j)) return { ok: false, error: '清单必须是数组' };
-  const bad = j.find((x) => !x || typeof x !== 'object' || !x.plugin || !x.action);
-  if (bad !== undefined) return { ok: false, error: '存在缺少 plugin/action 的条目' };
-  return { ok: true, items: j };
+  try { j = JSON.parse(trimmed); } catch { j = null; }
+  if (j !== null && j !== undefined) {
+    if (!Array.isArray(j)) return { ok: false, error: '清单必须是数组' };
+    const bad = j.find((x) => !x || typeof x !== 'object' || !x.plugin || !x.action);
+    if (bad !== undefined) return { ok: false, error: '存在缺少 plugin/action 的条目' };
+    return { ok: true, items: j };
+  }
+  // 行格式：每行 `plugin action [key=value ...]`（值含空格用引号包裹；# 开头是注释行）
+  const items = [];
+  const lines = trimmed.split('\n');
+  for (let li = 0; li < lines.length; li++) {
+    const raw = lines[li];
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    // 引号 token 切分：key="a b" 保持一个 token
+    const toks = [...line.matchAll(/[\w.-]+="[^"]*"|"[^"]*"|\S+/g)].map((m) => m[0]);
+    if (toks.length < 2) return { ok: false, error: `第 ${li + 1} 行：至少要有 插件 动作 两列` };
+    const [plugin, action, ...kv] = toks;
+    const values = {};
+    for (let ki = 0; ki < kv.length; ki++) {
+      const tok = kv[ki];
+      const eq = tok.indexOf('=');
+      let k; let v;
+      if (eq > 0) {
+        k = tok.slice(0, eq); v = tok.slice(eq + 1);
+      } else if (tok.startsWith('--') && ki + 1 < kv.length) {
+        // 旗标形态 --key value：与 CLI 用法一致，清单照着命令行写就行
+        k = tok.slice(2); v = kv[ki + 1]; ki++;
+      } else {
+        return { ok: false, error: `第 ${li + 1} 行：参数 "${tok}" 缺 =（写 key=value 或 --key value）` };
+      }
+      if (v.startsWith('"') && v.endsWith('"') && v.length >= 2) v = v.slice(1, -1);
+      values[k] = v;
+    }
+    items.push({ plugin, action, values });
+  }
+  if (!items.length) return { ok: false, error: '没有有效条目（全是注释或空行）' };
+  return { ok: true, items };
+}
+
+/** 第一百一十四轮⑥：批量项导出为行格式（与 parseBatchList 行格式成对，人可读可回导）。 */
+export function batchToLines(items) {
+  if (!Array.isArray(items)) return '';
+  return items.map((it) => {
+    const kv = Object.entries(it.values ?? {}).map(([k, v]) =>
+      String(v).includes(' ') ? `${k}="${v}"` : `${k}=${v}`);
+    return [it.plugin, it.action, ...kv].filter(Boolean).join(' ');
+  }).join('\n');
+}
+
+/** 第一百一十四轮⑦：队列暂停判定——跑完当前项后停（每窗口开头问一次）。
+ * paused=true 时应停：尚未开始的窗口不进；窗口内已并发的跑完。 */
+export function shouldPauseBatch(paused, windowIndex) {
+  return paused === true && windowIndex > 0;
 }
 
 // ---------------------------------------------------------------- 第二十六轮：插件生态体验

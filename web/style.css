@@ -1977,3 +1977,10 @@ td.gsum-label { font-weight: 600; }
 }
 .update-bar .ubtn:hover { background: color-mix(in srgb, var(--fg) 8%, transparent); color: var(--fg); }
 .update-bar a { color: var(--accent); }
+
+/* ============ 第一百一十四轮：批量与队列进阶 ============ */
+.bp-pause { margin-left: 8px; }
+.bp-pause.paused { background: color-mix(in srgb, var(--warn, #e8b13a) 18%, transparent); }
+.bp-row.st-running { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.batch-import-ta { width: 100%; min-height: 120px; font: inherit; font-size: 12px; margin: 6px 0; }
+.batch-import-pop { position: absolute; right: 8px; top: 100%; z-index: 60; width: min(520px, 92vw); padding: 10px; display: flex; flex-direction: column; }
