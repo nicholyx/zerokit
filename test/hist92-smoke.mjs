@@ -80,7 +80,7 @@ run(['run', 'sysinfo', 'overview']);
 {
   const app = (await import('node:fs')).readFileSync(path.join(PKG_ROOT, 'web', 'app.js'), 'utf8');
   const srv = (await import('node:fs')).readFileSync(path.join(PKG_ROOT, 'src', 'server.ts'), 'utf8');
-  check('⑨ 日志页今天/插件 chip', app.includes('data-log-today') && app.includes('data-log-plugin'));
+  check('⑨ 日志页时间范围/插件 chip（第一百一十三轮升级为四档 range）', app.includes('data-log-range') && app.includes('data-log-plugin'));
   check('⑨ 服务端 plugin 过滤', srv.includes("searchParams.get('plugin')") && srv.includes("e['plugin'] === pluginF"));
 }
 

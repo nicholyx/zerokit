@@ -1156,3 +1156,5 @@ if \(bad\) parts\.push\(`✗ \$\{\(T && T\.bsFail\) \|\| '失败'\} \$\{bad\}`\)
 if \(skipped\) parts\.push\(`∅ \$\{\(T && T\.bsSkip\) \|\| '未跑'\} \$\{sk
 updateLink.*data-i18n="updateView"
 updateLater.*data-i18n="updateLaterBtn"
+logJson.*JSON
+id: '.*zh: '.*en: '.*

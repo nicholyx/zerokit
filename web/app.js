@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale } from './extras.js';
+import { humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -5581,6 +5581,7 @@ let logsPage = 1;
 let logsDecision = '';
 let logsQuery = '';
 // 第九十二轮⑦：快捷过滤状态（今天/插件 chip）
+let logsRange = '';   // 第一百一十三轮①：''|today|7d|30d
 let logsToday = false;
 let logsPlugin = '';
 let logsPlugins = [];
@@ -5632,7 +5633,12 @@ async function renderLogs() {
   const chips = [['', t('logAll')], ['allow', t('logAllow')], ['deny', t('logDeny')], ['error', t('logError')]]
     .map(([id, label]) => `<button class="chip${logsDecision === id ? ' on' : ''}" data-log-decision="${id}">${label}</button>`).join('');
   // 第九十二轮⑦：快捷过滤 chip——今天 + 插件（语义与 CLI --today/--plugin 一致）
-  const quickChips = `<button class="chip${logsToday ? ' on' : ''}" data-log-today="1">${t('logToday')}</button>`;
+  // 第一百一十三轮①：时间范围四档（全部/今天/7天/30天），向后兼容旧 logsToday
+  if (logsToday) logsRange = 'today';
+  const quickChips = AUDIT_RANGES.map((r) => {
+    const label = lang === 'en' ? r.en : r.zh;
+    return `<button class="chip${logsRange === r.id ? ' on' : ''}" data-log-range="${r.id}">${label}</button>`;
+  }).join('');
   const plugChips = (logsPlugins ?? []).slice(0, 6).map((p) =>
     `<button class="chip${logsPlugin === p ? ' on' : ''}" data-log-plugin="${esc(p)}">${esc(p)}</button>`).join('');
   // 第十九轮⑤：自动清理提示——启动时算过一遍超期条目数（trimAuditLog），页头亮出来
@@ -5648,6 +5654,7 @@ async function renderLogs() {
       <div class="chips">${chips}${quickChips}${plugChips ? `<span class="chip-sep">·</span>${plugChips}` : ''}</div>
       <input id="logQuery" class="log-query" placeholder="${t('logFilterPh')}" value="${esc(logsQuery)}">
       <button class="ghost" id="logCsv" title="${t('logCsvTitle')}">⬇ CSV</button>
+      <button class="ghost" id="logJson" title="导出当前筛选为 JSON">⬇ JSON</button>
       <button class="ghost" id="logReload">${t('logReload')}</button>
       <button class="ghost" id="logFile">${logsFile === 'audit' ? t('logShowDenied') : t('logShowAll')}</button>
     </div>
@@ -5656,8 +5663,8 @@ async function renderLogs() {
   el.logsView.querySelectorAll('[data-log-decision]').forEach((b) => {
     b.addEventListener('click', () => { logsDecision = b.dataset.logDecision; logsPage = 1; renderLogs(); });
   });
-  el.logsView.querySelectorAll('[data-log-today]').forEach((b) => {
-    b.addEventListener('click', () => { logsToday = !logsToday; logsPage = 1; renderLogs(); });
+  el.logsView.querySelectorAll('[data-log-range]').forEach((b) => {
+    b.addEventListener('click', () => { logsRange = b.dataset.logRange; logsToday = logsRange === 'today'; logsPage = 1; renderLogs(); });
   });
   el.logsView.querySelectorAll('[data-log-plugin]').forEach((b) => {
     b.addEventListener('click', () => { logsPlugin = logsPlugin === b.dataset.logPlugin ? '' : b.dataset.logPlugin; logsPage = 1; renderLogs(); });
@@ -5670,7 +5677,10 @@ async function renderLogs() {
       const params = new URLSearchParams({ file: logsFile, limit: '200' });
       if (logsDecision) params.set('decision', logsDecision);
       if (logsQuery) params.set('q', logsQuery);
+      if (logsPlugin) params.set('plugin', logsPlugin);
       const d2 = await api(`/api/logs?${params}`);
+      // 第一百一十三轮⑥：导出与所见一致——时间范围也带上
+      if (logsRange) d2.entries = filterAudit(d2.entries ?? [], { range: logsRange });
       const es = d2.entries ?? [];
       if (!es.length) { el.count.textContent = '没有可导出的行'; return; }
       const head = 'time,plugin,action,decision,ms,exitCode';
@@ -5686,6 +5696,25 @@ async function renderLogs() {
       el.count.textContent = `已导出 ${es.length} 条日志`;
     } catch (err) { el.count.textContent = `导出失败：${err.message}`; }
   });
+  // 第一百一十三轮⑦：JSON 导出——与 CSV 同筛选（时间范围/决策/插件/关键词全带上）
+  $('logJson').addEventListener('click', async () => {
+    try {
+      const params = new URLSearchParams({ file: logsFile, limit: '200' });
+      if (logsDecision) params.set('decision', logsDecision);
+      if (logsQuery) params.set('q', logsQuery);
+      if (logsPlugin) params.set('plugin', logsPlugin);
+      const d2 = await api(`/api/logs?${params}`);
+      if (logsRange) d2.entries = filterAudit(d2.entries ?? [], { range: logsRange });
+      const es = d2.entries ?? [];
+      if (!es.length) { el.count.textContent = '没有可导出的行'; return; }
+      const blob = new Blob([JSON.stringify(es, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `zerokit-logs-${logsFile}-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click(); URL.revokeObjectURL(a.href);
+      el.count.textContent = `已导出 ${es.length} 条日志（JSON）`;
+    } catch (err) { el.count.textContent = `导出失败：${err.message}`; }
+  });
   $('logFile').addEventListener('click', () => {
     logsFile = logsFile === 'audit' ? 'denied' : 'audit';
     logsPage = 1;
@@ -5699,11 +5728,8 @@ async function renderLogs() {
     if (logsQuery) params.set('q', logsQuery);
     if (logsPlugin) params.set('plugin', logsPlugin);
     data = await api(`/api/logs?${params}`);
-    // 第九十二轮⑦：客户端「今天」过滤（本地零点锚定，与 CLI --today 同语义）
-    if (logsToday) {
-      const d = new Date(); d.setHours(0, 0, 0, 0);
-      data.entries = (data.entries ?? []).filter((e) => Date.parse(e.ts) >= d.getTime());
-    }
+    // 第一百一十三轮①：时间范围统一走 filterAudit 纯函数（今天=本地零点、7d/30d=滚动窗）
+    if (logsRange) data.entries = filterAudit(data.entries ?? [], { range: logsRange });
     // 插件 chip 候选：从当前页数据的插件集合取（去重保序）
     const prevPlugins = logsPlugins.join(',');
     logsPlugins = [...new Set((data.entries ?? []).map((e) => e.plugin).filter(Boolean))];

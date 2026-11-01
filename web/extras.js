@@ -3575,3 +3575,47 @@ export function parseChainSpec(spec) {
   if (typeof spec !== 'string' || !spec.trim()) return [];
   return spec.split(',').map((x) => x.trim()).filter(Boolean);
 }
+
+/** 第一百一十三轮：审计筛选纯函数——UI 与导出共用同一套语义。
+ * range: 'today'|'7d'|'30d'|''（空=全部）；outcome 对应 decision 字段；
+ * plugin 精确 id；q 走动作名/插件名/命令行/错误文本的小写包含。 */
+export function filterAudit(records, { range = '', outcome = '', plugin = '', q = '', now = Date.now() } = {}) {
+  if (!Array.isArray(records)) return [];
+  const floorOf = () => {
+    const d = new Date(now); d.setHours(0, 0, 0, 0);
+    if (range === 'today') return d.getTime();
+    if (range === '7d' || range === '30d') return d.getTime() - (range === '7d' ? 7 : 30) * 86400e3;
+    return -Infinity;
+  };
+  const floor = floorOf();
+  const ql = q.trim().toLowerCase();
+  return records.filter((e) => {
+    const ts = typeof e.ts === 'string' ? Date.parse(e.ts) : Number(e.ts ?? 0);
+    if (ts < floor) return false;
+    if (outcome && (e.decision ?? '') !== outcome) return false;
+    if (plugin && e.plugin !== plugin) return false;
+    if (ql) {
+      const hay = `${e.action ?? ''}\n${e.plugin ?? ''}\n${e.command ?? ''}\n${e.error ?? ''}`.toLowerCase();
+      if (!hay.includes(ql)) return false;
+    }
+    return true;
+  });
+}
+
+/** 第一百一十三轮：时间范围档位标签（与 CLI --today/--since 对齐）。 */
+export const AUDIT_RANGES = [
+  { id: '', zh: '全部', en: 'All' },
+  { id: 'today', zh: '今天', en: 'Today' },
+  { id: '7d', zh: '最近 7 天', en: 'Last 7 days' },
+  { id: '30d', zh: '最近 30 天', en: 'Last 30 days' },
+];
+
+/** 第一百一十三轮：单条审计记录的可复制摘要（详情展开/导出共用）。 */
+export function auditLine(e) {
+  if (!e) return '';
+  const bits = [e.ts ?? '', `${e.plugin ?? '?'}.${e.action ?? '?'}`, e.decision ?? ''];
+  if (e.ms != null) bits.push(`${e.ms}ms`);
+  if (e.exitCode != null) bits.push(`exit=${e.exitCode}`);
+  if (e.error) bits.push(String(e.error).slice(0, 120));
+  return bits.join(' | ');
+}
