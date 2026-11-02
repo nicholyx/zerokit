@@ -44,6 +44,20 @@
 <div class="card"><h4>⑥ 错误上报</h4>
   <button id="errBtn" class="ghost">人为抛错并上报</button>
   <div class="state" id="errState"></div></div>
+<div class="card"><h4>⑦ 动作菜单（getActions）</h4>
+  <div class="hint">页面运行时自建本插件动作列表：</div>
+  <div class="state" id="actList">等 context…</div></div>
+<div class="card"><h4>⑧ 轻量记忆（storage 64KB）</h4>
+  <button id="stSave">存一个计数</button>
+  <button id="stRead" class="ghost">读回来</button>
+  <button id="stKeys" class="ghost">列全部键</button>
+  <div class="state" id="stState">还没存过</div></div>
+<div class="card"><h4>⑨ 复制（copy 走宿主）</h4>
+  <button id="cpBtn" class="ghost">复制当前时间到剪贴板</button>
+  <div class="state" id="cpState"></div></div>
+<div class="card"><h4>⑩ 主题即时推（onTheme）</h4>
+  <div class="hint">现在去宿主外观面板切深/浅色——这张卡的字会立刻变，不用重开</div>
+  <div class="state" id="thState">等推送…</div></div>
 
 <script>
 (function () {
@@ -120,6 +134,56 @@
       document.getElementById('errState').className = 'state err';
     }
   };
+
+  // ⑦ 动作菜单（第一百二十一轮①）
+  zkit.ready(function () {
+    var acts = zkit.getActions();
+    document.getElementById('actList').innerHTML = acts.map(function (a) {
+      return '<div class="val">' + a.id + '（' + a.risk + (a.hasParams ? '，带参数' : '') + '）</div>';
+    }).join('') || '<div class="hint">宿主没带 actions（旧版本启动器），降级为空</div>';
+  });
+
+  // ⑧ 轻量记忆（第一百二十一轮②）
+  var stCount = 0;
+  document.getElementById('stSave').onclick = function () {
+    stCount += 1;
+    zkit.storage.set('demo.count', stCount).then(function (r) {
+      document.getElementById('stState').textContent = '已存 demo.count=' + stCount + '（用 ' + (r.bytes ?? '?') + ' 字节）';
+    }, function (e) {
+      document.getElementById('stState').textContent = '存失败：' + e.message;
+    });
+  };
+  document.getElementById('stRead').onclick = function () {
+    zkit.storage.get('demo.count').then(function (r) {
+      document.getElementById('stState').textContent = '读回 demo.count=' + JSON.stringify(r.value);
+    }, function (e) {
+      document.getElementById('stState').textContent = '读失败：' + e.message;
+    });
+  };
+  document.getElementById('stKeys').onclick = function () {
+    zkit.storage.keys().then(function (r) {
+      document.getElementById('stState').textContent = '键：' + (r.keys || []).join(', ') + '（' + (r.bytes ?? 0) + ' 字节）';
+    }, function (e) {
+      document.getElementById('stState').textContent = '列键失败：' + e.message;
+    });
+  };
+
+  // ⑨ 复制（第一百二十一轮⑤）
+  document.getElementById('cpBtn').onclick = function () {
+    zkit.copy(new Date().toISOString()).then(function () {
+      document.getElementById('cpState').textContent = '已复制，去任何输入框粘贴试试';
+    }, function (e) {
+      document.getElementById('cpState').textContent = '复制失败：' + e.message;
+    });
+  };
+
+  // ⑩ 主题即时推（第一百二十一轮④）
+  if (zkit.onTheme) {
+    zkit.onTheme(function (ap) {
+      document.getElementById('thState').textContent = '已收到推送：dark=' + (ap.dark ? '深色' : '浅色') + ' accent=' + ap.accent;
+      report();
+    });
+  }
 
   window.addEventListener('load', report);
 })();

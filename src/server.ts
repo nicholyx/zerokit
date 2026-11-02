@@ -28,6 +28,8 @@ import { addFromDir, addFromGit, findPlugin, listPlugins, previewAdd, removePlug
 import { applyUpdate, checkUpdate } from './core/update.ts';
 import { describeSource, readSource } from './core/sources.ts';
 import { checkRequires } from './core/resolve.ts';
+// 第一百二十一轮②：web 插件页面 KV 存储（sandbox 里没有 localStorage，宿主代存）
+import { storeGet, storeKeys, storeRemove, storeSet } from './core/webstore.ts';
 import { applyDefaults, coerceParam, toFormFields, toJsonSchema } from './core/schema.ts';
 import { type PublicSetting, publicSettings, SECRET_MASK, writeSettings } from './core/pluginConfig.ts';
 import { dependents, depStates, installDeps, missingDeps } from './core/deps.ts';
@@ -396,6 +398,24 @@ export function createServer(): http.Server {
       }
       if (url.pathname === '/api/plugins') {
         json(res, 200, { plugins: wirePlugins() });
+        return;
+      }
+
+      // 第一百二十一轮②：web 插件页面 KV 存储。POST 走令牌门（上面统一拦），
+      // 但插件页面是 opaque origin 拿不到令牌——实际由宿主前端代调（它有令牌），
+      // 按 pluginId 隔离，每个插件只能动自己的文件。
+      if (url.pathname === '/api/webstore' && req.method === 'POST') {
+        const body = (await readBody(req)) as Record<string, unknown>;
+        const pid = String(body.plugin ?? '');
+        if (!/^[\w.-]{1,64}$/.test(pid)) { json(res, 400, { error: '非法插件 id' }); return; }
+        const key = body.key as string | undefined;
+        let r;
+        if (body.op === 'get') r = storeGet(pid, key as string);
+        else if (body.op === 'set') r = storeSet(pid, key as string, body.value);
+        else if (body.op === 'remove') r = storeRemove(pid, key as string);
+        else if (body.op === 'keys') r = storeKeys(pid);
+        else { json(res, 400, { error: 'op 只支持 get/set/remove/keys' }); return; }
+        json(res, r.ok ? 200 : 400, r);
         return;
       }
 

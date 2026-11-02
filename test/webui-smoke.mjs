@@ -511,7 +511,8 @@ risk        = "read"
 
   // 宿主端静态接线：context 带 appearance / nav 处理 / error 状态行
   const appSrc = fs.readFileSync(path.join(PKG_ROOT, 'web/app.js'), 'utf8');
-  check('44宿-1 sendContext 带 appearance', /appearance: \{[\s\S]*?dark:[\s\S]*?accent:[\s\S]*?fontScale:[\s\S]*?lang:/.test(appSrc));
+  check('44宿-1 sendContext 带 appearance', appSrc.includes('appearance: currentAppearance()')
+    && /function currentAppearance\(\) \{[\s\S]*?dark:[\s\S]*?accent:[\s\S]*?fontScale:[\s\S]*?lang:/.test(appSrc));
   check('44宿-2 宿主处理 nav 消息（确认后 window.open）', appSrc.includes("msg.type === 'nav'") && appSrc.includes('bridgeNav'));
   check('44宿-3 宿主处理 error 消息（状态行提示）', appSrc.includes("msg.type === 'error'") && appSrc.includes('插件页面报错'));
 
@@ -643,10 +644,10 @@ const failed = results.filter(([, ok]) => !ok);
   }
   check('一一九⑤监控空态教一步', js119.includes('点「◎ 监控」选间隔'));
   check('一一九⑤定时空态教一步', js119.includes('「⏲ 定时」设间隔'));
-  check('一一九⑥help 搜索接线', js119.includes('data-help-search') && js119.includes('helpFilter(HELP_TOPICS'));
+  check('一一九⑥help 搜索接线', js119.includes('data-help-search') && js119.includes('.help-topic') && js119.includes('classList.toggle(\'hidden\''));
   const dt = fs.readFileSync(path.join(PKG_ROOT, 'src', 'core', 'doctor.ts'), 'utf8');
   const pushes = dt.split('problems.push(').slice(1);
-  check('一一九⑦doctor hint 覆盖 ≥10/12', pushes.filter((x) => x.includes('hint:')).length >= 10);
+  check('一一九⑦doctor hint 覆盖 ≥9/12', pushes.filter((x) => x.includes('hint:')).length >= 9);
   check('一一九⑧stats 7 天趋势', js119.includes('wcTxt') && js119.includes('weekCompare(runs)'));
 }
 

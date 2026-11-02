@@ -215,6 +215,7 @@ function loadPrefs() {
 function applyFontScale() {
   const v = localStorage.getItem('zerokit.font-scale') || 'm';
   document.documentElement.dataset.fontScale = v;
+  pushThemeToFrame();   // 第一百二十一轮④：字号变化也推给插件页面
 }
 
 function applyAccent() {
@@ -375,6 +376,7 @@ function openThemePop() {
       t = makeT(lang);
       applyLang(true);
       openThemePop();
+      pushThemeToFrame();   // 第一百二十一轮④：语言切换也推给插件页面
     });
   });
   pop.querySelectorAll('[data-theme-choice]').forEach((b) => {
@@ -389,6 +391,7 @@ function openThemePop() {
       try { localStorage.setItem(PREF.theme, b.dataset.themeChoice); } catch { /* 隐私模式 */ }
       applyTheme();
       paint();
+      pushThemeToFrame();   // 第一百二十一轮④：主题一变就推给插件页面
     });
   });
   pop.querySelectorAll('[data-accent]').forEach((b) => {
@@ -397,6 +400,7 @@ function openThemePop() {
       try { localStorage.setItem(PREF.accent, accent); } catch { /* 隐私模式 */ }
       applyAccent();
       paint();
+      pushThemeToFrame();   // 第一百二十一轮④：强调色同推
     });
   });
   // ---- 第二十轮：数据分组（导出 / 导入 / 清除痕迹收进外观面板底部） ----
@@ -5112,7 +5116,6 @@ function sendContext(frame) {
   if (!frame.contentWindow || !detail || !lastResult) return;
   // 第四十四轮⑤：外观上下文一并下发——插件页面跟随宿主主题/暗色/字号/语言，
   // 不用页面自己猜。都是非敏感的展示信息。
-  const cs = getComputedStyle(document.documentElement);
   frame.contentWindow.postMessage({
     __zkit: true,
     type: 'context',
@@ -5124,14 +5127,66 @@ function sendContext(frame) {
         ok: lastResult.ok, data: lastResult.data, stdout: lastResult.stdout,
         stderr: lastResult.stderr, error: lastResult.error, ms: lastResult.ms,
       },
-      appearance: {
-        dark: document.documentElement.dataset.theme === 'dark',
-        accent: cs.getPropertyValue('--accent').trim() || '#2271f0',
-        fontScale: localStorage.getItem('zerokit.font-scale') || 'm',
-        lang: localStorage.getItem('zerokit.lang') || 'system',
-      },
+      appearance: currentAppearance(),
+      // 第一百二十一轮①：本插件全部动作（页面 getActions 自建菜单用；非敏感元数据）
+      actions: detail.plugin.actions.map((a) => ({ id: a.id, title: a.title, risk: a.risk, params: a.params ?? [] })),
     },
   }, '*');   // targetOrigin 用 '*'：sandbox 页面是 opaque origin，没有具体源可写（消息不含敏感内容）
+}
+
+/** 外观快照（sendContext 与 theme 推送共用一份口径） */
+function currentAppearance() {
+  const cs = getComputedStyle(document.documentElement);
+  return {
+    dark: document.documentElement.dataset.theme === 'dark',
+    accent: cs.getPropertyValue('--accent').trim() || '#2271f0',
+    fontScale: localStorage.getItem('zerokit.font-scale') || 'm',
+    lang: localStorage.getItem('zerokit.lang') || 'system',
+  };
+}
+
+/** 第一百二十一轮④：主题/字号/语言一变就推给插件页面（不等重开详情页）。
+ * applyLang/openThemePop 里的重渲后调 pushThemeToFrame；页面不认识 theme 消息就忽略（旧页面兼容）。 */
+function pushThemeToFrame() {
+  const frame = document.querySelector('#result .web-frame:not(.html)');
+  if (frame && frame.contentWindow) {
+    frame.contentWindow.postMessage({ __zkit: true, type: 'theme', payload: currentAppearance() }, '*');
+  }
+}
+
+/** 第一百二十一轮②：storage 转发——宿主持令牌调 /api/webstore，按 detail.plugin.id 隔离 */
+async function bridgeStorage(frame, msg) {
+  const pid = detail?.plugin?.id;
+  const reply = (payload) => frame.contentWindow.postMessage({
+    __zkit: true, type: 'storage:result', callId: msg.callId, payload,
+  }, '*');
+  if (!pid) { reply({ ok: false, error: '详情页已关闭' }); return; }
+  try {
+    const r = await fetch('/api/webstore', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-zerokit-token': TOKEN },
+      body: JSON.stringify({ op: msg.op, plugin: pid, key: msg.key, value: msg.value }),
+    });
+    const j = await r.json();
+    reply(r.ok ? j : { ok: false, error: j.error || `存储操作失败（${r.status}）` });
+  } catch (e) {
+    reply({ ok: false, error: e.message });
+  }
+}
+
+/** 第一百二十一轮⑤：复制转发——宿主走 navigator.clipboard（sandbox 里页面自己复制不了） */
+async function bridgeCopy(frame, msg) {
+  const reply = (payload) => frame.contentWindow.postMessage({
+    __zkit: true, type: 'copy:result', callId: msg.callId, payload,
+  }, '*');
+  try {
+    const text = String(msg.text ?? '');
+    if (!text) { reply({ ok: false, error: '没有要复制的内容' }); return; }
+    await navigator.clipboard.writeText(text);
+    reply({ ok: true });
+  } catch (e) {
+    reply({ ok: false, error: e.message });
+  }
 }
 
 async function bridgeRun(frame, msg) {
@@ -5144,8 +5199,19 @@ async function bridgeRun(frame, msg) {
     reply({ ok: false, error: `桥只能调本插件的动作：${plugin ? `没有动作 ${msg.action}` : '详情页已关闭'}` });
     return;
   }
+  // 第一百二十一轮③：进度事件——执行期间的阶段性反馈转发给页面（run:progress）。
+  // 宿主侧进度来源是 /api/ps 轮询里该动作的 stdout 增量，这里用轻量法：run 前后
+  // 发 started/done 两类事件，页面至少能画「跑起来了/跑完了」；细粒度行级进度
+  // 需要 server 流式支持，显式不做（会把 /api/run 的幂等语义改掉）。
+  const progress = (phase) => {
+    try {
+      frame.contentWindow.postMessage({ __zkit: true, type: 'run:progress', callId: msg.callId, phase }, '*');
+    } catch { /* iframe 已关就算了 */ }
+  };
+  progress('started');
   try {
     const res = await executeAction(plugin, action, msg.values ?? {});
+    progress('done');
     if (!res) { reply({ ok: false, error: '用户在确认框取消了执行' }); return; }
     lastResult = res;   // 页面后续要 context 时给最新的
     reply({
@@ -5155,6 +5221,7 @@ async function bridgeRun(frame, msg) {
     });
     refreshPsCount();
   } catch (e) {
+    progress('done');
     reply({ ok: false, error: e.message });
   }
 }
@@ -5178,6 +5245,12 @@ window.addEventListener('message', (ev) => {
     frame.style.height = `${h}px`;
   } else if (msg.type === 'run') {
     bridgeRun(frame, msg);
+  } else if (msg.type === 'storage') {
+    // 第一百二十一轮②：KV 存储转发（宿主持令牌，按插件隔离）
+    bridgeStorage(frame, msg);
+  } else if (msg.type === 'copy') {
+    // 第一百二十一轮⑤：复制转发
+    bridgeCopy(frame, msg);
   } else if (msg.type === 'nav') {
     bridgeNav(frame, msg);
   } else if (msg.type === 'error') {
