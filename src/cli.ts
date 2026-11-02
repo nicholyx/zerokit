@@ -6,6 +6,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { type Plugin, type RiskLevel, toolName } from './core/manifest.ts';
 import { HOME, LOG_DIR, PLUGINS_DIR } from './core/paths.ts';
+import { pluginHealthCard, findLostPlugins, purgePreview, appendPluginEvent } from './core/lifecycle125.ts';
 import { actionStats, gcAudit, readAudit, readAuditDetailed, recentErrors, SLOW_MS } from './core/ops.ts';
 import { packPluginWithManifest as packPlugin, publishReady, unpackPlugin, verifyInstalled } from './core/distro.ts';
 import * as distroNs from './core/distro.ts';
@@ -1176,7 +1177,7 @@ async function cmdPluginUpdate(args: string[]): Promise<number> {
   // 旧清单就没了，diff/rug-pull 都要在覆盖前算好
   const curEntry = findPlugin(id);
   const curPlugin = curEntry?.plugin;
-  const dryRun = args.includes('--dry-run');
+  const dryRun = args.includes('--dry-run') || args.includes('--check');
 
   const check = checkUpdate(id);
   if (!check.source) {
@@ -1493,10 +1494,47 @@ async function cmdPlugin(args: string[]): Promise<number> {
     if (result.id) process.stdout.write(c.dim(`  看看它有什么动作：zkit show ${result.id}\n`));
     return depCode;
   }
+  // 第一百二十五轮①：单插件深度体检——不是全局 doctor 的缩影，回答「这一个还好吗」
+  if (sub === 'health') {
+    const id = args[1];
+    if (!id) { process.stderr.write('用法：zkit plugin health <插件>\n'); return 2; }
+    const entry = findPlugin(id);
+    if (!entry) { process.stderr.write(c.red(`✗ 没有找到插件 ${id}\n`)); return 1; }
+    const installed = listPlugins().map((e) => e.plugin?.id).filter(Boolean) as string[];
+    const card = pluginHealthCard(entry, installed, readAudit());
+    const badge = card.level === 'good' ? c.green('✓ 健康') : card.level === 'warn' ? c.yellow('⚠ 注意') : c.red('✗ 异常');
+    process.stdout.write(c.bold(`${card.id} ${badge}\n`));
+    process.stdout.write(`  动作风险构成：读 ${card.riskMix.read} · 写 ${card.riskMix.mutate} · 毁 ${card.riskMix.destructive}\n`);
+    for (const e of card.loadErrors) process.stdout.write(c.red(`  ✗ ${e}\n`));
+    for (const w of card.loadWarnings) process.stdout.write(c.yellow(`  ! ${w}\n`));
+    for (const d of card.depIssues) process.stdout.write(c.red(`  ✗ ${d}\n`));
+    if (card.runs) {
+      const rate = Math.round((card.runs.ok / card.runs.total) * 100);
+      const rateCol = rate >= 90 ? c.green : rate >= 60 ? c.yellow : c.red;
+      process.stdout.write(`  最近执行：${card.runs.ok}/${card.runs.total} 成功（${rateCol(rate + '%')}）\n`);
+      if (card.runs.lastError) process.stdout.write(c.dim(`  上次失败：${card.runs.lastError}\n`));
+    } else {
+      process.stdout.write(c.dim('  最近执行：还没跑过（无成功率数据）\n'));
+    }
+    return card.level === 'bad' ? 1 : 0;
+  }
+  // 第一百二十五轮⑦：失联插件处置（目录在、清单没了）
+  if (sub === 'doctor-lost') {
+    const lost = findLostPlugins(PLUGINS_DIR);
+    if (lost.length === 0) { process.stdout.write(c.green('✓ 没有失联插件\n')); return 0; }
+    process.stdout.write(c.yellow(`${lost.length} 个失联插件：\n`));
+    for (const l of lost) {
+      process.stdout.write(`  ${l.id}  ${c.dim(l.reason)} · 上次来源 ${l.sourceText}\n`);
+      process.stdout.write(c.dim(`    处置：zkit plugin install ${l.id}（重装）或 zkit plugin remove ${l.id} --force（清掉）\n`));
+      appendPluginEvent(HOME, { ts: new Date().toISOString(), plugin: l.id, kind: 'lost', detail: l.reason });
+    }
+    return 1;
+  }
   if (sub === 'remove' || sub === 'rm') {
+    const purge = args.includes('--purge');
     const id = args[1];
     if (!id) {
-      process.stderr.write('用法：zkit plugin remove <插件> [--force]\n');
+      process.stderr.write('用法：zkit plugin remove <插件> [--force] [--purge]\n');
       return 2;
     }
     // 别人还在依赖它时先拦住：删掉依赖会让那些插件的动作在运行时才炸
@@ -1513,9 +1551,20 @@ async function cmdPlugin(args: string[]): Promise<number> {
       process.stdout.write(c.bold(`\n将失去：${pv.losing} 个动作（${target.name}）\n`));
       process.stdout.write(c.dim('  持久数据（settings/logs）保留在数据目录，重装即恢复。\n'));
     }
-    const ok = removePlugin(id);
+    // 失联插件（listPlugins 已隔离）在目录层面直删兜底
+    let ok = removePlugin(id);
+    if (!ok) {
+      const ghost = findLostPlugins(PLUGINS_DIR).find((l) => l.id === id);
+      if (ghost) { fs.rmSync(ghost.dir, { recursive: true, force: true }); ok = true; }
+    }
     process.stdout.write(ok ? c.green(`✓ 已卸载 ${id}\n`) : c.red(`✗ 没有找到插件 ${id}\n`));
     if (ok) appendInstallHistory(HOME, { ts: new Date().toISOString(), plugin: id, kind: 'remove' });
+    // 第一百二十五轮⑤：--purge 连持久痕迹一起清（默认保留：重装即恢复是既有承诺）
+    if (ok && purge) {
+      const pp = purgePreview(HOME, id);
+      for (const f of pp.settingsFiles) { try { fs.rmSync(f, { force: true }); } catch { /* 尽力 */ } }
+      if (pp.settingsFiles.length > 0) process.stdout.write(c.dim(`  --purge：已清 ${pp.settingsFiles.length} 个配置文件\n`));
+    }
     return ok ? 0 : 1;
   }
   if (sub === 'history') {
@@ -1525,7 +1574,7 @@ async function cmdPlugin(args: string[]): Promise<number> {
     const pIdx = args.indexOf('--plugin');
     if (pIdx >= 0 && args[pIdx + 1]) evts = evts.filter((e) => e.plugin === args[pIdx + 1]);
     if (evts.length === 0) { process.stdout.write('还没有安装记录。\n'); return 0; }
-    const label: Record<string, string> = { install: '安装', update: '升级', remove: '卸载' };
+    const label: Record<string, string> = { install: '安装', update: '升级', remove: '卸载', lost: '失联', 'health-degraded': '健康降级' };
     for (const e of [...evts].reverse()) {
       const ver = e.version ? ` v${e.version}` : '';
       const dt = e.detail ? c.dim(`  ${e.detail}`) : '';

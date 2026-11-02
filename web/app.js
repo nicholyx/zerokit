@@ -6470,7 +6470,7 @@ async function showPluginHome(id) {
     </div>
     <div class="plug-home-desc">${esc(p.description || p.summary || '')}</div>
     <span id="plugUpdateBadge" class="badge upd-badge hidden" style="display:none"></span>
-    <div class="plug-home-history">📥 装于 ${esc(p.installedAt ? new Date(p.installedAt).toLocaleString() : '未知时间')} · ${esc(p.sourceText)}${p.installedVersion && p.installedVersion !== p.version ? `（记录自 v${esc(p.installedVersion)}）` : ''}</div>
+    <div class="plug-home-history">${p.health === 'good' ? '<span class="ph-health ph-good" title="清单正常、依赖齐全、最近执行无异常">✓ 健康</span>' : p.health === 'warn' ? '<span class="ph-health ph-warn" title="有警告（依赖/配置/成功率），终端跑 zkit plugin health 看详情">⚠ 注意</span>' : '<span class="ph-health ph-bad" title="清单损坏或加载失败">✗ 异常</span>'} 📥 装于 ${esc(p.installedAt ? new Date(p.installedAt).toLocaleString() : '未知时间')} · ${esc(p.sourceText)}${p.installedVersion && p.installedVersion !== p.version ? `（记录自 v${esc(p.installedVersion)}）` : ''}</div>
     <div class="plug-home-meta">
       <span class="badge">${p.actions.length} 个动作</span>
       ${deps.length ? `<span class="badge">插件依赖 ${deps.map((d) => `${esc(d.id)}${d.installed ? '' : '（未装）'}`).join('、')}</span>` : ''}
