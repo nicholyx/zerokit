@@ -4,6 +4,8 @@ import http from 'node:http';
 import path from 'node:path';
 import process from 'node:process';
 import { type Plugin, toolName } from './core/manifest.ts';
+import { pluginHealthCard } from './core/lifecycle125.ts';
+import { readAudit } from './core/ops.ts';
 import { DATA_DIR, HOME, LOG_DIR, PKG_ROOT } from './core/paths.ts';
 import { needsConfirm, rememberApproval } from './core/approvals.ts';
 import { readFileSync } from 'node:fs';
@@ -73,6 +75,8 @@ export interface ServerOptions {
 }
 
 interface WiredPlugin {
+  /** 第一百二十五轮⑥：good/warn/bad——插件主页徽标信号源 */
+  health: 'good' | 'warn' | 'bad';
   id: string;
   name: string;
   version: string;
@@ -94,6 +98,8 @@ interface WiredPlugin {
 }
 
 function wirePlugins(): WiredPlugin[] {
+  const audit = readAudit();
+  const installedIds = listPlugins().map((e) => e.plugin?.id).filter(Boolean) as string[];
   const out: WiredPlugin[] = [];
   for (const entry of listPlugins()) {
     const p: Plugin | undefined = entry.plugin;
@@ -114,6 +120,7 @@ function wirePlugins(): WiredPlugin[] {
       sourceUrl: source?.url ?? '',
       sourceText: describeSource(source),
       installedAt: source?.installedAt ?? '',
+      health: pluginHealthCard(entry, installedIds, audit).level,
       settings: publicSettings(p),
       actions: p.actions.map((a) => ({
         id: a.id,

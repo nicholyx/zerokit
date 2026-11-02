@@ -43,6 +43,10 @@ export function listPlugins(): PluginEntry[] {
     if (name.startsWith('.tmp-')) continue;
     // 第四十三轮：_vendor 这类下划线目录是插件共享代码层，不是插件本身
     if (name.startsWith('_')) continue;
+    // 第一百二十五轮④：失联目录（无清单但带来源记录）不进正常列表——
+    // 「1 个加载失败」是噪音，失联有专门的面（zkit plugin doctor-lost）
+    const hasAnyManifest = fs.existsSync(path.join(dir, 'plugin.toml')) || fs.existsSync(path.join(dir, 'plugin.json'));
+    if (!hasAnyManifest && fs.existsSync(path.join(dir, '.zerokit-source.json'))) continue;
     const result = loadDir(dir);
     const entry: PluginEntry = { dir, errors: result.errors, warnings: result.warnings };
     if (result.plugin) entry.plugin = result.plugin;

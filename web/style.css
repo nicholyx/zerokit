@@ -2049,3 +2049,9 @@ td.gsum-label { font-weight: 600; }
 .partial-out summary { cursor: pointer; color: var(--warn); font-size: 12px; padding: 4px 0; user-select: none; }
 .partial-out pre { margin-top: 4px; }
 @media (prefers-reduced-motion: reduce) { .partial-out summary { transition: none; } }
+
+/* 第一百二十五轮⑥：插件主页健康徽标 */
+.ph-health { display:inline-block; margin-right:8px; padding:1px 8px; border-radius:9px; font-size:12px; font-weight:600; }
+.ph-good { background:color-mix(in srgb, var(--ok, #3aa660) 18%, transparent); color:var(--ok, #3aa660); }
+.ph-warn { background:color-mix(in srgb, var(--warn, #e8b13a) 20%, transparent); color:var(--warn, #e8b13a); }
+.ph-bad { background:color-mix(in srgb, var(--danger, #d05656) 18%, transparent); color:var(--danger, #d05656); }
