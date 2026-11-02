@@ -651,6 +651,20 @@ const failed = results.filter(([, ok]) => !ok);
   check('一一九⑧stats 7 天趋势', js119.includes('wcTxt') && js119.includes('weekCompare(runs)'));
 }
 
+// ---------- 第一百二十三轮：结果区键盘与无障碍 ----------
+{
+  const appJs = fs.readFileSync(path.join(PKG_ROOT, 'web', 'app.js'), 'utf8');
+  const extrasJs = fs.readFileSync(path.join(PKG_ROOT, 'web', 'extras.js'), 'utf8');
+  const css = fs.readFileSync(path.join(PKG_ROOT, 'web', 'style.css'), 'utf8');
+  check('123① jsonFoldSpans 纯函数存在', extrasJs.includes('export function jsonFoldSpans'));
+  check('123② JSON 折叠接线（pre.json-foldable）', appJs.includes('json-foldable') && appJs.includes('折叠'));
+  check('123③ 对比差异行 ▲ 非颜色标记', appJs.includes('cmp-mark') && appJs.includes('aria-label="有差异"'));
+  check('123④ 表头 aria-sort', appJs.includes("aria-sort="));
+  check('123⑤ Shift+Enter 复制 JSON 行', appJs.includes('已复制 JSON 行'));
+  check('123⑥ KV Enter 复制值', appJs.includes('已复制值') && appJs.includes('td[data-dkv]'));
+  check('123⑦ 折叠样式', css.includes('.json-fold > summary') && css.includes('.cmp-mark'));
+}
+
 console.log(`\n${'='.repeat(60)}\n通过 ${results.length - failed.length} / ${results.length}`);
 if (failed.length > 0) {
   console.log('失败项：');
