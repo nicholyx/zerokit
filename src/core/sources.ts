@@ -71,7 +71,8 @@ export function describeSource(s: PluginSource | null): string {
     case 'git':
       return `git ${s.url ?? '?'}${s.ref ? `（分支 ${s.ref}）` : ''}`;
     case 'market':
-      return `集市 ${s.market ?? '?'}`;
+      // 第一百二十二轮⑥：集市来源带登记的源仓库地址（market 来源的 url 存的是集市源地址）
+      return `集市 ${s.market ?? '?'}${s.url ? ` · ${s.url}` : ''}`;
     case 'bundled':
       return 'zerokit 自带示例';
     case 'dir':

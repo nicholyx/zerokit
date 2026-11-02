@@ -17,7 +17,113 @@
         "clip",
         "粘贴板"
       ],
-      "source": "path:plugins/clipboard"
+      "source": "path:plugins/clipboard",
+      "actionCount": 6,
+      "riskMix": {
+        "read": 2,
+        "mutate": 3,
+        "destructive": 1
+      }
+    },
+    {
+      "id": "convert",
+      "name": "编码转换台",
+      "summary": "进制/大小写/JSON 美化等八种常用转换，零依赖纯计算",
+      "version": "0.1.0",
+      "tags": [
+        "转换",
+        "进制",
+        "十六进制",
+        "json",
+        "大小写",
+        "encode"
+      ],
+      "source": "path:plugins/convert",
+      "actionCount": 9,
+      "riskMix": {
+        "read": 9,
+        "mutate": 0,
+        "destructive": 0
+      }
+    },
+    {
+      "id": "demochain",
+      "name": "组合动作演示",
+      "summary": "演示链式组合动作：第一步取数，第二步用它的结果算",
+      "version": "0.1.0",
+      "tags": [
+        "chain",
+        "组合",
+        "演示",
+        "pipeline"
+      ],
+      "source": "path:plugins/demochain",
+      "actionCount": 3,
+      "riskMix": {
+        "read": 3,
+        "mutate": 0,
+        "destructive": 0
+      }
+    },
+    {
+      "id": "demohttp",
+      "name": "HTTP 动作演示",
+      "summary": "演示 HTTP 动作：取本仓库信息（内核发请求、走代理）",
+      "version": "0.1.0",
+      "tags": [
+        "http",
+        "rest",
+        "api",
+        "演示"
+      ],
+      "source": "path:plugins/demohttp",
+      "actionCount": 1,
+      "riskMix": {
+        "read": 1,
+        "mutate": 0,
+        "destructive": 0
+      }
+    },
+    {
+      "id": "demosettings",
+      "name": "设置项演示",
+      "summary": "演示用户设置与 secret：配置存本地、敏感值只走环境变量",
+      "version": "0.1.0",
+      "tags": [
+        "setting",
+        "settings",
+        "设置",
+        "secret",
+        "演示"
+      ],
+      "source": "path:plugins/demosettings",
+      "actionCount": 1,
+      "riskMix": {
+        "read": 1,
+        "mutate": 0,
+        "destructive": 0
+      }
+    },
+    {
+      "id": "demoweb",
+      "name": "网页桥演示",
+      "summary": "演示 web 动作消息协议全家桶：上下文、外观跟随、深链执行、受控跳转、自适应高度、错误上报",
+      "version": "0.1.0",
+      "tags": [
+        "演示",
+        "web",
+        "桥",
+        "iframe",
+        "bridge",
+        "demo"
+      ],
+      "source": "path:plugins/demoweb",
+      "actionCount": 3,
+      "riskMix": {
+        "read": 2,
+        "mutate": 1,
+        "destructive": 0
+      }
     },
     {
       "id": "filesearch",
@@ -35,7 +141,13 @@
         "filesearch",
         "everything"
       ],
-      "source": "path:plugins/filesearch"
+      "source": "path:plugins/filesearch",
+      "actionCount": 4,
+      "riskMix": {
+        "read": 2,
+        "mutate": 2,
+        "destructive": 0
+      }
     },
     {
       "id": "ip",
@@ -49,22 +161,33 @@
         "网络",
         "地址"
       ],
-      "source": "path:plugins/ip"
+      "source": "path:plugins/ip",
+      "actionCount": 1,
+      "riskMix": {
+        "read": 1,
+        "mutate": 0,
+        "destructive": 0
+      }
     },
     {
       "id": "proxy",
       "name": "白名单代理",
-      "summary": "只允许访问 jlcops.com / jlcerp.com 的出网代理",
+      "summary": "只放行白名单域名的本机出网代理（默认 example.com，用 allow-domain 加自己要的）",
       "version": "1.1.0",
       "tags": [
         "代理",
         "proxy",
         "网络",
         "白名单",
-        "jlc",
         "出网"
       ],
-      "source": "path:plugins/proxy"
+      "source": "path:plugins/proxy",
+      "actionCount": 7,
+      "riskMix": {
+        "read": 2,
+        "mutate": 4,
+        "destructive": 1
+      }
     },
     {
       "id": "quick",
@@ -80,7 +203,32 @@
         "base64",
         "quick"
       ],
-      "source": "path:plugins/quick"
+      "source": "path:plugins/quick",
+      "actionCount": 4,
+      "riskMix": {
+        "read": 3,
+        "mutate": 1,
+        "destructive": 0
+      }
+    },
+    {
+      "id": "snap",
+      "name": "截图到文件",
+      "summary": "用系统自带工具截全屏/当前窗口，存到文件——不装任何第三方依赖",
+      "version": "0.1.0",
+      "tags": [
+        "截图",
+        "屏幕",
+        "截屏",
+        "screenshot"
+      ],
+      "source": "path:plugins/snap",
+      "actionCount": 3,
+      "riskMix": {
+        "read": 1,
+        "mutate": 2,
+        "destructive": 0
+      }
     },
     {
       "id": "sysinfo",
@@ -96,78 +244,34 @@
         "sysinfo",
         "性能"
       ],
-      "source": "path:plugins/sysinfo"
-    },
-    {
-      "id": "demochain",
-      "name": "组合动作演示",
-      "summary": "演示链式组合动作：第一步取数，第二步用它的结果算",
-      "version": "0.1.0",
-      "tags": [
-        "组合",
-        "chain",
-        "演示",
-        "pipeline",
-        "示例"
-      ],
-      "source": "path:plugins/demochain"
-    },
-    {
-      "id": "demosettings",
-      "name": "设置项演示",
-      "summary": "演示用户设置与 secret：配置存本地、敏感值只走环境变量",
-      "version": "0.1.0",
-      "tags": [
-        "设置",
-        "setting",
-        "secret",
-        "演示",
-        "示例"
-      ],
-      "source": "path:plugins/demosettings"
-    },
-    {
-      "id": "demohttp",
-      "name": "HTTP 动作演示",
-      "summary": "演示 HTTP 动作：取本仓库信息（内核发请求、走代理）",
-      "version": "0.1.0",
-      "tags": [
-        "http",
-        "rest",
-        "api",
-        "演示",
-        "示例"
-      ],
-      "source": "path:plugins/demohttp"
-    },
-    {
-      "id": "convert",
-      "name": "编码转换台",
-      "source": "path:plugins/convert",
-      "description": ""
-    },
-    {
-      "id": "snap",
-      "name": "截图到文件",
-      "source": "path:plugins/snap",
-      "description": ""
+      "source": "path:plugins/sysinfo",
+      "actionCount": 5,
+      "riskMix": {
+        "read": 4,
+        "mutate": 1,
+        "destructive": 0
+      }
     },
     {
       "id": "typist",
       "name": "文本片段台",
-      "source": "path:plugins/typist",
-      "description": ""
-    },
-    {
-      "id": "demoweb",
-      "name": "网页桥演示",
-      "summary": "web 动作消息协议全家桶演示：上下文/外观/深链/受控跳转/高度/错误上报",
+      "summary": "常用文本模板（SQL/Markdown/YAML 骨架等）一键写入剪贴板，改两个占位就能用",
+      "version": "0.1.0",
       "tags": [
-        "demo",
-        "web",
-        "bridge"
+        "模板",
+        "片段",
+        "snippet",
+        "sql",
+        "yaml",
+        "markdown"
       ],
-      "source": "path:plugins/demoweb"
+      "source": "path:plugins/typist",
+      "actionCount": 5,
+      "riskMix": {
+        "read": 1,
+        "mutate": 4,
+        "destructive": 0
+      }
     }
   ]
 }

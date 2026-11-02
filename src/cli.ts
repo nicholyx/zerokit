@@ -2843,6 +2843,44 @@ function cmdMarket(args: string[]): number {
     return r.ok ? 0 : 1;
   }
 
+  if (sub === 'info') {
+    // 第一百二十二轮⑦：单源详情——登记表计数/风险构成/添加时间/源地址，配 doctor 用
+    const name = args[1];
+    const markets = loadMarkets();
+    if (!name) {
+      if (markets.length === 0) { process.stdout.write('还没有添加任何集市。\n'); return 0; }
+      process.stdout.write('用法：zkit market info <集市名>\n已添加的集市：\n');
+      for (const m of markets) process.stdout.write(`  ${c.bold(m.name)}${c.dim(`  ${m.url}`)}\n`);
+      return 0;
+    }
+    const m = markets.find((x) => x.name === name);
+    if (!m) {
+      const near = markets.find((x) => x.name.toLowerCase().includes(name.toLowerCase()));
+      process.stderr.write(`✗ 没有这个集市：${name}${near ? `（是不是想找 ${near.name}？）` : `（已添加：${markets.map((x) => x.name).join('、')}）`}\n`);
+      return 1;
+    }
+    const index = readIndex(m.name);
+    process.stdout.write(`${c.bold(m.name)}  ${c.dim(m.url)}\n`);
+    process.stdout.write(`  类型 ${m.kind === 'path' ? '本地目录' : m.kind === 'git' ? 'git 仓库' : '?'} · 添加于 ${m.addedAt ? new Date(m.addedAt).toLocaleString() : '未知时间'}\n`);
+    if (!index || !Array.isArray(index.plugins)) {
+      process.stdout.write(c.red('  ✗ 索引读不出来（源可能已移动/删除——先 market refresh 试试）\n'));
+      return 1;
+    }
+    process.stdout.write(`  登记插件 ${index.plugins.length} 个\n`);
+    for (const e of index.plugins) {
+      const inst = findPlugin(e.id)?.plugin;
+      const mixParts: string[] = [];
+      if (e.riskMix) {
+        if (e.riskMix.read) mixParts.push(`读×${e.riskMix.read}`);
+        if (e.riskMix.mutate) mixParts.push(`写×${e.riskMix.mutate}`);
+        if (e.riskMix.destructive) mixParts.push(`毁×${e.riskMix.destructive}`);
+      }
+      const mix = mixParts.length ? ` · ${mixParts.join(' ')}` : '';
+      process.stdout.write(`    ${e.name ?? e.id}${e.version ? c.dim(` v${e.version}`) : ''}${typeof e.actionCount === 'number' ? c.dim(` · ${e.actionCount} 动作`) : ''}${c.dim(mix)}${inst ? c.green('  ✓ 已装') : ''}\n`);
+    }
+    return 0;
+  }
+
   if (sub === 'remove' || sub === 'rm') {
     const name = args[1];
     if (!name) {
@@ -2923,7 +2961,7 @@ function cmdMarket(args: string[]): number {
     else if (r.ok) process.stdout.write(c.yellow(`  ✓ 可用（${r.warnings.length} 条建议）\n`));
     return r.ok ? 0 : 1;
   }
-  process.stderr.write('用法：zkit market <list|add|remove|refresh|search|index|lint>\n');
+  process.stderr.write('用法：zkit market <list|info|add|remove|refresh|search|index|lint>\n');
   return 2;
 }
 

@@ -2030,3 +2030,11 @@ td.gsum-label { font-weight: 600; }
 .cheat-card li { padding: 2px 0; font-size: 12.5px; }
 .cheat-card a { color: var(--accent, #4f8cff); }
 [data-theme="dark"] .panel-desc { background: color-mix(in srgb, var(--accent, #4f8cff) 10%, transparent); }
+
+/* ===== 第一百二十二轮：集市与插件发现体验 ===== */
+.market-health { font-size: 12px; margin-left: 2px; }
+.market-health-text { color: var(--fg-dim); font-size: 12px; margin-left: 8px; }
+.market-risk-mix { display: inline-flex; gap: 4px; margin-left: 6px; }
+.market-risk-mix .badge.destructive { color: #e5484d; border-color: #e5484d55; }
+.market-risk-mix .badge.warn { color: var(--warn); border-color: var(--warn); }
+.market-msg-link { margin-left: 10px; padding: 2px 10px; font-size: 12px; }

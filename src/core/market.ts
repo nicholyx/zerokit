@@ -38,6 +38,9 @@ export interface MarketEntry {
   /** 第六十二轮⑥：内容完整性声明（plugin pack 输出的 sha256-…）。
    * 目录源（path:）没有包级哈希可校，字段可缺；git 源装完可对照。 */
   integrity?: string;
+  /** 第一百二十二轮②：动作数与风险构成（buildIndex 生成时摊开，可缺=旧登记表） */
+  actionCount?: number;
+  riskMix?: Record<string, number>;
 }
 
 export interface MarketIndex {
@@ -292,6 +295,8 @@ export function installFromMarket(pluginId: string, marketName?: string, opts: {
     source: {
       type: 'market',
       market: preview.market,
+      // 第一百二十二轮⑥：集市源地址也记上——插件主页「从哪装的」能点回源仓库
+      url: loadMarkets().find((mm) => mm.name === preview.market)?.url,
       installedAt: new Date().toISOString(),
       installedVersion: preview.load.plugin.version,
     },
@@ -332,6 +337,10 @@ export function buildIndex(dir: string, name?: string, description?: string): Ma
     if (!result.plugin) continue;
     const p = result.plugin;
     const rel = path.relative(dir, full).split(path.sep).join('/');
+    // 第一百二十二轮②：动作数与风险构成进登记表——买前看清货：几个动作、几读几写几毁。
+    // buildIndex 生成时静态摊开（浏览器拿登记表就有，不必下载插件源码）。
+    const riskMix: Record<string, number> = { read: 0, mutate: 0, destructive: 0 };
+    for (const a of p.actions) riskMix[a.risk] = (riskMix[a.risk] ?? 0) + 1;
     plugins.push({
       id: p.id,
       name: p.name,
@@ -339,6 +348,8 @@ export function buildIndex(dir: string, name?: string, description?: string): Ma
       version: p.version,
       tags: p.keywords,
       source: `path:${rel}`,
+      actionCount: p.actions.length,
+      riskMix,
     });
   }
   const fallbackName = path.basename(path.resolve(dir));
