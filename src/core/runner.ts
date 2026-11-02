@@ -62,6 +62,10 @@ export interface RunResult {
   background?: { id: string; pid: number };
   /** 第六十七轮①：被外部中断（停止按钮 / Ctrl+.）——不是失败，是用户主动停 */
   stopped?: boolean;
+  /** 第一百二十四轮①：耗时分解（毫秒）——fork 到进程可用、到首字节输出、总时长 */
+  timing?: { spawnMs: number; firstByteMs: number; totalMs: number };
+  /** 第一百二十四轮⑤：超时/溢出被杀时已收到的部分 stdout（不再整体丢弃） */
+  partial?: string;
 }
 
 export interface RunOptions {
@@ -282,6 +286,10 @@ export interface AuditRecord {
   outBytes?: number;
   truncated?: boolean;
   error?: string;
+  /** 第七十六轮⑦：慢动作水位线（超 SLOW_MS） */
+  slow?: boolean;
+  /** 第一百二十四轮⑥：stderr 前 500 字符（排障最值钱的一段） */
+  stderrHead?: string;
 }
 
 /** 审计：全部调用进 audit.log，被拒/失败的额外进 denied.log（便于快速排查）。
@@ -315,6 +323,10 @@ interface ExecOutcome {
   stopped?: boolean;
   /** 第七十六轮②：输出超过 max_output 声明被杀 */
   outputOverflow?: boolean;
+  /** 第一百二十四轮①：耗时分解（毫秒） */
+  timing?: { spawnMs: number; firstByteMs: number; totalMs: number };
+  /** 第一百二十四轮⑤：超时/溢出被杀时已收到的部分 stdout */
+  partial?: string;
 }
 
 /**
@@ -353,6 +365,9 @@ function runInWorker(
     let truncated = false;
     let timedOut = false;
     let outputOverflow = false;
+    // 第一百二十四轮①：worker 路径同样给耗时分解（spawn≈worker 创建，首字节同义）
+    const t0 = Date.now();
+    let firstByteMs = 0;
 
     const worker = new Worker(script, {
       argv: args,
@@ -361,6 +376,7 @@ function runInWorker(
       env: opts.env,
       execArgv: [],
     });
+    const spawnMs = Date.now() - t0;
 
     const timer = setTimeout(() => {
       timedOut = true;
@@ -368,6 +384,7 @@ function runInWorker(
     }, opts.timeout);
 
     worker.stdout.on('data', (chunk: Buffer) => {
+      if (!firstByteMs) firstByteMs = Date.now() - t0;
       const text = decoder.write(chunk);
       if (stdout.length + text.length > MAX_OUTPUT) {
         truncated = true;
@@ -382,11 +399,15 @@ function runInWorker(
 
     worker.on('error', (err) => {
       clearTimeout(timer);
-      resolve({ exitCode: null, stdout, stderr: stderr + String(err.message), truncated, timedOut: false });
+      resolve({ exitCode: null, stdout, stderr: stderr + String(err.message), truncated, timedOut: false,
+        timing: { spawnMs, firstByteMs: firstByteMs || (Date.now() - t0), totalMs: Date.now() - t0 },
+        ...(timedOut && stdout ? { partial: stdout } : {}) });
     });
     worker.on('exit', (code) => {
       clearTimeout(timer);
-      resolve({ exitCode: code, stdout, stderr, truncated, timedOut });
+      resolve({ exitCode: code, stdout, stderr, truncated, timedOut,
+        timing: { spawnMs, firstByteMs: firstByteMs || (Date.now() - t0), totalMs: Date.now() - t0 },
+        ...(timedOut && stdout ? { partial: stdout } : {}) });
     });
   });
 }
@@ -415,6 +436,9 @@ function execArgv(
 ): Promise<ExecOutcome> {
   return new Promise((resolve) => {
     const encoding = opts.encoding as BufferEncoding;
+    // 第一百二十四轮①：耗时分解——spawn 时刻、首字节时刻，供 --profile 分解展示
+    const t0 = Date.now();
+    let firstByteMs = 0;
     const child = spawn(file, args, {
       cwd: opts.cwd,
       env: opts.env,
@@ -422,6 +446,7 @@ function execArgv(
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+    const spawnMs = Date.now() - t0;
     // 第六十七轮①⑧：外部中断——与超时同路（杀进程），但结局标 stopped 不标 timedOut
     let stopped = false;
     const onAbort = () => {
@@ -466,6 +491,8 @@ let timedOut = false;
     }, opts.timeout);
 
     child.stdout.on('data', (chunk: Buffer) => {
+      // 第一百二十四轮①：首字节时刻——「插件慢是启动慢还是跑得慢」的分界
+      if (!firstByteMs) firstByteMs = Date.now() - t0;
       const text = outDecoder.write(chunk);
       if (truncated) {
         spillPath()?.write(Buffer.from(text, encoding));
@@ -500,6 +527,7 @@ let timedOut = false;
       resolve({
         exitCode: null, stdout, stderr: stderr + String(err.message),
         truncated, timedOut: false,
+        timing: { spawnMs, firstByteMs: firstByteMs || (Date.now() - t0), totalMs: Date.now() - t0 },
         ...(artifactPath ? { artifactPath } : {}), ...(stopped ? { stopped } : {}),
         ...(outputOverflow ? { outputOverflow } : {}),
       });
@@ -511,8 +539,14 @@ let timedOut = false;
       stderr += errDecoder.end();
       spill?.end();
       opts.signal?.removeEventListener('abort', onAbort);
+      const timing = { spawnMs, firstByteMs: firstByteMs || (Date.now() - t0), totalMs: Date.now() - t0 };
+      // 第一百二十四轮⑤：超时/溢出被杀时保留已收到的部分输出——用户不该因为超时
+      // 损失已经产出的内容（比如跑了 9 秒的进度日志，超时在 10 秒那一刻）
+      const killed = timedOut || outputOverflow;
       resolve({
         exitCode: code, stdout, stderr, truncated, timedOut,
+        timing,
+        ...(killed && stdout ? { partial: stdout } : {}),
         ...(artifactPath ? { artifactPath } : {}), ...(stopped ? { stopped } : {}),
         ...(outputOverflow ? { outputOverflow } : {}),
       });
@@ -890,6 +924,8 @@ export async function runAction(
     truncated: outcome.truncated,
     // ⑦慢动作水位线：超 3s 打标，stats/audit 输出靠它快速定位拖后腿的动作
     ...(isSlow(ms) ? { slow: true } : {}),
+    // 第一百二十四轮⑥：审计带上 stderr 前 500 字符——排障时最值钱的就是它
+    ...(outcome.stderr.trim() ? { stderrHead: outcome.stderr.slice(0, 500) } : {}),
     ...(error ? { error, reason: outcome.stopped ? 'stopped' : outcome.timedOut ? 'timeout' : 'nonzero-exit' } : {}),
   });
 
@@ -907,6 +943,9 @@ export async function runAction(
   if (outcome.artifactPath) result.artifactPath = outcome.artifactPath;
   if (error) result.error = error;
   if (outcome.stopped) result.stopped = true;
+  // 第一百二十四轮①⑤：耗时分解与超时部分输出（仅子进程路径产生）
+  if (outcome.timing) result.timing = outcome.timing;
+  if (outcome.partial) result.partial = outcome.partial;
   return result;
 }
 

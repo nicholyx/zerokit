@@ -4501,7 +4501,18 @@ function renderResult(res) {
   if (res.truncated && res.artifactPath) {
     body += `<div class="cmd-line">输出过长已截断，完整内容：${esc(res.artifactPath)}</div>`;
   }
-  if (res.stderr && !res.ok) {
+  // 第一百二十四轮⑤：超时/被杀时已收到的部分输出单独示出——用户不该因超时损失已产出的内容
+  if (res.partial && res.partial !== res.stdout && res.partial.trim()) {
+    body += `<details class="partial-out" open><summary>被杀前已输出的部分（${res.partial.length} 字符）</summary><pre class="out" style="color:var(--warn)">${esc(masked(String(res.partial).slice(-800)))}</pre></details>`;
+  }
+  // 第一百二十四轮③：非零退出码可见（成功渲染 data 时它此前完全隐形）
+  if (res.exitCode !== null && res.exitCode !== undefined && res.exitCode !== 0) {
+    body += `<div class="cmd-line" style="color:var(--warn)">exit=${esc(String(res.exitCode))}</div>`;
+  }
+  // 第一百二十四轮②：stderr 分流展示——成功时也示出（此前只在失败卡里），警示输出与正常输出分块
+  if (res.stderr && String(res.stderr).trim() && res.ok) {
+    body += `<details class="fail-stderr"><summary>stderr</summary><pre class="out" style="color:var(--fg-dim)">${esc(masked(String(res.stderr)))}</pre></details>`;
+  } else if (res.stderr && !res.ok) {
     body += `<pre class="out" style="color:var(--fg-dim)">${esc(res.stderr)}</pre>`;
   }
   if (!body) body = `<div class="help">（没有输出）</div>`;

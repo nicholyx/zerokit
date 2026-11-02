@@ -701,7 +701,7 @@ function cmdSearch(args: string[]): number {
 function cmdDryRun(args: string[]): number {
   const target = args[0];
   if (!target || target.startsWith('-')) {
-    process.stderr.write('用法：zkit mcp dry-run <插件.动作> --params \'{"k":"v"}\'\n');
+    process.stderr.write('用法：zkit mcp dry-run <插件.动作> --params \'{"k":"v"}\'（--dry 是它的别名）\n');
     return 1;
   }
   const paramsIdx = args.indexOf('--params');
@@ -891,6 +891,8 @@ export async function cli(args: string[]): Promise<number> {
   if (sub === 'allow') return cmdAllow(args.slice(1));
   if (sub === 'search') return cmdSearch(args.slice(1));
   if (sub === 'dry-run') return cmdDryRun(args.slice(1));
+  // 第一百二十四轮⑦：--dry 别名（进用法表与文档，dry-run 正名保留）
+  if (sub === '--dry') return cmdDryRun(args.slice(1));
   if (sub === 'status') return cmdStatus();
   if (sub === 'revoke') return cmdRevoke(args.slice(1));
   process.stdout.write(`用法：
