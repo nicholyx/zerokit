@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter } from './extras.js';
+import { humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -5340,7 +5340,22 @@ function renderData(data, render, tableId = '') {
             ${l.isLeaf ? '' : '<i class="jt-dot">▾</i>'}${l.key !== '' ? `<b>${esc(l.key)}</b>: ` : ''}<span>${esc(maskState() ? maskSecrets(l.preview) : l.preview)}</span>
           </div>`).join('')}</div>`;
       }
-      return `<pre class="out">${esc(maskState() ? maskSecrets(JSON.stringify(data, null, 2)) : JSON.stringify(data, null, 2))}</pre>`;
+      // 第一百二十三轮③：长 JSON 折叠——>40 行时按段折叠（jsonFoldSpans 算位置，
+      // details/summary 原生交互可聚焦，读屏可进；小对象照旧整块）
+      const rawJson = maskState() ? maskSecrets(JSON.stringify(data, null, 2)) : JSON.stringify(data, null, 2);
+      const jl = rawJson.split('\n');
+      const spans = jsonFoldSpans(jl, 20);
+      if (spans.length && jl.length > 40) {
+        let outL = []; let cursor = 0;
+        for (const sp of spans) {
+          outL = outL.concat(jl.slice(cursor, sp.foldStart + 1));
+          outL.push(`<details class="json-fold"><summary>${esc(t('jsonFoldSummary')(sp.hidden))}</summary>${esc(jl.slice(sp.foldStart + 1, sp.foldEnd).join('\n'))}</details>`);
+          cursor = sp.foldEnd;
+        }
+        outL = outL.concat(jl.slice(cursor));
+        return `<pre class="out json-foldable">${outL.map((x) => x.startsWith('<details') ? x : esc(x)).join('\n')}</pre>`;
+      }
+      return `<pre class="out">${esc(rawJson)}</pre>`;
     }
     return renderKV(data);
   }
@@ -5417,7 +5432,7 @@ function renderTable(rows0, tableId = '') {
   const arrow = (c) => state.col === c ? (state.dir === 1 ? ' ▲' : ' ▼') : '';
   // 第三十九轮⑤：时间戳列头标 ⏱（提示已人性化显示）
   const head = visCols.map((c) =>
-    `<th class="sortable${numeric[c] ? ' num' : ''}" data-col="${esc(c)}">${esc(c)}${tsCols.has(c) ? ' <span class="ts-mark" title="时间戳已转本地时间">⏱</span>' : ''}${arrow(c)}</th>`).join('');
+    `<th class="sortable${numeric[c] ? ' num' : ''}" data-col="${esc(c)}"${state.col === c ? ` aria-sort="${state.dir === 1 ? 'ascending' : 'descending'}"` : ''}>${esc(c)}${tsCols.has(c) ? ' <span class="ts-mark" title="时间戳已转本地时间">⏱</span>' : ''}${arrow(c)}</th>`).join('');
   // 第二十九轮⑦：大表只画首屏 200 行 + 「加载全部」按钮——
   // >500 行全画 DOM 会冻 UI 数秒；200 行覆盖绝大多数真实结果，其余按需展开
   const bigTable = view.length > OVERFLOW_ROWS && !tableFullLoad.has(tableId || 't');
@@ -7914,7 +7929,7 @@ async function showSaved() {
         const a = savedList[selA.v], c = savedList[Number(b.dataset.sel)];
         if (a.key !== c.key) { el.count.textContent = '只能对比同一个动作的两条结果'; return; }
         const rows = resultCompare(a.data, c.data);
-        const html = rows.map((r2) => `<tr class="${r2.diff ? 'cmp-diff' : ''}"><td>${esc(r2.key)}</td><td>${esc(r2.a)}</td><td>${esc(r2.b)}</td></tr>`).join('');
+        const html = rows.map((r2) => `<tr class="${r2.diff ? 'cmp-diff' : ''}"><td>${r2.diff ? '<span class="cmp-mark" aria-label="' + t('cmpDiffMark') + '">▲</span> ' : ''}${esc(r2.key)}</td><td>${esc(r2.a)}</td><td>${esc(r2.b)}</td></tr>`).join('');
         const box = document.createElement('div');
         box.className = 'cmp-view';
         box.innerHTML = `<div class="ps-head"><h3>收藏对比：${esc(a.command)} ⇄ ${esc(c.command)}</h3>
@@ -8467,6 +8482,7 @@ document.addEventListener('keydown', (e) => {
   }
   // 第二十四轮⑥：结果表格 j/k 上下移选中行（配合排序/筛选看数据）
   if (detail && !typing && (e.key === 'j' || e.key === 'k')) {
+    // 第一百二十三轮⑥：KV 视图也接 j/k——#result 下第一个 table（无论 kv 还是数据表）
     const tbl = document.querySelector('#result table tbody');
     if (tbl) {
       e.preventDefault();
@@ -8487,9 +8503,14 @@ document.addEventListener('keydown', (e) => {
     const tr = document.querySelector('#result table tbody tr.row-sel');
     if (tr) {
       e.preventDefault();
-      const cells = [...tr.querySelectorAll('td')].map((td) => td.textContent.trim()).join('\t');
-      navigator.clipboard?.writeText(cells).then(() => {
-        el.count.textContent = '已复制选中行';
+      // 第一百二十三轮⑥：KV 表 Enter 复制值（第二列）；数据表复制 TSV 行；Shift+Enter 复制 JSON 行
+      const trJson = tr.dataset.rowjson;
+      const kvVal = tr.querySelector('td[data-dkv]');
+      const text = e.shiftKey
+        ? (trJson ?? JSON.stringify([...tr.querySelectorAll('td')].map((td) => td.textContent.trim())))
+        : (kvVal ? kvVal.textContent.trim() : [...tr.querySelectorAll('td')].map((td) => td.textContent.trim()).join('\t'));
+      navigator.clipboard?.writeText(text).then(() => {
+        el.count.textContent = e.shiftKey ? t('copiedJsonRow') : (kvVal ? t('copiedVal') : t('copiedWhat')(t('rowUnit')));
       }).catch(() => { el.count.textContent = '复制被浏览器拒绝'; });
       return;
     }

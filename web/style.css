@@ -2038,3 +2038,9 @@ td.gsum-label { font-weight: 600; }
 .market-risk-mix .badge.destructive { color: #e5484d; border-color: #e5484d55; }
 .market-risk-mix .badge.warn { color: var(--warn); border-color: var(--warn); }
 .market-msg-link { margin-left: 10px; padding: 2px 10px; font-size: 12px; }
+
+/* 第一百二十三轮：结果区键盘与无障碍 */
+.json-fold > summary { cursor: pointer; color: var(--accent); padding: 2px 0; user-select: none; }
+.json-fold[open] > summary { opacity: .7; }
+.cmp-mark { color: var(--warn, #e8b13a); font-size: .85em; }
+@media (prefers-reduced-motion: reduce) { .json-fold > summary { transition: none; } }

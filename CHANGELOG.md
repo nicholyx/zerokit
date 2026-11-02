@@ -1,6 +1,14 @@
 ## [Unreleased]
 
-（下一版攒着）
+### Added
+
+- 结果区键盘还债：KV 表也进 j/k 选中域（此前只有数据表），Enter 复制适配 KV（取值列）与 Shift+Enter（整行 JSON）
+- 长 JSON（浅对象 >40 行）按段折叠——`jsonFoldSpans` 算缩进配对段，details/summary 原生可聚焦可读屏
+- 结果对比视图差异行加 ▲ 标记（aria-label「有差异」）——不只靠黄色底色，色弱可辨
+- 表头 `aria-sort` 状态（ascending/descending/none）
+### Changed
+
+- 速查浮层（? 键）核实已有并保持——本轮不动
 
 ## [1.26.0] - 2026-11-02
 

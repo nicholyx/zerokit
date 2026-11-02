@@ -525,13 +525,13 @@ export const I18N = {
     loadAllRows: (n) => `加载全部 ${n} 行`, rowsTotal: (n) => `共 ${n} 行`, rowsFiltered: (n, total) => `${n} / ${total} 行（筛选中）`,
     copiedCol: (col, dedup, n) => `已复制列「${col}」${dedup ? '（去重后' : '（'}${n} 行）`,
     ctxCopyCell: '复制单元格', ctxCopyRow: '复制整行', ctxCopyTable: '复制整表（TSV）', ctxFilterEq: (col, v) => `只看「${col} = ${v}」`,
-    cellUnit: '单元格', rowUnit: '整行', tableUnit: '整表', copiedWhat: (what) => `已复制${what}`, copyDenied: '复制被浏览器拒绝',
+    cellUnit: '单元格', rowUnit: '整行', tableUnit: '整表', copiedWhat: (what) => `已复制${what}`, copyDenied: '复制被浏览器拒绝', copiedJsonRow: '已复制 JSON 行', copiedVal: '已复制值', jsonFoldSummary: (n) => `… 折叠 ${n} 行（点开）`,
     sortBy: '排序：', sortName: '名称', sortActions: '动作数', sortInstalled: '最近安装',
     watchDlgTitle: (name) => `监控「${name}」`, watchDlgHelp: '界面开着才会跑。每次采样记录结果，变化会高亮，可在 #/watch 面板聚合查看。',
     watchRerunEvery: '重跑间隔', watchFailLabel: '连续失败几次自动停（0 = 不停）', watchMatchLabel: '结果包含此串自动停（留空 = 不启用）',
     watchMatchPh: '如 error / 90%', watchStartBtn: '开始监控', cancel: '取消',
     importDone: (applied, skipped) => `导入完成：应用 ${applied} 项、跳过 ${skipped} 项，即将刷新…`,
-    cmpDiffCount: (n) => `对比出 ${n} 处差异`, cmpNoKeys: '两条没有可比的键',
+    cmpDiffCount: (n) => `对比出 ${n} 处差异`, cmpNoKeys: '两条没有可比的键', cmpDiffMark: '有差异',
     timerDlgTitle: (name) => `定时执行：${name}`, timerDlgHelp: '界面开着才会跑。只读动作才允许定时（有副作用的自动跑风险太大）。',
     timerSecLabel: '间隔（秒）', timerPresets: '快捷档位', timerWinLabel: '执行窗口（可空，如 09:00-18:00，窗口外跳过）',
     timerUseVals: '用当前表单值作为定时参数', timerSaveBtn: (upd) => `${upd ? '更新' : '开始'}定时`,
@@ -851,13 +851,13 @@ helpSearchTitle: '搜索', helpSearchBody: '支持中文关键词、拼音全拼
     loadAllRows: (n) => `Load all ${n} rows`, rowsTotal: (n) => `${n} rows in total`, rowsFiltered: (n, total) => `${n} / ${total} rows (filtered)`,
     copiedCol: (col, dedup, n) => `Column "${col}" copied (${n} rows${dedup ? ', deduped' : ''})`,
     ctxCopyCell: 'Copy cell', ctxCopyRow: 'Copy row', ctxCopyTable: 'Copy whole table (TSV)', ctxFilterEq: (col, v) => `Only show "${col} = ${v}"`,
-    cellUnit: 'cell', rowUnit: 'row', tableUnit: 'table', copiedWhat: (what) => `${what} copied`, copyDenied: 'Copy rejected by browser',
+    cellUnit: 'cell', rowUnit: 'row', tableUnit: 'table', copiedWhat: (what) => `${what} copied`, copyDenied: 'Copy rejected by browser', copiedJsonRow: 'Copied JSON row', copiedVal: 'Copied value', jsonFoldSummary: (n) => `… ${n} lines folded`,
     sortBy: 'Sort:', sortName: 'Name', sortActions: 'Actions', sortInstalled: 'Recently installed',
     watchDlgTitle: (name) => `Watch "${name}"`, watchDlgHelp: 'Runs only while the UI is open. Each sample is recorded, changes get highlighted; see the #/watch panel.',
     watchRerunEvery: 'Rerun interval', watchFailLabel: 'Auto-stop after N consecutive failures (0 = never)', watchMatchLabel: 'Auto-stop when result contains this string (empty = off)',
     watchMatchPh: 'e.g. error / 90%', watchStartBtn: 'Start watching', cancel: 'Cancel',
     importDone: (applied, skipped) => `Import done: ${applied} applied, ${skipped} skipped, refreshing…`,
-    cmpDiffCount: (n) => `${n} differences found`, cmpNoKeys: 'No comparable keys between the two',
+    cmpDiffCount: (n) => `${n} differences found`, cmpNoKeys: 'No comparable keys between the two', cmpDiffMark: 'differs',
     timerDlgTitle: (name) => `Scheduled run: ${name}`, timerDlgHelp: 'Runs only while the UI is open. Read-only actions only — auto-running side effects is too risky.',
     timerSecLabel: 'Interval (seconds)', timerPresets: 'Quick presets', timerWinLabel: 'Run window (optional, e.g. 09:00-18:00; skipped outside)',
     timerUseVals: 'Use current form values as scheduled params', timerSaveBtn: (upd) => `${upd ? 'Update' : 'Start'} schedule`,
@@ -1221,6 +1221,28 @@ export function markdownTable(rows) {
   const sep = `| ${cols.map((c) => (numeric[c] ? '---:' : '---')).join(' | ')} |`;
   const body = rows.map((r) => `| ${cols.map((c) => esc2(r[c])).join(' | ')} |`).join('\n');
   return [head, sep, body].join('\n');
+}
+
+/** 第一百二十三轮③：JSON 折叠——长数组行流（stringify null,2 的行）里，
+ * 闭合行 `    ],` 或 `    }` 前面同缩进的开行之后如果隔了超过 limit 行，
+ * 就标记为可折叠段（返回 [{foldStart, foldEnd, hidden, count}]，渲染层据此加省略行）。
+ * 纯函数只算位置，不碰 DOM。 */
+export function jsonFoldSpans(lines, limit = 20) {
+  if (!Array.isArray(lines) || lines.length <= limit + 4) return [];
+  const spans = [];
+  const ind = (l) => { const m = /^[ \t]*/.exec(l ?? ''); return m ? m[0].length : 0; };
+  const isOpen = (l) => /[\[{]\s*$/.test(l ?? '');
+  const isClose = (l) => /^\s*[}\]],?\s*$/.test(l ?? '');
+  for (let i = 0; i < lines.length; i++) {
+    if (!isOpen(lines[i])) continue;
+    const d = ind(lines[i]);
+    // 找同缩进的闭合行
+    let j = i + 1;
+    while (j < lines.length && !(isClose(lines[j]) && ind(lines[j]) === d)) j++;
+    if (j >= lines.length) continue;
+    if (j - i - 1 > limit) spans.push({ foldStart: i, foldEnd: j, hidden: j - i - 1 });
+  }
+  return spans;
 }
 
 /** TSV：Excel/Numbers 直接粘贴进单元格的格式。 */
