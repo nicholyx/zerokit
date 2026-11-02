@@ -166,12 +166,14 @@ function jqPath(root: unknown, expr: string): { hit: boolean; value?: unknown; w
   return { hit: true, value: cur };
 }
 
-function printRunResult(action: { output: string }, result: RunResult, json: boolean): void {
+function printRunResult(action: { output: string }, result: RunResult, json: boolean, profile = false): void {
   if (json) {
     process.stdout.write(JSON.stringify({
       ok: result.ok, exitCode: result.exitCode, ms: result.ms,
       data: result.data, stdout: result.stdout, stderr: result.stderr,
       truncated: result.truncated, artifactPath: result.artifactPath, error: result.error,
+      ...(result.timing ? { timing: result.timing } : {}),
+      ...(result.partial ? { partial: result.partial } : {}),
     }, null, 2) + '\n');
     return;
   }
@@ -180,11 +182,24 @@ function printRunResult(action: { output: string }, result: RunResult, json: boo
   } else if (result.stdout) {
     process.stdout.write(result.stdout.endsWith('\n') ? result.stdout : result.stdout + '\n');
   }
+  // 第一百二十四轮③：退出码显式透出——data 成功渲染时它此前完全不可见
+  if (result.exitCode !== null && result.exitCode !== 0) {
+    process.stderr.write(c.yellow(`exit=${result.exitCode}`) + '\n');
+  }
   if (result.error) process.stderr.write(c.red(`✗ ${result.error}`) + '\n');
+  // 第一百二十四轮⑤：超时被杀时保留的部分输出单独示出
+  if (result.partial && result.partial !== result.stdout) {
+    process.stderr.write(c.yellow(`… 被杀前已输出的部分（${result.partial.length} 字符）：\n`) + c.dim(result.partial.slice(-800)) + '\n');
+  }
   if (result.truncated && result.artifactPath) {
     process.stderr.write(c.yellow(`… 输出过长已截断，完整内容：${result.artifactPath}`) + '\n');
   }
   if (result.stderr.trim()) process.stderr.write(c.dim(result.stderr.trim()) + '\n');
+  // 第一百二十四轮①：耗时分解——spawn 慢是解释器/杀毒的问题，firstByte 慢是插件自己的问题
+  if (profile && result.timing) {
+    const t = result.timing;
+    process.stderr.write(c.dim(`⏱ spawn ${t.spawnMs}ms · 首字节 ${t.firstByteMs}ms · 总 ${t.totalMs}ms${t.firstByteMs - t.spawnMs > 500 ? '（首字节远晚于 spawn——插件自身启动慢）' : ''}`) + '\n');
+  }
 }
 
 // ---------------------------------------------------------------- 确认
@@ -788,6 +803,11 @@ async function cmdRun(args: string[]): Promise<number> {
 
   const yes = rest.includes('--yes') || rest.includes('-y');
   const asJson = rest.includes('--json');
+  // 第一百二十四轮①：--profile 耗时分解（spawn/首字节/总时长）
+  const profile = rest.includes('--profile');
+  // 第一百二十四轮④：--measure 连跑 3 次取中位（只读限定——别的语义根本不该重复执行）
+  const measureIdx = rest.indexOf('--measure');
+  const measureN = measureIdx >= 0 ? Math.min(10, Math.max(2, Number(rest[measureIdx + 1]) || 3)) : 0;
   // 第四十五轮：新控制旗标——out/copy/quiet/watch
   const outIdx = rest.indexOf('--out');
   // 第七十四轮④⑤：--format <yaml|csv|table|md|tsv>（与 --out <file> 区分：--out 后跟的是文件名时当文件写）
@@ -837,10 +857,10 @@ async function cmdRun(args: string[]): Promise<number> {
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i]!;
     if (a === '--out' || a === '--watch' || a === '--share' || a === '--jq' || a === '--env' || a === '--format' || a === '--retry' || a === '--avg'
-        || a === '--sort' || a === '--pick' || a === '--uniq' || a === '--sum' || a === '--head') { i++; continue; }
+        || a === '--sort' || a === '--pick' || a === '--uniq' || a === '--sum' || a === '--head' || a === '--measure') { i++; continue; }
     if (a.startsWith('--out=') || a.startsWith('--watch=') || a.startsWith('--share=') || a.startsWith('--jq=') || a.startsWith('--env=') || a.startsWith('--format=') || a.startsWith('--retry=') || a.startsWith('--avg=')
-        || a.startsWith('--sort=') || a.startsWith('--pick=') || a.startsWith('--uniq=') || a.startsWith('--sum=') || a.startsWith('--head=')) continue;
-    if (['--yes', '-y', '--json', '--copy', '--quiet', '--full', '--stdin-json'].includes(a)) continue;
+        || a.startsWith('--sort=') || a.startsWith('--pick=') || a.startsWith('--uniq=') || a.startsWith('--sum=') || a.startsWith('--head=') || a.startsWith('--measure=')) continue;
+    if (['--yes', '-y', '--json', '--copy', '--quiet', '--full', '--stdin-json', '--profile'].includes(a)) continue;
     // 第七十五轮：--sort -列 的降序值（-内存 不是短旗标，前一个是 --sort 就吞掉）
     if (a.startsWith('-') && !a.startsWith('--') && i > 0 && rest[i - 1] === '--sort') continue;
     argv.push(a);
@@ -1009,8 +1029,13 @@ async function cmdRun(args: string[]): Promise<number> {
       // 第四十五轮⑦：--quiet 只出结果 JSON 单行，头部装饰全免
       process.stdout.write(JSON.stringify({ ok: result.ok, data: result.data, error: result.error }) + '\n');
     } else {
-      printRunResult(action, result, asJson);
+      printRunResult(action, result, asJson, profile);
     }
+  }
+  // 第一百二十四轮①：--profile 耗时行在所有输出路径统一收尾打印（截断/格式化分支不走 printRunResult）
+  if (profile && result.timing && !quiet) {
+    const t = result.timing;
+    process.stderr.write(c.dim(`⏱ spawn ${t.spawnMs}ms · 首字节 ${t.firstByteMs}ms · 总 ${t.totalMs}ms${t.firstByteMs - t.spawnMs > 500 ? '（首字节远晚于 spawn——插件自身启动慢）' : ''}`) + '\n');
   }
   if (outFile && result.ok) {
     const { writeFileSync } = await import('node:fs');
@@ -1061,6 +1086,29 @@ async function cmdRun(args: string[]): Promise<number> {
     process.stdout.write(`连跑 ${avgN} 次：min ${msTxt(mn)} · avg ${msTxt(av)} · max ${msTxt(mx)}\n`);
     return 0;
   }
+  // 第一百二十四轮④：--measure 连跑 N 次报对照表（每行 spawn/首字节/总，中位行标出）。
+  // 与 --avg 的区别：--avg 只给总时一把尺；--measure 拆三层——「插件慢是启动慢还是跑得慢」要靠分层才能回答
+  if (measureN > 0) {
+    if (action.risk !== 'read') {
+      process.stderr.write(c.yellow(`--measure 只用于只读动作（当前风险 ${action.risk}）——重复执行可能有副作用，已拒绝\n`));
+      return 1;
+    }
+    const rowsM: { spawnMs: number; firstByteMs: number; totalMs: number }[] = [];
+    for (let i = 0; i < measureN; i++) {
+      const r = await runAction(plugin, action, { caller: 'cli', values: withDefaults.values });
+      if (!r.ok) { process.stderr.write(c.red(`第 ${i + 1} 次失败：${String(r.error ?? '')}\n`)); return 1; }
+      rowsM.push(r.timing ?? { spawnMs: 0, firstByteMs: 0, totalMs: r.ms });
+    }
+    const totals = rowsM.map((r) => r.totalMs).sort((a, b) => a - b);
+    const mid = totals[Math.floor(totals.length / 2)]!;
+    const msTxt = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(2)}s` : `${Math.round(v)}ms`);
+    process.stdout.write(`measure ${pluginId}.${actionId} ×${measureN}\n`);
+    rowsM.forEach((r, i) => {
+      process.stdout.write(`${String(i + 1).padStart(2)}  spawn ${String(r.spawnMs).padStart(5)}ms  首字节 ${String(r.firstByteMs).padStart(5)}ms  总 ${String(r.totalMs).padStart(5)}ms${r.totalMs === mid ? '  ← 中位' : ''}\n`);
+    });
+    process.stdout.write(`中位：spawn ${msTxt(rowsM.find((r) => r.totalMs === mid)?.spawnMs ?? 0)} · 首字节 ${msTxt(rowsM.find((r) => r.totalMs === mid)?.firstByteMs ?? 0)} · 总 ${msTxt(mid)}\n`);
+    return 0;
+  }
   // 第四十五轮⑧：--watch N 进入轮询，只打印 diff，Ctrl-C 退出
   if (watchSec && result.ok) {
     const sec = cliX.normalizeWatchSec(watchSec);
@@ -1092,6 +1140,10 @@ async function cmdRun(args: string[]): Promise<number> {
     if (r.timedOut && typeof r.ms === 'number' && typeof r.timeoutSec === 'number') {
       const t = timeoutDiagnosis(r.ms, r.timeoutSec);
       if (t) process.stderr.write(c.dim(`⟐ ${t}\n`));
+    }
+    // 第一百二十四轮⑤：失败路径也提示部分输出（成功路径在统一收尾段，失败路径不走那里）
+    if (result.partial && result.partial !== result.stdout && result.partial.trim()) {
+      process.stderr.write(c.yellow(`… 被杀前已输出的部分（${result.partial.length} 字符）：\n`) + c.dim(result.partial.slice(-800)) + '\n');
     }
   }
   return result.ok ? 0 : 1;
@@ -2339,6 +2391,9 @@ function cmdLogs(args: string[]): number {
     if (sinceArg === '7d' || sinceArg === '30d') return Date.now() - (sinceArg === '7d' ? 7 : 30) * 86400e3;
     return -Infinity;
   })();
+  // 第一百二十四轮⑧：--slow N 只看耗时超 N 毫秒的执行（慢动作猎枪）
+  const slowIdx = args.indexOf('--slow');
+  const slowMs = slowIdx >= 0 ? Math.max(0, Number(args[slowIdx + 1]) || 3000) : 0;
   const file = path.join(LOG_DIR, args[0] === 'denied' ? 'denied.log' : 'audit.log');
   if (!fs.existsSync(file)) {
     process.stdout.write(c.dim(`还没有日志：${file}\n`));
@@ -2350,7 +2405,7 @@ function cmdLogs(args: string[]): number {
       const mark = r.decision === 'allow' ? c.green('✓') : c.red('✗');
       process.stdout.write(
         `${mark} ${c.dim(r.ts?.slice(11, 19) ?? '')} ${pad(r.plugin ?? '', 16)} ${pad(r.action ?? '', 16)} `
-        + `${c.dim(r.caller ?? '')} ${r.error ? c.red(r.error) : ''}\n`,
+        + `${c.dim(r.caller ?? '')}${r.slow ? c.yellow(` ${r.ms}ms⏱`) : (r.ms ? c.dim(` ${r.ms}ms`) : '')} ${r.error ? c.red(r.error) : ''}\n`,
       );
       if (r.command) process.stdout.write(c.dim(`    ${r.command}\n`));
     } catch {
@@ -2359,16 +2414,17 @@ function cmdLogs(args: string[]): number {
   };
   const lines = fs.readFileSync(file, 'utf8').trimEnd().split('\n');
   // 过滤在 JSON 层做（printLine 解析同一条记录两遍不值当——这里只判能不能过）
-  const passes = (r: { plugin?: string; ts?: string }) => {
+  const passes = (r: { plugin?: string; ts?: string; ms?: number }) => {
     if (plugFilter && r.plugin !== plugFilter) return false;
     if (sinceFloor > -Infinity && Date.parse(r.ts ?? '') < sinceFloor) return false;
+    if (slowMs && (r.ms ?? 0) < slowMs) return false;
     return true;
   };
   const filtered: string[] = [];
   for (const line of lines) {
     try { if (passes(JSON.parse(line))) filtered.push(line); } catch { filtered.push(line); }
   }
-  if (plugFilter || sinceArg) process.stdout.write(c.dim(`过滤：${plugFilter ? `插件=${plugFilter} ` : ''}${sinceArg ? `时间=${sinceArg}` : ''}，命中 ${filtered.length} / ${lines.length} 条\n`));
+  if (plugFilter || sinceArg || slowMs) process.stdout.write(c.dim(`过滤：${plugFilter ? `插件=${plugFilter} ` : ''}${sinceArg ? `时间=${sinceArg} ` : ''}${slowMs ? `慢于=${slowMs}ms` : ''}，命中 ${filtered.length} / ${lines.length} 条\n`));
   for (const line of filtered.slice(-tail)) printLine(line);
   // ③--follow：从文件尾开始盯新增行（轮询 500ms——audit 是低频流，inotify 不值得引）
   if (follow) {

@@ -2044,3 +2044,8 @@ td.gsum-label { font-weight: 600; }
 .json-fold[open] > summary { opacity: .7; }
 .cmp-mark { color: var(--warn, #e8b13a); font-size: .85em; }
 @media (prefers-reduced-motion: reduce) { .json-fold > summary { transition: none; } }
+
+/* 第一百二十四轮⑤：超时被杀时保留的部分输出 */
+.partial-out summary { cursor: pointer; color: var(--warn); font-size: 12px; padding: 4px 0; user-select: none; }
+.partial-out pre { margin-top: 4px; }
+@media (prefers-reduced-motion: reduce) { .partial-out summary { transition: none; } }
