@@ -102,6 +102,9 @@ export interface PluginSetting {
   enum?: string[];
   /** 密钥类：CLI/界面里打码，审计与确认提示里替换成 ****** */
   secret?: boolean;
+  /** 第一百二十六轮①：number/integer 的值域（清单级声明，运行时 fail-closed） */
+  min?: number;
+  max?: number;
 }
 
 export interface Action {
@@ -505,6 +508,29 @@ function parseSettings(
       setting.enum = opts;
       if (setting.default !== undefined && !opts.includes(String(setting.default))) {
         errors.push(`设置项 ${name}: default 不在 enum 候选项里`);
+        continue;
+      }
+    }
+    // 第一百二十六轮①：number/integer 值域声明与校验
+    if (s['min'] !== undefined || s['max'] !== undefined) {
+      if (type !== 'number' && type !== 'integer') {
+        errors.push(`设置项 ${name}: min/max 只对 number/integer 有意义（该设置是 ${type}）`);
+        continue;
+      }
+      const mn = s['min'] !== undefined ? Number(s['min']) : -Infinity;
+      const mx = s['max'] !== undefined ? Number(s['max']) : Infinity;
+      if (!Number.isFinite(mn) && s['min'] !== undefined || !Number.isFinite(mx) && s['max'] !== undefined) {
+        errors.push(`设置项 ${name}: min/max 需要数字`);
+        continue;
+      }
+      if (mn >= mx) {
+        errors.push(`设置项 ${name}: min（${mn}）必须小于 max（${mx}）`);
+        continue;
+      }
+      setting.min = mn; setting.max = mx;
+      if (setting.default !== undefined && typeof setting.default === 'number'
+        && (setting.default < mn || setting.default > mx)) {
+        errors.push(`设置项 ${name}: default（${setting.default}）不在 min~max（${mn}~${mx}）范围内`);
         continue;
       }
     }

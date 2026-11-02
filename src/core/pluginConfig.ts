@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { ensureDirs, SETTINGS_DIR } from './paths.ts';
+import { ensureDirs, HOME, SETTINGS_DIR } from './paths.ts';
 import { coerceParam } from './schema.ts';
 import type { Plugin, PluginSetting } from './manifest.ts';
 
@@ -41,6 +41,8 @@ export interface SettingsView {
   missing: string[];
   /** 存了但值不合法（类型不对、enum 不在候选里） */
   invalid: Array<{ name: string; error: string }>;
+  /** 第一百二十六轮②：合法但有话要说（相对路径提示等） */
+  warns: string[];
   /** 整个文件读不出来的原因（JSON 损坏 / 权限不足） */
   error?: string;
 }
@@ -49,9 +51,9 @@ export function settingsPath(pluginId: string): string {
   return path.join(SETTINGS_DIR, `${pluginId}.json`);
 }
 
-function coerce(setting: PluginSetting, raw: unknown): { value?: unknown; error?: string } {
+function coerce(setting: PluginSetting, raw: unknown): { value?: unknown; error?: string; warn?: string } {
   // 设置项与动作参数共用同一套类型与校验规则，避免两处语义漂移
-  return coerceParam(
+  const r = coerceParam(
     {
       name: setting.name,
       type: setting.type,
@@ -63,6 +65,17 @@ function coerce(setting: PluginSetting, raw: unknown): { value?: unknown; error?
     },
     raw,
   );
+  if (r.error) return r;
+  // 第一百二十六轮①：值域校验（min/max 是第一百二十六轮加在设置上的，动作参数没有）
+  if ((setting.type === 'number' || setting.type === 'integer') && typeof r.value === 'number') {
+    if (setting.min !== undefined && r.value < setting.min) return { error: `${setting.name} 不能小于 ${setting.min}（收到 ${r.value}）` };
+    if (setting.max !== undefined && r.value > setting.max) return { error: `${setting.name} 不能大于 ${setting.max}（收到 ${r.value}）` };
+  }
+  // 第一百二十六轮②：path 类设置的相对路径与存在性提示（提示不是报错——允许先设后建）
+  if (setting.type === 'path' && typeof r.value === 'string' && r.value && !path.isAbsolute(r.value)) {
+    return { value: r.value, warn: `${setting.name} 是相对路径，运行时按插件工作目录解析` };
+  }
+  return r;
 }
 
 /** 读原始存储。文件不存在 = 还没配过；JSON 坏了抛给调用方处理 */
@@ -85,7 +98,7 @@ function readStored(pluginId: string): Record<string, unknown> {
 
 /** 把存储内容与声明合并成「这次执行真正会用到的设置」 */
 export function resolveSettings(plugin: Plugin): SettingsView {
-  const view: SettingsView = { states: [], values: {}, missing: [], invalid: [] };
+  const view: SettingsView = { states: [], values: {}, missing: [], invalid: [], warns: [] };
   if (plugin.settings.length === 0) return view;
 
   let stored: Record<string, unknown>;
@@ -111,6 +124,7 @@ export function resolveSettings(plugin: Plugin): SettingsView {
       }
       view.states.push({ setting, value: r.value, source: 'stored' });
       view.values[setting.name] = r.value;
+      if (r.warn) view.warns.push(r.warn);
       continue;
     }
     if (setting.default !== undefined) {
@@ -159,6 +173,8 @@ export interface PublicSetting {
   masked?: string;
   missing: boolean;
   error?: string;
+  /** 第一百二十六轮⑧：是否已设置（前端「已设置/未设置」徽标的真实信号源——此前前端读 x.set 恒 undefined） */
+  set: boolean;
 }
 
 export function publicSettings(plugin: Plugin): PublicSetting[] {
@@ -174,6 +190,7 @@ export function publicSettings(plugin: Plugin): PublicSetting[] {
       secret: s.secret === true,
       source: st.source,
       missing: s.required && st.source === 'unset',
+      set: st.source !== 'unset',
     };
     if (s.enum) out.enum = s.enum;
     if (st.error) out.error = st.error;
@@ -207,6 +224,8 @@ export function writeSettings(plugin: Plugin, patch: Record<string, unknown>): W
   }
 
   const byName = new Map(plugin.settings.map((s) => [s.name, s]));
+  const before = { ...stored };
+  const via = 'cli';
   for (const [name, raw] of Object.entries(patch)) {
     const setting = byName.get(name);
     if (!setting) {
@@ -240,6 +259,18 @@ export function writeSettings(plugin: Plugin, patch: Record<string, unknown>): W
   try {
     ensureDirs();
     const file = settingsPath(plugin.id);
+    // 第一百二十六轮⑥：每个键的变更记一笔（secret 只记「变了」不记值）
+    for (const [name] of Object.entries(patch)) {
+      const setting = byName.get(name);
+      if (!setting) continue;
+      const v1 = Object.prototype.hasOwnProperty.call(before, name) ? before[name] : undefined;
+      const v2 = Object.prototype.hasOwnProperty.call(cleaned, name) ? cleaned[name] : null;
+      appendConfigEvent(HOME, {
+        ts: new Date().toISOString(), plugin: plugin.id, key: name,
+        ...(v1 !== undefined ? { v1 } : {}), ...(v2 !== null ? { v2 } : {}),
+        ...(setting.secret ? { secret: true } : {}), via,
+      });
+    }
     const tmp = `${file}.tmp-${process.pid}-${Date.now()}`;
     fs.writeFileSync(tmp, JSON.stringify(cleaned, null, 2) + '\n', { mode: 0o600 });
     fs.renameSync(tmp, file);
@@ -262,4 +293,40 @@ export function settingsHints(plugin: Plugin, view: SettingsView): string[] {
       ? `${name}（密钥，用 --stdin 从标准输入读，别写进 shell 历史）：${hint}`
       : `${name}：${hint}`;
   });
+}
+
+// -------------------- 第一百二十六轮⑥：设置变更流水 --------------------
+// 与安装流水同构（installHistory），但域不同：这是「用户改了什么配置」的账本。
+// 记录键/旧值/新值/来源；secret 值不落盘（只记发生了变更）。
+
+export interface ConfigEvent {
+  ts: string;
+  plugin: string;
+  key: string;
+  v1?: unknown;
+  v2?: unknown;
+  secret?: boolean;
+  via: string;
+}
+
+function configEventsPath(home: string): string {
+  return path.join(home, 'logs', 'config-events.json');
+}
+
+export function readConfigHistory(home: string): ConfigEvent[] {
+  try {
+    const raw = JSON.parse(fs.readFileSync(configEventsPath(home), 'utf8')) as unknown;
+    return Array.isArray(raw) ? (raw as ConfigEvent[]) : [];
+  } catch { return []; }
+}
+
+export function appendConfigEvent(home: string, ev: ConfigEvent): void {
+  const file = configEventsPath(home);
+  let list: ConfigEvent[] = [];
+  try { list = readConfigHistory(home); } catch { /* 首条 */ }
+  if (ev.secret) { delete ev.v1; delete ev.v2; }
+  list.push(ev);
+  while (list.length > 500) list.shift();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(list), 'utf8');
 }

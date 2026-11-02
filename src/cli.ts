@@ -38,7 +38,7 @@ import { applyDefaults, parseArgv, toCliFlags, toJsonSchema } from './core/schem
 import { depHealth, depStates, depTree, dependents, findCycle, installDeps, missingDeps, topoOrder } from './core/deps.ts';
 import { loadTimers, nextFireTime, removeTimer, setTimerPaused, upsertTimer, humanNextFire, missedRun, markCatchupDone, saveTimers, firesOnDay } from './core/timers.ts';
 import {
-  SECRET_MASK, publicSettings, resolveSettings, settingsHints, writeSettings,
+  SECRET_MASK, publicSettings, resolveSettings, readConfigHistory, settingsHints, writeSettings,
 } from './core/pluginConfig.ts';
 import { type RunResult, audit, chainDisplay, confirmPolicy, runAction } from './core/runner.ts';
 
@@ -548,6 +548,49 @@ async function cmdConfig(args: string[]): Promise<number> {
     return 0;
   }
 
+  // 第一百二十六轮④：config diff——当前值 vs 清单默认值
+  if (sub === 'diff') {
+    const view = viewOf();
+    const rows = view.states.map((st) => ({
+      name: st.setting.name,
+      type: st.setting.type,
+      source: st.source,
+      value: st.setting.secret && st.source !== 'unset' ? SECRET_MASK : st.value ?? null,
+      default: st.setting.default ?? null,
+      changed: st.source === 'stored',
+    })).filter((r) => r.changed || r.default !== null);
+    if (json) { process.stdout.write(JSON.stringify({ plugin: plugin.id, diff: rows }, null, 2) + '\n'); return 0; }
+    if (rows.length === 0) { process.stdout.write(`插件 ${plugin.id} 没有可对比的设置项。\n`); return 0; }
+    let n = 0;
+    for (const r of rows) {
+      if (!r.changed) continue; n++;
+      const dv = r.default === null ? c.dim('（无默认值）') : JSON.stringify(r.default);
+      process.stdout.write(`  ${r.name}: ${dv} → ${JSON.stringify(r.value)}\n`);
+    }
+    if (n === 0) process.stdout.write(c.green(`✓ ${plugin.id} 的设置全部还是清单默认值\n`));
+    return 0;
+  }
+  // 第一百二十六轮⑥：config history——设置变更流水
+  if (sub === 'history') {
+    const evts = readConfigHistory(HOME).filter((e) => e.plugin === plugin.id);
+    if (evts.length === 0) { process.stdout.write(`插件 ${plugin.id} 还没有设置变更记录。\n`); return 0; }
+    for (const e of [...evts].reverse().slice(0, 50)) {
+      const val = e.v2 === null ? '（清除）' : e.secret ? SECRET_MASK : JSON.stringify(e.v2);
+      const old = e.v1 === null || e.v1 === undefined ? '' : c.dim(`（原 ${e.secret ? SECRET_MASK : JSON.stringify(e.v1)}）`);
+      process.stdout.write(`  ${e.ts.slice(0, 19).replace('T', ' ')}  ${e.key} = ${val}${old}  ${c.dim(e.via)}\n`);
+    }
+    return 0;
+  }
+  // 第一百二十六轮⑦：config reset <键>——单键回默认（secret 清空）
+  if (sub === 'reset') {
+    if (!name) { process.stderr.write(`用法：zkit config ${plugin.id} reset <键>\n`); return 2; }
+    const r = writeSettings(plugin, { [name]: null });
+    if (!r.ok) { process.stderr.write(c.red(`✗ ${r.error}\n`)); return 1; }
+    const st = r.view!.states.find((x) => x.setting.name === name)!;
+    const back = st.source === 'default' ? `已回默认值 ${JSON.stringify(st.setting.default)}` : st.source === 'unset' ? '已清除（无默认值，现为未设置）' : '已重置';
+    process.stdout.write(`${c.green('✓')} ${name} ${back}\n`);
+    return 0;
+  }
   if (sub !== 'get' && sub !== 'set' && sub !== 'unset') return cmdConfigUsage();
   if (!name) return cmdConfigUsage();
   const declared = plugin.settings.find((s) => s.name === name);
@@ -566,6 +609,10 @@ async function cmdConfig(args: string[]): Promise<number> {
     }
     if (state.source === 'unset') {
       process.stderr.write(c.red(`✗ ${name} 还没设置\n`));
+      return 1;
+    }
+    if (declared.secret && reveal && !process.stdout.isTTY) {
+      process.stderr.write(c.red('✗ --reveal 只在本地终端允许（输出被管道/重定向时拒绝，防明文被采集）\n'));
       return 1;
     }
     const value = declared.secret && !reveal ? SECRET_MASK : state.value;

@@ -2289,8 +2289,19 @@ function openDetail(plugin, action, prefill) {
         const msg = $('cfgMsg');
         msg.textContent = t('fbSaving');
         try {
-          await api('/api/plugin/config', { method: 'POST', body: { plugin: plugin.id, patch } });
+          const r = await api('/api/plugin/config', { method: 'POST', body: { plugin: plugin.id, patch } });
           msg.textContent = t('fbSaved');
+          // 第一百二十六轮⑧：保存后即时重渲表单（已设置/未设置状态与新值马上可见，不用关开一次）
+          if (r.settings?.length) {
+            box.querySelectorAll('[data-cfg]').forEach((n) => {
+              const st = r.settings.find((x) => x.name === n.dataset.cfg);
+              if (!st) return;
+              const note = n.closest('.plug-setting')?.querySelector('.plug-setting-note');
+              if (note) note.textContent = st.set ? '已设置' : '未设置';
+              if (n.type === 'checkbox') n.checked = st.value === true;
+              else if (!n.placeholder) n.value = String(st.value ?? '');
+            });
+          }
         } catch (e) {
           msg.textContent = t('fbSaveFail') + e.message;
         }

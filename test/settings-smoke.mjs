@@ -439,7 +439,8 @@ function cli(args, input) {
     set.status === 0 && get.stdout.trim() === cfg.SECRET_MASK
     && !set.stdout.includes(secret),
     `${set.status} ${get.stdout} ${set.stdout}`);
-  check('CLI：显式 --reveal 才回显真实值', reveal.stdout.trim() === secret, reveal.stdout);
+  // 第一百二十六轮⑤：--reveal 只在本地终端允许——测试的 stdout 是管道，应拒绝而非回显
+  check('CLI：管道下 --reveal 拒绝（防明文被采集）', reveal.status === 1 && reveal.stdout.trim() !== secret, `${reveal.status} ${reveal.stdout}`);
   check('CLI：--stdin 写入时给出「别进 shell 历史」的提醒',
     /shell 历史/.test(set.stderr), set.stderr);
 }
