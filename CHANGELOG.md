@@ -1,13 +1,17 @@
 ## [Unreleased]
 
+（下一版攒着）
+
+## [1.24.0] - 2026-11-02
+
 ### Added
+
 - `run --retry N`：只读动作失败后指数退避重试（1s/2s/4s，钳 0–5 次）；非只读动作拒绝该旗标——重试副作用动作等于放大风险
 - `run --avg N`：连跑 2–10 次报 min/avg/max 耗时——给性能敏感的动作一个一行结论
 - `audit --follow --json`：跟读流改为 JSONL（每行一个对象）；纯 `--json` 快照仍是一次性信封
 - `stats --action <插件.动作>`：单动作视角——次数/成功率/p50/p95/最慢/最近一次执行
 - `audit --export csv`：审计记录导出 CSV（与启动器日志页导出同口径：ts/decision/caller/plugin/action/ms/error）
 - `market doctor`：全部集市源探活——index 读不出红✗、空登记表黄标、超 30 天未更新提示
-
 
 ## [1.23.0] - 2026-11-02
 
