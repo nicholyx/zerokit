@@ -812,6 +812,11 @@ async function cmdRun(args: string[]): Promise<number> {
   const quiet = rest.includes('--quiet');
   const watchIdx = rest.indexOf('--watch');
   const watchSec = watchIdx >= 0 && rest[watchIdx + 1] ? rest[watchIdx + 1] : undefined;
+  // 第一百二十轮①②：--retry N 失败退避重试；--avg N 连跑报 min/avg/max
+  const retryIdx = rest.indexOf('--retry');
+  const retryN = retryIdx >= 0 ? Math.max(0, Math.min(5, parseInt(rest[retryIdx + 1] ?? '2', 10) || 2)) : 0;
+  const avgIdx = rest.indexOf('--avg');
+  const avgN = avgIdx >= 0 ? Math.max(2, Math.min(10, parseInt(rest[avgIdx + 1] ?? '3', 10) || 3)) : 0;
   // 第七十一轮②：--env KEY=VAL 临时环境变量（可多次；只在本次进程注入，不落盘）
   const envOverrides: Record<string, string> = {};
   for (let i = 0; i < rest.length; i++) {
@@ -831,9 +836,9 @@ async function cmdRun(args: string[]): Promise<number> {
   const argv: string[] = [];
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i]!;
-    if (a === '--out' || a === '--watch' || a === '--share' || a === '--jq' || a === '--env' || a === '--format'
+    if (a === '--out' || a === '--watch' || a === '--share' || a === '--jq' || a === '--env' || a === '--format' || a === '--retry' || a === '--avg'
         || a === '--sort' || a === '--pick' || a === '--uniq' || a === '--sum' || a === '--head') { i++; continue; }
-    if (a.startsWith('--out=') || a.startsWith('--watch=') || a.startsWith('--share=') || a.startsWith('--jq=') || a.startsWith('--env=') || a.startsWith('--format=')
+    if (a.startsWith('--out=') || a.startsWith('--watch=') || a.startsWith('--share=') || a.startsWith('--jq=') || a.startsWith('--env=') || a.startsWith('--format=') || a.startsWith('--retry=') || a.startsWith('--avg=')
         || a.startsWith('--sort=') || a.startsWith('--pick=') || a.startsWith('--uniq=') || a.startsWith('--sum=') || a.startsWith('--head=')) continue;
     if (['--yes', '-y', '--json', '--copy', '--quiet', '--full', '--stdin-json'].includes(a)) continue;
     // 第七十五轮：--sort -列 的降序值（-内存 不是短旗标，前一个是 --sort 就吞掉）
@@ -923,7 +928,7 @@ async function cmdRun(args: string[]): Promise<number> {
     savedEnv.push([k, process.env[k]]);
     process.env[k] = v;
   }
-  const result = await runAction(plugin, action, { caller: 'cli', values: withDefaults.values });
+  let result: Awaited<ReturnType<typeof runAction>> = await runAction(plugin, action, { caller: 'cli', values: withDefaults.values });
   for (const [k, v] of savedEnv) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
   // 第四十五轮⑤：成功执行进历史（重放要干净的参数面）
   if (result.ok) {
@@ -1028,6 +1033,33 @@ async function cmdRun(args: string[]): Promise<number> {
     const { writeFileSync } = await import('node:fs');
     writeFileSync(shareFile, text, 'utf8');
     process.stdout.write(c.green(`✓ 分享文件已生成：${shareFile}（${isHtml ? 'HTML 单文件' : 'Markdown'}，${text.length} 字符）\n`));
+  }
+  // 第一百二十轮①：--retry N 失败退避重试（指数 1s/2s/4s…，只读专属——非只读重试有重复副作用风险）
+  if (retryN > 0 && !result.ok) {
+    if (action.risk !== 'read') {
+      process.stderr.write(c.yellow(`--retry 只用于只读动作（当前风险 ${action.risk}）——重跑可能有重复副作用，已拒绝\n`));
+    } else {
+      for (let i = 1; i <= retryN && !result.ok; i++) {
+        const wait = Math.min(8000, 1000 * 2 ** (i - 1));
+        if (!quiet) process.stderr.write(c.dim(`（第 ${i}/${retryN} 次重试，等 ${Math.round(wait / 1000)}s）\n`));
+        await new Promise((r) => setTimeout(r, wait));
+        result = await runAction(plugin, action, { caller: 'cli', values: withDefaults.values });
+      }
+    }
+  }
+  // 第一百二十轮②：--avg N 连跑 N 次报 min/avg/max（量性能一把尺；次数钳 2..10）
+  if (avgN > 0) {
+    const samples: number[] = [];
+    for (let i = 0; i < avgN; i++) {
+      const r = await runAction(plugin, action, { caller: 'cli', values: withDefaults.values });
+      if (typeof r.ms === 'number') samples.push(r.ms);
+      if (!r.ok) { process.stderr.write(c.red(`第 ${i + 1} 次失败：${String((r as { error?: string }).error ?? '')}\n`)); return 1; }
+    }
+    const mn = Math.min(...samples), mx = Math.max(...samples);
+    const av = Math.round(samples.reduce((a, b) => a + b, 0) / samples.length);
+    const msTxt = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(2)}s` : `${Math.round(v)}ms`);
+    process.stdout.write(`连跑 ${avgN} 次：min ${msTxt(mn)} · avg ${msTxt(av)} · max ${msTxt(mx)}\n`);
+    return 0;
   }
   // 第四十五轮⑧：--watch N 进入轮询，只打印 diff，Ctrl-C 退出
   if (watchSec && result.ok) {
@@ -2379,6 +2411,21 @@ function cmdStats(args: string[]): number {
     all = all.filter((r) => Date.parse(r.ts ?? '') >= cutoff);
   }
   const stats = actionStats(all);
+  // 第一百二十轮⑥：--action <插件.动作> 单动作视图
+  const actIdx = args.indexOf('--action');
+  if (actIdx >= 0) {
+    const key = String(args[actIdx + 1] ?? '');
+    const one = stats.find((x) => x.key === key || x.key === key.replace('.', '.'));
+    if (!one) {
+      process.stderr.write(c.red(`✗ 没有这个动作的执行记录：${key}（用 zkit stats 看全部）\n`));
+      return 1;
+    }
+    const fmt = (v: number | undefined | null) => (v == null ? '—' : v >= 1000 ? (v / 1000).toFixed(1) + 's' : Math.round(v) + 'ms');
+    process.stdout.write(`${one.key}：${one.count} 次，成功 ${one.count - one.failCount}（${Math.round(((one.count - one.failCount) / Math.max(1, one.count)) * 100)}%）\n`);
+    process.stdout.write(`  耗时：p50 ${fmt(one.p50Ms)} · p95 ${fmt(one.p95Ms)} · 最慢 ${fmt(one.maxMs)}\n`);
+    if (one.lastTs) process.stdout.write(c.dim(`  最近一次执行：${one.lastTs}\n`));
+    return 0;
+  }
   if (stats.length === 0) {
     process.stdout.write(c.dim('还没有执行记录（跑几个动作再来看）。\n'));
     return 0;
@@ -2477,8 +2524,20 @@ async function cmdAudit(args: string[]): Promise<number> {
     process.stdout.write(c.dim('还没有审计记录。\n'));
     return 0;
   }
-  if (args.includes('--json')) {
+  // --json 与 --follow 组合：json 快照打印后继续跟读流（跟读流每行一个 JSON 对象，不是信封）
+  if (args.includes('--json') && !args.includes('--follow')) {
     process.stdout.write(JSON.stringify({ records }, null, 2) + '\n');
+    return 0;
+  }
+  // 第一百二十轮⑦：--export csv（与启动器 113 轮导出同口径：ts/decision/caller/plugin/action/ms/error）
+  const expIdx = args.indexOf('--export');
+  if (expIdx >= 0) {
+    const fmt = String(args[expIdx + 1] ?? 'csv');
+    if (fmt !== 'csv') { process.stderr.write(c.red('✗ 目前只支持 --export csv\n')); return 2; }
+    const esc = (v: unknown) => { const t = v == null ? '' : String(v); return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+    const head = 'ts,decision,caller,plugin,action,ms,error';
+    const lines = [head, ...records.map((r) => [r.ts, r.decision, r.caller, r.plugin, r.action, typeof r.ms === 'number' ? r.ms : '', r.error ?? ''].map(esc).join(','))];
+    process.stdout.write(lines.join('\n') + '\n');
     return 0;
   }
   process.stdout.write(`最近 ${records.length} 条审计记录：\n`);
@@ -2502,7 +2561,9 @@ async function cmdAudit(args: string[]): Promise<number> {
       await new Promise((r) => setTimeout(r, 2000));
       const now = readAudit();
       if (now.length > seen) {
+        const asJson = args.includes('--json');
         for (const r of now.slice(seen)) {
+          if (asJson) { process.stdout.write(JSON.stringify(r) + '\n'); continue; }
           const mark = r.decision === 'allow' ? '✓' : '✗';
           process.stdout.write(`${mark} ${r.ts?.slice(11, 19) ?? ''} ${r.caller ?? ''} ${r.plugin}.${r.action}${r.error ? ' ' + String(r.error).slice(0, 60) : ''}\n`);
         }
@@ -2726,6 +2787,30 @@ async function cmdPluginInstall(args: string[]): Promise<number> {
 
 function cmdMarket(args: string[]): number {
   const sub = (args[0] ?? 'list').toLowerCase();
+
+  // 第一百二十轮⑧：market doctor——全部集市源批量探活（index 可读性+插件数+登记时间），一眼看清哪些源挂了
+  if (sub === 'doctor') {
+    const markets = loadMarkets();
+    if (markets.length === 0) {
+      process.stdout.write('还没有添加任何集市（zkit market add <源>）——没有可体检的。\n');
+      return 0;
+    }
+    let bad = 0;
+    for (const m of markets) {
+      const idx = readIndex(m.name);
+      if (!idx || !Array.isArray(idx.plugins)) {
+        bad++;
+        process.stdout.write(`${c.red('✗')} ${c.bold(m.name)} 索引读不出来（源可能已移动/删除——zkit market remove ${m.name} 后重加）\n`);
+        continue;
+      }
+      const n = idx.plugins.length;
+      const stale = m.addedAt ? Date.now() - Date.parse(m.addedAt) > 30 * 86400000 : false;
+      const reg = n === 0 ? c.yellow('（空登记表——源里没有 market.json 或没登记任何插件）') : '';
+      process.stdout.write(`${c.green('✓')} ${c.bold(m.name)} ${n} 个插件${stale ? c.yellow(' · 添加超过 30 天，可 market refresh 更新索引') : ''}${reg}\n`);
+    }
+    process.stdout.write(bad === 0 ? c.green(`集市健康：${markets.length}/${markets.length} 全部可用\n`) : c.yellow(`${bad}/${markets.length} 个源读不出来\n`));
+    return bad === 0 ? 0 : 1;
+  }
 
   if (sub === 'list' || sub === 'ls') {
     const markets = loadMarkets();
