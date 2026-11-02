@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+（下一版攒着）
+
+## [1.27.0] - 2026-11-02
+
 ### Added
 
 - 结果区键盘还债：KV 表也进 j/k 选中域（此前只有数据表），Enter 复制适配 KV（取值列）与 Shift+Enter（整行 JSON）
