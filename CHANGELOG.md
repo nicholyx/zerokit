@@ -1,6 +1,9 @@
 ## [Unreleased]
 
-（下一版攒着）
+### Added
+- web 插件桥新五条能力：`zkit.getActions()`（动作列表自建菜单）、`zkit.storage`（每插件 64KB KV 宿主代存，sandbox 里没有 localStorage）、`zkit.copy(text)`（走宿主剪贴板）、`zkit.onTheme(cb)`（主题/字号/语言变化即时推）、`zkit.onProgress(cb)`（run 阶段事件 started/done）
+- 消息协议新增 storage/copy/theme/run:progress 四组消息（旧页面不认识自动忽略，协议兼容）
+- demoweb 演示板扩到十张能力卡；文档 plugin-spec web 节同步五条新 API
 
 ## [1.24.0] - 2026-11-02
 
