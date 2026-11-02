@@ -171,12 +171,19 @@ function marketSnapshot(): {
   }
   const markets = loadMarkets().map((m) => {
     const index = readIndex(m.name);
+    // 第一百二十二轮④：源健康徽标——index 可读绿 / 超 30 天未刷新黄 / 读不出红。
+    // 只用本地缓存判断（浏览集市不碰网络），黄红是「值得刷新/该移除」的提示不是判决。
+    const idxOk = Boolean(index && Array.isArray(index.plugins));
+    const stale = m.addedAt ? Date.now() - Date.parse(m.addedAt) > 30 * 86400000 : false;
+    const health = !idxOk ? 'bad' : stale ? 'stale' : 'ok';
     return {
       name: m.name,
       url: m.url,
       addedAt: m.addedAt,
       local: !/^(https?:\/\/|git@|ssh:\/\/)/.test(m.url),
       description: index?.description ?? '',
+      health,
+      healthText: !idxOk ? '索引读不出来' : stale ? '超 30 天未刷新' : '',
       plugins: (index?.plugins ?? []).map((e) => ({
         ...e,
         installedVersion: installed.get(e.id) ?? '',

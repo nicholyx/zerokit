@@ -6080,16 +6080,39 @@ async function renderDoctor() {
 function marketMsg(text, kind = '') {
   const box = $('marketMsg');
   if (!box) return;
-  box.textContent = text || '';
+  box.textContent = '';
   box.className = `market-msg ${kind}`;
+  box.append(document.createTextNode(text || ''));
+  // 第一百二十二轮⑤：安装成功的提示带「查看插件主页」深链——装完第一件事就是去看装了什么
+  if (kind === 'ok' && arguments.length > 2 && arguments[2]) {
+    const link = document.createElement('button');
+    link.className = 'ghost market-msg-link';
+    link.textContent = '查看插件主页';
+    link.addEventListener('click', () => { location.hash = `#/plugins/${encodeURIComponent(arguments[2])}`; });
+    box.append(link);
+  }
+}
+
+/** 第一百二十二轮②：登记表 riskMix 摊成徽标组；旧登记表没有该字段返回 null（不显示） */
+function marketRiskMix(e) {
+  if (!e || !e.riskMix || typeof e.riskMix !== 'object') return null;
+  return {
+    read: e.riskMix.read || 0,
+    mutate: e.riskMix.mutate || 0,
+    destructive: e.riskMix.destructive || 0,
+  };
 }
 
 function marketCardHtml(m) {
   const local = m.local ? '<span class="badge">本地目录</span>' : '';
+  // 第一百二十二轮④：源健康徽标（绿=可读 / 黄=超30天 / 红=读不出）——浏览时不碰网络，只读缓存判断
+  const hIcon = m.health === 'bad' ? '🔴' : m.health === 'stale' ? '🟡' : '🟢';
+  const hTitle = m.health === 'bad' ? `索引读不出来（源可能已移动——可试刷新）`
+    : m.health === 'stale' ? '超 30 天未刷新（可刷新更新索引）' : '索引正常';
   return `
     <div class="plug-card market-card" data-market="${esc(m.name)}">
       <div class="plug-card-head">
-        <b>${esc(m.name)}</b>
+        <b>${esc(m.name)}</b><span class="market-health" title="${esc(hTitle)}">${hIcon}</span>
         <span class="aid">${esc(m.url)}</span>
         <span class="badge">${(m.plugins || []).length} 个插件</span>${local}
         <span class="plug-ops">
@@ -6097,7 +6120,7 @@ function marketCardHtml(m) {
           <button class="ghost" data-op="remove">移除</button>
         </span>
       </div>
-      <div class="plug-card-body">${esc(m.description || '')}</div>
+      <div class="plug-card-body">${esc(m.description || '')}${m.healthText ? `<span class="market-health-text">${esc(m.healthText)}</span>` : ''}</div>
     </div>`;
 }
 
@@ -6105,12 +6128,15 @@ function marketEntryHtml(m, e) {
   const tags = (e.tags || []).length
     ? `<span class="market-tags">${(e.tags || []).map(esc).join(' · ')}</span>` : '';
   const installed = Boolean(e.installedVersion);
+  // 第一百二十二轮②：风险构成徽标——装之前先看清这个插件里有什么级别的动作
+  const mix = marketRiskMix(e);
+  const mixHtml = mix ? `<span class="market-risk-mix" title="动作风险构成">${mix.read ? `<span class="badge read">读 ×${mix.read}</span>` : ''}${mix.mutate ? `<span class="badge warn">写 ×${mix.mutate}</span>` : ''}${mix.destructive ? `<span class="badge destructive">毁 ×${mix.destructive}</span>` : ''}</span>` : '';
   return `
     <div class="plug-card market-entry" data-id="${esc(e.id)}" data-market="${esc(m.name)}">
       <div class="plug-card-head">
         <b>${esc(e.name)}</b>
-        <span class="aid">${esc(e.id)}${e.version ? ` · v${esc(e.version)}` : ''}</span>
-        <span class="badge">${esc(m.name)}</span>
+        <span class="aid">${esc(e.id)}${e.version ? ` · v${esc(e.version)}` : ''}${typeof e.actionCount === 'number' ? ` · ${e.actionCount} 个动作` : ''}</span>
+        <span class="badge">${esc(m.name)}</span>${mixHtml}
         ${installed ? `<span class="badge read">已装${e.installedVersion ? ` v${esc(e.installedVersion)}` : ''}</span>` : ''}
         <span class="plug-ops">
           ${installed ? '' : '<button class="ghost" data-op="preview">安装</button>'}
@@ -6212,7 +6238,7 @@ async function doMarketInstall() {
     marketPreview = null;
     await load(false);          // 插件列表与徽标刷新
     await renderMarket();
-    marketMsg(`已安装「${p.entry?.name || p.id}」`, 'ok');
+    marketMsg(`已安装「${p.entry?.name || p.id}」`, 'ok', p.id || p.entry?.id);
   } catch (e) {
     marketMsg(`安装失败：${e.message}`, 'err');
     if (btn) { btn.disabled = false; btn.textContent = '确认安装'; }
@@ -6285,7 +6311,7 @@ async function renderMarket() {
       <button class="primary" id="marketAddBtn">添加</button>
     </div>
     ${marketData.markets.length === 0
-      ? '<div class="ps-empty" role="status">还没有添加任何集市。先用上面的输入框加一个，或者在终端 <code>zkit market add &lt;地址&gt;</code>。</div>'
+      ? `<div class="ps-empty" role="status">还没有添加任何集市。<div class="e-hint">第一步：把本仓库当集市——上面的输入框粘 <code>${esc('/Users/你/zerokit')}</code>（本地目录）或任意 git 地址，回车。终端等价：<code>zkit market add &lt;地址&gt;</code>。</div><div class="e-hint">任何 git 仓库根目录放一份 market.json 就是一个集市（zkit market index 一键生成）。</div></div>`
       : `<div class="plug-install">
            <input id="marketQ" placeholder="搜索集市里的插件（id / 名称 / 摘要 / 标签）"
                   value="${esc(marketQuery)}" autocomplete="off" spellcheck="false">
