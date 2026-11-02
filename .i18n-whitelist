@@ -410,6 +410,9 @@ if \(diffs\.length === 0\) return '<div cla
 return `<table class="grid diff-table"><
 const md = \['\| 字段 \| 较早 \| 最新 \|', '\| --- \|
 reply\(\{ ok: false, error: `桥只能调本插件的动作：\$\{
+reply\(\{ ok: false, error: '详情页已关闭' \}\); return
+error: j\.error \|\| `存储操作失败（\$\{r\.status\}）` \}\)
+reply\(\{ ok: false, error: '没有要复制的内容' \}\); return
 if \(!res\) \{ reply\(\{ ok: false, error: '用
 console\.warn\('\[zk-bridge\] 页面报错：', msg\.er
 el\.count\.textContent = `插件页面报错：\$\{String\(

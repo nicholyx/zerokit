@@ -16,6 +16,10 @@ try {
         { id: 'nav', label: '受控跳转', hint: 'zkit.openLink(url) 宿主确认后开系统浏览器' },
         { id: 'resize', label: '自适应高度', hint: 'zkit.setHeight(px) 报告内容高度' },
         { id: 'error', label: '错误上报', hint: 'zkit.reportError(e) 白屏也看得见原因' },
+        { id: 'actions', label: '动作菜单', hint: 'zkit.getActions() 自建本插件动作列表' },
+        { id: 'storage', label: '轻量记忆', hint: 'zkit.storage.get/set 64KB KV 宿主代存' },
+        { id: 'copy', label: '复制到剪贴板', hint: 'zkit.copy(text) sandbox 里也能复制' },
+        { id: 'theme', label: '主题即时推', hint: 'zkit.onTheme(cb) 宿主换肤立刻跟' },
       ],
     });
   } else if (cmd === 'now') {

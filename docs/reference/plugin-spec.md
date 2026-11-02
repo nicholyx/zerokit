@@ -683,6 +683,25 @@ zkit.appearance;
 
 // 页面致命错误上报：宿主状态行显示，白屏也看得见原因
 zkit.reportError(err);
+
+// 本插件动作列表（id/title/risk/带参数与否）——页面自建菜单不用硬编码
+const actions = zkit.getActions();   // [{ id, title, risk, hasParams }]
+
+// 轻量记忆：每插件 64KB KV（宿主落 ~/.zerokit/webstore/<插件id>.json；
+// sandbox 里没有 localStorage，这是唯一持久化出路。key 限 [\w.-] 1-64 字符）
+await zkit.storage.set('ui.lastTab', 'home');
+const v = (await zkit.storage.get('ui.lastTab')).value;
+await zkit.storage.remove('ui.lastTab');
+const info = await zkit.storage.keys();   // { keys: [...], bytes: N }
+
+// 复制到剪贴板（sandbox 里 navigator.clipboard 是废的，走宿主；上限 1MB 纯文本）
+await zkit.copy('要复制的文本');
+
+// 主题/字号/语言变化即时推（不用重开详情页；cb 收最新 appearance）
+zkit.onTheme((ap) => repaint(ap.dark));
+
+// run 阶段事件（cb 收 { callId, phase }，phase 是 'started'/'done'）
+zkit.onProgress((p) => spin(p.phase === 'started'));
 ```
 
 ### web 动作消息协议（完整参考）
@@ -696,9 +715,14 @@ zkit.reportError(err);
 | 页面→宿主 | `resize` | `{ height }` | 报告内容高度（宿主限幅 80~720） |
 | 页面→宿主 | `nav` | `{ url }` | 请求开外部链接（仅 http(s)） |
 | 页面→宿主 | `error` | `{ error }` | 页面自报致命错误 |
-| 宿主→页面 | `context` | `{ plugin, action, params, result, appearance }` | 执行上下文 + 外观 |
+| 页面→宿主 | `storage` | `{ callId, op, key, value? }` | KV 存储转发（op=get/set/remove/keys） |
+| 页面→宿主 | `copy` | `{ callId, text }` | 复制转发（宿主走剪贴板） |
+| 宿主→页面 | `context` | `{ plugin, action, params, result, appearance, actions }` | 执行上下文 + 外观 + 本插件动作列表 |
 | 宿主→页面 | `run:result` | `{ callId, payload }` | run 的应答（按 callId 配对） |
+| 宿主→页面 | `run:progress` | `{ callId, phase }` | run 阶段事件（started/done） |
 | 宿主→页面 | `nav:allowed` | `{ url }` | 跳转放行回执 |
+| 宿主→页面 | `theme` | `{ payload }` | 主题/字号/语言变化主动推 |
+| 宿主→页面 | `storage:result` / `copy:result` | `{ callId, payload }` | storage/copy 的应答 |
 
 安全边界（这四条是硬的，别试图绕）：
 
@@ -707,7 +731,7 @@ zkit.reportError(err);
 3. **未知 type 一律忽略**——协议外的消息不解释、不转发、不回执。
 4. **写动作照常弹确认**——`zkit.run` 转发执行，确认弹窗在宿主侧，页面代替不了用户点头；`zkit.openLink` 同理，跳哪个链接用户看得见。
 
-`window.zkit` 完整 API：`hosted`（是否在启动器里）、`context`、`ready(cb)`、`run(action, values)`、`setHeight(px)`、`openLink(url)`、`appearance`、`reportError(e)`。活样例：`plugins/demoweb/`（六项能力一页演示）。
+`window.zkit` 完整 API：`hosted`（是否在启动器里）、`context`、`ready(cb)`、`run(action, values)`、`getActions()`、`storage`（get/set/remove/keys，64KB 配额）、`copy(text)`、`onTheme(cb)`、`onProgress(cb)`、`setHeight(px)`、`openLink(url)`、`appearance`、`reportError(e)`。活样例：`plugins/demoweb/`（十项能力一页演示）。
 
 安全模型：页面跑在 `sandbox="allow-scripts"` 的 iframe 里（opaque origin），
 **拿不到会话令牌、fetch 不了宿主 API**——执行只能经 postMessage 桥由宿主转发，
