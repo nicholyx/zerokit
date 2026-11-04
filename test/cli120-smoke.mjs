@@ -11,7 +11,8 @@ const CLI = path.join(PKG_ROOT, 'src', 'cli.ts');
 let pass = 0, fail = 0;
 const check = (name, cond) => { if (cond) { pass++; console.log(`  ✓ ${name}`); } else { fail++; console.error(`FAIL  ${name}  <- cli120`); } };
 const home = mkdtempSync(path.join(tmpdir(), 'c120-'));
-const run = (args) => spawnSync(process.execPath, [CLI, ...args], { encoding: 'utf8', timeout: 60000, env: { ...process.env, ZEROKIT_HOME: home } });
+// 第一百二十七轮①：retry 退避基线压到 10ms（否则 --retry 用例白等 1s+2s）
+const run = (args) => spawnSync(process.execPath, [CLI, ...args], { encoding: 'utf8', timeout: 60000, env: { ...process.env, ZEROKIT_HOME: home, ZEROKIT_RETRY_MS: '10' } });
 console.log(`cli120-smoke（${home}）`);
 run(['plugin', 'bundled']);
 

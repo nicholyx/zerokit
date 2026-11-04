@@ -50,8 +50,8 @@ check('② 四态图标', batchStateIcon('ok') === '✓' && batchStateIcon('fail
 
 // ⑤ server batch-done 端点（起 server 实测）
 {
-  const tokenProbe = run(['ui', '--port', '0']); // 只是占位——实际起 server 用子进程
-  void tokenProbe;
+  // 第一百二十七轮①：这里原来 spawnSync(['ui','--port','0']) 当「占位」——ui 是前台进程，
+  // spawnSync 会挂满 60s timeout，整个文件被拖到一分钟。它什么都不验证，删掉。
   // 起 server
   const { spawn } = await import('node:child_process');
   const srv = spawn(process.execPath, [CLI, 'ui', '--port', '29871'], { env: { ...process.env, ZEROKIT_HOME: home }, stdio: ['ignore','pipe','pipe'] });

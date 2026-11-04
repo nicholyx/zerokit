@@ -86,8 +86,9 @@ writeFileSync(path.join(devDir, 'web', 'index.html'), '<!doctype html><meta char
 
 // server E2E：/api/dev/status 返回清单摘要
 {
-  const srv = run(['ui', '--port', '28994'], {});
-  // ui 前台阻塞——改用子进程内启动方案太重；直接验证 servePluginPage 路径可用（symlink 目录里有 web/index.html）
+  // 第一百二十七轮①：原来这里 spawnSync(['ui','--port','28994']) 想起 server，但 ui 是前台进程——
+  // spawnSync 挂满 60s timeout，返回值也从没用过。它对断言零贡献，删掉后本文件 60s → 秒级。
+  // server E2E 已由 webui-smoke 的桥直测段覆盖。
   const stat = readFileSync(path.join(home, 'plugins', 'myweb', 'web', 'index.html'), 'utf8');
   check('① 沙箱资源路径可达（安装目录直读）', stat.length > 0);
 }

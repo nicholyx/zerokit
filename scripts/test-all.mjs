@@ -6,6 +6,12 @@
 // 像是产品坏了，实际只是调用方式不对。所以把"每个测试怎么起"这件事收到这里。
 //
 // 每个测试都把结果汇总成一行「通过 X / Y」打印出来。这里解析那一行做总汇总。
+//
+// 用法：
+//   node scripts/test-all.mjs                # 全量
+//   node scripts/test-all.mjs <片段>         # 只跑文件名含片段的（可多个）
+//   node scripts/test-all.mjs --changed      # 按 git diff 挑受影响的测试（IMPACT_MAP）
+//   node scripts/test-all.mjs --shuffle      # 随机顺序跑（暴露顺序依赖）
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,12 +26,73 @@ const EXTRA_ARGS = {
   'mcp-smoke.mjs': ['src/mcp.ts'],
 };
 
+/**
+ * --changed 的受影响面映射：源文件/目录前缀 → 要跑的测试片段。
+ * 语义是「改了这个，至少要跑这些」——宁可多跑不可漏跑；没登记的改动回退全量。
+ * 维护约定：新测试文件落地时在对应源行补上自己的片段。
+ */
+const IMPACT_MAP = {
+  'src/core/runner.ts': ['runner', 'batch', 'chain', 'exec', 'sandbox', 'selfheal'],
+  'src/core/registry.ts': ['registry', 'lifecycle', 'deps', 'distro', 'market'],
+  'src/core/manifest.ts': ['lintdoc', 'scaffold', 'utools', 'cfg', 'settings'],
+  'src/core/pluginConfig.ts': ['cfg', 'settings'],
+  'src/core/deps.ts': ['deps'],
+  'src/core/market.ts': ['market', 'distro'],
+  'src/core/distro.ts': ['distro', 'market'],
+  'src/core/ops.ts': ['ops', 'audit', 'timeline'],
+  'src/core/audit.ts': ['audit', 'mcp'],
+  'src/core/suggest.ts': ['selfheal'],
+  'src/core/doctor.ts': ['doctor'],
+  'src/core/scaffold.ts': ['scaffold', 'lintdoc'],
+  'src/core/lintdoc.ts': ['lintdoc'],
+  'src/core/timers.ts': ['timers', 'watch'],
+  'src/core/datamap.ts': ['data'],
+  'src/core/cliX.ts': ['cli', 'audit', 'exec'],
+  'src/mcp.ts': ['mcp'],
+  'src/server.ts': ['webui', 'ui2', 'server', 'webbridge'],
+  'src/cli.ts': ['cli', 'selfheal', 'ops', 'rel', 'polish', 'timers', 'supply'],
+  'web/app.js': ['webui', 'keys', 'a11y', 'polish', 'search'],
+  'web/extras.js': ['extras', 'i18n', 'search'],
+  'web/index.html': ['webui'],
+  'web/style.css': ['webui'],
+  'plugins/': ['eco', 'roundtrip', 'chain', 'lintdoc', 'health'],
+};
+
 const flags = process.argv.slice(2).filter((a) => a.startsWith('-'));
 const only = process.argv.slice(2).filter((a) => !a.startsWith('-'));
 const files = fs.readdirSync(TEST_DIR)
   .filter((f) => f.endsWith('.mjs'))
   .filter((f) => only.length === 0 || only.some((o) => f.includes(o)))
   .sort();
+
+// --changed：按 git diff 基线（默认 main）挑改动过的源文件，再按 IMPACT_MAP 挑测试。
+// 在 feature 分支上即「这轮改了什么 → 至少跑哪些」；没改动或没登记的改动回退全量。
+if (flags.includes('--changed')) {
+  const base = (flags.find((a) => a.startsWith('--base=')) ?? '').slice(7) || 'main';
+  const diff = spawnSync('git', ['diff', '--name-only', `${base}...HEAD`], { encoding: 'utf8', cwd: ROOT });
+  const changed = (diff.stdout ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
+  const frags = new Set();
+  let unmapped = [];
+  for (const f of changed) {
+    if (f.startsWith('test/') && f.endsWith('.mjs')) { frags.add(f.slice(5, -5)); continue; }  // 测试自己 → 跑自己
+    const hit = Object.keys(IMPACT_MAP).filter((k) => f === k || f.startsWith(k));
+    if (hit.length === 0) { unmapped.push(f); continue; }
+    for (const frag of IMPACT_MAP[hit[0]]) frags.add(frag);
+  }
+  if (diff.status !== 0 || changed.length === 0) {
+    console.log(`（--changed：相对 ${base} 没有可识别的改动，回退全量）`);
+  } else if (unmapped.length > 0) {
+    console.log(`（--changed：有未登记影响面的改动（${unmapped.join('、')}），保守跑全量）`);
+  } else {
+    for (const g of frags) only.push(g);
+    files.length = 0;
+    for (const f of fs.readdirSync(TEST_DIR).filter((f) => f.endsWith('.mjs')).sort()) {
+      if (only.some((o) => f.includes(o))) files.push(f);
+    }
+    console.log(`（--changed：${changed.length} 个源文件改动 → 跑 ${files.length} 个测试）`);
+  }
+}
+
 // --shuffle：随机顺序跑。用于暴露隐式的顺序依赖（理论上每个测试都该自包含；
 // 顺序换了就挂 = 有测试在偷读别的测试留下的状态）。
 if (flags.includes('--shuffle')) {
