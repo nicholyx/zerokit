@@ -81,12 +81,12 @@ run(['plugin', 'bundled']);
   check('⑨ persistCount 断链 0', persistCount('a', [h[2], h[1]]) === 0);
 }
 // server 端 /api/doctor 同源
+// server 端 /api/doctor 同源
 {
-  const srv = spawnSync(process.execPath, [CLI, 'ui', '--port', '28991'], {
-    encoding: 'utf8', timeout: 15000, env: { ...process.env, ZEROKIT_HOME: home },
-  });
-  // ui 前台会阻塞——spawn 后台不好测，改直接调用 buildDoctorReport + 手动验证端点逻辑在 typecheck 层
-  check('④ server 端接线（typecheck 已过）', true);
+  // 第一百二十七轮①：原来 spawnSync(['ui','--port','28991']) 挂满 15s timeout 才返回（ui 是前台进程），
+  // 返回值没用过、对断言零贡献——删掉。server 端同源由 webui-smoke（真 server 拉起探活）覆盖。
+  const wired = readFileSync(path.join(PKG_ROOT, 'src/server.ts'), 'utf8').includes('/api/doctor');
+  check('④ server 端接线（静态 + webui-smoke 活测）', wired);
 }
 
 rmSync(home, { recursive: true, force: true });

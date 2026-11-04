@@ -1112,8 +1112,10 @@ async function cmdRun(args: string[]): Promise<number> {
     if (action.risk !== 'read') {
       process.stderr.write(c.yellow(`--retry 只用于只读动作（当前风险 ${action.risk}）——重跑可能有重复副作用，已拒绝\n`));
     } else {
+      // 测试钩子：ZEROKIT_RETRY_MS 压基线退避（秒级退避让 CI 白等；生产行为不变）
+      const retryBase = Number(process.env.ZEROKIT_RETRY_MS ?? '') > 0 ? Number(process.env.ZEROKIT_RETRY_MS) : 1000;
       for (let i = 1; i <= retryN && !result.ok; i++) {
-        const wait = Math.min(8000, 1000 * 2 ** (i - 1));
+        const wait = Math.min(8000, retryBase * 2 ** (i - 1));
         if (!quiet) process.stderr.write(c.dim(`（第 ${i}/${retryN} 次重试，等 ${Math.round(wait / 1000)}s）\n`));
         await new Promise((r) => setTimeout(r, wait));
         result = await runAction(plugin, action, { caller: 'cli', values: withDefaults.values });

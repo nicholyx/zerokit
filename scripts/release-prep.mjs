@@ -36,6 +36,46 @@ const read = (f) => fs.readFileSync(path.join(REPO, f), 'utf8');
 const write = (f, s) => fs.writeFileSync(path.join(REPO, f), s);
 
 // ---------- ① CHANGELOG 归档 ----------
+// 第一百二十七轮③：主文件版本段 >12 时，把更旧的搬进 docs/reference/changelog-archive.md——
+// 主 CHANGELOG 无限膨胀会让 [Unreleased] 锚点越埋越深、diff 噪音越来越大。
+function archiveOldVersions() {
+  const mainPath = path.join(REPO, 'CHANGELOG.md');
+  const archPath = path.join(REPO, 'docs', 'reference', 'changelog-archive.md');
+  const main = fs.readFileSync(mainPath, 'utf8');
+  const heads = [...main.matchAll(/^## \[(\d+\.\d+\.\d+)\] - /gm)];
+  if (heads.length <= 12) return 0;
+  const vkey = (v) => v.split('.').map(Number);
+  const sorted = heads.map((m) => ({ at: m.index ?? 0, v: m[1] })).sort((a, b) => {
+    const [x, y] = [vkey(a.v), vkey(b.v)];
+    return (x[0] - y[0]) || (x[1] - y[1]) || (x[2] - y[2]);
+  });
+  const moveOut = new Set(sorted.slice(0, sorted.length - 12).map((h) => h.v)); // 最旧的搬走
+  const firstHead = main.search(/^## \[/m);
+  const unreleased = main.slice(0, firstHead);
+  const ends = heads.map((m) => m.index ?? 0 + m[0].length);
+  const segMap = new Map();
+  heads.forEach((m, i) => {
+    const end = i + 1 < heads.length ? heads[i + 1].index ?? main.length : main.length;
+    segMap.set(m[1], main.slice(m.index ?? 0, end));
+  });
+  const kept = [...segMap.entries()].filter(([v]) => !moveOut.has(v)).sort((a, b) => {
+    const [x, y] = [vkey(b[0]), vkey(a[0])];
+    return (x[0] - y[0]) || (x[1] - y[1]) || (x[2] - y[2]);
+  });
+  const newMain = unreleased + kept.map(([, t]) => t.trimEnd() + '\n\n').join('');
+  const arch = fs.readFileSync(archPath, 'utf8');
+  const archFirst = arch.search(/^## \[/m);
+  const movingSegs = [...segMap.entries()].filter(([v]) => moveOut.has(v)).sort((a, b) => {
+    const [x, y] = [vkey(b[0]), vkey(a[0])];
+    return (x[0] - y[0]) || (x[1] - y[1]) || (x[2] - y[2]);
+  });
+  const newArch = arch.slice(0, archFirst) + movingSegs.map(([, t]) => t.trimEnd() + '\n\n').join('') + arch.slice(archFirst).trimEnd() + '\n';
+  fs.writeFileSync(mainPath, newMain);
+  fs.writeFileSync(archPath, newArch);
+  console.log(`（归档：主 CHANGELOG 搬 ${moveOut.size} 个旧版本段进 changelog-archive.md）`);
+  return moveOut.size;
+}
+
 const cl = read('CHANGELOG.md');
 if (CHECK) {
   // 锚
@@ -151,3 +191,5 @@ write('apps/desktop/src-tauri/Cargo.lock', lock.replace(lockRe, `$1"${ver}"`));
   }
 }
 console.log(`✓ 全部落盘（CHANGELOG + 四处版本号 → ${ver}）`);
+// 版本段过多时把最旧的搬进归档（近 12 版留主文件）
+if (WRITE) archiveOldVersions();
