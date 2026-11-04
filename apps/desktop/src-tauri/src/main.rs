@@ -762,8 +762,12 @@ fn main() {
                             }
                         }
                         "devtools" => {
+                            // 第一百三十五轮⑥：devtools 走前端 invoke（open_devtools 方法需要
+                            // devtools feature，release 构建没有——用插件消息代替编译期方法）
                             if let Some(window) = app.get_webview_window("main") {
-                                window.open_devtools();
+                                let _ = window.eval(
+                                    "try { window.__TAURI_INTERNALS__.invoke('plugin:window|internal_toggle_devtools') } catch (e) { console.warn('devtools 不可用', e) }",
+                                );
                             }
                         }
                         "logs" => {
