@@ -108,6 +108,23 @@ const run = (args) => spawnSync(process.execPath, ['src/cli.ts', ...args], {
   pass('引导页结构（#guide/#boot/可复制命令）', /id="guide"/.test(splash) && /id="boot"/.test(splash) && /clipboard/.test(splash));
 }
 
+// ---- 第一百三十五轮：桌面壳健壮性第二波（静态断言 + 依赖接线） ----
+{
+  const rs = fs.readFileSync(path.join(ROOT, 'apps', 'desktop', 'src-tauri', 'src', 'main.rs'), 'utf8');
+  const toml = fs.readFileSync(path.join(ROOT, 'apps', 'desktop', 'src-tauri', 'Cargo.toml'), 'utf8');
+  const cap = fs.readFileSync(path.join(ROOT, 'apps', 'desktop', 'src-tauri', 'capabilities', 'default.json'), 'utf8');
+  const appJs = fs.readFileSync(path.join(ROOT, 'web', 'app.js'), 'utf8');
+  const css = fs.readFileSync(path.join(ROOT, 'web', 'style.css'), 'utf8');
+  pass('135① 多显示器钳制（available_monitors + 钳回主屏）', /available_monitors/.test(rs) && /钳回主屏/.test(rs));
+  pass('135② 托盘「重新载入界面」', /"reload", "重新载入界面"/.test(rs) && /location\.reload/.test(rs));
+  pass('135③ tooltip 带版本与端口', /shell_ver/.test(rs) && /ZEROKIT_PORT/.test(rs) && /ui_port/.test(rs));
+  pass('135④ 开机自启插件接上', /tauri-plugin-autostart/.test(toml) && /tauri_plugin_autostart::init/.test(rs) && /autostart:allow-enable/.test(cap));
+  pass('135⑤ 壳内升级横幅（checkShellUpdate）', /checkShellUpdate/.test(appJs) && /update-bar/.test(css) && /releases\/latest/.test(appJs));
+  pass('135⑥ devtools 菜单 + F12', /开发者工具/.test(rs) && /open_devtools/.test(rs) && /F12/.test(appJs));
+  pass('135⑦ 窗口标题带版本', /title\(format!\("zerokit v\{\}"/.test(rs));
+  pass('135⑧ 单实例守卫', /tauri-plugin-single-instance/.test(toml) && /tauri_plugin_single_instance::init/.test(rs) && /set_focus/.test(rs));
+}
+
 fs.rmSync(TMP_HOME, { recursive: true, force: true });
 console.log('\n' + '='.repeat(60));
 console.log(`通过 ${passed} / ${passed + failed}`);

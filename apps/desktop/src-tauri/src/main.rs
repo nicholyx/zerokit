@@ -491,6 +491,18 @@ fn show_error(app: &AppHandle, message: &str) {
 fn main() {
     let boot_config = load_config();
     tauri::Builder::default()
+        // 第一百三十五轮⑧：单实例——二次启动不起新内核/新窗口，聚焦已有窗口后退出
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
+        // 第一百三十五轮④：开机自启（默认关；前端经 __TAURI__.autostart 切换，无 UI 前可用 CLI 配）
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .manage(CoreProcess(Mutex::new(None)))
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -501,7 +513,7 @@ fn main() {
             // ③启动屏版本号：占位页显示当前壳版本（tauri context 的 package version）
             let shell_version = app.package_info().version.to_string();
             let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-                .title("zerokit")
+                .title(format!("zerokit v{}", app.package_info().version))
                 // ③版本注入要在页面任何脚本跑之前——initialization_script 正是干这个的
                 .initialization_script(&format!(
                     "window.__ZK_VERSION = {};",
@@ -537,6 +549,49 @@ fn main() {
                 }
             }
             let window = builder.build()?;
+
+            // 第一百三十五轮①：记忆位置可能在已拔掉的显示器上——窗口会「消失」。
+            // 拿不到任何 monitor 或位置不在任一屏幕可见区内时钳回主屏。
+            {
+                let win = window.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(600));
+                    let mut monitors = match win.available_monitors() {
+                        Ok(ms) => ms,
+                        Err(_) => return,
+                    };
+                    if monitors.is_empty() {
+                        return;
+                    }
+                    let (px, py) = match win.outer_position() {
+                        Ok(pos) => (pos.x, pos.y),
+                        Err(_) => return,
+                    };
+                    let size = win.outer_size().unwrap_or_default();
+                    let visible = monitors.iter().any(|m| {
+                        let mp = m.position();
+                        let ms = m.size();
+                        px + (size.width as i32) > mp.x
+                            && px < mp.x + ms.width as i32
+                            && py + (size.height as i32) > mp.y
+                            && py < mp.y + ms.height as i32
+                    });
+                    if !visible {
+                        // 钳回主屏工作区中心
+                        if let Ok(Some(primary)) = win.primary_monitor() {
+                            let mp = primary.position();
+                            let ms = primary.size();
+                            let x = mp.x + ((ms.width as i32 - size.width as i32) / 2).max(0);
+                            let y = mp.y + ((ms.height as i32 - size.height as i32) / 3).max(0);
+                            let _ = win.set_position(tauri::PhysicalPosition::new(x, y));
+                            if std::env::var("ZEROKIT_DEBUG").is_ok() {
+                                eprintln!("记忆位置 ({px},{py}) 不在任何显示器上，钳回主屏 ({x},{y})");
+                            }
+                        }
+                    }
+                    let _ = &mut monitors; // monitors 后续可能复用
+                });
+            }
 
             // 居中放在窗口完全建好之后再干：实测在 setup 里立刻设置位置会被窗口管理器覆盖掉
             // （窗口会贴到屏幕右下角）。这里延迟一小会儿，并按主显示器自己算位置。
@@ -668,14 +723,22 @@ fn main() {
                 // ①托盘菜单扩充：设置（打开内核设置面）/ 日志 / 退出
                 let show = MenuItem::with_id(app, "show", "显示 / 隐藏", true, None::<&str>)?;
                 let settings = MenuItem::with_id(app, "settings", "打开设置", true, None::<&str>)?;
+                let reload = MenuItem::with_id(app, "reload", "重新载入界面", true, None::<&str>)?; // 第一百三十五轮②
                 let logs = MenuItem::with_id(app, "logs", "打开日志目录", true, None::<&str>)?;
+                let devtools = MenuItem::with_id(app, "devtools", "开发者工具（F12）", cfg!(debug_assertions), None::<&str>)?; // 第一百三十五轮⑥：仅 debug 构建可用
                 let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-                let menu = Menu::with_items(app, &[&show, &settings, &logs, &quit])?;
+                let menu = Menu::with_items(app, &[&show, &settings, &reload, &logs, &devtools, &quit])?;
 
                 let hotkey_tip = registered.first().cloned().unwrap_or_else(|| "托盘呼出".into());
+                let shell_ver = app.package_info().version.to_string();
+                let ui_port = std::env::var("ZEROKIT_PORT").ok().unwrap_or_default(); // 第一百三十五轮③：tooltip 带端口
                 TrayIconBuilder::new()
                     .menu(&menu)
-                    .tooltip(format!("zerokit —— {hotkey_tip} 呼出"))
+                    .tooltip(if ui_port.is_empty() {
+                        format!("zerokit v{shell_ver} —— {hotkey_tip} 呼出")
+                    } else {
+                        format!("zerokit v{shell_ver} :{ui_port} —— {hotkey_tip} 呼出")
+                    })
                     // ②托盘左键/双击 = 切换主窗口（macOS 上明确化）
                     .on_tray_icon_event(|tray, event| {
                         if let tauri::tray::TrayIconEvent::DoubleClick { .. } = event {
@@ -690,6 +753,17 @@ fn main() {
                                 let _ = window.show();
                                 let _ = window.set_focus();
                                 let _ = window.eval("if (window.__zerokit) { try { location.hash = '#/'; } catch {} }");
+                            }
+                        }
+                        "reload" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.eval("location.reload()");
+                            }
+                        }
+                        "devtools" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                window.open_devtools();
                             }
                         }
                         "logs" => {
