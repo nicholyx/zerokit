@@ -65,6 +65,8 @@ export interface DoctorReport {
   summary: { plugins: number; actions: number; errors: number; warnings: number };
   /** 第八十四轮②：每次全量体检的摘要落 doctor-history.jsonl（保留 50 条）。 */
   history: DoctorHistoryEntry[];
+  /** 第一百二十九轮⑦：执行历史存储段（条数/字节/最老一条）。 */
+  historyStore: { entries: number; bytes: number; oldest: string | null };
 }
 
 /** 第八十四轮②：体检历史一条记录。failed/warned 是问题文本列表，用于跨次比对。 */
@@ -381,6 +383,17 @@ export async function buildDoctorReport(): Promise<DoctorReport> {
     orphanTimerKeys,
     plugins,
     history: historyBefore.slice(0, 5),
+    // 第一百二十九轮⑦：执行历史存储盘点（读同 cliX.readHistory，坏行不计）
+    historyStore: (() => {
+      try {
+        const p = HOME + '/history.json';
+        if (!existsSync(p)) return { entries: 0, bytes: 0, oldest: null };
+        const raw = readFileSync(p, 'utf8');
+        const arr = JSON.parse(raw) as { ts?: unknown }[];
+        const list = Array.isArray(arr) ? arr.filter((e) => e && typeof e.ts === 'string') : [];
+        return { entries: list.length, bytes: Buffer.byteLength(raw, 'utf8'), oldest: list[0]?.ts as string ?? null };
+      } catch { return { entries: 0, bytes: 0, oldest: null }; }
+    })(),
     summary: {
       plugins: plugins.length,
       actions: plugins.reduce((n, p) => n + p.actions, 0),

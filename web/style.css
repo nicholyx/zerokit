@@ -746,6 +746,9 @@ html[data-theme="light"] body { background: var(--bg); }
 .log-detail pre { margin: 0; font: 12px/1.6 var(--mono); white-space: pre-wrap; word-break: break-all; }
 .log-detail .log-error { color: var(--bad); margin: 6px 0 0; font-size: 12px; }
 .log-extra { margin-top: 6px; font-size: 11px; color: var(--fg-dim); }
+/* 第一百二十九轮⑥：日志详情的 CLI 重放行 */
+.log-replay { margin-top: 6px; font-size: 11px; color: var(--fg-dim); }
+.log-replay code { background: var(--bg-soft, rgba(127,127,127,.15)); padding: 1px 5px; border-radius: 4px; font-size: 11px; }
 
 /* ---------------- 自检面板 ---------------- */
 .doc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 4px 0 12px; }

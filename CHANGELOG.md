@@ -1,6 +1,10 @@
 ## [Unreleased]
 
-（下一版攒着）
+### Added
+
+- `zkit runs` 执行历史消费面：`list`（最近 N 次一览，`--limit`/`--json`）、`show <序号>`（单条完整 + `--replay` 走完整执行链路含风险确认）、`export`（JSONL 导出）、`gc --days N`（保留近 N 天，`--yes` 执行）。
+- `doctor` 新增 `historyStore` 段：执行历史条数/字节/最老一条时间。
+- 启动器日志详情给出「CLI 重放」命令行；`Ctrl+R` 快速重放最近一次执行（确认弹层）。
 
 ## [1.32.0] - 2026-11-04
 

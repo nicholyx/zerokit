@@ -38,6 +38,34 @@ export function appendHistory(entry: HistoryEntry): void {
   } catch { /* 旁路 */ }
 }
 
+// ---- 第一百二十九轮：执行历史消费面（runs list/show/export/gc）----
+/** runs list 行模型：序号（1=最新）、耗时无存档则 '-'、相对时间。 */
+export interface RunRow { idx: number; ts: string; plugin: string; action: string; argv: string[]; exitCode: number }
+/** ⑤把历史（尾新）翻成「1=最新」的行表。limit<=0 全量。 */
+export function runsTable(entries: HistoryEntry[], limit = 10): RunRow[] {
+  const rev = entries.slice().reverse(); // 最新在前
+  const capped = limit > 0 ? rev.slice(0, limit) : rev;
+  return capped.map((e, i) => ({ idx: i + 1, ts: e.ts, plugin: e.plugin, action: e.action, argv: e.argv, exitCode: e.exitCode }));
+}
+/** ②按序号取一条（1=最新）；越界 undefined。 */
+export function runByIndex(entries: HistoryEntry[], idx: number): HistoryEntry | undefined {
+  if (!Number.isInteger(idx) || idx < 1) return undefined;
+  const rev = entries.slice().reverse();
+  return rev[idx - 1];
+}
+/** ③导出 JSONL：老→新（时间正序，尾行最新）。空历史返回 []。 */
+export function runsToJsonl(entries: HistoryEntry[]): string[] {
+  return entries.map((e) => JSON.stringify({ ts: e.ts, plugin: e.plugin, action: e.action, argv: e.argv, exitCode: e.exitCode }));
+}
+/** ④保留近 N 天（毫秒锚 now 可注入），返回 [保留, 清除]。N<=0 全清。 */
+export function gcSplit(entries: HistoryEntry[], days: number, now = Date.now()): [HistoryEntry[], HistoryEntry[]] {
+  const cut = days > 0 ? now - days * 86_400_000 : now + 1;
+  const keep: HistoryEntry[] = [];
+  const drop: HistoryEntry[] = [];
+  for (const e of entries) (Date.parse(e.ts) >= cut ? keep : drop).push(e);
+  return [keep, drop];
+}
+
 /** ③把 HistoryEntry 还原成可执行的 argv（zkit run p a --k v ...）。 */
 export function historyToArgv(e: HistoryEntry): string[] {
   return ['run', e.plugin, e.action, ...e.argv];
