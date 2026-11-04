@@ -2136,6 +2136,7 @@ async function cmdDoctor(): Promise<number> {
       desktop: report.desktop,
       orphanTimerKeys: report.orphanTimerKeys,
       integrity: report.integrity,
+      historyStore: report.historyStore,
       plugins: report.plugins.map((pl) => ({
         id: pl.id ?? null, name: pl.name ?? null, ok: !pl.problems.some((x) => x.level === 'error'),
         problems: pl.problems.map((x) => ({ level: x.level, text: x.text, hint: x.hint ?? null })),
@@ -2266,6 +2267,72 @@ async function cmdLast(args: string[]): Promise<number> {
 }
 
 /** 第四十五轮⑥：zkit history [N]——最近 N 条；--rerun N 重跑第 N 条。 */
+// 第一百二十九轮：执行历史消费面。子命令 list（默认）/show/export/gc。
+async function cmdRuns(args: string[]): Promise<number> {
+  const cliX = await import('./core/cliX.ts');
+  const sub = args[0] ?? 'list';
+  const rest = args.slice(1);
+  const flagVal = (name: string): string | undefined => { const i = rest.indexOf(name); return i >= 0 ? rest[i + 1] : undefined; };
+  const asJson = rest.includes('--json');
+  const entries = cliX.readHistory();
+
+  if (sub === 'list') {
+    const limit = Number(flagVal('--limit') ?? 10) || 10;
+    const rows = cliX.runsTable(entries, limit);
+    if (rows.length === 0) { process.stdout.write('还没有执行历史。跑一次 zkit run 试试。\n'); return 0; }
+    if (asJson) { process.stdout.write(JSON.stringify({ runs: rows }) + '\n'); return 0; }
+    process.stdout.write(`最近 ${rows.length} 次执行（1 = 最新）：\n`);
+    for (const r of rows) {
+      const when = new Date(r.ts); const mins = Math.round((Date.now() - when.getTime()) / 60000);
+      const rel = mins < 1 ? '刚刚' : mins < 60 ? `${mins} 分钟前` : mins < 1440 ? `${Math.floor(mins / 60)} 小时前` : `${Math.floor(mins / 1440)} 天前`;
+      process.stdout.write(`  ${String(r.idx).padStart(3)}  ${r.exitCode === 0 ? c.green('✓') : c.red('✗')} ${r.plugin}.${r.action.padEnd(18)} ${c.dim(rel)}\n`);
+    }
+    process.stdout.write(c.dim(`重放：zkit runs show <序号> --replay\n`));
+    return 0;
+  }
+
+  if (sub === 'show') {
+    const idx = Number(rest.find((x) => /^\d+$/.test(x)));
+    const e = cliX.runByIndex(entries, idx);
+    if (!e) { process.stderr.write(c.red(`✗ 没有第 ${rest[0]} 号执行（zkit runs list 看序号）\n`)); return 1; }
+    if (asJson) { process.stdout.write(JSON.stringify(e) + '\n'); return 0; }
+    process.stdout.write(`${c.bold(`${e.plugin}.${e.action}`)}  ${e.ts.replace('T', ' ').slice(0, 19)}  ${e.exitCode === 0 ? c.green('成功') : c.red('失败')}\n`);
+    process.stdout.write(`重放命令：zkit ${cliX.historyToArgv(e).join(' ')}\n`);
+    if (rest.includes('--replay')) {
+      // 走完整 cmdRun 链路（含风险确认与历史记录），与手敲一致
+      return cmdRun([e.plugin, e.action, ...e.argv]); // cmdRun(args) 吃 [插件, 动作, 参数...]（main 已剥 cmd 与 'run'）
+    }
+    return 0;
+  }
+
+  if (sub === 'export') {
+    const lines = cliX.runsToJsonl(entries);
+    if (lines.length === 0) { process.stdout.write('（没有可导出的执行历史）\n'); return 0; }
+    if (asJson) { process.stdout.write(JSON.stringify({ lines: lines.length }) + '\n'); return 0; }
+    for (const l of lines) process.stdout.write(l + '\n');
+    process.stderr.write(c.dim(`已导出 ${lines.length} 行 JSONL（stdout）\n`));
+    return 0;
+  }
+
+  if (sub === 'gc') {
+    const days = Number(flagVal('--days') ?? 30) || 30;
+    const [keep, drop] = cliX.gcSplit(entries, days);
+    if (rest.includes('--yes') || rest.includes('-y')) {
+      // 幂等：再跑一遍 drop 为空即成功
+    } else {
+      process.stdout.write(`将清除 ${drop.length} 条 ${days} 天前的历史（保留 ${keep.length} 条）。加 --yes 执行。\n`);
+      return 0;
+    }
+    const fs = await import('node:fs');
+    fs.writeFileSync(cliX.HISTORY_FILE(), JSON.stringify(keep));
+    process.stdout.write(c.green(`✓ 已清除 ${drop.length} 条，保留 ${keep.length} 条\n`));
+    return 0;
+  }
+
+  process.stderr.write(`用法：zkit runs list [--limit N] [--json] | show <序号> [--replay] [--json] | export | gc --days N [--yes]\n`);
+  return 1;
+}
+
 async function cmdHistory(args: string[]): Promise<number> {
   const cliX = await import('./core/cliX.ts');
   // 第七十一轮④：--failed 只看失败记录，附诊断建议（复用 suggest.ts 的规则表）
@@ -3525,7 +3592,7 @@ async function cmdWeb(args: string[]): Promise<number> {
   });
 }
 
-const KNOWN_COMMANDS = ['allow', 'bench', 'audit', 'data', 'completion', 'config', 'desktop', 'doctor', 'env', 'welcome', 'gc', 'health', 'history', 'help', 'kill', 'last', 'list', 'logs', 'ls', 'man', 'market', 'mcp', 'path', 'plugin', 'ps', 'timers', 'run', 'show', 'stats', 'ui', 'web', 'which'];
+const KNOWN_COMMANDS = ['allow', 'bench', 'audit', 'data', 'completion', 'config', 'desktop', 'doctor', 'env', 'welcome', 'gc', 'health', 'history', 'help', 'kill', 'last', 'list', 'logs', 'ls', 'man', 'market', 'mcp', 'path', 'plugin', 'ps', 'timers', 'run', 'runs', 'show', 'stats', 'ui', 'web', 'which'];
 
 // 第四十六轮②：man——不引依赖的终端命令参考（stdout 全量文本，man zkit 可外部包一层）
 const MAN_PAGE = `zkit(1) -- zerokit 命令行参考
@@ -3751,6 +3818,9 @@ async function main(): Promise<number> {
       return cmdLast(rest);
     case 'history':
       return cmdHistory(rest);
+    // 第一百二十九轮：执行历史消费面
+    case 'runs':
+      return await cmdRuns(rest);
     case 'logs':
       return cmdLogs(rest);
     // 第七十一轮⑦：bench 子命令暴露 scripts/bench.mjs（--quick=BENCH_N:3 只测冷启动）

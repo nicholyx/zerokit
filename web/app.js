@@ -2514,6 +2514,19 @@ function syncBatchView() {
 
 function backToList() {
   detail = null;
+  // 第一百二十九轮⑧：Ctrl+R 快速重放最近一次执行（确认弹层拦截破坏性动作）
+  if (e.key === 'r' && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+    const lastRun = (runStore ? Object.values(runStore).flat() : []).filter(Boolean).sort((a, b) => String(b?.ts ?? '').localeCompare(String(a?.ts ?? '')))[0];
+    if (lastRun?.plugin && lastRun?.action) {
+      e.preventDefault();
+      if (window.confirm(t('replayLastRun') + `${lastRun.plugin}.${lastRun.action}?`)) {
+        const plugin = entries.find((p) => p.plugin?.id === lastRun.plugin);
+        const action = plugin?.plugin?.actions?.find((a) => a.id === lastRun.action) ?? plugin?.actions?.find((a) => a.id === lastRun.action);
+        if (plugin && action) { openDetail(typeof plugin === 'object' && plugin.plugin ? plugin.plugin : plugin, action); submit(); }
+        else el.count.textContent = t('replayPluginGone');
+      }
+    }
+  }
   // 第十八轮①：离开详情页 = 离开监控对象，翻页自动停（监控只盯着当前动作）
   for (const k of Object.keys(watchRegistry())) stopWatch(k);
   renderWatchBar();
@@ -5864,6 +5877,7 @@ function logDetailHtml(e, i) {
     <pre>${esc(mtext(e['command'] ?? '（无动作）'))}</pre>
     ${e['error'] ? `<p class="log-error">${esc(mtext(e['error']))}</p>` : ''}
     <div class="log-extra">决策 ${esc(String(e['decision'] ?? '-'))} · 退出码 ${esc(String(e['exitCode'] ?? '-'))} · 输出 ${esc(String(e['outBytes'] ?? 0))} 字节${e['truncated'] ? ' · 已截断' : ''}</div>
+    ${e['plugin'] && e['action'] && e['decision'] !== 'deny' ? `<div class="log-replay">${esc(t('logReplay'))}：<code>${esc(`zkit run ${String(e['plugin'])} ${String(e['action'])}`)}</code></div>` : ''}
   </div>`;
 }
 
