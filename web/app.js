@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans } from './extras.js';
+import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -8214,6 +8214,8 @@ function showHotkeyCheat() {
 }
 
 /** 命令面板：一个输入框直达任何动作 / 页面。数据全是本地，不新增接口。 */
+// 第一百三十轮③：命中信号 key → 双语标签
+const WHY_LABEL = { exact: 'whyExact', prefix: 'whyPrefix', substr: 'whySubstr', keyword: 'whyKeyword', pinyin: 'whyPinyin', subseq: 'whySubseq', recent: 'whyRecent' };
 function showPalette() {
   if (paletteMode) return;
   paletteMode = true;
@@ -8252,6 +8254,7 @@ function showPalette() {
   overlay.innerHTML = `
     <div class="modal palette">
       <input id="paletteQ" type="text" placeholder="输入动作名、插件名或页面名…" autocomplete="off" spellcheck="false">
+      <div class="palette-chips hidden" id="paletteChips"></div>
       <ul id="paletteList" role="listbox"></ul>
       <div class="palette-foot">↑↓ 选择 · Enter 打开 · 1-9 直选 · Tab 补全 · Esc 关闭</div>
     </div>`;
@@ -8260,6 +8263,7 @@ function showPalette() {
   const list = overlay.querySelector('#paletteList');
   let sel = 0;
   let items = [];
+  let whyMap = new Map(); // 第一百三十轮③：item → 命中信号
 
   // 第八十五轮③⑧：空查询时按「页面 / 操作」分组展示（有分组头的条目才分段）；
   // 非空查询混排（paletteScore 已排好，分组头反而碍事）。
@@ -8272,6 +8276,7 @@ function showPalette() {
         <span class="palette-icon">${x.icon}</span>
         <span class="palette-label">${x.label}</span>
         <span class="palette-hint">${x.hint}</span>
+        ${whyMap.get(x) ? `<span class="palette-why" data-why="${whyMap.get(x)}">${whyMap.get(x)}</span>` : ''}
         ${x.key ? `<kbd class="palette-key">${x.key}</kbd>` : ''}
       </li>`).join('') || '<li class="palette-item none">没有匹配的项</li>';
     } else {
@@ -8286,6 +8291,7 @@ function showPalette() {
         <span class="palette-icon">${x.icon}</span>
         <span class="palette-label">${x.label}</span>
         <span class="palette-hint">${x.hint}</span>
+        ${whyMap.get(x) ? `<span class="palette-why" data-why="${whyMap.get(x)}">${whyMap.get(x)}</span>` : ''}
         ${x.key ? `<kbd class="palette-key">${x.key}</kbd>` : ''}
       </li>`);
       });
@@ -8297,7 +8303,17 @@ function showPalette() {
     const raw = q.value;
     const needle = raw.trim().toLowerCase();
     // 第二十四轮③：`;插件.动作` 快速执行语法——直接跳详情页，不走打分
-    const quick = quickRunKey(raw);
+    let quick = quickRunKey(raw);
+    // 第一百三十轮⑤：无前缀 `插件.动作` 也直达（要求两侧都真命中，避免误吞普通查询）
+    if (!quick) {
+      const body = raw.trim();
+      const dot = body.indexOf('.');
+      if (dot > 0 && dot < body.length - 1) {
+        const pid = body.slice(0, dot);
+        const aid = body.slice(dot + 1);
+        if (entries.some((en) => en.plugin.id === pid && en.action.id === aid)) quick = { plugin: pid, action: aid };
+      }
+    }
     if (quick) {
       const entry = entries.find((en) => en.plugin.id === quick.plugin && en.action.id === quick.action);
       items = [{
@@ -8334,15 +8350,37 @@ function showPalette() {
     const all = [...pages.map((x) => ({ ...x, act: (() => { const f = x.act; return () => { pushCmdHist(x.label); exitPalette(); f(); }; })() })),
       ...actionItems.map((x) => ({ ...x, act: (() => { const f = x.act; return () => { pushCmdHist(x.label); exitPalette(); f(); }; })() })),
       ...pluginItems];
-    // 打分排序：精确 > 前缀 > 子串 > hint 子串 > 子序列（拼首字母）；空查询取前 20
-    items = paletteScore(all, needle);
-    // 第八十五轮⑥：空查询时最近用过的页面/操作排前（动作与插件不参与——它们的记忆已有专门机制）
+    // 第一百三十轮②③：打分 v2——拼音/子序列兜底 + 命中信号 why；最近用过加权
+    const recent = readJson('zerokit.cmdhist') ?? [];
+    const ranked = paletteScoreV2(all, needle, {
+      pinyinOf: (label) => { try { return romanize(label); } catch { return ''; } },
+      pinyinInitialsOf: (label) => { try { const r = romanize(label); return (r.match(/[bcdfghjklmnpqrstwxyz]/g) ?? []).join(''); } catch { return ''; } },
+      recent,
+    });
+    // 空查询：最近用过的页面/操作排前（既有行为），非空：v2 已按分数排好
     if (!needle) {
-      const head = boostRecent(items.filter((x) => x.group), readJson('zerokit.cmdhist') ?? []);
-      items = [...head, ...items.filter((x) => !x.group)];
+      const head = boostRecent(ranked.map((r) => r.item).filter((x) => x.group), recent);
+      const headSet = new Set(head);
+      items = [...head, ...ranked.map((r) => r.item).filter((x) => !x.group && !headSet.has(x))];
+      whyMap = new Map(ranked.map((r) => [r.item, WHY_LABEL[r.why] ?? r.why]));
+    } else {
+      items = ranked.map((r) => r.item);
+      whyMap = new Map(ranked.map((r) => [r.item, WHY_LABEL[r.why] ?? r.why]));
     }
     sel = 0;
     paint();
+    // 第一百三十轮⑧：空态计数行
+    // 第一百三十轮④：最近使用 chips（空查询才显示）
+    const chipsBox = overlay.querySelector('#paletteChips');
+    if (chipsBox) {
+      const chips = recentChips(recent, 5);
+      if (!needle && chips.length) {
+        chipsBox.classList.remove('hidden');
+        chipsBox.innerHTML = chips.map((c) => `<button class="chip" data-chip="${esc(c)}">${esc(c)}</button>`).join('');
+      } else chipsBox.classList.add('hidden');
+    }
+    const foot = overlay.querySelector('.palette-foot');
+    if (foot && !needle) { const st = paletteStatsLine(pages.length + COMMAND_LIST.length, entries.length); foot.dataset.stats = lang === 'en' ? st.en : st.zh; foot.prepend(Object.assign(document.createElement('span'), { textContent: `${lang === 'en' ? st.en : st.zh} · ` })); }
   };
   /** ①②命令执行：解释 go 标记（hash 直跳 / UI 动作），并记入最近命令 */
   const runCommand = (name) => {
@@ -8368,6 +8406,10 @@ function showPalette() {
     }
   };
   const exitPalette = () => { paletteMode = false; overlay.remove(); };
+  // 第一百三十轮⑥：关面板把焦点还给触发前的元素（键盘流不被打断）
+  const paletteReturnFocus = () => {
+    try { palettePrevFocus?.focus?.(); } catch { /* 元素可能已不在 DOM */ }
+  };
   /** 第八十五轮⑥：页面/操作的最近使用（与命令模式共用 zerokit.cmdhist，保留 10 条） */
   const pushCmdHist = (label) => {
     if (!label) return;
@@ -8379,7 +8421,7 @@ function showPalette() {
   let histIdx = -1;
   const histList = () => [...new Set([...(readJson('zerokit.cmdhist') ?? []), ...(readJson('zerokit.searches') ?? []).map((s) => String(s))])];
   q.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { e.preventDefault(); exitPalette(); }
+    if (e.key === 'Escape') { e.preventDefault(); exitPalette(); paletteReturnFocus(); }
     // 第八十五轮⑤：1-9 直接选中对应序号条目（只在有足够条目时生效）
     else if (/^[1-9]$/.test(e.key) && items.length >= Number(e.key)) {
       e.preventDefault(); items[Number(e.key) - 1]?.act();
@@ -8404,12 +8446,17 @@ function showPalette() {
     else if (e.key === 'Enter') { e.preventDefault(); items[sel]?.act(); }
     else { histIdx = -1; }
   });
+  overlay.addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-chip]');
+    if (chip) { q.value = chip.dataset.chip; refill(); q.focus(); }
+  });
   list.addEventListener('click', (e) => {
     const li = e.target.closest('.palette-item[data-i]');
     if (li) items[Number(li.dataset.i)]?.act();
   });
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) exitPalette(); });
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) { exitPalette(); paletteReturnFocus(); } });
   refill();
+  const palettePrevFocus = document.activeElement;
   q.focus();
 }
 

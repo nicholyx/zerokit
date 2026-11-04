@@ -35,7 +35,7 @@ check('⑤ 数字直选 1-9', app.includes("/^[1-9]$/.test(e.key)"));
 check('⑥ 页面/操作进 cmdhist', app.includes('pushCmdHist') && app.includes('.slice(0, 10)'));
 check('⑦ Tab 补全分支', app.includes("e.key === 'Tab'") && app.includes('tabComplete('));
 check('⑧ 空结果 none 行保留', app.includes('没有匹配的项'));
-check('③ 空查询 boostRecent 接线', app.includes('boostRecent(items.filter((x) => x.group)'));
+check('③ 空查询 boostRecent 接线', app.includes('boostRecent(ranked.map((r) => r.item).filter((x) => x.group)')); // 第一百三十轮改 v2 打分，boostRecent 仍在
 check('① 序号列渲染', app.includes('palette-num'));
 check('CSS 分组/徽标样式', readFileSync(path.join(PKG_ROOT, 'web', 'style.css'), 'utf8').includes('.palette-group'));
 
