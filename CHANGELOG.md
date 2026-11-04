@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+（下一版攒着）
+
+## [1.31.0] - 2026-11-04
+
 ### Changed
 
 - 测试提速：删掉 batch98/devweb86/doctor84 三个测试里「起前台 ui server 挂满 timeout」的病灶（全量 29 分钟 → 2 分钟）；`--retry` 退避测试加 `ZEROKIT_RETRY_MS` 钩子，测试内 10ms 档

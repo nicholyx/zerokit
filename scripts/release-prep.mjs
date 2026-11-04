@@ -102,8 +102,10 @@ if (CHECK) {
 if (cl.includes(`## [${ver}] - `)) die(`版本 [${ver}] 的段已存在于 CHANGELOG（重复发布或版本号写错）`);
 // 第六十六轮教训：[Unreleased] 可能含 Added/Fixed 等多段，归档要整段搬走（正则只抓
 // Added 会把 Fixed 留在原地，落进新版本段外——自检计数 6≠3 就是这么来的）。
-const mUnrel = /## \[Unreleased\]\n\n### Added\n\n((?:- [^\n]*\n)+)/.exec(cl);
-if (!mUnrel) die('[Unreleased] 段没有 ### Added 条目——没有可归档的内容，拒绝执行');
+// 第一百二十七轮修正：只要求 [Unreleased] 下有任意分类段且含条目——
+// 纯 Changed/Fixed 的轮次（维护轮）同样要能归档，不该被 Added 铁律挡住
+const mUnrel = /## \[Unreleased\]\n\n### (?:Added|Changed|Deprecated|Removed|Fixed|Security)\n\n(?:- [^\n]*\n)/.exec(cl);
+if (!mUnrel) die('[Unreleased] 段没有任何分类条目——没有可归档的内容，拒绝执行');
 const unrelStart = cl.indexOf('## [Unreleased]');
 const unrelEndRaw = cl.indexOf('\n## [', unrelStart + 5);
 const unrelEnd = unrelEndRaw === -1 ? cl.length : unrelEndRaw;
