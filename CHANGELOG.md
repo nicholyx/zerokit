@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+（下一版攒着）
+
+## [1.32.0] - 2026-11-04
+
 ### Added
 
 - `mcp tools --markdown`：工具清单导出 Markdown 表（AI 客户端接入文档直接贴）
