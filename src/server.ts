@@ -36,7 +36,7 @@ import { applyDefaults, coerceParam, toFormFields, toJsonSchema } from './core/s
 import { type PublicSetting, publicSettings, SECRET_MASK, writeSettings } from './core/pluginConfig.ts';
 import { dependents, depStates, installDeps, missingDeps } from './core/deps.ts';
 import { buildArgv, chainDisplay, confirmPolicy, displayCommand, runAction , audit } from './core/runner.ts';
-import { buildDoctorReport, toHistoryEntry, appendDoctorHistory, readDoctorHistory, diffDoctorHistory, doctorSummaryLine } from './core/doctor.ts';
+import { buildDoctorReport, toHistoryEntry, appendDoctorHistory, readDoctorHistory, diffDoctorHistory, doctorSummaryLine, doctorTrend, trendVerdict } from './core/doctor.ts';
 import { evalAppUpdate, fetchLatestRelease, readCurrentVersion } from './core/appupdate.ts';
 import {
   addMarket, findEntry, installFromMarket, loadMarkets, previewInstall,
@@ -635,6 +635,10 @@ export function createServer(): http.Server {
           summaryLine: doctorSummaryLine(report, passed),
           history: full.slice(0, 5),
           diff: diffDoctorHistory(entry, full[1]),
+          trend: (() => { // 第一百三十三轮⑥：趋势三处同源（CLI --trend/--json、面板）
+            const rows = doctorTrend(full, 8);
+            return { rows, verdict: trendVerdict(rows) };
+          })(),
         });
         return;
       }

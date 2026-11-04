@@ -90,5 +90,21 @@ run(['plugin', 'bundled']);
 }
 
 rmSync(home, { recursive: true, force: true });
+
+// ---- 第一百三十三轮⑤⑦：doctorTrend / trendVerdict ----
+{
+  const { doctorTrend, trendVerdict } = await import('../src/core/doctor.ts');
+  const mk = (ts, e, w, p = 3) => ({ ts, errors: e, warnings: w, passed: p, failed: [], warn: [] });
+  const rows = doctorTrend([mk('2026-11-04T10:00:00Z', 2, 1), mk('2026-11-04T09:00:00Z', 1, 1)], 8);
+  check('133⑤ 旧→新排序+delta', rows.length === 2 && rows[0].errors === 1 && rows[1].errors === 2 && rows[1].deltaE === 1 && rows[0].deltaE === 0);
+  check('133⑤ limit 生效', doctorTrend([mk('t', 0, 0), mk('t', 0, 0), mk('t', 0, 0)], 2).length === 2);
+  check('133⑤ 空历史', doctorTrend([]).length === 0);
+  check('133⑤ 警告 delta', (() => { const r = doctorTrend([mk('b', 0, 5), mk('a', 0, 2)]); return r[1].deltaW === 3; })());
+  check('133⑥ 判读-上升', trendVerdict(doctorTrend([mk('b', 3, 0), mk('a', 1, 0)])).includes('上升'));
+  check('133⑥ 判读-下降', trendVerdict(doctorTrend([mk('b', 0, 0), mk('a', 2, 0)])).includes('下降'));
+  check('133⑥ 判读-平稳', trendVerdict(doctorTrend([mk('b', 1, 1), mk('a', 1, 1)])).includes('平稳'));
+  check('133⑥ 判读-样本不足', trendVerdict([mk('a', 0, 0)]).includes('样本不足'));
+}
+
 console.log(`\n通过 ${pass} / ${pass + fail}`);
 process.exit(fail > 0 ? 1 : 0);

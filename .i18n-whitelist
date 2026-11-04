@@ -1210,3 +1210,11 @@ title="变化时是否弹通知"
 el.count.textContent = '静默时段要 HH:mm 格式
 静默时段已开启
 已关通知：
+次采样 · \$\{w\.changes\} 次变更\$\{w\.changes > 0
+最近 10 次采样（红=失败）
+if \(d < 60_000\) return '刚刚'
+分钟前`;
+小时前`;
+天前`;
+return `\$\{Math\.floor\(d / 86_400_000\)\} 天前`;
+doc-trend-verdict">判读：

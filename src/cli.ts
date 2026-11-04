@@ -24,7 +24,7 @@ import { installSummary, uninstallPreview, upgradeDiff, versionGap, appendInstal
 import { fullUpgradeDiff, rugpullCheck } from './core/update116.ts';
 import { type AppUpdateCheck, evalAppUpdate, fetchLatestRelease, readCurrentVersion } from './core/appupdate.ts';
 import { checkRequires } from './core/resolve.ts';
-import { buildDoctorReport, toHistoryEntry, appendDoctorHistory, readDoctorHistory, diffDoctorHistory, persistCount, doctorSummaryLine } from './core/doctor.ts';
+import { buildDoctorReport, toHistoryEntry, appendDoctorHistory, readDoctorHistory, diffDoctorHistory, persistCount, doctorSummaryLine, doctorTrend, trendVerdict } from './core/doctor.ts';
 import { dataInventory, isDataScope, wipePreview, wipeData, dataStats, auditDataEvent, type DataScope } from './core/datamap.ts';
 import { killAllProcesses, killProcess, listProcesses } from './core/runtime.ts';
 import { readSource } from './core/sources.ts';
@@ -2104,6 +2104,19 @@ async function cmdDoctor(): Promise<number> {
   const fullHistory = readDoctorHistory();
   const diff = diffDoctorHistory(entry, fullHistory[1]);
   // 第八十四轮③：--diff 只看变化
+  // 第一百三十三轮⑤⑥⑦：--trend 趋势表 / --json 带 history
+  if (process.argv.includes('--trend')) {
+    const rows = doctorTrend(readDoctorHistory(), 8);
+    if (!rows.length) { process.stdout.write('还没有体检历史——先跑一次 zkit doctor。\n'); return 0; }
+    process.stdout.write(c.bold(`最近 ${rows.length} 次体检趋势（旧 → 新）：\n`));
+    for (const r of rows) {
+      const dE = r.deltaE ? ` ${r.deltaE > 0 ? '+' : ''}${r.deltaE}` : '';
+      const dW = r.deltaW ? ` ${r.deltaW > 0 ? '+' : ''}${r.deltaW}` : '';
+      process.stdout.write(`  ${String(r.ts).slice(0, 19).replace('T', ' ')}  错误 ${r.errors}${dE} · 警告 ${r.warnings}${dW} · 通过 ${r.passed}\n`);
+    }
+    process.stdout.write(`\n判读：${trendVerdict(rows)}\n`);
+    return 0;
+  }
   if (process.argv.includes('--diff')) {
     if (fullHistory.length < 2) {
       process.stdout.write('没有上一次体检记录（这是第一次）。先跑一次 zkit doctor 建立基线。\n');
@@ -2128,6 +2141,10 @@ async function cmdDoctor(): Promise<number> {
       summary: report.summary,
       summaryLine: doctorSummaryLine(report, passedCount),
       history: fullHistory.slice(0, 5),
+      trend: (() => { // 第一百三十三轮⑦：机读趋势（与 --trend 同源）
+        const rows = doctorTrend(fullHistory, 8);
+        return { rows, verdict: trendVerdict(rows) };
+      })(),
       diff,
       recentErrors: { last24h, total: recentErrs.length },
       tools: report.tools.map((t) => ({ name: t.name, ok: t.ok, version: t.version ?? null, path: t.path ?? null })),

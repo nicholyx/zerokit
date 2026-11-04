@@ -122,6 +122,28 @@ export function readDoctorHistory(): DoctorHistoryEntry[] {
   } catch { return []; }
 }
 
+/** 第一百三十三轮⑤：体检趋势——最近 N 次的 errors/warnings 变化表（Newest 在前转 Oldest 在前）。 */
+export interface DoctorTrendRow { ts: string; errors: number; warnings: number; passed: number; deltaE: number; deltaW: number }
+export function doctorTrend(history: DoctorHistoryEntry[], limit = 8): DoctorTrendRow[] {
+  const rows = history.slice(0, limit).reverse(); // Oldest → Newest
+  return rows.map((e, i) => ({
+    ts: e.ts, errors: e.errors, warnings: e.warnings, passed: e.passed,
+    deltaE: i === 0 ? 0 : e.errors - (rows[i - 1]?.errors ?? e.errors),
+    deltaW: i === 0 ? 0 : e.warnings - (rows[i - 1]?.warnings ?? e.warnings),
+  }));
+}
+
+/** 第一百三十三轮⑤：趋势一句话判读（连续两次恶化才算「在恶化」）。 */
+export function trendVerdict(rows: DoctorTrendRow[]): string {
+  if (rows.length < 2) return '样本不足（跑两次以上体检才有趋势）';
+  const last = rows.at(-1)!;
+  const prev = rows.at(-2)!;
+  if (last.errors > prev.errors) return `错误数在上升（${prev.errors} → ${last.errors}）`;
+  if (last.errors < prev.errors) return `错误数在下降（${prev.errors} → ${last.errors}）`;
+  if (last.warnings > prev.warnings) return `警告数在上升（${prev.warnings} → ${last.warnings}）`;
+  return '平稳';
+}
+
 /** 追加一条并裁剪到 50 条（旧删新留）。 */
 export function appendDoctorHistory(entry: DoctorHistoryEntry): void {
   const prev = readDoctorHistory();
