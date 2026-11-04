@@ -511,7 +511,7 @@ export const I18N = {
     sugAskAi: (q) => `问 AI 工作台：「${q}」`,
     sugTryThese: '试试这些（都是只读、安全）：',
     emptyNoMatchTitle: (q) => `没有匹配「${q || ''}」的动作`,
-    logAll: '全部', logAllow: '允许', logDeny: '被拒', logError: '失败', logToday: '今天', logReplay: 'CLI 重放', replayLastRun: '重放最近一次执行：', replayPluginGone: '该插件已不在',
+    logAll: '全部', logAllow: '允许', logDeny: '被拒', logError: '失败', logToday: '今天', logReplay: 'CLI 重放', replayLastRun: '重放最近一次执行：', replayPluginGone: '该插件已不在', whyExact: '精确', whyPrefix: '前缀', whySubstr: '子串', whyKeyword: '关键字', whyPinyin: '拼音', whySubseq: '子序列', whyRecent: '最近',
     drawerHelp: '使用指南',
     memBrought: '已带入上次参数', memForget: '清除记忆',
     previewTip: '先看真正会执行的命令行（密钥打码），再决定跑不跑', previewCmd: '预览命令',
@@ -837,7 +837,7 @@ helpSearchTitle: '搜索', helpSearchBody: '支持中文关键词、拼音全拼
     sugAskAi: (q) => `Ask the AI workbench: "${q}"`,
     sugTryThese: 'Try these (all read-only, safe):',
     emptyNoMatchTitle: (q) => `No actions matching "${q || ''}"`,
-    logAll: 'All', logAllow: 'Allowed', logDeny: 'Denied', logError: 'Failed', logToday: 'Today', logReplay: 'Replay in CLI', replayLastRun: 'Replay last run: ', replayPluginGone: 'That plugin is no longer installed',
+    logAll: 'All', logAllow: 'Allowed', logDeny: 'Denied', logError: 'Failed', logToday: 'Today', logReplay: 'Replay in CLI', replayLastRun: 'Replay last run: ', replayPluginGone: 'That plugin is no longer installed', whyExact: 'exact', whyPrefix: 'prefix', whySubstr: 'substr', whyKeyword: 'keyword', whyPinyin: 'pinyin', whySubseq: 'subseq', whyRecent: 'recent',
     drawerHelp: 'Usage guide',
     memBrought: 'Last params filled in', memForget: 'Forget',
     previewTip: 'Preview the exact command line (secrets masked) before running', previewCmd: 'Preview',
@@ -1349,6 +1349,72 @@ export function paletteScore(items, needle) {
   }
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, 20).map((x) => x.it);
+}
+
+/** 第一百三十轮②③：命令面板打分 v2——命中信号可见 + 最近使用加权。
+ * 返回 [{item, score, why}]，why 是命中信号 key（exact/prefix/substr/keyword/pinyin/subseq/recent），渲染层查 I18N。
+ * 拼音：label 的拼音串（含首字母）包含查询词也算命中——打 zkjr 能出「监控面板」。
+ */
+export function paletteScoreV2(items, needle, opts = {}) {
+  const q = String(needle ?? '').trim().toLowerCase();
+  const pinyinOf = opts.pinyinOf ?? (() => '');
+  const recent = new Set((opts.recent ?? []).map(String));
+  if (!q) {
+    return items.slice(0, 20).map((item) => ({ item, score: 0, why: recent.has(String(item.label)) ? 'recent' : '' }));
+  }
+  const scored = [];
+  for (const item of items) {
+    const label = String(item.label ?? '');
+    const ll = label.toLowerCase();
+    const hint = String(item.hint ?? '').toLowerCase();
+    const py = pinyinOf(label).toLowerCase();
+  const pyInit = (opts.pinyinInitialsOf ?? (() => ''))(label).toLowerCase();
+    let score = 0;
+    let why = '';
+    if (ll === q) { score = 100; why = 'exact'; }
+    else if (ll.startsWith(q)) { score = 82; why = 'prefix'; }
+    else if (ll.includes(q)) { score = 62; why = 'substr'; }
+    else if (hint.includes(q)) { score = 40; why = 'keyword'; }
+    else if (py && py.includes(q)) { score = 34; why = 'pinyin'; }
+    else if (pyInit && pyInit.includes(q)) { score = 30; why = 'pinyin'; } // 拼音首字母缩写（jkmb）
+    else {
+      let li = 0;
+      let seq = true;
+      for (const ch of q) {
+        li = ll.indexOf(ch, li);
+        if (li < 0) { seq = false; break; }
+        li++;
+      }
+      if (seq) { score = 24; why = 'subseq'; }
+    }
+    if (score > 0) {
+      if (recent.has(label)) score += 12; // 最近用过的小幅加权，不压过精确命中
+      scored.push({ item, score, why });
+    }
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, 20);
+}
+
+/** 第一百三十轮④：最近使用 chips——从历史列表生成去重 chips（保序，限 N）。 */
+export function recentChips(hist, limit = 5) {
+  const seen = new Set();
+  const out = [];
+  for (const h of (Array.isArray(hist) ? hist : [])) {
+    const v = String(h ?? '').trim();
+    if (!v || seen.has(v)) continue;
+    seen.add(v);
+    out.push(v);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/** 第一百三十轮⑧：面板空态计数行。 */
+export function paletteStatsLine(cmdCount, actionCount) {
+  const c = Math.max(0, Number(cmdCount) || 0);
+  const a = Math.max(0, Number(actionCount) || 0);
+  return { zh: `共 ${c} 条命令 · ${a} 个动作`, en: `${c} commands · ${a} actions` };
 }
 
 /** 历史毫秒列表的 P95：给「慢于平常」徽标用。空列表返回 null。 */

@@ -1333,6 +1333,38 @@ for (const [name] of failed) console.error('FAIL  ' + name);
   check('108① 表结构对齐', Object.keys(ERROR_BOOK_TEXT.zh).length === Object.keys(ERROR_BOOK_TEXT.en).length);
 }
 
+
+// ---- 第一百三十轮：面板打分 v2 / chips / 统计行 ----
+{
+  const { paletteScoreV2, recentChips, paletteStatsLine } = await import('../web/extras.js');
+  const items = [
+    { label: '监控面板', hint: 'watch' },
+    { label: '审计日志', hint: 'logs' },
+    { label: '使用统计', hint: 'stats' },
+  ];
+  const py = paletteScoreV2(items, 'jiankong', { pinyinOf: (l) => ({ '监控面板': 'jiankongmianban', '审计日志': 'shenjirizhi', '使用统计': 'shiyongtongji' })[l] ?? '' });
+  check('130② 拼音命中监控面板', py[0]?.item.label === '监控面板' && py[0]?.why === 'pinyin');
+  const PY = { '监控面板': 'jiankongmianban', '审计日志': 'shenjirizhi', '使用统计': 'shiyongtongji' };
+  const INIT = { '监控面板': 'jkmb', '审计日志': 'sjrz', '使用统计': 'sytj' };
+  const sq = paletteScoreV2(items, 'jkmb', { pinyinOf: () => '', pinyinInitialsOf: (l) => INIT[l] ?? '' });
+  check('130② 首字母缩写命中', sq.length >= 1 && sq[0].item.label === '监控面板' && sq[0].why === 'pinyin');
+  const sq2 = paletteScoreV2(items, '监板', { pinyinOf: () => '' });
+  check('130② 中文子序列兜底', sq2.length >= 1 && sq2[0].item.label === '监控面板' && sq2[0].why === 'subseq');
+  const ex = paletteScoreV2(items, '监控面板', { pinyinOf: () => '' });
+  check('130③ 精确最高', ex[0].why === 'exact' && ex[0].score === 100);
+  const pf = paletteScoreV2(items, '监', { pinyinOf: () => '' });
+  check('130③ 前缀 82', pf[0].why === 'prefix' && pf[0].score === 82);
+  const rw = paletteScoreV2(items, '审计', { pinyinOf: () => '', recent: ['使用统计'] });
+  check('130① 命中优先于最近', rw[0].item.label === '审计日志');
+  const r2 = paletteScoreV2(items, '', { pinyinOf: () => '', recent: ['审计日志'] });
+  check('130① 空查询最近有标', r2.find((x) => x.item.label === '审计日志')?.why === 'recent');
+  check('130④ chips', JSON.stringify(recentChips(['b', 'a', 'b', '', 'c', 'a', 'd', 'e', 'f', 'g'], 5)) === '["b","a","c","d","e"]');
+  check('130④ chips 空历史', recentChips(null).length === 0);
+  const stt = paletteStatsLine(28, 52);
+  check('130⑧ 统计行 zh', stt.zh === '共 28 条命令 · 52 个动作' && stt.en === '28 commands · 52 actions');
+  check('130⑧ 负数兜底', paletteStatsLine(-1, 'x').zh === '共 0 条命令 · 0 个动作');
+}
+
 console.log(`通过 ${results.length - failed.length} / ${results.length}`);
 if (failed.length) 
 
