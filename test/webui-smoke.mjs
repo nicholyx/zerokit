@@ -672,3 +672,17 @@ if (failed.length > 0) {
 }
 fs.rmSync(TMP_HOME, { recursive: true, force: true });
 process.exit(failed.length > 0 ? 1 : 0);
+
+// ---- 第一百三十一轮：详情页深耕静态断言 ----
+{
+  const appJs = fs.readFileSync(path.join(PKG_ROOT, 'web', 'app.js'), 'utf8');
+  const css = fs.readFileSync(path.join(PKG_ROOT, 'web', 'style.css'), 'utf8');
+  check('131① 默认 chip 接线', appJs.includes('defaultChip(f)') && css.includes('.def-chip'));
+  check('131② enum 提示接线', appJs.includes('enumHint(f)') && css.includes('.enum-hint'));
+  check('131③ 上次耗时', appJs.includes("lastRun.ms ? ' · ' + esc(String(lastRun.ms)) + 'ms'"));
+  check('131④ 健康徽标接线', appJs.includes('actionHealthBadge(runStore') && css.includes('.badge.hb-✓'));
+  check('131⑤ 依赖行', appJs.includes('depParts') && appJs.includes('插件依赖'));
+  check('131⑥ 插件信息条', appJs.includes('plug-info-line') && appJs.includes('installedAt'));
+  check('131⑦ secret autocomplete=off+eye', appJs.includes('type="password"') && appJs.includes('data-eye') && appJs.includes('autocomplete="off"'));
+  check('131⑧ 折叠接线', appJs.includes('desc-fold') && appJs.includes('descMore') && css.includes('.desc-fold'));
+}

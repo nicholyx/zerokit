@@ -2069,3 +2069,13 @@ td.gsum-label { font-weight: 600; }
 .ph-good { background:color-mix(in srgb, var(--ok, #3aa660) 18%, transparent); color:var(--ok, #3aa660); }
 .ph-warn { background:color-mix(in srgb, var(--warn, #e8b13a) 20%, transparent); color:var(--warn, #e8b13a); }
 .ph-bad { background:color-mix(in srgb, var(--danger, #d05656) 18%, transparent); color:var(--danger, #d05656); }
+
+/* ---- 第一百三十一轮：详情页深耕 ---- */
+.def-chip { display:inline-block; margin-left:6px; padding:0 6px; border-radius:8px; font-size:11px; background:color-mix(in srgb, var(--accent, #5aa9ff) 14%, transparent); color:var(--fg); vertical-align:1px; }
+.enum-hint { margin-top:3px; font-size:11px; color:var(--fg-dim); }
+.plug-info-line { margin-top:4px; font-size:12px; color:var(--fg-dim); }
+.badge.hb-✓ { background:color-mix(in srgb, #3fbf6f 18%, transparent); }
+.badge.hb-⚠ { background:color-mix(in srgb, #e0a832 18%, transparent); }
+.badge.hb-✗ { background:color-mix(in srgb, #e05a4f 18%, transparent); }
+.desc-fold { display:-webkit-box; -webkit-line-clamp:6; -webkit-box-orient:vertical; overflow:hidden; }
+.desc-more { margin-top:4px; font-size:12px; }
