@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- 深读层自学化起步：`docs/deep/design.md` 补导语块/篇内目录/三处「记住这条」callout/尾部交叉链，新增 `docs/deep/index.md` 导读页；check-docs 新增 deep 代码块 `file=` 标签路径校验
+
+
 ## [1.37.0] - 2026-11-04
 
 ### Added
@@ -7,7 +14,6 @@
 - 监控面板自刷新：采样计数/变更次数/相对时间/成败点阵 2 秒节流就地更新，不用重进面板（此前面板显示的是打开那一刻的快照）
 - `zkit doctor --trend`：最近 8 次体检的错误/警告趋势表与判读（错误升/警告升/平稳）
 - `doctor --json` 与启动器环境自检页新增 `trend` 字段（rows+verdict），CLI 与 UI 三处同源
-- 深读层自学化起步：`docs/deep/design.md` 补导语块/篇内目录/三处「记住这条」callout/尾部交叉链，新增 `docs/deep/index.md` 导读页；check-docs 新增 deep 代码块 `file=` 标签路径校验
 
 ## [1.36.0] - 2026-11-04
 
