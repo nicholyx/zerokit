@@ -1383,6 +1383,25 @@ for (const [name] of failed) console.error('FAIL  ' + name);
   check('131⑧ 280 字符折', descNeedsFold('x'.repeat(281)) === true && descNeedsFold('') === false);
 }
 
+// ---- 第一百三十二轮：监控通知纯函数 ----
+{
+  const { inQuietHours, notifyThrottle, pushNotifyLog, parseHm } = await import('../web/extras.js');
+  check('132④ 静默窗内', inQuietHours(23 * 60, 22 * 60, 7 * 60) === true);
+  check('132④ 静默窗外', inQuietHours(12 * 60, 22 * 60, 7 * 60) === false);
+  check('132④ 边界含头不含尾', inQuietHours(22 * 60, 22 * 60, 23 * 60) === true && inQuietHours(23 * 60, 22 * 60, 23 * 60) === false);
+  check('132④ 同值不算静默', inQuietHours(300, 300, 300) === false);
+  check('132⑤ 节流首弹允许', notifyThrottle(NaN, 1000).allow === true);
+  check('132⑤ 窗内拒绝', notifyThrottle(1000, 1000 + 4 * 60 * 1000, 5 * 60 * 1000).allow === false);
+  check('132⑤ 窗外放行且 at 前移', (() => { const r = notifyThrottle(1000, 1000 + 5 * 60 * 1000, 5 * 60 * 1000); return r.allow === true && r.at === 1000 + 5 * 60 * 1000; })());
+  const log0 = [];
+  let log = pushNotifyLog(log0, { ts: 1, key: 'a', kind: 'change' });
+  log = pushNotifyLog(log, { ts: 2, key: 'a', kind: 'change' }); // 同 key 同 kind 替换
+  check('132⑥ 同源去重', log.length === 1 && log[0].ts === 2);
+  for (let i = 0; i < 15; i++) log = pushNotifyLog(log, { ts: 100 + i, key: 'k' + i, kind: 'change' });
+  check('132⑥ 环上限 10', log.length === 10 && log[0].ts === 114);
+  check('132④ parseHm', parseHm('22:00') === 1320 && parseHm('7:30') === 450 && parseHm('24:00') === null && parseHm('abc') === null);
+}
+
 console.log(`通过 ${results.length - failed.length} / ${results.length}`);
 if (failed.length) 
 

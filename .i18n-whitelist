@@ -1198,3 +1198,15 @@ return `<span class=\"def-chip\" title=\"清单声明的默认值\">\$\{v\.lengt
 return `<div class=\"enum-hint\">取值 \$\{f\.enum\.map\(\(e\) => esc\(e\)\)\.join\(' \| '\)\}</div>`;
 if \(rs\.length === 0\) return \{ label: '新', ok: 0, total: 0 \};
 return `<div class=\"enum-hint\">取值 \$\{vals\.map\(\(e\) => esc\(e\)\)\.join\(' \| '\)\}</div>`;
+note: quietNow
+⇄ \$\{w\.title\} \$\{kind
+通知记录：还没有——监控发现变化
+通知记录（最近
+静默时段（期间不弹通知，只在面板记录）
+aria-label="静默开始"
+aria-label="静默结束"
+>保存</button> <span class="sub">（HH:mm，支持跨午夜）
+title="变化时是否弹通知"
+el.count.textContent = '静默时段要 HH:mm 格式
+静默时段已开启
+已关通知：

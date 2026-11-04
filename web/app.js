@@ -17,7 +17,7 @@ import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
 import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans } from './extras.js';
-import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote, defaultChip, enumHint, actionHealthBadge, descNeedsFold } from './extras.js';
+import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote, defaultChip, enumHint, actionHealthBadge, descNeedsFold, inQuietHours, notifyThrottle, pushNotifyLog, parseHm } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
 import { cellDisplay, tableDensity, kvCollapsed } from './extras.js';
@@ -2825,7 +2825,7 @@ async function persistWatch() {
         key,
         interval: w.interval, failStreak: w.failStreak, matchStr: w.matchStr,
         title: w.title, pluginId: w.pluginId, actionId: w.actionId,
-        runs: w.runs, changes: w.changes,
+        runs: w.runs, changes: w.changes, notify: w.notify !== false,
         samples: (w.samples ?? []).slice(-10),
       })),
       stops: stops.slice(-20),
@@ -2857,7 +2857,7 @@ async function restoreWatches() {
         samples: Array.isArray(w.samples) ? w.samples : [],
         title: w.title ?? w.key, pluginId: pluginId ?? '', actionId: actRest.join('.') ?? '',
         deadline: Date.now() + w.interval * 1000,
-        runs: w.runs ?? 0, changes: w.changes ?? 0,
+        runs: w.runs ?? 0, changes: w.changes ?? 0, notify: w.notify !== false,
       };
       scheduleWatch(w.key, w.interval);
     }
@@ -2930,6 +2930,7 @@ function openWatchDialog(plugin, action, key) {
       deadline: Date.now() + sec * 1000,
       runs: 0,
       changes: 0,
+      notify: true, // 第一百三十二轮③：每个监控可开关通知，默认开
     };
     scheduleWatch(key, sec);
     updateWatchTitle();
@@ -3008,35 +3009,54 @@ function scheduleWatch(key, sec) {
  * ④ 同动作 10 分钟去重窗口——风暴时只弹第一条，不刷屏。
  */
 const watchAlertAt = {}; // key → 上次告警时间戳（内存态即可：刷新重置不算损失）
+const notifyLastAt = {}; // 第一百三十二轮⑤：key → 上次通知时间戳（节流窗）
+let notifyLog = readJson('zerokit.notify-log', []); // ⑥ 通知记录（localStorage 环 10 条）
+function persistNotifyLog() { writeJson('zerokit.notify-log', notifyLog); }
 function notifyWatchChange(w, prev, next) {
   try {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
-    const fails = (w.samples ?? []).filter((sm) => !sm.ok).length;
-    const failStreakNow = (() => {
-      let n = 0;
-      for (let i = (w.samples ?? []).length - 1; i >= 0; i--) {
-        if (!w.samples[i].ok) n++;
-        else break;
-      }
-      return n;
-    })();
+    if (w.notify === false) return; // ③ 单监控通知关：连记录都不进（用户明确不要）
     const now = Date.now();
-    const isAlert = failStreakNow >= 3; // ③ 升级线
-    if (isAlert) {
-      if (now - (watchAlertAt[w.title] ?? 0) < 10 * 60 * 1000) return; // ④ 去重窗口
-      watchAlertAt[w.title] = now;
-      const errs = (w.samples ?? []).filter((sm) => !sm.ok).slice(-3)
-        .map((sm) => String(sm.err ?? '未知错误').slice(0, 60));
-      new Notification(t('watchAlertTitle'), {
-        body: `⚠ ${w.title} 连续失败 ${failStreakNow} 次（累计 ${fails}）：\n${errs.join('\n')}`,
-        tag: `zk-watch-alert-${w.title}`,
-      });
+    const kind = ((w.samples ?? []).filter((sm) => !sm.ok).length >= 1 && next && next.ok !== true) ? 'alert' : 'change';
+    // ⑤ 节流：同一监控 5 分钟内只弹一次（面板计数照记）
+    const th = notifyThrottle(notifyLastAt[w.title] ?? NaN, now, 5 * 60 * 1000);
+    const suppressed = !th.allow;
+    notifyLastAt[w.title] = th.at;
+    // ④ 静默时段：免打扰内不弹系统通知（面板记一笔 kind:'quiet'）
+    const q = readJson('zerokit.quiet', { on: false, start: '22:00', end: '07:00' });
+    const qStart = parseHm(q.start) ?? 1320, qEnd = parseHm(q.end) ?? 420;
+    const d = new Date(now);
+    const quietNow = q.on === true && inQuietHours(d.getHours() * 60 + d.getMinutes(), qStart, qEnd);
+    // ⑥ 通知记录（无论弹没弹都记：quiet/throttled 状态可追溯）
+    notifyLog = pushNotifyLog(notifyLog, {
+      ts: now, key: w.title, kind: quietNow ? 'quiet' : kind,
+      note: quietNow ? '静默时段，未弹出' : suppressed ? '节流合并，未弹出' : (kind === 'alert' ? '连续失败告警' : '结果有变化'),
+      changes: w.changes,
+    });
+    persistNotifyLog();
+    renderWatchBar(); // 记录小节在监控条/面板上——轻量重画
+    if (quietNow || suppressed) return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') {
+      // ① 降级：无权限时面板 toast（el.count 复用——通知中心不可用不该静默）
+      el.count.textContent = `⇄ ${w.title} ${kind === 'alert' ? '连续失败' : '结果有变化'}（第 ${w.changes} 次）`;
       return;
     }
-    new Notification(t('watchNotifyTitle'), {
+    // ② 通知点击跳监控面板
+    const goWatch = () => { location.hash = '#/watch'; };
+    if (kind === 'alert') {
+      let failStreakNow = 0;
+      for (let i = (w.samples ?? []).length - 1; i >= 0; i--) { if (!w.samples[i].ok) failStreakNow++; else break; }
+      const n = new Notification(t('watchAlertTitle'), {
+        body: `⚠ ${w.title} 连续失败 ${failStreakNow} 次`,
+        tag: `zk-watch-alert-${w.title}`,
+      });
+      n.onclick = goWatch;
+      return;
+    }
+    const n2 = new Notification(t('watchNotifyTitle'), {
       body: `⇄ ${w.title} 结果有变化（第 ${w.changes} 次）`,
       tag: `zk-watch-${w.title}`,
     });
+    n2.onclick = goWatch;
   } catch { /* 通知失败不影响监控 */ }
 }
 
@@ -3074,6 +3094,24 @@ function renderWatchBar() {
 /** 第二十九轮⑧：性能面板 #/perf——体感问题的量化入口。
  * 列表项数 / 列表渲染耗时 / 搜索耗时三张卡，外加最近一次渲染时间。
  * 数字来自 perfStats（renderList/search 实测写入），不猜。 */
+
+/** 第一百三十二轮⑥：通知记录小节（最近 10 条环）。 */
+function renderNotifySection() {
+  if (!notifyLog.length) return '<div class="watch-notify"><div class="sub">通知记录：还没有——监控发现变化且通过静默/节流闸后会出现在这里。</div></div>';
+  return `<div class="watch-notify"><div class="sub">通知记录（最近 ${notifyLog.length} 条）：</div>${notifyLog.map((e) => `<div class="watch-notify-row">${new Date(e.ts).toLocaleTimeString()} · ${esc(String(e.key))} · ${esc(String(e.note ?? ''))}（第 ${e.changes ?? '?'} 次变化）</div>`).join('')}</div>`;
+}
+
+/** 第一百三十二轮④：静默时段设置小节。 */
+function renderQuietSection() {
+  const q = readJson('zerokit.quiet', { on: false, start: '22:00', end: '07:00' });
+  return `<div class="watch-quiet">
+    <label class="chk"><input type="checkbox" id="quietOn"${q.on ? ' checked' : ''}> 静默时段（期间不弹通知，只在面板记录）</label>
+    <div class="row-mini"><input id="quietStart" value="${esc(String(q.start))}" aria-label="静默开始" style="width:72px"> –
+    <input id="quietEnd" value="${esc(String(q.end))}" aria-label="静默结束" style="width:72px">
+    <button class="ghost mini" id="quietSave">保存</button> <span class="sub">（HH:mm，支持跨午夜）</span></div>
+  </div>`;
+}
+
 function showPerfPanel() {
   hidePanels();
   mode = 'perf';
@@ -3133,6 +3171,7 @@ function showWatchPanel() {
       <span class="sub">${w.runs} 次采样 · ${w.changes} 次变更</span>
       <span class="watch-summary">${esc(summary)}</span>
       ${w.stopReason ? `<span class="bad">${esc(w.stopReason)}</span>` : ''}
+      <button class="ghost mini" data-wnotify="${esc(k)}" title="变化时是否弹通知">${w.notify === false ? '通知关' : '通知开'}</button>
       <button class="ghost mini" data-wstop="${esc(k)}">停止</button>
       <button class="ghost mini" data-wcsv="${esc(k)}">导出 CSV</button>
       <button class="ghost mini" data-wmd="${esc(k)}" data-ai="1" title="${esc(t('tlWmd'))}">趋势 MD</button>
@@ -3144,8 +3183,27 @@ function showWatchPanel() {
     <h2 class="ps-title">${esc(t('psWatch'))}</h2>
     <div class="help">界面开着才会跑；翻到别的动作自动停。在只读动作详情页点「监控」添加。</div>
     ${rows || '<div class="ps-empty" role="status">没有在跑的监控——打开任一<b>只读</b>动作详情页点「◎ 监控」选间隔即可开始，跑着的不用守在旁边。</div>'}
-    ${stopLog.length ? `<div class="watch-stoplog"><div class="sub">最近自动停止：</div>${stopLog.map((l) => `<div class="watch-stoprow bad">${esc(l)}</div>`).join('')}</div>` : ''}`;
+    ${stopLog.length ? `<div class="watch-stoplog"><div class="sub">最近自动停止：</div>${stopLog.map((l) => `<div class="watch-stoprow bad">${esc(l)}</div>`).join('')}</div>` : ''}
+    ${renderNotifySection()}
+    ${renderQuietSection()}`;
   showPanelAnimated(el.allowView);
+  // 第一百三十二轮④：静默时段交互
+  el.allowView.querySelector('#quietSave')?.addEventListener('click', () => {
+    const on = el.allowView.querySelector('#quietOn')?.checked ?? false;
+    const st = String(el.allowView.querySelector('#quietStart')?.value ?? '22:00').trim();
+    const en = String(el.allowView.querySelector('#quietEnd')?.value ?? '07:00').trim();
+    if (parseHm(st) === null || parseHm(en) === null) { el.count.textContent = '静默时段要 HH:mm 格式（如 22:00）'; return; }
+    writeJson('zerokit.quiet', { on, start: st, end: en });
+    el.count.textContent = on ? `静默时段已开启（${st}–${en}）` : '静默时段已关闭';
+  });
+  el.allowView.querySelectorAll('[data-wnotify]').forEach((b) => b.addEventListener('click', () => {
+    const reg2 = watchRegistry(); const w3 = reg2[b.dataset.wnotify];
+    if (!w3) return;
+    w3.notify = w3.notify === false; // undefined/true → false；false → true
+    el.count.textContent = w3.notify === false ? `已关通知：${w3.title}` : `已开通知：${w3.title}`;
+    void persistWatch();
+    showWatchPanel(); // 重画按钮态
+  }));
   el.allowView.querySelectorAll('[data-wstop]').forEach((b) => b.addEventListener('click', () => {
     stopWatch(b.dataset.wstop);
     showWatchPanel();

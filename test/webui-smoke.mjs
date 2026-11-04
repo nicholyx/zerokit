@@ -686,3 +686,20 @@ process.exit(failed.length > 0 ? 1 : 0);
   check('131⑦ secret autocomplete=off+eye', appJs.includes('type="password"') && appJs.includes('data-eye') && appJs.includes('autocomplete="off"'));
   check('131⑧ 折叠接线', appJs.includes('desc-fold') && appJs.includes('descMore') && css.includes('.desc-fold'));
 }
+
+// ---- 第一百三十二轮：监控通知静态断言 ----
+{
+  const appJs = fs.readFileSync(path.join(PKG_ROOT, 'web', 'app.js'), 'utf8');
+  const extrasJs = fs.readFileSync(path.join(PKG_ROOT, 'web', 'extras.js'), 'utf8');
+  const css = fs.readFileSync(path.join(PKG_ROOT, 'web', 'style.css'), 'utf8');
+  const cliTs = fs.readFileSync(path.join(PKG_ROOT, 'src', 'cli.ts'), 'utf8');
+  check('132① 降级 toast 接线', appJs.includes("Notification.permission !== 'granted'") && appJs.includes('el.count.textContent'));
+  check('132② 点击跳面板', appJs.includes("location.hash = '#/watch'") && appJs.includes('n.onclick') && appJs.includes('n2.onclick'));
+  check('132③ 开关按钮+默认开', appJs.includes('data-wnotify') && appJs.includes('notify: true') && appJs.includes("w.notify === false"));
+  check('132④ 静默时段接线', appJs.includes('zerokit.quiet') && appJs.includes('inQuietHours(') && appJs.includes('#quietSave'));
+  check('132⑤ 节流接线', appJs.includes('notifyThrottle(') && appJs.includes('5 * 60 * 1000'));
+  check('132⑥ 记录小节', appJs.includes('renderNotifySection') && appJs.includes('zerokit.notify-log') && extrasJs.includes('export function pushNotifyLog'));
+  check('132⑦ CLI watch list', cliTs.includes("'list'") && cliTs.includes('lastChanged') && cliTs.includes('notify:'));
+  check('132⑧ doctor 监控行', cliTs.includes('监控 ${n} 个在册'));
+  check('132 样式', css.includes('.watch-notify') && css.includes('.watch-quiet'));
+}

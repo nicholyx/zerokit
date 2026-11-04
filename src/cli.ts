@@ -2200,6 +2200,13 @@ async function cmdDoctor(): Promise<number> {
   process.stdout.write(`\n数据目录 ${c.dim(report.dirs.home)}\n`);
   process.stdout.write(`插件目录 ${c.dim(report.dirs.plugins)}\n`);
 
+  // 第一百三十二轮⑧：监控与通知面健康（watch.json 状态 + UI 侧通知权限说明）
+  try {
+    const wf = JSON.parse(fs.readFileSync(path.join(HOME_PATH(), 'watch.json'), 'utf8')) as { watches?: unknown[] };
+    const n = (wf.watches ?? []).length;
+    if (n > 0) process.stdout.write(`监控 ${n} 个在册（zkit watch list 看明细；通知权限在启动器里授权，denied 时自动降级面板提示）\n`);
+  } catch { /* 无 watch.json 不算病 */ }
+
   // 第八十一轮⑦：供应链完整性改动的点名
   if (report.integrity.tampered.length || report.integrity.missingFiles.length || report.integrity.noSnapshot.length) {
     process.stdout.write(c.bold('\n供应链完整性\n'));
@@ -2806,7 +2813,7 @@ function cmdAllow(args: string[]): number {
     auditNs.saveAllow(pruned.alive);
   }
   const list = pruned.alive;
-  if (sub === 'list' || sub === undefined) {
+  if (sub === 'list') {
     if (list.length === 0) {
       process.stdout.write(c.dim('还没有任何显式授权。加：zkit allow add <插件.动作> [ttl天数]\n'));
       return 0;
@@ -3211,12 +3218,34 @@ function humanDuration(ms: number): string {
 /** 第七十九轮⑦⑧：zkit data export --watch / data import —— 监控历史随备份走。
  * 格式与第二十轮 collectBackup 信封兼容（app/version/exportedAt/keys），
  * watch 配置作为单独分区塞进 meta——导入时可选 --no-watch 跳过。 */
+/** 第一百三十二轮⑦：zkit watch list——读 watch.json（浏览器写的监控状态），机读字段。 */
+async function cmdWatchList(rest: string[]): Promise<number> {
+  const watchPath = path.join(HOME_PATH(), 'watch.json');
+  let file: { watches?: Array<Record<string, unknown>> } = {};
+  try { file = JSON.parse(fs.readFileSync(watchPath, 'utf8')) as { watches?: Array<Record<string, unknown>> }; } catch { /* 没有监控就空表 */ }
+  const ws = (file.watches ?? []).map((w) => {
+    const samples = Array.isArray(w.samples) ? (w.samples as Array<{ ts?: number }>) : [];
+    const lastTs = samples.length ? (samples.at(-1) as { ts?: number } | undefined)?.ts ?? null : null;
+    return {
+      key: w.key, interval: w.interval, runs: w.runs ?? 0, changes: w.changes ?? 0,
+      lastChanged: lastTs, notify: w.notify !== false, lastSampleAt: lastTs,
+    };
+  });
+  if (rest.includes('--json')) { console.log(JSON.stringify({ watches: ws }, null, 2)); return 0; }
+  if (!ws.length) { console.log('没有监控记录（watch.json 不存在或为空）。'); return 0; }
+  console.log(`监控 ${ws.length} 个：`);
+  for (const w of ws) {
+    const when = w.lastChanged ? new Date(w.lastChanged as number).toISOString() : '从未变化';
+    console.log(`  ${String(w.key)}  每 ${w.interval}s · ${w.runs} 次 · ${w.changes} 变更 · 上次变化 ${when} · 通知${w.notify ? '开' : '关'}`);
+  }
+  return 0;
+}
+
 async function cmdData(args: string[]): Promise<number> {
   const sub = args[0];
+  const fmtBytes = (n: number): string => (n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KB`); // 第八十八轮搬回（watch list 独立时误删）
   const rest = args.slice(1);
   const watchPath = path.join(HOME_PATH(), 'watch.json');
-  // 第八十八轮：数据与隐私面——inventory/stats/wipe（snapshot/restore 等旧子命令保留在前）
-  const fmtBytes = (n: number): string => (n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KB`);
   if (sub === 'inventory') {
     const inv = dataInventory();
     auditDataEvent('data:read', 'cli', 'inventory');
@@ -3782,6 +3811,8 @@ async function main(): Promise<number> {
       return cmdPlugin(rest);
     case 'data':
       return await cmdData(rest);
+    case 'watch':
+      return await cmdWatchList(rest); // 第一百三十二轮⑦：zkit watch list（读 watch.json 机读视图）
     case 'timers':
       return await cmdTimers(rest);
     case 'market':
