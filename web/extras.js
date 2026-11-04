@@ -1966,7 +1966,53 @@ export function collectBackup(entries, now = Date.now(), version = '0.25.0') {
   };
 }
 
-/** 解析并校验备份文本。格式不对返回 {ok:false, error}——错误要说人话。 */
+// ---- 第一百三十六轮：备份与恢复面（完整迁移一台新机器） ----
+
+/** 插件清单进备份信封：id/来源/版本（不进 keys，导入端按需重装）。 */
+export function pluginManifestForBackup(plugins) {
+  return (plugins ?? []).map((p) => ({
+    id: p.id,
+    version: p.version ?? null,
+    source: p.sourceType ?? 'bundled', // bundled/market/path
+    sourceText: p.sourceText ?? null, // 集市名或路径——恢复端拿它找源
+  }));
+}
+
+/** setting 配置进备份：secret 值不落盘（值置 null、明示 skipped）。 */
+export function settingsForBackup(configRows, isSecret) {
+  const out = {}; let skippedSecrets = 0;
+  for (const row of configRows ?? []) {
+    const key = row.key ?? row.id ?? row.name;
+    if (!key) continue;
+    if (isSecret?.(row) || /secret|token|password|api_?key/i.test(String(key))) {
+      out[key] = { value: null, secret: true }; skippedSecrets++;
+    } else {
+      out[key] = { value: row.value ?? null, secret: false };
+    }
+  }
+  return { settings: out, skippedSecrets };
+}
+
+/** 导出文件名：zerokit-backup-YYYYMMDD-HHmm-<N>p.json（N=插件数）。 */
+export function backupFileName(now, pluginCount) {
+  const d = new Date(now);
+  const pad = (n) => String(n).padStart(2, '0');
+  const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+  return `zerokit-backup-${stamp}-${pluginCount}p.json`;
+}
+
+/** 导入预览三类：可恢复（localStorage 键）/ 需重装（插件）/ 不可恢复（运行态，仅提示）。 */
+export function classifyRestore(backup) {
+  if (!backup || backup.app !== 'zerokit' || !backup.keys) return null;
+  const restorable = Object.keys(backup.keys).length;
+  const reinstall = (backup.plugins ?? []).map((p) => ({ id: p.id, source: p.source, sourceText: p.sourceText }));
+  const notRestorable = ['watch（监控）', 'timer（定时）', '运行中进程'];
+  return { restorable, reinstall, notRestorable, settings: backup.settings ?? {} };
+}
+
+
+/** 解析并校验备份文本。格式不对返回 {ok:false, error}——错误要说人话。
+ * 第一百三十六轮：v2 信封多 plugins/settings 字段——v1（0.25.0 起）文件照常可导（向后兼容是硬约束）。 */
 export function parseBackup(text) {
   let data;
   try { data = JSON.parse(text); } catch { return { ok: false, error: '不是有效的 JSON 文件' }; }
@@ -2015,10 +2061,8 @@ function tryParseObject(v) {
 }
 
 /** 可预测的备份文件名：zerokit-backup-YYYYMMDD-HHMMSS.json */
-export function backupFilename(now = Date.now()) {
-  const d = new Date(now);
-  const p = (n) => String(n).padStart(2, '0');
-  return `zerokit-backup-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.json`;
+export function backupFilename(now = Date.now(), pluginCount = 0) {
+  return backupFileName(now, pluginCount); // 第一百三十六轮④：文件名带插件数
 }
 
 // ============ 第二十一轮：多环境与配置档 ============

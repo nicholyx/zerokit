@@ -1219,3 +1219,11 @@ if \(d < 60_000\) return '刚刚'
 return `\$\{Math\.floor\(d / 86_400_000\)\} 天前`;
 doc-trend-verdict">判读：
 bar\.innerHTML = `🆕 壳有新版本 v\$\{esc\(latest\)\}（当前 v\$\{esc\(cur\)\}）
+<b>需重装插件（\$\{cls\.reinstall\.length\}）：</b>
+<b>不随备份走：</b>\$\{cls\.notRestorable
+项插件配置\$\{Object\.values
+恢复完成：导入 \$\{applied\} 键
+rep\.push\(`配置 \$\{restoredCfg\} 恢复
+rep\.push\(`插件 \$\{installed\} 装回
+const\ notRestorable\ =\ \['watch（监控）',\ 'timer（定时）',\ '运行中进程'\];
+\+\ \(backup\.plugins\?\.length\ \?\ `（含\ \$\{backup\.plugins\.length\}\ 个插件清单\$\{backup\.meta\.skippedSecrets

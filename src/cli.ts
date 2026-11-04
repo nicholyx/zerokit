@@ -3828,6 +3828,10 @@ async function main(): Promise<number> {
       return cmdPlugin(rest);
     case 'data':
       return await cmdData(rest);
+    case 'backup':
+      return await cmdBackup(rest); // 第一百三十六轮⑧：与 UI 同一信封
+    case 'restore':
+      return await cmdRestore(rest);
     case 'watch':
       return await cmdWatchList(rest); // 第一百三十二轮⑦：zkit watch list（读 watch.json 机读视图）
     case 'timers':
@@ -3913,3 +3917,107 @@ main().then((code) => process.exit(code)).catch((err) => {
   process.stderr.write(c.red(`✗ ${err?.stack ?? err}`) + '\n');
   process.exit(1);
 });
+
+// ---------------- 第一百三十六轮：CLI 备份/恢复（与 UI 同一 v2 信封） ----------------
+
+async function cmdBackup(args: string[]): Promise<number> {
+  const outIdx = args.indexOf('--out');
+  const outFile = outIdx >= 0 ? args[outIdx + 1] : undefined;
+  const home = HOME_PATH();
+  // localStorage 等价物：prefs.json + watch.json 等顶层 JSON；内核侧最关键的是插件清单与 settings
+  const keys: Record<string, string> = {};
+  try {
+    const prefsPath = path.join(home, 'prefs.json');
+    if (fs.existsSync(prefsPath)) keys['zerokit.prefs'] = fs.readFileSync(prefsPath, 'utf8');
+  } catch { /* 无 prefs 不阻塞 */ }
+  try {
+    const wPath = path.join(home, 'watch.json');
+    if (fs.existsSync(wPath)) keys['zerokit.watch'] = fs.readFileSync(wPath, 'utf8');
+  } catch { /* 同上 */ }
+  const plugins = listPlugins().map((entry) => ({
+    id: entry.plugin?.id ?? '(unknown)',
+    version: ((entry.plugin as { version?: string } | undefined)?.version) ?? null,
+    source: 'bundled',
+    sourceText: null,
+  }));
+  const settings: Record<string, { value: string | null; secret: boolean }> = {};
+  let skippedSecrets = 0;
+  try {
+    const sdir = path.join(home, 'settings');
+    if (fs.existsSync(sdir)) {
+      for (const f of fs.readdirSync(sdir)) {
+        if (!f.endsWith('.json')) continue;
+        const pid = f.slice(0, -5);
+        try {
+          const cfg = JSON.parse(fs.readFileSync(path.join(sdir, f), 'utf8')) as Record<string, { value?: string; secret?: boolean }>;
+          for (const [k, v] of Object.entries(cfg)) {
+            if (v?.secret) { settings[`${pid}.${k}`] = { value: null, secret: true }; skippedSecrets++; }
+            else settings[`${pid}.${k}`] = { value: typeof v?.value === 'string' ? v.value : null, secret: false };
+          }
+        } catch { /* 单插件坏配置不阻塞 */ }
+      }
+    }
+  } catch { /* 同上 */ }
+  const backup = {
+    app: 'zerokit',
+    version: '1.40.0',
+    exportedAt: new Date().toISOString(),
+    keys,
+    plugins,
+    settings,
+    meta: { keyCount: Object.keys(keys).length, bytes: JSON.stringify(keys).length, plugins: plugins.length, skippedSecrets },
+  };
+  const text = JSON.stringify(backup, null, 2);
+  if (outFile) {
+    fs.writeFileSync(outFile, text, 'utf8');
+    process.stdout.write(`✓ 备份已写入 ${outFile}（${plugins.length} 个插件清单、${Object.keys(settings).length} 项配置、跳过 ${skippedSecrets} 个 secret）\n`);
+  } else {
+    process.stdout.write(text + '\n');
+  }
+  return 0;
+}
+
+async function cmdRestore(args: string[]): Promise<number> {
+  const fIdx = args.indexOf('--file');
+  const file = fIdx >= 0 ? args[fIdx + 1] : undefined;
+  if (!file) {
+    process.stdout.write('用法：zkit restore --file <备份.json> [--dry-run]\n');
+    return 2;
+  }
+  let data: { app?: string; keys?: Record<string, string>; plugins?: Array<{ id: string }>; settings?: Record<string, { value: string | null; secret: boolean }>; exportedAt?: string };
+  try {
+    data = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (e) {
+    process.stdout.write(`读取备份失败：${(e as Error).message}\n`);
+    return 1;
+  }
+  if (data.app !== 'zerokit' || typeof data.keys !== 'object') {
+    process.stdout.write('不是 zerokit 备份文件（缺 app/keys 字段）\n');
+    return 1;
+  }
+  const dry = args.includes('--dry-run');
+  process.stdout.write(`备份来自 ${data.exportedAt ?? '未知时间'} · ${Object.keys(data.keys).length} 键 · ${data.plugins?.length ?? 0} 插件 · ${Object.keys(data.settings ?? {}).length} 配置项\n`);
+  // settings 写回（非 secret）
+  let restored = 0, skipped = 0;
+  for (const [fullKey, cell] of Object.entries(data.settings ?? {})) {
+    if (!cell || cell.secret || cell.value == null) { skipped++; continue; }
+    const dot = fullKey.indexOf('.');
+    if (dot <= 0) { skipped++; continue; }
+    const pid = fullKey.slice(0, dot), key = fullKey.slice(dot + 1);
+    if (dry) { restored++; continue; }
+    try {
+      const sdir = path.join(HOME_PATH(), 'settings');
+      fs.mkdirSync(sdir, { recursive: true });
+      const fp = path.join(sdir, `${pid}.json`);
+      let cfg: Record<string, unknown> = {};
+      try { cfg = JSON.parse(fs.readFileSync(fp, 'utf8')); } catch { /* 新建 */ }
+      cfg[key] = { value: cell.value, secret: false };
+      fs.writeFileSync(fp, JSON.stringify(cfg, null, 2), 'utf8');
+      restored++;
+    } catch { skipped++; }
+  }
+  process.stdout.write(dry ? `[dry-run] 配置可恢复 ${restored} 项 / ${skipped} 跳过（secret 或无效）\n` : `配置 ${restored} 恢复 / ${skipped} 跳过（secret 需重填）\n`);
+  process.stdout.write(`插件 ${(data.plugins ?? []).length} 个在清单里——bundled 插件装包即有，集市插件到集市重装（zkit market search）\n`);
+  if (!dry) process.stdout.write('恢复完成。启动器侧的 localStorage 键请在启动器里导入同一备份文件。\n');
+  return 0;
+}

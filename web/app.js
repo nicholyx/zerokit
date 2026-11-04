@@ -27,7 +27,7 @@ import { filterRows, colStats, unitOf, isUnitColumn, convertUnitColumn, mergeTab
 import { renderCopyTemplate, toJsonl, exportFilename, toMarkdownProps } from './extras.js';
 import { WATCH_INTERVALS, intervalLabel, cellDiff, sparkSeries, watchStopCondition, tabTitle, watchCsv } from './extras.js';
 import { dangerousPattern, maskSecrets, rateLimitHits, trimAuditLog, actionRiskCard } from './extras.js';
-import { BACKUP_GROUPS, classifyKey, collectBackup, parseBackup, mergeBackup, backupFilename } from './extras.js';
+import { BACKUP_GROUPS, classifyKey, collectBackup, parseBackup, mergeBackup, backupFilename, pluginManifestForBackup, settingsForBackup, classifyRestore } from './extras.js';
 import { HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions } from './extras.js';
 import { profileList, validProfileName, upsertProfile, deleteProfile, renameProfile } from './extras.js';
 import { resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader } from './extras.js';
@@ -3941,21 +3941,43 @@ function purgeSensitive() {
 // 个性化数据全在 localStorage（zerokit.* 键），换机器/清缓存就全丢。
 // 导出 = 全量键值打包成信封 JSON；导入 = 校验 → 预览分组 → 勾选 → 合并（新优先）。
 
-function exportBackup() {
+async function exportBackup() {
   const entries = [];
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
     entries.push([k, localStorage.getItem(k)]);
   }
   const backup = collectBackup(entries);
+  // 第一百三十六轮①③④：插件清单 + setting 配置进信封（secret 不落盘）
+  try {
+    const pl = await (await fetch('/api/plugins')).json();
+    backup.plugins = pluginManifestForBackup(pl.plugins ?? pl.list ?? pl ?? []);
+    // 第一百三十六轮③：setting 配置进信封——GET /api/plugin/config 返回
+    // { settings: [{ name, value?, secret, … }] }；secret 项拿不到明文（只有 masked），天然不落盘
+    let cfgRows = [];
+    try {
+      const cfgs = await Promise.all(backup.plugins.map((p) =>
+        fetch(`/api/plugin/config?plugin=${encodeURIComponent(p.id)}`).then((r) => (r.ok ? r.json() : null)).then((j) => ({ pid: p.id, j })).catch(() => null)));
+      for (const c of cfgs) {
+        const p2id = c?.pid;
+        if (p2id && Array.isArray(c.j?.settings)) cfgRows = cfgRows.concat(c.j.settings.map((s) => ({ key: `${p2id}.${s.name}`, value: s.value, isSecret: s.secret })));
+      }
+    } catch { /* 无配置的插件跳过 */ }
+    const { settings, skippedSecrets } = settingsForBackup(cfgRows, (r) => r.isSecret === true);
+    if (Object.keys(settings).length) backup.settings = settings;
+    backup.meta.plugins = backup.plugins.length;
+    if (skippedSecrets) backup.meta.skippedSecrets = skippedSecrets;
+  } catch { /* 无 server 时退化为纯本地导出 */ }
+  const fname = backupFilename(Date.now(), backup.plugins?.length ?? 0);
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = backupFilename();
+  a.download = fname;
   a.click();
   URL.revokeObjectURL(url);
-  el.count.textContent = t('backupExported')(backup.meta.keyCount, backup.meta.bytes, backupFilename());
+  el.count.textContent = t('backupExported')(backup.meta.keyCount, backup.meta.bytes, fname)
+    + (backup.plugins?.length ? `（含 ${backup.plugins.length} 个插件清单${backup.meta.skippedSecrets ? ` · ${backup.meta.skippedSecrets} 项 secret 不落盘` : ''}）` : '');
 }
 
 /** 导入三步：选文件 → parseBackup 校验 → 分组预览+勾选 → mergeBackup 合并写回并重载 */
@@ -3993,6 +4015,16 @@ function openImportDialog() {
             </label>`).join('')}
         </div>
         <div class="confirm-explain">合并策略：同名数据以备份为准（新优先），本地独有条目保留。</div>
+        ${(() => { // 第一百三十六轮②⑦：三类恢复视图 + 运行态显式说明
+          const cls = classifyRestore(backup);
+          if (!cls) return '';
+          const re = cls.reinstall.length
+            ? `<div class="import-reinstall"><b>需重装插件（${cls.reinstall.length}）：</b>${cls.reinstall.slice(0, 8).map((x) => esc(x.id)).join('、')}${cls.reinstall.length > 8 ? '…' : ''}——导入后可在集市「一键装回」</div>` : '';
+          const nr = `<div class="import-notrestorable"><b>不随备份走：</b>${cls.notRestorable.join('、')}——监控/定时是运行态，请重新创建</div>`;
+          const sc = Object.keys(cls.settings).length
+            ? `<div class="import-settings">含 ${Object.keys(cls.settings).length} 项插件配置${Object.values(cls.settings).some((v) => v.secret) ? '（其中 secret 值不落盘，需重填）' : ''}</div>` : '';
+          return re + nr + sc;
+        })()}
         <div class="actions">
           <button class="ghost" id="impCancel">取消</button>
           <button class="primary" id="impOk">导入</button>
@@ -4015,8 +4047,34 @@ function openImportDialog() {
         try { localStorage.setItem(k, v); } catch { /* 私密模式尽力而为 */ }
       }
       overlay.remove();
-      el.count.textContent = t('importDone')(applied, skipped);
-      setTimeout(() => location.reload(), 900);
+      // 第一百三十六轮⑤⑥：setting 写回（非 secret）+ 插件装回尝试 + 恢复报告
+      (async () => {
+        let restoredCfg = 0, skippedCfg = 0;
+        const cfgEntries = Object.entries(backup.settings ?? {});
+        for (const [key, cell] of cfgEntries) {
+          if (!cell || cell.secret || cell.value == null) { skippedCfg++; continue; }
+          try {
+            const r = await fetch('/api/plugin/config', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plugin: cell.plugin ?? key.split('.')[0], key: cell.fullKey ?? key, value: cell.value }) });
+            if (r.ok) restoredCfg++; else skippedCfg++;
+          } catch { skippedCfg++; }
+        }
+        let installed = 0, failed = 0, bundledCount = 0;
+        for (const pl of backup.plugins ?? []) {
+          if (!pl?.id) continue;
+          if (pl.source === 'bundled') { bundledCount++; continue; } // 新机器 plugin bundled 自带，无需装
+          const src = pl.sourceText || (pl.source === 'path' ? pl.sourceText : '');
+          if (!src) { failed++; continue; }
+          try {
+            const r = await fetch('/api/plugin/install', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source: src, confirm: '' }) });
+            if (r.ok && !(await r.json()).needConfirm) installed++; else failed++;
+          } catch { failed++; }
+        }
+        const rep = [`恢复完成：导入 ${applied} 键 / 跳过 ${skipped} 键`];
+        if (cfgEntries.length) rep.push(`配置 ${restoredCfg} 恢复 / ${skippedCfg} 跳过（secret 或无效）`);
+        if ((backup.plugins ?? []).length) rep.push(`插件 ${installed} 装回 / ${bundledCount} 自带 / ${failed} 需手动（集市）`);
+        el.count.textContent = rep.join(' · ');
+        setTimeout(() => location.reload(), 1200);
+      })();
     });
   };
   input.click();
