@@ -1218,3 +1218,4 @@ if \(d < 60_000\) return '刚刚'
 天前`;
 return `\$\{Math\.floor\(d / 86_400_000\)\} 天前`;
 doc-trend-verdict">判读：
+bar\.innerHTML = `🆕 壳有新版本 v\$\{esc\(latest\)\}（当前 v\$\{esc\(cur\)\}）

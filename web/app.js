@@ -9728,3 +9728,35 @@ function maybeCheckAppUpdate() {
 
 // 启动时查一次新版本（放在函数定义之后——模块级 const 有 TDZ，提前调用会被 catch 静默吞掉）
 maybeCheckAppUpdate();
+
+// ---- 第一百三十五轮：壳内升级检查 ----
+async function checkShellUpdate() {
+  const cur = window.__ZK_VERSION;
+  if (!cur) return; // 浏览器直开（非壳）不查
+  try {
+    const r = await fetch('https://api.github.com/repos/nicholyx/zerokit/releases/latest', { headers: { Accept: 'application/vnd.github+json' } });
+    if (!r.ok) return;
+    const rel = await r.json();
+    const latest = String(rel.tag_name ?? '').replace(/^v/, '');
+    if (!latest || latest === cur) return;
+    const asset = (rel.assets ?? []).find((a) => /aarch64\.dmg$/.test(a.name))?.browser_download_url
+      ?? (rel.assets ?? []).find((a) => /x64-setup\.exe$/.test(a.name))?.browser_download_url
+      ?? rel.html_url;
+    const bar = document.createElement('div');
+    bar.className = 'update-bar';
+    bar.setAttribute('role', 'status');
+    bar.innerHTML = `🆕 壳有新版本 v${esc(latest)}（当前 v${esc(cur)}） <a href="${esc(asset)}" target="_blank" rel="noopener">去下载</a> <button class="ghost mini" type="button">✕</button>`;
+    bar.querySelector('button').addEventListener('click', () => bar.remove());
+    const drawer = document.getElementById('drawer');
+    if (drawer) drawer.prepend(bar);
+  } catch { /* 断网/限流都不算病——静默 */ }
+}
+// ⑥ F12 devtools：壳内转发（Rust 侧菜单也有；键盘走 __TAURI_INTERNALS__ 判壳）
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'F12' && window.__TAURI_INTERNALS__) {
+    e.preventDefault();
+    window.__TAURI_INTERNALS__.invoke('plugin:window|internal_toggle_devtools')?.catch?.(() => {});
+  }
+});
+
+void checkShellUpdate();
