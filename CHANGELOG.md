@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **备份与恢复面（完整迁移一台新机器）**：插件清单进备份信封（id/来源/版本）；导入预览三类视图（可恢复键 / 需重装插件 / 不随备份走的运行态）；插件配置随备份走且 secret 值不落盘（键名规则 + 服务端明文不可得双保险）；导出文件名带插件数（`zerokit-backup-YYYYMMDD-HHmm-Np.json`）；导入后自动恢复配置 + 按来源装回插件并给恢复报告；CLI `zkit backup --out` / `zkit restore --file [--dry-run]`
+
 ## [1.39.0] - 2026-11-04
 
 ### Added

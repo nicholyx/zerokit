@@ -637,9 +637,9 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
     const { out, skipped } = mergeBackup({}, { evil: 'x' });
     return !('evil' in out) && skipped === 1;
   })());
-  check('backupFilename: 可预测格式', (() => {
+  check('backupFilename: 可预测格式（136 带插件数）', (() => {
     const d = new Date(2026, 9, 27, 22, 13, 41);
-    return backupFilename(d.getTime()) === 'zerokit-backup-20261027-221341.json';
+    return backupFilename(d.getTime(), 6) === 'zerokit-backup-20261027-2213-6p.json';
   })());
 }
 
