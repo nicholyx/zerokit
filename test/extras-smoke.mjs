@@ -1365,6 +1365,24 @@ for (const [name] of failed) console.error('FAIL  ' + name);
   check('130⑧ 负数兜底', paletteStatsLine(-1, 'x').zh === '共 0 条命令 · 0 个动作');
 }
 
+// ---- 第一百三十一轮：详情页纯函数 ----
+{
+  const { defaultChip, enumHint, actionHealthBadge, descNeedsFold } = await import('../web/extras.js');
+  check('131① 默认 chip 有值', defaultChip({ default: '10' }).includes('def-chip') && defaultChip({ default: '10' }).includes('10'));
+  check('131① 无默认空串', defaultChip({ default: '' }) === '' && defaultChip({}) === '');
+  check('131① 超长截断', defaultChip({ default: 'x'.repeat(30) }).includes('…'));
+  check('131② enum 提示', enumHint({ enum: ['2', '8', '16'] }).includes('2 | 8 | 16'));
+  check('131② select 也给提示', enumHint({ type: 'select', options: ['a', 'b'] }).includes('a | b') && enumHint({}) === '');
+  check('131④ 健康新', actionHealthBadge([]).label === '新' && actionHealthBadge(null).total === 0);
+  check('131④ 90%+', actionHealthBadge(Array.from({length:20},(_,i)=>({ok:i<19}))).label === '✓');
+  check('131④ 50-90', actionHealthBadge(Array.from({length:10},(_,i)=>({ok:i<7}))).label === '⚠');
+  check('131④ <50', actionHealthBadge([{ok:false},{ok:false},{ok:true}]).label === '✗');
+  check('131④ 只看近20', actionHealthBadge([...Array.from({length:30},()=>({ok:true})),{ok:false}]).total === 20);
+  check('131⑧ 六行内不折', descNeedsFold('a\nb\nc\nd\ne\nf') === false);
+  check('131⑧ 七行折', descNeedsFold('a\nb\nc\nd\ne\nf\ng') === true);
+  check('131⑧ 280 字符折', descNeedsFold('x'.repeat(281)) === true && descNeedsFold('') === false);
+}
+
 console.log(`通过 ${results.length - failed.length} / ${results.length}`);
 if (failed.length) 
 

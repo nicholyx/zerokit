@@ -1188,3 +1188,13 @@ batchExportLabel
 market.json 就是一个集市
 partial-out" open><summary>被杀前已输出的部分
 <div class="plug-home-history">\$\{p\.health
+if \(\(plugin\.pluginDeps \?\? \[\]\)\.length\) depParts\.push\(`插件依赖 \$\{\(plugin\.pluginDeps \?\? \[\]\)\.join
+if \(cmdReqs\.length\) depParts\.push\(`命令依赖 \$\{cmdReqs\.join\('、'\)\}`\)
+\$\{hb\.total \? `<span class=\"badge hb-\$\{hb\.label\}\" title=\"近 \$\{hb\.total\} 次：成功 \$\{hb\.ok\}\">健康 \$\{
+<div class=\"plug-info-line dim\">v\$\{esc\(plugin\.version\)\} · \$\{esc\(detail\.plugin\.sourceText \|
+\$\{fold \? `<button class=\"link desc-more\" id=\"descMore\">展开全部</button>` : ''\}
+descMoreBtn\.textContent = folded \? '展开全部' : '收起';
+return `<span class=\"def-chip\" title=\"清单声明的默认值\">\$\{v\.length > 18 \? v\.slice\(0, 18\) \+ '…' : v
+return `<div class=\"enum-hint\">取值 \$\{f\.enum\.map\(\(e\) => esc\(e\)\)\.join\(' \| '\)\}</div>`;
+if \(rs\.length === 0\) return \{ label: '新', ok: 0, total: 0 \};
+return `<div class=\"enum-hint\">取值 \$\{vals\.map\(\(e\) => esc\(e\)\)\.join\(' \| '\)\}</div>`;

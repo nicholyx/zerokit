@@ -17,7 +17,7 @@ import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
 import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans } from './extras.js';
-import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote } from './extras.js';
+import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote, defaultChip, enumHint, actionHealthBadge, descNeedsFold } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
 import { cellDisplay, tableDensity, kvCollapsed } from './extras.js';
@@ -1727,6 +1727,14 @@ function openDetail(plugin, action, prefill) {
     <div class="cmd-line" style="color:var(--bad)">
       ✗ 缺少依赖：${esc(plugin.missingDeps.join(', '))}　先装上它，这个动作才能跑
     </div>`;
+  // 第一百三十一轮⑤：依赖状态行——插件依赖（pluginDeps）与命令依赖（requires）都展示
+  const depParts = [];
+  if ((plugin.pluginDeps ?? []).length) depParts.push(`插件依赖 ${(plugin.pluginDeps ?? []).join('、')}${plugin.requiresOk ? '' : '（缺）'}`);
+  const cmdReqs = Object.keys(plugin.requires ?? {});
+  if (cmdReqs.length) depParts.push(`命令依赖 ${cmdReqs.join('、')}`);
+  const depLine = depParts.length
+    ? `<div class="plug-info-line">${plugin.requiresOk ? '✓' : '⚠'} ${depParts.map(esc).join(' · ')}</div>`
+    : '';
 
   const steps = Array.isArray(action.steps) ? action.steps : [];
   const chainDry = steps.length ? `
@@ -1792,7 +1800,7 @@ function openDetail(plugin, action, prefill) {
   const lastRun = (runStore[aliasKey] ?? [])[0];  // unshift 语义：首位才是最新一条（第七十轮修：at(-1) 取到最旧）
   const key = actionKey(plugin.id, action.id);
   const lastRunNote = lastRun
-    ? `<div class="mem-note last-run-note">上次：${lastRun.ok ? '✓ ' + t('runOk') : '✗ ' + t('runFail')} · ${t('minsAgo')(Math.max(1, Math.round((Date.now() - lastRun.ts) / 60000)))}
+    ? `<div class="mem-note last-run-note">上次：${lastRun.ok ? '✓ ' + t('runOk') : '✗ ' + t('runFail')} · ${t('minsAgo')(Math.max(1, Math.round((Date.now() - lastRun.ts) / 60000)))}${lastRun.ms ? ' · ' + esc(String(lastRun.ms)) + 'ms' : ''}
         <button class="ghost mini" id="peekLast" title="${esc(t('tlPeekLast'))}">回看</button>
         ${lastRun.values ? `<button class="ghost mini" id="rerunLast" title="${t('rerunTitle')}">${t('rerun')}</button>` : ''}</div>`
     : '';
@@ -1859,6 +1867,9 @@ function openDetail(plugin, action, prefill) {
   // 深链 query 预填：#/插件/动作?字段=值——比 prefill 更显式的传参方式
   const linkParams = deepLinkParams(location.hash);
   const effectiveInitial = { ...initial, ...linkParams };
+  // 第一百三十一轮④：动作健康徽标（近 20 次成功率）⑧：长描述折叠
+  const hb = actionHealthBadge(runStore[actionKey(plugin.id, action.id)] ?? []);
+  const fold = descNeedsFold(action.description);
   // 第七十二轮②③：参数历史（同名字段最近取值）与智能占位
   const fields = action.fields.map((f) => {
     const req = f.required ? ' <span class="req">*</span>' : '';
@@ -1874,6 +1885,10 @@ function openDetail(plugin, action, prefill) {
     // ③ 智能占位：无值无默认时按类型给形状提示（placeholder 不进提交值）
     const given0 = effectiveInitial[f.name] !== undefined ? effectiveInitial[f.name] : f.default;
     const ph = given0 === undefined || given0 === '' ? suggestPlaceholder(f) : '';
+    // 第一百三十一轮①②：默认值徽标 + enum 取值提示（checkbox/select 自带形态不叠）
+    const dchip = !f.secret && f.type !== 'checkbox' && f.type !== 'select' && effectiveInitial[f.name] === undefined
+      ? defaultChip(f) : '';
+    const ehint = f.type !== 'checkbox' ? enumHint(f) : '';
     if (f.type === 'checkbox') {
       const checked = effectiveInitial[f.name] !== undefined ? effectiveInitial[f.name] === 'true' || effectiveInitial[f.name] === true : Boolean(f.default);
       return `<div class="field check" data-field="${esc(f.name)}">
@@ -1883,10 +1898,10 @@ function openDetail(plugin, action, prefill) {
     }
     if (f.type === 'select') {
       const sel = effectiveInitial[f.name] !== undefined ? effectiveInitial[f.name] : f.default;
-      return `<div class="field" data-field="${esc(f.name)}"><label>${esc(f.name)}${req}</label>
+      return `<div class="field" data-field="${esc(f.name)}"><label>${esc(f.name)}${req}${dchip}</label>
         <select id="f_${esc(f.name)}">
           ${(f.options || []).map((o) => `<option${o === sel ? ' selected' : ''}>${esc(o)}</option>`).join('')}
-        </select>${help}</div>`;
+        </select>${help}${ehint}</div>`;
     }
     // 密钥字段：输入框就是 password，既不回显也不进参数记忆；带 👁 切换明文
     const type = f.secret ? 'password' : (f.type === 'number' ? 'number' : 'text');
@@ -1896,8 +1911,8 @@ function openDetail(plugin, action, prefill) {
       ? `${f.min !== undefined ? ` min="${esc(f.min)}"` : ''}${f.max !== undefined ? ` max="${esc(f.max)}"` : ''}${f.step !== undefined ? ` step="${esc(f.step)}"` : ''}`
       : '';
     if (f.multiline) {
-      return `<div class="field" data-field="${esc(f.name)}"><label>${esc(f.name)}${req}</label>
-        <textarea id="f_${esc(f.name)}" rows="3" class="auto-grow" placeholder="${esc(ph)}" data-initial="${esc(given0 ?? '')}">${esc(given ?? '')}</textarea>${help}${histChips}
+      return `<div class="field" data-field="${esc(f.name)}"><label>${esc(f.name)}${req}${dchip}</label>
+        <textarea id="f_${esc(f.name)}" rows="3" class="auto-grow" placeholder="${esc(ph)}" data-initial="${esc(given0 ?? '')}">${esc(given ?? '')}</textarea>${help}${ehint}${histChips}
         <div class="field-err hidden" id="${errId}"></div></div>`;
     }
     if (f.secret) {
@@ -1905,11 +1920,11 @@ function openDetail(plugin, action, prefill) {
         <div class="secret-wrap">
           <input id="f_${esc(f.name)}" type="password"${def} placeholder="${esc(ph)}" autocomplete="off" data-initial="${esc(given0 ?? '')}">
           <button type="button" class="ghost mini eye" data-eye="${esc(f.name)}" aria-label="显示或隐藏明文" title="${esc(t('tlEye'))}">👁</button>
-        </div>${help}
+        </div>${help}${ehint}
         <div class="field-err hidden" id="${errId}"></div></div>`;
     }
-    return `<div class="field" data-field="${esc(f.name)}"><label>${esc(f.name)}${req}</label>
-      <input id="f_${esc(f.name)}" type="${type}"${numAttrs}${def} placeholder="${esc(ph)}" autocomplete="off" data-initial="${esc(given0 ?? '')}">${help}${histChips}
+    return `<div class="field" data-field="${esc(f.name)}"><label>${esc(f.name)}${req}${dchip}</label>
+      <input id="f_${esc(f.name)}" type="${type}"${numAttrs}${def} placeholder="${esc(ph)}" autocomplete="off" data-initial="${esc(given0 ?? '')}">${help}${ehint}${histChips}
       <div class="field-err hidden" id="${errId}"></div></div>`;
   }).join('');
 
@@ -1921,9 +1936,12 @@ function openDetail(plugin, action, prefill) {
         <span class="badge ${esc(action.risk)}">${esc(riskText(action.risk))}</span>
         ${steps.length ? `<span class="badge">${t('chainN')(steps.length)}</span>` : ''}
         <span class="badge">${esc(action.tool)}</span>
+        ${hb.total ? `<span class="badge hb-${hb.label}" title="近 ${hb.total} 次：成功 ${hb.ok}">健康 ${hb.label} ${hb.ok}/${hb.total}</span>` : `<span class="badge hb-新">健康 新</span>`}
         ${sparkline}
       </div>
-      <div class="desc">${esc(action.description || t('noDesc'))}</div>
+      <div class="plug-info-line dim">v${esc(plugin.version)} · ${esc(detail.plugin.sourceText || plugin.sourceText || '')}${detail.plugin.installedAt ? ' · 装于 ' + esc(new Date(detail.plugin.installedAt).toLocaleDateString()) : ''}</div>
+      <div class="desc${fold ? ' desc-fold' : ''}" id="actionDesc">${esc(action.description || t('noDesc'))}</div>
+      ${fold ? `<button class="link desc-more" id="descMore">展开全部</button>` : ''}
       ${historyPanel}
       ${action.risk !== 'read' ? `<div class="risk-explain callout">⚠ 风险等级「${esc(riskText(action.risk))}」是什么意思：只读=只是看、不改任何东西；会改动=会修改文件/配置/服务，执行前想清楚；高风险=可能删除数据或不可逆，确认明白了再执行。</div>` : ''}
       ${note ? `<div class="detail-note">📌 ${esc(note)}</div>` : ''}
@@ -1932,7 +1950,7 @@ function openDetail(plugin, action, prefill) {
         <span class="sub" id="hkHint">${hotkeyFor(favKey) ? `当前绑定：${hotkeyFor(favKey)}` : '未绑定（F1–F12）'}</span>
       </div>
     </div>
-    ${depWarn}
+    ${depWarn}${depLine}
     ${chainInfo}
     ${memNote}
   ${whyNote}
@@ -1997,6 +2015,14 @@ function openDetail(plugin, action, prefill) {
       });
     });
   }
+
+  // 第一百三十一轮⑧：长描述展开/收起
+  const descMoreBtn = el.detailView.querySelector('#descMore');
+  if (descMoreBtn) descMoreBtn.addEventListener('click', () => {
+    const d = el.detailView.querySelector('#actionDesc');
+    const folded = d.classList.toggle('desc-fold');
+    descMoreBtn.textContent = folded ? '展开全部' : '收起';
+  });
 
   // ---- 第十四轮：表单与输入体验 ----
   // 即时校验：input/change 时校必填与数字范围，错误就地标红

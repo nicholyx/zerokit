@@ -3835,3 +3835,34 @@ export function auditLine(e) {
   if (e.error) bits.push(String(e.error).slice(0, 120));
   return bits.join(' | ');
 }
+
+/** 第一百三十一轮①：参数默认值徽标——有默认值的参数标注「默认」+值。 */
+export function defaultChip(f) {
+  if (f.default === undefined || f.default === '') return '';
+  const v = String(f.default);
+  return `<span class="def-chip" title="清单声明的默认值">${v.length > 18 ? v.slice(0, 18) + '…' : v}</span>`;
+}
+
+/** 第一百三十一轮②：enum/select 取值提示（非 select 类型但有 enum 声明时给一行取值）。 */
+export function enumHint(f) {
+  // select 的取值在下拉里，但键盘流/读屏用户先看到提示行更直接；enum 残留（非 select）同样给
+  const vals = Array.isArray(f.enum) ? f.enum : (f.type === 'select' ? (f.options ?? []) : []);
+  if (vals.length === 0) return '';
+  const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return `<div class="enum-hint">取值 ${vals.map((e) => esc(e)).join(' | ')}</div>`;
+}
+
+/** 第一百三十一轮④：动作健康徽标（与 MCP healthBadge 同语义，前端本地版）。 */
+export function actionHealthBadge(runs) {
+  const rs = (runs ?? []).slice(0, 20);
+  if (rs.length === 0) return { label: '新', ok: 0, total: 0 };
+  const ok = rs.filter((r) => r?.ok).length;
+  const pct = ok / rs.length;
+  return { label: pct > 0.9 ? '✓' : pct >= 0.5 ? '⚠' : '✗', ok, total: rs.length };
+}
+
+/** 第一百三十一轮⑧：长描述折叠——超 maxLines 行才需要「展开全部」。 */
+export function descNeedsFold(text, maxLines = 6) {
+  if (!text) return false;
+  return text.split('\n').length > maxLines || text.length > 280;
+}
