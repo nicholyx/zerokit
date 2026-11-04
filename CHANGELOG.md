@@ -1,4 +1,4 @@
-## [Unreleased]
+## [1.36.0] - 2026-11-04
 
 ### Added
 
@@ -127,15 +127,4 @@
 - web 插件桥新五条能力：`zkit.getActions()`（动作列表自建菜单）、`zkit.storage`（每插件 64KB KV 宿主代存，sandbox 里没有 localStorage）、`zkit.copy(text)`（走宿主剪贴板）、`zkit.onTheme(cb)`（主题/字号/语言变化即时推）、`zkit.onProgress(cb)`（run 阶段事件 started/done）
 - 消息协议新增 storage/copy/theme/run:progress 四组消息（旧页面不认识自动忽略，协议兼容）
 - demoweb 演示板扩到十张能力卡；文档 plugin-spec web 节同步五条新 API
-
-## [1.24.0] - 2026-11-02
-
-### Added
-
-- `run --retry N`：只读动作失败后指数退避重试（1s/2s/4s，钳 0–5 次）；非只读动作拒绝该旗标——重试副作用动作等于放大风险
-- `run --avg N`：连跑 2–10 次报 min/avg/max 耗时——给性能敏感的动作一个一行结论
-- `audit --follow --json`：跟读流改为 JSONL（每行一个对象）；纯 `--json` 快照仍是一次性信封
-- `stats --action <插件.动作>`：单动作视角——次数/成功率/p50/p95/最慢/最近一次执行
-- `audit --export csv`：审计记录导出 CSV（与启动器日志页导出同口径：ts/decision/caller/plugin/action/ms/error）
-- `market doctor`：全部集市源探活——index 读不出红✗、空登记表黄标、超 30 天未更新提示
 
