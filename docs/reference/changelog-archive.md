@@ -2,6 +2,17 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [1.21.0] - 2026-11-02
+
+### Added
+- 装时快照统一：addFromDir（集市/git/本地目录）与 bundled 安装全部写 `.zk-integrity.json`（此前只有 toolpack unpack 写）——verify/doctor 复验覆盖从部分插件到全部
+- 快照带 `at` 时间与 zerokit 版本（追溯装的时候是什么环境）
+- `plugin add <目录> --replace`：显式升级（备份式替换，快照随之重建）
+- doctor 供应链段显示复验覆盖计数（如「13/13 个插件复验通过」），无快照插件清零
+
+### Fixed
+- `plugin pack` 打包时把本机安装来源记录 `.zerokit-source.json` 一并打进 zip——unpack 后 verify 永远报「被删除」，属包装内容污染
+
 ## [1.20.0] - 2026-11-02
 
 ### Added
@@ -1472,4 +1483,3 @@
   版本升至 1.1.0；`clipboard` 升至 1.1.0。
 - 示例插件 `jlc-proxy` 更名为 `proxy`，插件目录自包含
   （不再指向外部安装路径）。
-
