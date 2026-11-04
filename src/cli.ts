@@ -89,6 +89,7 @@ ${c.bold('插件')}
   plugin deps [插件]          依赖树与安装状态；不带插件则只列缺依赖的
   plugin update [插件]        列出可更新的；带插件 id 则检查并更新（来源处拉新版）
   plugin remove <插件>        卸载（先列会失去什么）
+plugin selfcheck <插件>     装机自检（挑只读动作真跑一次）
   plugin history            安装/升级/卸载流水
   plugin bundled              安装仓库自带的示例插件
   plugin export <插件>        打包成单个 .toolpack 文件
@@ -1590,6 +1591,11 @@ async function cmdPlugin(args: string[]): Promise<number> {
     const users = dependents(id);
     if (users.length > 0 && !args.includes('--force')) {
       process.stderr.write(c.red(`✗ 还有插件依赖 "${id}"：${users.join(', ')}\n`));
+      // 第一百三十七轮⑦：列出每个依赖方会失去哪些动作（不是只报名字）
+      for (const uid of users) {
+        const up = findPlugin(uid)?.plugin;
+        if (up) process.stderr.write(c.dim(`  ${uid} 将失去 ${up.actions.length} 个动作：${up.actions.slice(0, 5).map((a) => a.id).join('、')}${up.actions.length > 5 ? '…' : ''}\n`));
+      }
       process.stderr.write(c.dim('  真要删就先卸载它们，或者加 --force 强行删除（会留下跑不起来的插件）\n'));
       return 1;
     }
@@ -1702,6 +1708,8 @@ async function cmdPlugin(args: string[]): Promise<number> {
   if (sub === 'pack') return cmdPluginPack(args.slice(1));
   if (sub === 'unpack') return cmdPluginUnpack(args.slice(1));
   if (sub === 'verify') return cmdPluginVerify(args.slice(1));
+  // 第一百三十七轮⑥：装机自检跑一次并出结论
+  if (sub === 'selfcheck') return await cmdPluginSelfcheck(args.slice(1));
   if (sub === 'info') return cmdPluginInfo(args.slice(1));
   if (sub === 'recommend') return cmdPluginRecommend(args.slice(1));
   if (sub === 'lint') return cmdPluginLint(args.slice(1));
@@ -1815,6 +1823,29 @@ function cmdPluginUnpack(args: string[]): number {
   if (!r.ok) { process.stderr.write(c.red(`✗ ${r.message}\n`)); return 1; }
   process.stdout.write(c.green(`✓ ${r.message}\n`));
   return 0;
+}
+
+/** 第一百三十七轮⑥：zkit plugin selfcheck <id>——挑只读动作真跑一次，区分「装上了」和「装上且能跑」。 */
+async function cmdPluginSelfcheck(args: string[]): Promise<number> {
+  const id = args.find((a) => !a.startsWith('-'));
+  if (!id) { process.stderr.write('用法：zkit plugin selfcheck <id>\n'); return 2; }
+  const entry = findPlugin(id);
+  if (!entry?.plugin) { process.stderr.write(c.red(`✗ 没有插件 ${id}\n`)); return 1; }
+  const { selfcheckPlugin } = await import('./core/selfcheck.ts');
+  const r = await selfcheckPlugin(entry.plugin);
+  process.stdout.write(c.bold(`装机自检 · ${entry.plugin.name}\n`));
+  if (r.probe.kind === 'skip') {
+    process.stdout.write(c.yellow(`! 跳过：${r.probe.reason}\n`));
+    return 0;
+  }
+  process.stdout.write(c.dim(`  探针动作：${r.probe.actionId}（只读）\n`));
+  if (r.ok) {
+    process.stdout.write(c.green(`✓ 装上且能跑（${r.ms ?? '?'}ms）\n`));
+    return 0;
+  }
+  process.stderr.write(c.red(`✗ 装上了但跑不起来：${r.error ?? '退出码非零'}\n`));
+  if (r.stderr) process.stderr.write(c.dim(`  ${r.stderr.slice(0, 200)}\n`));
+  return 1;
 }
 
 /** 第六十二轮⑤：zkit plugin verify <id>——对已装插件复验完整性。 */

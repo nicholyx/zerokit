@@ -1227,3 +1227,15 @@ rep\.push\(`配置 \$\{restoredCfg\} 恢复
 rep\.push\(`插件 \$\{installed\} 装回
 const\ notRestorable\ =\ \['watch（监控）',\ 'timer（定时）',\ '运行中进程'\];
 \+\ \(backup\.plugins\?\.length\ \?\ `（含\ \$\{backup\.plugins\.length\}\ 个插件清单\$\{backup\.meta\.skippedSecrets
+<button\ class="ghost\ more\-item"\ id="selfcheckBtn"\ role="menuitem"\ title="装机自检：挑只读动作真跑一次，确认这个插件在这台机器上能跑">🔍\ 装机自检</button>
+if\ \(scBtn\)\ \{\ scBtn\.disabled\ =\ true;\ scBtn\.textContent\ =\ '🔍\ 自检中…';\ \}
+if\ \(r\.probe\?\.kind\ ===\ 'skip'\)\ el\.count\.textContent\ =\ `自检跳过：\$\{r\.probe\.reason\}`;
+else\ if\ \(r\.ok\)\ el\.count\.textContent\ =\ `装机自检\ ✓\ 能跑（\$\{r\.ms\ \?\?\ '\?'\}ms\ ·\ 探针\ \$\{r\.probe\.actionId\}）`;
+else\ el\.count\.textContent\ =\ `装机自检\ ✗\ \$\{r\.error\ \|\|\ '退出码非零'\}`;
+\}\ catch\ \(e\)\ \{\ el\.count\.textContent\ =\ `自检失败：\$\{e\.message\}`;\ \}
+if\ \(scBtn\)\ \{\ scBtn\.disabled\ =\ false;\ scBtn\.textContent\ =\ '🔍\ 装机自检';\ \}
+if\ \(btn\)\ btn\.textContent\ =\ '②\ 落盘安装…';
+if\ \(sc\.ok\)\ marketMsg\(`已安装「\$\{nm\}」·\ 自检\ ✓\ 能跑（\$\{sc\.ms\ \?\?\ '\?'\}ms）`,\ 'ok',\ p\.id\ \|\|\ p\.entry\?\.id\);
+else\ marketMsg\(`已安装「\$\{nm\}」·\ 但自检\ ✗\ 跑不起来：\$\{sc\.error\ \|\|\ '退出码非零'\}`,\ 'warn',\ p\.id\ \|\|\ p\.entry\?\.id\);
+marketMsg\(`已安装「\$\{nm\}」·\ 自检跳过（\$\{sc\.probe\.reason\}）`,\ 'ok',\ p\.id\ \|\|\ p\.entry\?\.id\);
+marketMsg\(`已安装「\$\{nm\}」`,\ 'ok',\ p\.id\ \|\|\ p\.entry\?\.id\);

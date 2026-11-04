@@ -42,6 +42,17 @@ import {
   addMarket, findEntry, installFromMarket, loadMarkets, previewInstall,
   readIndex, refreshMarket, removeMarket,
 } from './core/market.ts';
+// 第一百三十七轮：集市装机自检
+import { selfcheckPlugin } from './core/selfcheck.ts';
+
+/** 第一百三十七轮：装完的插件立刻自检（找不到插件返回 null，不炸安装流程）。 */
+async function selfcheckOf(id: string): Promise<import('./core/selfcheck.ts').SelfcheckResult | null> {
+  try {
+    const entry = findPlugin(id);
+    if (!entry?.plugin) return null;
+    return await selfcheckPlugin(entry.plugin);
+  } catch { return null; }
+}
 
 /**
  * 本地 HTTP 面：给启动器 / Web 页面 / Tauri 壳提供同一套 API。
@@ -883,6 +894,9 @@ export function createServer(): http.Server {
         const result = isLocal
           ? addFromDir(preview.source, { source: { type: 'dir', installedAt: new Date().toISOString(), installedVersion: '' } })
           : addFromGit(preview.source);
+        // 第一百三十七轮①：直装（本地目录/git）也要自检
+        let selfcheckLocal: Awaited<ReturnType<typeof selfcheckOf>> = null;
+        if (result.ok && result.id) selfcheckLocal = await selfcheckOf(result.id);
         // 先装插件、再补依赖：插件目录里已经能看到它缺什么，补齐过程也按同一套校验走。
         // 依赖只在用户显式勾选 / 带 withDeps 时才装——装插件等于允许执行代码，
         // 不能因为「顺手」就装一堆没看过的能力。
@@ -907,6 +921,7 @@ export function createServer(): http.Server {
           depsInstalled,
           depsErrors,
           depsMissing,
+          selfcheck: selfcheckLocal,
           // 前端收到后重新拉 /api/plugins
         });
         return;
@@ -1065,8 +1080,23 @@ export function createServer(): http.Server {
           depsInstalled,
           depsErrors,
           depsMissing,
+          // 第一百三十七轮①：装完立刻自检（只读动作真跑一次）
+          selfcheck: result.ok && result.id ? await selfcheckOf(result.id) : null,
           ...marketSnapshot(),
         });
+        return;
+      }
+
+      // 第一百三十七轮③：详情页「重跑自检」
+      if (url.pathname === '/api/plugin/selfcheck' && req.method === 'POST') {
+        const body = await readBody(req);
+        const id = String(body['id'] ?? '');
+        const entry = findPlugin(id);
+        if (!entry?.plugin) {
+          json(res, 404, { error: `没有插件 ${id}` });
+          return;
+        }
+        json(res, 200, await selfcheckOf(id));
         return;
       }
 
