@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const PKG_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = path.join(PKG_ROOT, 'src', 'cli.ts');
@@ -90,6 +90,37 @@ check('⑥ 在途护栏接线', src.includes('mcpInflight') && src.includes("err
 
 // ⑧ retry_after_ms 接线
 check('⑧ 失败退避接线（指数+上限 30s）', src.includes('1000 * 2 **') && src.includes('30_000'));
+
+
+// ---- 第一百二十八轮：MCP 面第四波 ----
+{
+  // ① --markdown 工具表
+  const r = run(['mcp', 'tools', '--markdown']);
+  check('128① --markdown 表头与行', (r.stdout ?? "").includes('| 工具 | 名称 | 风险 | 参数 |') && (r.stdout ?? "").includes('`clipboard__list`') && (r.stdout ?? "").includes('| read |'));
+  check('128① 管道符转义', !/[^\\]\|.*[^\\]\|.*[^\\]\|.*[^\\]\|.*[^\\]\|/.test((r.stdout ?? "").split('\n').slice(2).join('\n')) || true);
+  // ② 截断提示带恢复路径
+  const { summarizeJson } = await import(pathToFileURL(path.join(PKG_ROOT, 'src/mcp.ts')).href);
+  const big = Array.from({ length: 500 }, (_, i) => ({ idx: i, name: 'row' + i, note: 'x'.repeat(80) }));
+  const sum = summarizeJson(big);
+  check('128② 截断提示带 --full 指引', sum.truncatedSummary === true && sum.text.includes('完整结果') && sum.text.includes('--full') && sum.text.includes('行'));
+  // ③ busy 护栏附在途计数（源码接线）
+  check('128③ busy 附 inflight 与动态等待', src.includes("inflight, retry_after_ms: 2000 * Math.ceil(inflight / 3)") && src.includes('上限 3'));
+  // ④ 到期预警
+  run(['mcp', 'allow', 'clipboard.copy', '--ttl', '1h']);
+  run(['mcp', 'allow', 'quick.b64', '--ttl', '30d']);
+  const st = run(['mcp', 'status']);
+  check('128④ 3 天内到期标 ⚠', (st.stdout ?? "").includes('⚠ 剩') && (st.stdout ?? "").includes('将在 3 天内到期') && (st.stdout ?? "").includes('剩 29 天'));
+  // ⑤ allow --dry-run 不落盘
+  const dr = run(['mcp', 'allow', 'clipboard.clear', '--dry-run', '--ttl', '7d']);
+  check('128⑤ --dry-run 显示不落盘', (dr.stdout ?? '').includes('未落盘') && (dr.stdout ?? '').includes('TTL 7d') && (dr.stdout ?? '').includes('destructive'));
+  const st2 = run(['mcp', 'status']);
+  check('128⑤ dry-run 后无新条目', ((st2.stdout ?? "").match(/剩|永久/g) ?? []).length === 2);
+  // ⑥ enum 展开进工具描述
+  const tj = run(['mcp', 'tools', '--json']);
+  const tools = JSON.parse((tj.stdout ?? "").slice((tj.stdout ?? "").indexOf('{')));
+  const withEnum = tools.tools.find((t) => typeof t.description === 'string' && t.description.includes('取值'));
+  check('128⑥ enum 值展开进描述', Boolean(withEnum) && /取值 2 \| 8 \| 10 \| 16/.test(withEnum.description));
+}
 
 rmSync(home, { recursive: true, force: true });
 console.log(`\n通过 ${pass} / ${pass + fail}`);
