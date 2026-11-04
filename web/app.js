@@ -951,7 +951,9 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-function hidePanels() {  for (const v of [el.listView, el.detailView, el.workbench, el.psView,
+function hidePanels() {
+  if (watchPanelTimer) { clearTimeout(watchPanelTimer); watchPanelTimer = 0; } // 第一百三十三轮①：离开面板摘自刷新
+  for (const v of [el.listView, el.detailView, el.workbench, el.psView,
     el.plugView, el.marketView, el.logsView, el.doctorView, el.allowView, el.devView, el.dashView]) {
     v.classList.add('hidden');
     // 第五十九轮②：每次面板重新显示时重放视图动效（先移除类，显示方再加回）
@@ -2998,6 +3000,7 @@ function scheduleWatch(key, sec) {
       return;
     }
     w.deadline = Date.now() + sec * 1000;
+    if (mode === 'watch') liveRefreshWatchPanel(); // 第一百三十三轮①②：面板盯盘时数据行节流自刷新
     renderWatchBar();
     scheduleWatch(key, sec);
   }, sec * 1000);
@@ -3009,6 +3012,7 @@ function scheduleWatch(key, sec) {
  * ④ 同动作 10 分钟去重窗口——风暴时只弹第一条，不刷屏。
  */
 const watchAlertAt = {}; // key → 上次告警时间戳（内存态即可：刷新重置不算损失）
+let watchPanelDirty = 0; let watchPanelTimer = 0; // 第一百三十三轮①：面板自刷新节流闸（声明上移防 TDZ）
 const notifyLastAt = {}; // 第一百三十二轮⑤：key → 上次通知时间戳（节流窗）
 let notifyLog = readJson('zerokit.notify-log', []); // ⑥ 通知记录（localStorage 环 10 条）
 function persistNotifyLog() { writeJson('zerokit.notify-log', notifyLog); }
@@ -3151,6 +3155,53 @@ function showPerfPanel() {
 }
 
 /** ⑥⑨ 监控聚合面板 #/watch：所有在跑的监控 + 采样 CSV 导出 */
+/** 第一百三十三轮①②：面板数据区节流自刷新——只替换 runs/changes/上次变化/点阵/通知记录，
+ * 不重建整个面板（用户 hover/滚动/焦点不受打扰——⑧）。 */
+function liveRefreshWatchPanel() {
+  if (mode !== 'watch') return;
+  const now = Date.now();
+  watchPanelDirty = now;
+  if (watchPanelTimer) return;
+  watchPanelTimer = setTimeout(() => {
+    watchPanelTimer = 0;
+    if (mode !== 'watch') return; // 离开了就不再画
+    if (Date.now() - watchPanelDirty < 1900) { // 距上次标记不足 2s：再等一会
+      watchPanelTimer = setTimeout(liveRefreshWatchPanel, 2000 - (Date.now() - watchPanelDirty));
+      return;
+    }
+    // 只更新已有行的动态字段（不重建 DOM——⑧ 不打断交互）
+    const reg = watchRegistry();
+    document.querySelectorAll('.watch-row').forEach((row) => {
+      const k = row.querySelector('[data-wnotify]')?.getAttribute('data-wnotify');
+      const w = k ? reg[k] : undefined;
+      if (!w) return;
+      const sub = row.querySelector('.sub');
+      if (sub) sub.textContent = `${w.runs} 次采样 · ${w.changes} 次变更${w.changes > 0 && w.samples.length ? ' · 上次变化 ' + relTime(w.samples.at(-1)?.ts ?? Date.now()) : ''}`;
+      // ④ sparkline 点阵（最近 10 次成败）
+      let spark = row.querySelector('.watch-spark');
+      if (!spark) { spark = document.createElement('span'); spark.className = 'watch-spark'; row.querySelector('.watch-summary')?.after(spark); }
+      spark.innerHTML = (w.samples ?? []).slice(-10).map((sm) => `<i class="${sm.ok ? 'ok' : 'bad'}"></i>`).join('');
+      spark.title = '最近 10 次采样（红=失败）';
+    });
+    // ② 通知记录小节即时更新
+    const notifyBox = document.querySelector('.watch-notify');
+    if (notifyBox) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = renderNotifySection();
+      notifyBox.replaceWith(tmp.firstElementChild ?? notifyBox);
+    }
+  }, 2000);
+}
+
+/** 第一百三十三轮③：相对时间（与 resultTabTitle 同档语义的轻量版）。 */
+function relTime(ts) {
+  const d = Date.now() - ts;
+  if (d < 60_000) return '刚刚';
+  if (d < 3_600_000) return `${Math.floor(d / 60_000)} 分钟前`;
+  if (d < 86_400_000) return `${Math.floor(d / 3_600_000)} 小时前`;
+  return `${Math.floor(d / 86_400_000)} 天前`;
+}
+
 function showWatchPanel() {
   hidePanels();
   mode = 'watch';
@@ -3168,7 +3219,8 @@ function showWatchPanel() {
     <div class="run-row watch-row">
       <span class="badge ${lastOk ? 'read' : 'bad'}">⏱</span>
       <span class="run-when">${esc(w.title)}（每 ${esc(intervalLabel(w.interval))}）</span>
-      <span class="sub">${w.runs} 次采样 · ${w.changes} 次变更</span>
+      <span class="sub">${w.runs} 次采样 · ${w.changes} 次变更${w.changes > 0 && w.samples.length ? ' · 上次变化 ' + relTime(w.samples.at(-1)?.ts ?? Date.now()) : ''}</span>
+      <span class="watch-spark">${(w.samples ?? []).slice(-10).map((sm) => `<i class="${sm.ok ? 'ok' : 'bad'}"></i>`).join('')}</span>
       <span class="watch-summary">${esc(summary)}</span>
       ${w.stopReason ? `<span class="bad">${esc(w.stopReason)}</span>` : ''}
       <button class="ghost mini" data-wnotify="${esc(k)}" title="变化时是否弹通知">${w.notify === false ? '通知关' : '通知开'}</button>
@@ -3247,6 +3299,7 @@ function showHelpPanel() {
       <button class="ghost mini" data-try="${esc(tp.tryHash)}" title="${esc(tr('helpTryTip'))}">${esc(tr('helpTry'))} →</button>
     </div>`).join('');
   el.allowView.innerHTML = `
+    ${panelDescBar('help')}
     <h2 class="ps-title">${esc(tr('helpTitle'))}</h2>
     <div class="help">${esc(tr('helpIntro'))}</div>
     <input id="helpSearch" type="search" placeholder="${esc(t('helpSearchPh'))}" data-help-search style="max-width:340px;margin:6px 0;width:100%">
@@ -6169,9 +6222,17 @@ async function renderDoctor() {
   // 第八十四轮①④：三级汇总行 + 最近体检趋势（数据来自 server 的 --json 同源接口）
   const sumLine = r.summaryLine ?? '';
   const hist = r.history ?? [];
-  const trendHtml = hist.length >= 2
-    ? `<div class="doc-trend">${hist.slice(0, 5).map((e) => `<span class="doc-trend-item">✗${e.errors}/⚠${e.warnings}</span>`).join('<span class="trend-arrow">→</span>')}</div>`
-    : '';
+  // 第一百三十三轮⑥：趋势升级——带 delta 的行表（旧→新）+ 一句话判读
+  const trendRows = r.trend?.rows ?? [];
+  const trendHtml = trendRows.length >= 2
+    ? `<div class="doc-trend"><div class="doc-trend-table">${trendRows.map((row) => {
+        const dE = row.deltaE ? `（${row.deltaE > 0 ? '+' : ''}${row.deltaE}）` : '';
+        const dW = row.deltaW ? `（${row.deltaW > 0 ? '+' : ''}${row.deltaW}）` : '';
+        return `<span class="doc-trend-item">${String(row.ts).slice(5, 16).replace('T', ' ')} ✗${row.errors}${dE} ⚠${row.warnings}${dW}</span>`;
+      }).join('<span class="trend-arrow">→</span>')}</div><div class="doc-trend-verdict">判读：${esc(String(r.trend?.verdict ?? ''))}</div></div>`
+    : (hist.length >= 2
+      ? `<div class="doc-trend">${hist.slice(0, 5).map((e) => `<span class="doc-trend-item">✗${e.errors}/⚠${e.warnings}</span>`).join('<span class="trend-arrow">→</span>')}</div>`
+      : '');
   const sumHtml = sumLine ? `<div class="doc-summary" role="status">${esc(sumLine)}</div>${trendHtml}` : '';
   const toolRows = (r.tools ?? []).map((t) => `<div class="doc-line ${t.ok ? '' : 'bad'}">
       <span class="doc-mark">${t.ok ? '✓' : '!'}</span>

@@ -658,10 +658,10 @@ const failed = results.filter(([, ok]) => !ok);
   const css = fs.readFileSync(path.join(PKG_ROOT, 'web', 'style.css'), 'utf8');
   check('123① jsonFoldSpans 纯函数存在', extrasJs.includes('export function jsonFoldSpans'));
   check('123② JSON 折叠接线（pre.json-foldable）', appJs.includes('json-foldable') && appJs.includes('折叠'));
-  check('123③ 对比差异行 ▲ 非颜色标记', appJs.includes('cmp-mark') && appJs.includes('aria-label="有差异"'));
+  check('123③ 对比差异行 ▲ 非颜色标记', appJs.includes('cmp-mark') && appJs.includes("t('cmpDiffMark')"));
   check('123④ 表头 aria-sort', appJs.includes("aria-sort="));
-  check('123⑤ Shift+Enter 复制 JSON 行', appJs.includes('已复制 JSON 行'));
-  check('123⑥ KV Enter 复制值', appJs.includes('已复制值') && appJs.includes('td[data-dkv]'));
+  check('123⑤ Shift+Enter 复制 JSON 行', appJs.includes("t('copiedJsonRow')"));
+  check('123⑥ KV Enter 复制值', appJs.includes("t('copiedVal')") && appJs.includes('td[data-dkv]'));
   check('123⑦ 折叠样式', css.includes('.json-fold > summary') && css.includes('.cmp-mark'));
 }
 
@@ -702,4 +702,22 @@ process.exit(failed.length > 0 ? 1 : 0);
   check('132⑦ CLI watch list', cliTs.includes("'list'") && cliTs.includes('lastChanged') && cliTs.includes('notify:'));
   check('132⑧ doctor 监控行', cliTs.includes('监控 ${n} 个在册'));
   check('132 样式', css.includes('.watch-notify') && css.includes('.watch-quiet'));
+}
+
+// ---- 第一百三十三轮：面板自刷新 + doctor 趋势静态断言 ----
+{
+  const appJs = fs.readFileSync(path.join(PKG_ROOT, 'web', 'app.js'), 'utf8');
+  const cliTs = fs.readFileSync(path.join(PKG_ROOT, 'src', 'cli.ts'), 'utf8');
+  const docTs = fs.readFileSync(path.join(PKG_ROOT, 'src', 'core', 'doctor.ts'), 'utf8');
+  const css = fs.readFileSync(path.join(PKG_ROOT, 'web', 'style.css'), 'utf8');
+  check('133① 自刷新接线', appJs.includes('liveRefreshWatchPanel') && appJs.includes('watchPanelTimer') && appJs.includes("if (mode === 'watch') liveRefreshWatchPanel();"));
+  check('133① 离开摘定时器', appJs.includes('clearTimeout(watchPanelTimer)'));
+  check('133① 节流 2s', appJs.includes('1900') && appJs.includes('2000'));
+  check('133③ 相对时间行', appJs.includes('上次变化 ') && appJs.includes('function relTime('));
+  check('133④ sparkline', appJs.includes('watch-spark') && css.includes('.watch-spark i'));
+  check('133⑤ CLI --trend', cliTs.includes("'--trend'") && cliTs.includes('trendVerdict'));
+  check('133⑥ UI 趋势小节', appJs.includes('doc-trend-verdict') && appJs.includes('判读：'));
+  check('133⑦ --json trend', cliTs.includes('trend: (() =>') || (cliTs.includes('trend') && cliTs.includes('--json')));
+  check('133⑧ 不重建 DOM', appJs.includes("row.querySelector('.sub')") && appJs.includes('replaceWith'));
+  check('133 纯函数在 doctor.ts', docTs.includes('export function doctorTrend') && docTs.includes('export function trendVerdict'));
 }
