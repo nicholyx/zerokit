@@ -2079,3 +2079,10 @@ td.gsum-label { font-weight: 600; }
 .badge.hb-✗ { background:color-mix(in srgb, #e05a4f 18%, transparent); }
 .desc-fold { display:-webkit-box; -webkit-line-clamp:6; -webkit-box-orient:vertical; overflow:hidden; }
 .desc-more { margin-top:4px; font-size:12px; }
+
+/* ---- 第一百三十二轮：监控通知 ---- */
+.watch-notify { margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--fg, #333) 5%, transparent); }
+.watch-notify-row { font-size: 12px; padding: 1px 0; color: var(--fg-dim, #888); }
+.watch-quiet { margin-top: 8px; padding: 8px 10px; border-radius: 8px; border: 1px dashed color-mix(in srgb, var(--fg, #333) 20%, transparent); }
+.watch-quiet .row-mini { display: flex; gap: 6px; align-items: center; margin-top: 6px; font-size: 12px; }
+.watch-quiet input { padding: 2px 6px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--fg, #333) 25%, transparent); background: transparent; color: inherit; }

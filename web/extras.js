@@ -3866,3 +3866,33 @@ export function descNeedsFold(text, maxLines = 6) {
   if (!text) return false;
   return text.split('\n').length > maxLines || text.length > 280;
 }
+
+/* ===== 第一百三十二轮：监控通知与静默时段 ===== */
+
+/** ④ 静默时段判断：now 处于 [start,end]（HH:mm，支持跨午夜）则静默。 */
+export function inQuietHours(nowMin, startMin, endMin) {
+  if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || startMin === endMin) return false;
+  if (startMin < endMin) return nowMin >= startMin && nowMin < endMin;
+  return nowMin >= startMin || nowMin < endMin; // 跨午夜（如 22:00–07:00）
+}
+
+/** ⑤ 通知节流：同一监控 throttleMs 内只弹一次；返回 {allow, at}（at 记录本次时间戳）。 */
+export function notifyThrottle(lastAt, now, throttleMs = 5 * 60 * 1000) {
+  const allow = !Number.isFinite(lastAt) || now - lastAt >= throttleMs;
+  return { allow, at: allow ? now : lastAt };
+}
+
+/** ⑥ 通知记录环：append 后保留最近 limit 条（新的在前）。 */
+export function pushNotifyLog(log, entry, limit = 10) {
+  const arr = Array.isArray(log) ? [entry, ...log.filter((e) => e && e.key !== entry.key || e.kind !== entry.kind)] : [entry];
+  return arr.slice(0, limit);
+}
+
+/** ④ HH:mm → 分钟数（'22:00'→1320；坏值 null）。 */
+export function parseHm(s) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(s ?? '').trim());
+  if (!m) return null;
+  const h = Number(m[1]), mm = Number(m[2]);
+  if (h > 23 || mm > 59) return null;
+  return h * 60 + mm;
+}
