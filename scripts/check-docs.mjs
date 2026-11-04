@@ -96,5 +96,18 @@ const bad = (msg) => { console.log(`✗ ${msg}`); problems.push(msg); };
   if (problems.length === 0 || !problems.some((p2) => p2.includes('版本锚'))) console.log('✓ START-HERE 版本锚完整');
 }
 
+// 第一百三十四轮⑨：deep 代码块 file= 标签路径校验
+{
+  const deepFiles = fs.readdirSync('docs/deep').filter((f) => f.endsWith('.md'));
+  let tagged = 0;
+  for (const df of deepFiles) {
+    const text = fs.readFileSync(path.join('docs/deep', df), 'utf8');
+    for (const m of text.matchAll(/```[\\w]*\\s+file=([^\\s`]+)/g)) {
+      tagged++;
+      if (!fs.existsSync(m[1])) { console.log(`FAIL deep 代码块标签指向不存在的文件: ${m[1]} (${df})`); process.exit(1); }
+    }
+  }
+  console.log(`deep 代码块标签：${tagged} 处路径全部存在`);
+}
 if (problems.length > 0) { console.log(`有 ${problems.length} 处问题`); process.exit(1); }
 console.log('文档巡检全部通过');
