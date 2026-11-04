@@ -139,7 +139,9 @@ function toolDescription(plugin: Plugin, action: Action): string {
       const req = p.required ? '必填' : '可选';
       const def = p.default !== undefined ? `，默认 ${JSON.stringify(p.default)}` : '';
       const secret = p.secret ? '（敏感，不会被回显）' : '';
-      return `${p.name}:${p.type}${p.required ? '' : '?'}（${req}${def}）${secret}`;
+      // 第一百二十八轮⑥：enum 值展开进描述——模型不用再猜取值范围
+      const en = 'enum' in p && Array.isArray((p as { enum?: unknown }).enum) ? `，取值 ${((p as { enum: unknown[] }).enum).join(' | ')}` : '';
+      return `${p.name}:${p.type}${p.required ? '' : '?'}（${req}${def}${en}）${secret}`;
     });
     parts.push(`参数：${segs.join('；')}`);
   }
@@ -220,7 +222,9 @@ export function summarizeJson(value: unknown, opts: SummarizeOpts = {}): Summary
     const sample = cols.slice(0, 4).map((c) => `${c}=${JSON.stringify((value[0] as Record<string, unknown>)[c])}`).join(' ');
     tableNote = `\n表格形状：${value.length} 行 × ${cols.length} 列（${cols.slice(0, 8).join(', ')}${cols.length > 8 ? ', …' : ''}）\n首行样本：${sample}`;
   }
-  const note = `\n…（结果过大已摘要，省略约 ${omitted} 字符。字段概览：${statsLine || '无'}）${tableNote}`;
+  // 第一百二十八轮②：截断提示带恢复路径——模型被截断后最需要知道「怎么拿全量」
+  const lineCount = full.split('\n').length;
+  const note = `\n…（结果过大已摘要，省略约 ${omitted} 字符、约 ${lineCount} 行。字段概览：${statsLine || '无'}。完整结果：CLI 加 --full，或提示用户直接运行 zkit run 命令）${tableNote}`;
   return { text: shown + note, truncatedSummary: true, fieldStats: stats };
 }
 
@@ -469,9 +473,9 @@ export async function serve(): Promise<number> {
     const inflight = mcpInflight.get(name) ?? 0;
     if (inflight >= 3) {
       return {
-        content: [{ type: 'text', text: `工具 ${name} 已有 ${inflight} 个请求在途，请稍后重试（建议 2 秒后）` }],
+        content: [{ type: 'text', text: `工具 ${name} 已有 ${inflight} 个请求在途（上限 3），请稍后重试（建议 ${2000 * Math.ceil(inflight / 3)}ms 后）` }],
         isError: true,
-        structuredContent: { error: 'busy', retry_after_ms: 2000 },
+        structuredContent: { error: 'busy', inflight, retry_after_ms: 2000 * Math.ceil(inflight / 3) },
       };
     }
     mcpInflight.set(name, inflight + 1);
@@ -740,18 +744,24 @@ function cmdStatus(): number {
   const now = Date.now();
   if (entries.length === 0) { process.stdout.write('没有授权记录（只读动作默认放行，不需要授权）。\n'); return 0; }
   process.stdout.write(`AI 调用授权（${entries.length} 条）：\n`);
+  let expiring = 0;
   for (const e of entries) {
     const alive = entryAlive(e, now);
     let remain = '已过期';
+    let soon = false;
     if (e.ttlDays === -1) remain = '永久';
     else if (alive) {
       const msLeft = e.ttlDays * 86_400_000 - (now - Date.parse(e.at));
       if (msLeft >= 86_400_000) remain = `剩 ${Math.floor(msLeft / 86_400_000)} 天`;
       else if (msLeft >= 3_600_000) remain = `剩 ${Math.floor(msLeft / 3_600_000)} 小时`;
       else remain = `剩 ${Math.max(1, Math.floor(msLeft / 60_000))} 分钟`;
+      // 第一百二十八轮④：3 天内到期标 ⚠——授权悄悄过期是「AI 突然全失败」的头号原因
+      soon = msLeft < 3 * 86_400_000;
+      if (soon) expiring++;
     }
-    process.stdout.write(`  ${e.key.padEnd(34)} ${remain}${alive ? '' : '（将不再放行）'}  授权于 ${e.at}\n`);
+    process.stdout.write(`  ${e.key.padEnd(34)} ${soon ? '⚠ ' : ''}${remain}${alive ? '' : '（将不再放行）'}  授权于 ${e.at}\n`);
   }
+  if (expiring > 0) process.stdout.write(`\n⚠ ${expiring} 条授权将在 3 天内到期：到期后有副作用动作会被拒绝。续期：zkit mcp allow <key> --ttl 30d\n`);
   return 0;
 }
 
@@ -817,6 +827,17 @@ function cmdTools(args: string[]): number {
     process.stdout.write(JSON.stringify({ count: tools.length, ...(riskWant ? { risk: riskWant } : {}), tools }, null, 2) + '\n');
     return 0;
   }
+  // 第一百二十八轮①：--markdown 导出工具表——AI 客户端接入文档直接贴
+  if (args.includes('--markdown')) {
+    process.stdout.write(`| 工具 | 名称 | 风险 | 参数 |\n|---|---|---|---|\n`);
+    for (const t of tools) {
+      const ps = t.params.length ? t.params.map((x) => `${x.name}${x.required ? '' : '?'}:${x.type}`).join(', ') : '—';
+      const esc = (v: string) => v.replace(/\|/g, '\\|');
+      process.stdout.write(`| \`${t.name}\` | ${esc(t.title)} | ${t.risk} | ${esc(ps)} |\n`);
+    }
+    process.stdout.write(`\n（${tools.length} 个工具；生成于 zkit mcp tools --markdown）\n`);
+    return 0;
+  }
   process.stdout.write(`共 ${tools.length} 个 MCP 工具${riskWant ? `（风险=${riskWant}）` : ''}${plugWant ? `（插件=${plugWant}）` : ''}（加 --json 看机读格式）：\n`);
   for (const t of tools) {
     const riskMark = t.risk === 'read' ? '' : t.risk === 'destructive' ? '  ⚠destructive' : '  ●有副作用';
@@ -870,6 +891,14 @@ function cmdAllow(args: string[]): number {
     const n = Number(ttlRaw);
     if (!Number.isFinite(n) || n <= 0) { process.stderr.write('✗ --ttl 只认 1h / 1d / 7d / 30d / permanent\n'); return 1; }
     ttlDays = n;
+  }
+  // 第一百二十八轮⑤：--dry-run 只显示将授权什么，不落盘
+  if (args.includes('--dry-run')) {
+    process.stdout.write(`（--dry-run：以下是将发生的授权，未落盘）\n`);
+    const ttlIdx = args.indexOf('--ttl');
+    process.stdout.write(`  将授权：${target}（风险 ${match.action.risk}${ttlIdx >= 0 ? `，TTL ${args[ttlIdx + 1]}` : '，默认 30 天'}）\n`);
+    process.stdout.write(`  将执行的命令：${buildCommand(match.plugin, match.action, {}).join(' ')}\n`);
+    return 0;
   }
   const existing = loadAllowEntries();
   saveAllowAudit(upsertAllow(existing, target, ttlDays));
