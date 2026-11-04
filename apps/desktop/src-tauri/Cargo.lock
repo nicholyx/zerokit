@@ -4959,7 +4959,7 @@ dependencies = [
 
 [[package]]
 name = "zerokit-desktop"
-version = "1.40.0"
+version = "1.41.0"
 dependencies = [
  "serde",
  "serde_json",
