@@ -1980,6 +1980,7 @@ function openDetail(plugin, action, prefill) {
           <button class="ghost more-item" id="shareCardBtn" role="menuitem" title="${t('shareCardTip')}">🪪 ${t('shareCard')}</button>
           <button class="ghost more-item" id="copyJsonBtn" role="menuitem" title="${t('copyJsonTip')}">📋 ${t('copyJson')}</button>
           <button class="ghost more-item" id="resetBtn" role="menuitem" title="${t('resetTip')}">↺ ${t('resetDefaults')}</button>
+          <button class="ghost more-item" id="selfcheckBtn" role="menuitem" title="装机自检：挑只读动作真跑一次，确认这个插件在这台机器上能跑">🔍 装机自检</button>
         </div>
       </div>
     </div>
@@ -2102,6 +2103,18 @@ function openDetail(plugin, action, prefill) {
       else node.value = f.default === undefined ? '' : String(f.default);
     }
     onFormInput();
+  });
+  // 第一百三十七轮③：详情页重跑自检（挑只读动作真跑一次）
+  $('selfcheckBtn')?.addEventListener('click', async () => {
+    const scBtn = $('selfcheckBtn');
+    if (scBtn) { scBtn.disabled = true; scBtn.textContent = '🔍 自检中…'; }
+    try {
+      const r = await api('/api/plugin/selfcheck', { method: 'POST', body: { id: plugin.id } });
+      if (r.probe?.kind === 'skip') el.count.textContent = `自检跳过：${r.probe.reason}`;
+      else if (r.ok) el.count.textContent = `装机自检 ✓ 能跑（${r.ms ?? '?'}ms · 探针 ${r.probe.actionId}）`;
+      else el.count.textContent = `装机自检 ✗ ${r.error || '退出码非零'}`;
+    } catch (e) { el.count.textContent = `自检失败：${e.message}`; }
+    if (scBtn) { scBtn.disabled = false; scBtn.textContent = '🔍 装机自检'; }
   });
   // 历史参数重选：最近 3 次成功组合
   const histSets = recentParamSets((runStore[actionKey(plugin.id, action.id)] ?? []), 3);
@@ -6481,9 +6494,11 @@ async function doMarketInstall() {
   const p = marketPreview;
   if (!p) return;
   const btn = $('marketInstall');
-  if (btn) { btn.disabled = true; btn.textContent = '安装中…'; }
+  // 第一百三十七轮⑧：安装进度三阶段（拉取校验 → 落盘 → 自检）
+  if (btn) { btn.disabled = true; btn.textContent = '① 拉取与校验…'; }
   try {
     const withDeps = $('marketWithDeps')?.checked === true;
+    if (btn) btn.textContent = '② 落盘安装…';
     const res = await api('/api/market/install', {
       method: 'POST',
       body: { id: p.id || p.entry?.id, market: p.market, confirm: p.confirm, withDeps },
@@ -6492,7 +6507,17 @@ async function doMarketInstall() {
     marketPreview = null;
     await load(false);          // 插件列表与徽标刷新
     await renderMarket();
-    marketMsg(`已安装「${p.entry?.name || p.id}」`, 'ok', p.id || p.entry?.id);
+    // 第一百三十七轮①②：装机自检结果进反馈（装上 ≠ 能跑）
+    const sc = res.selfcheck;
+    const nm = p.entry?.name || p.id;
+    if (sc && sc.probe?.kind === 'run') {
+      if (sc.ok) marketMsg(`已安装「${nm}」· 自检 ✓ 能跑（${sc.ms ?? '?'}ms）`, 'ok', p.id || p.entry?.id);
+      else marketMsg(`已安装「${nm}」· 但自检 ✗ 跑不起来：${sc.error || '退出码非零'}`, 'warn', p.id || p.entry?.id);
+    } else if (sc && sc.probe?.kind === 'skip') {
+      marketMsg(`已安装「${nm}」· 自检跳过（${sc.probe.reason}）`, 'ok', p.id || p.entry?.id);
+    } else {
+      marketMsg(`已安装「${nm}」`, 'ok', p.id || p.entry?.id);
+    }
   } catch (e) {
     marketMsg(`安装失败：${e.message}`, 'err');
     if (btn) { btn.disabled = false; btn.textContent = '确认安装'; }
