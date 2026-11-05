@@ -345,3 +345,77 @@ export function promptPlan(params: { name: string; title: string; required?: boo
     fallback: p.default !== undefined ? String(p.default) : '',
   }));
 }
+
+// ---------------------------------------------------------------- 第一百四十八轮：输出管道
+
+/** 148：--calc 列=表达式（表达式支持 + - * / 与既有列名/数字，如 内存MB=内存/1048576）。 */
+export function calcColumn(rows: Row[], spec: string): { rows: Row[]; newCol?: string; error?: string } {
+  const eq = spec.indexOf('=');
+  if (eq <= 0) return { rows, error: `--calc "${spec}" 缺 =（写法：新列=表达式，如 内存MB=内存/1048576）` };
+  const name = spec.slice(0, eq).trim();
+  const expr = spec.slice(eq + 1).trim();
+  if (!name || !expr) return { rows, error: `--calc "${spec}" 名字或表达式为空` };
+  const allKeys = [...new Set(rows.flatMap((r) => Object.keys(r)))];
+  // token 化：列名（中文/字母/数字/下划线）、数字、运算符
+  const tokens = expr.match(/[+\-*/()]|[\p{L}\p{N}_][\p{L}\p{N}_.]*|\d+(?:\.\d+)?/gu) ?? [];
+  if (tokens.length === 0) return { rows, error: `--calc 表达式 "${expr}" 解析不了（只支持 + - * / 和列名/数字）` };
+  const unknown = tokens.filter((t) => /^[\p{L}_]/u.test(t) && !allKeys.includes(t));
+  if (unknown.length > 0) return { rows, error: `--calc 引用了不存在的列：${unknown.join('、')}（可用：${allKeys.join('、') || '（无）'}）` };
+  const out: Row[] = [];
+  for (const r of rows) {
+    // shunting-yard 太重：单遍求值按运算优先级做两轮（* / 后 + -），支持括号展开成嵌套算术不可行——用受限递归下降
+    let pos = 0;
+    const peek = (): string => tokens[pos] ?? '';
+    const eat = (): string => { const t = tokens[pos] ?? ''; pos++; return t; };
+    const factor = (): number => {
+      const t = peek();
+      if (t === '(') { eat(); const v = addx(); if (peek() === ')') eat(); return v; }
+      if (t === '-') { eat(); return -factor(); }
+      eat();
+      if (/^\d/.test(t)) return Number(t);
+      return numVal(r[t]) ?? 0;
+    };
+    const mulx = (): number => { let v = factor(); while (peek() === '*' || peek() === '/') { const op = eat(); const rhs = factor(); if (op === '*') v *= rhs; else { if (rhs === 0) throw new Error(`除零（${expr}）`); v /= rhs; } } return v; };
+    const addx = (): number => { let v = mulx(); while (peek() === '+' || peek() === '-') { const op = eat(); const rhs = mulx(); if (op === '+') v += rhs; else v -= rhs; } return v; };
+    try {
+      const v = addx();
+      out.push({ ...r, [name]: Math.round(v * 1000) / 1000 });
+    } catch (e) {
+      return { rows, error: `--calc ${spec}：${(e as Error).message}。→ 怎么改：检查表达式里的列是否含 0 值，或先 --where 过滤掉 0 行` };
+    }
+  }
+  return { rows: out, newCol: name };
+}
+
+/** 148：--where 条件（列>5 / 列=值 / 列~子串）。返回保留行。 */
+export function whereRows(rows: Row[], cond: string): { rows: Row[]; error?: string } {
+  const m = /^([\p{L}\p{N}_][\p{L}\p{N}_.]*)(>=|<=|>|<|=|~)(.+)$/u.exec(cond.trim());
+  if (!m) return { rows, error: `--where "${cond}" 看不懂（写法：列>5、列=值、列~子串）` };
+  const col = m[1] ?? '', op = m[2] ?? '', rawVal = m[3] ?? '';
+  const allKeys = [...new Set(rows.flatMap((r) => Object.keys(r)))];
+  if (!allKeys.includes(col)) return { rows, error: `--where 列 "${col}" 不存在（可用：${allKeys.join('、') || '（无）'}）` };
+  const val = rawVal.trim().replace(/^["']|["']$/g, '');
+  const keep = rows.filter((r) => {
+    const cell = r[col];
+    if (op === '~') return String(cell ?? '').includes(val);
+    if (op === '=') return String(cell ?? '') === val;
+    const a = numVal(cell), b = numVal(val);
+    if (a === null || b === null) return false;
+    if (op === '>') return a > b;
+    if (op === '<') return a < b;
+    if (op === '>=') return a >= b;
+    return a <= b;
+  });
+  return { rows: keep };
+}
+
+/** 148：--rename 旧=新（显示层改名）。 */
+export function renameColumn(rows: Row[], spec: string): { rows: Row[]; error?: string } {
+  const eq = spec.indexOf('=');
+  if (eq <= 0) return { rows, error: `--rename "${spec}" 缺 =（写法：旧列=新列）` };
+  const from = spec.slice(0, eq).trim(), to = spec.slice(eq + 1).trim();
+  if (!from || !to) return { rows, error: `--rename "${spec}" 名字为空` };
+  const allKeys = [...new Set(rows.flatMap((r) => Object.keys(r)))];
+  if (!allKeys.includes(from)) return { rows, error: `--rename 列 "${from}" 不存在（可用：${allKeys.join('、') || '（无）'}）` };
+  return { rows: rows.map((r) => { const { [from]: v, ...rest } = r; return { ...rest, [to]: v }; }) };
+}
