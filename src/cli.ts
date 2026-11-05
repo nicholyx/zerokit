@@ -133,10 +133,17 @@ ${c.bold('其他')}
   --version / -V          版本号
 
 run 进阶
-  --out table|json|yaml|csv   输出格式（table 人看，其余给管道）
+  --out table|json|yaml|csv|md|tsv   输出格式（table 人看，其余给管道）
   --copy                      成功后把结果 JSON 复制到剪贴板
   --quiet                     只输出结果 JSON 单行（脚本管道用）
   --watch N                   每 N 秒轮询重跑，只打印变化（Ctrl-C 退出）
+  --jq 路径                   点路径取值（.data.items[0].name），收窄后继续加工
+  --where 列>5|列=值|列~子串   过滤行（可重复，按出现顺序应用）
+  --calc 新列=表达式          计算列（+ - * / 与已有列名，如 内存MB=内存/1048576）
+  --rename 旧列=新列          显示层改名
+  --pick a,b --sort 列 --uniq 列 --head N --sum 列   表格再加工
+  --pipe "shell 命令"         表格文本经 stdin 接外部命令（如 --pipe "grep -i mac"）
+  组合顺序（固定）：jq → where → calc → rename → pick → sort → uniq → head → sum → pipe
 
 ${c.bold('示例')}
   zkit run proxy status
@@ -942,9 +949,11 @@ async function cmdRun(args: string[]): Promise<number> {
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i]!;
     if (a === '--out' || a === '--watch' || a === '--share' || a === '--jq' || a === '--env' || a === '--format' || a === '--retry' || a === '--avg'
-        || a === '--sort' || a === '--pick' || a === '--uniq' || a === '--sum' || a === '--head' || a === '--measure') { i++; continue; }
+        || a === '--sort' || a === '--pick' || a === '--uniq' || a === '--sum' || a === '--head' || a === '--measure'
+        || a === '--where' || a === '--calc' || a === '--rename' || a === '--pipe') { i++; continue; }
     if (a.startsWith('--out=') || a.startsWith('--watch=') || a.startsWith('--share=') || a.startsWith('--jq=') || a.startsWith('--env=') || a.startsWith('--format=') || a.startsWith('--retry=') || a.startsWith('--avg=')
-        || a.startsWith('--sort=') || a.startsWith('--pick=') || a.startsWith('--uniq=') || a.startsWith('--sum=') || a.startsWith('--head=') || a.startsWith('--measure=')) continue;
+        || a.startsWith('--sort=') || a.startsWith('--pick=') || a.startsWith('--uniq=') || a.startsWith('--sum=') || a.startsWith('--head=') || a.startsWith('--measure=')
+        || a.startsWith('--where=') || a.startsWith('--calc=') || a.startsWith('--rename=') || a.startsWith('--pipe=')) continue;
     if (['--yes', '-y', '--json', '--copy', '--quiet', '--full', '--stdin-json', '--profile'].includes(a)) continue;
     // 第七十五轮：--sort -列 的降序值（-内存 不是短旗标，前一个是 --sort 就吞掉）
     if (a.startsWith('-') && !a.startsWith('--') && i > 0 && rest[i - 1] === '--sort') continue;
@@ -1060,6 +1069,11 @@ async function cmdRun(args: string[]): Promise<number> {
     const i = rest.indexOf(name);
     return i >= 0 ? rest[i + 1] : undefined;
   };
+  const flagVals = (name: string): string[] => {
+    const out: string[] = [];
+    for (let i = 0; i < rest.length - 1; i++) if (rest[i] === name) out.push(rest[i + 1]!);
+    return out;
+  };
   const tf: import('./core/cliX.ts').TransformOpts = {};
   const tfSort = flagVal('--sort');
   const tfPick = flagVal('--pick');
@@ -1075,18 +1089,40 @@ async function cmdRun(args: string[]): Promise<number> {
   // 加工标志位：四个表格类格式 + 默认 JSON 展示路径都走加工后数据；--json/--quiet 不走
   let tfRows: import('./core/cliX.ts').Row[] = [];
   let tfError: string | undefined;
-  if (hasTf && result.ok) {
-    const t = cliX.transformRows(cliX.toRows(result.data), tf);
-    tfRows = t.rows; tfError = t.error;
-    if (tfError) {
-      process.stderr.write(c.red(`✗ ${tfError}\n`));
-      return 1;
+  // 第一百四十八轮：输出管道——where → calc → rename 在 pick/sort/... 之前按固定序应用
+  const wheres = flagVals('--where');
+  const calcs = flagVals('--calc');
+  const renames = flagVals('--rename');
+  const pipeCmd = flagVal('--pipe');
+  const hasPipe = !!(wheres.length || calcs.length || renames.length || hasTf || pipeCmd);
+  if (hasPipe && result.ok) {
+    let rows = cliX.toRows(result.data);
+    for (const w of wheres) {
+      const r1 = cliX.whereRows(rows, w);
+      if (r1.error) { process.stderr.write(c.red(`✗ ${r1.error}\n→ 怎么改：--where 用「列>数字」「列=值」「列~子串」三种写法；列名不确定时看错误提示里的可用列清单\n`)); return 1; }
+      rows = r1.rows;
     }
+    for (const cc of calcs) {
+      const r2 = cliX.calcColumn(rows, cc);
+      if (r2.error) { process.stderr.write(c.red(`✗ ${r2.error}\n→ 怎么改：--calc 写法「新列=表达式」，表达式只能用已有列名、数字和 + - * /（可加括号）\n`)); return 1; }
+      rows = r2.rows;
+    }
+    for (const rn of renames) {
+      const r3 = cliX.renameColumn(rows, rn);
+      if (r3.error) { process.stderr.write(c.red(`✗ ${r3.error}\n→ 怎么改：--rename 写法「旧列=新列」，旧列必须是结果里已有的列\n`)); return 1; }
+      rows = r3.rows;
+    }
+    if (hasTf) {
+      const t = cliX.transformRows(rows, tf);
+      rows = t.rows; tfError = t.error;
+      if (tfError) { process.stderr.write(c.red(`✗ ${tfError}\n`)); return 1; }
+    }
+    tfRows = rows;
   }
   // 第七十四轮④⑤：--format md / tsv；②：--full 展开大结果（默认 30 行截断）
   const wantFull = rest.includes('--full');
-  const dispRows = hasTf ? tfRows : undefined;
-  if (outFmt === 'yaml') {
+  const dispRows = hasPipe ? tfRows : undefined;
+  if (!pipeCmd) if (outFmt === 'yaml') {
     process.stdout.write(cliX.renderYaml(result.data));
   } else if (outFmt === 'csv') {
     process.stdout.write(cliX.renderCsv(dispRows ?? cliX.toRows(result.data)));
@@ -1116,6 +1152,30 @@ async function cmdRun(args: string[]): Promise<number> {
     } else {
       printRunResult(action, result, asJson, profile);
     }
+  }
+  // 第一百四十八轮⑥：--pipe <cmd>——表格文本经 stdin 接 shell 命令（如 --pipe "grep -i mac"）。
+  // 在所有格式化之后接管 stdout：上面已打印的内容会被管道命令一起吞掉吗——不会，这里改为拦截式：
+  // --pipe 存在时上面的输出都写进缓冲，最终只把表格文本喂给管道命令、命令输出才是用户看到的。
+  // 实现约束（诚实边界）：上面各分支直接 process.stdout.write，改全部缓冲风险大；--pipe 与
+  // --quiet/--json 互斥（两者都面向脚本，组合语义不清），与格式旗标兼容（管道吃的是最终表格文本）。
+  if (pipeCmd && result.ok) {
+    if (quiet || asJson) {
+      process.stderr.write(c.red(`✗ --pipe 不能与 --quiet/--json 同用（管道吃表格文本，机读输出没有表格）\n`));
+      return 1;
+    }
+    const tableText = cliX.renderTable(dispRows ?? cliX.toRows(result.data));
+    const { spawn: pipeSpawn } = await import('node:child_process');
+    const shell = process.platform === 'win32' ? 'cmd' : '/bin/sh';
+    const shellArgs = process.platform === 'win32' ? ['/c', pipeCmd] : ['-c', pipeCmd];
+    const child = pipeSpawn(shell, shellArgs, { stdio: ['pipe', 'inherit', 'inherit'] });
+    child.stdin.write(tableText);
+    child.stdin.end();
+    const pipeCode = await new Promise<number>((res) => child.on('close', (cc) => res(cc ?? 0)));
+    if (pipeCode !== 0) {
+      process.stderr.write(c.yellow(`… 管道命令退出码 ${pipeCode}\n`));
+      return pipeCode;
+    }
+    return 0;
   }
   // 第一百二十四轮①：--profile 耗时行在所有输出路径统一收尾打印（截断/格式化分支不走 printRunResult）
   if (profile && result.timing && !quiet) {
