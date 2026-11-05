@@ -9,6 +9,15 @@ import type { AuditRecord } from './runner.ts';
 export const AUDIT_LOG = () => path.join(LOG_DIR, 'audit.log');
 export const DENIED_LOG = () => path.join(LOG_DIR, 'denied.log');
 
+/** 读全部拒绝记录（denied.log，与 audit 同构；文件不存在返回空数组）。 */
+export function readDenied(): AuditRecord[] {
+  try {
+    return fs.readFileSync(DENIED_LOG(), 'utf8').split('\n')
+      .filter((l) => l.trim())
+      .map((l) => JSON.parse(l) as AuditRecord);
+  } catch { return []; }
+}
+
 /** 读全部审计记录（文件不存在返回空数组；坏行跳过并计数的场景用 readAuditDetailed）。 */
 export function readAudit(): AuditRecord[] {
   return readAuditDetailed().records;
