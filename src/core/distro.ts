@@ -276,7 +276,7 @@ export function packPlugin(id: string, outDir?: string): PackResult {
 }
 
 /** 第六十二轮①：打包带完整性清单。返回 [zip字节, 清单文本]。 */
-export function packPluginWithManifest(id: string, outDir?: string): PackResult & { integrity?: string } {
+export async function packPluginWithManifest(id: string, outDir?: string): Promise<PackResult & { integrity?: string }> {
   const dir = path.join(PLUGINS_DIR, id);
   if (!fs.existsSync(dir)) return { ok: false, message: `插件 ${id} 没有安装（${dir} 不存在）` };
   const files: Array<{ name: string; data: Buffer }> = [];
@@ -300,11 +300,26 @@ export function packPluginWithManifest(id: string, outDir?: string): PackResult 
   if (!files.some((f) => f.name === 'plugin.toml')) {
     return { ok: false, message: '插件目录里没有 plugin.toml，不像是可安装的插件' };
   }
+  // 第一百四十四轮⑦：没有 README 的插件打包时自动补一份（从 lintdoc 的 docPlugin 生成，
+  // 安装方解包即有动作说明）——有 README 的不动作者的
+  if (!files.some((f) => f.name.toLowerCase() === 'readme.md')) {
+    try {
+      const { loadPlugin } = await import('./manifest.ts');
+      const { docPlugin } = await import('./lintdoc.ts');
+      const loaded = loadPlugin(dir);
+      if (loaded.plugin) {
+        files.push({ name: 'README.md', data: Buffer.from(docPlugin(loaded.plugin), 'utf8') });
+        files.sort((a, b) => a.name.localeCompare(b.name));
+      }
+    } catch { /* 生成失败不挡打包 */ }
+  }
   const manifest = buildManifest(files);
   const all = [...files, { name: INTEGRITY_FILE, data: Buffer.from(manifest, 'utf8') }];
   const total = crypto.createHash('sha256').update(manifest).digest('hex');
   const buf = zipFiles(all);
-  const out = path.join(outDir ?? process.cwd(), `zerokit-${id}.zip`);
+  const outDirFinal = outDir ?? process.cwd();
+  fs.mkdirSync(outDirFinal, { recursive: true });
+  const out = path.join(outDirFinal, `zerokit-${id}.zip`);
   fs.writeFileSync(out, buf);
   return { ok: true, file: out, files: all.map((f) => f.name), bytes: buf.length, integrity: `sha256-${total}` };
 }

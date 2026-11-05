@@ -19,6 +19,8 @@ export interface LintFinding {
   /** 涉及对象：插件本身或某个动作/设置项 */
   target: string;
   message: string;
+  /** 第一百四十四轮④：一句「怎么改」——lint 不只说错了，还给出手 */
+  fixHint?: string;
 }
 
 const RISK_HINTS: ReadonlyArray<{ re: RegExp; min: RiskLevelOf }> = [
@@ -33,15 +35,34 @@ function riskRank(r: RiskLevelOf): number {
 }
 
 /** 主体体检：输入已加载的插件，输出体检发现（不含加载失败——那由调用方报）。 */
+/**
+ * 每条规则的修复指引（第一百四十四轮④）：lint 不只说错了，还告诉作者怎么改。
+ * keyed by rule id（L01…），渲染层取不到就省略。
+ */
+export const FIX_HINTS: Record<string, string> = {
+  L01: '在 [plugin] 段写长 description（三引号字符串），它是插件主页正文',
+  L02: '[plugin] 段加 keywords 数组，拼音与模糊搜索都吃它',
+  L03: '把动作 description 写到 8 字以上，说清什么时候用这个动作',
+  L04: '动作下加 [action.match] 表（type/fills/label），试一试与文档示例靠它预填',
+  L05: 'match.fills 只能引用同一动作里声明过的参数名',
+  L06: '要么把 risk 提到匹配档位，要么把标题/描述改得不像危险操作',
+  L07: 'run 里的 {xxx} 占位符必须在 [[action.param]] 声明同名参数',
+  L08: '给动作写 exampleShape（示例 JSON 字符串），启动器能预览输出形状',
+  L09: '补全后再跑一次 zkit plugin lint',
+  L10: '[plugin] 段写 license = "MIT" 等标识，集市与打包都认它',
+  L11: '声明了 ui 就要至少有一个 render = "web" 的动作',
+  L12: '涉密参数改走 [[setting]]（secret = true），不要明文进命令行',
+};
+
 export function lintPlugin(p: Plugin): LintFinding[] {
   const out: LintFinding[] = [];
   const actionIds = new Set(p.actions.map((a) => a.id));
 
   // L01 插件级：描述太薄（summary 是搜索与模型路由的一句话；description 是长说明，可选）
   if (!p.summary || p.summary.length < 8) {
-    out.push({ rule: 'L01', severity: 'warn', target: p.id, message: '插件 summary 太短（少于 8 字）——它出现在搜索结果与 AI 路由里，值得写清楚它解决什么问题' });
+    out.push({ rule: 'L01', severity: 'warn', target: p.id, message: '插件 summary 太短（少于 8 字）——它出现在搜索结果与 AI 路由里，值得写清楚它解决什么问题', fixHint: '把 [plugin] 段的 summary 写到 8 字以上：解决什么问题、给谁用' });
   } else if (!p.description || p.description.length < 20) {
-    out.push({ rule: 'L01', severity: 'info', target: p.id, message: '没写长 description（插件主页的正文）——写了会让插件主页更完整' });
+    out.push({ rule: 'L01', severity: 'info', target: p.id, message: '没写长 description（插件主页的正文）——写了会让插件主页更完整', fixHint: '在 [plugin] 段写长 description（三引号字符串），它是插件主页正文' });
   }
   // L02 插件级：没有 keywords
   if (!p.keywords || p.keywords.length === 0) {
@@ -119,7 +140,7 @@ export function lintPlugin(p: Plugin): LintFinding[] {
       out.push({ rule: 'L12', severity: 'warn', target: `${p.id}.${a.id}`, message: `动作声明了 sandbox，但 env 里出现疑似敏感键 ${suspicious.join('、')}——口令应走 [[setting]] 声明（掩码存储），不该在清单里写明文` });
     }
   }
-  return out.sort((x, y) => RISK_ORDER.indexOf(x.severity) - RISK_ORDER.indexOf(y.severity));
+  return out.map((f) => ({ ...f, fixHint: f.fixHint ?? FIX_HINTS[f.rule] })).sort((x, y) => RISK_ORDER.indexOf(x.severity) - RISK_ORDER.indexOf(y.severity));
 }
 
 const RISK_ORDER: readonly LintSeverity[] = ['error', 'warn', 'info'];

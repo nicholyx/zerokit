@@ -195,7 +195,7 @@ risk        = "read"
   const cb = fs.readFileSync(path.join(PKG_ROOT, 'docs/reference/cookbook.md'), 'utf8');
   const headings = [...cb.matchAll(/^## \d+\./gm)].length;
   check('cookbook：十篇齐全且都带示例代码块',
-    headings === 10 && (cb.match(/```/g) ?? []).length >= 20, `headings=${headings}`);
+    headings === 11 && (cb.match(/```/g) ?? []).length >= 20, `headings=${headings}`);
 }
 
 // ---------------------------------------------------------------- 收尾

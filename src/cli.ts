@@ -18,7 +18,7 @@ import {
   addFromDir, addFromGit, devLink, exportPlugin, findPlugin, importPlugin, installBundled,
   installBundledPlugin, listPlugins, loadDir, removePlugin, requirePlugin,
 } from './core/registry.ts';
-import { type ScaffoldExample, type ScaffoldRuntime, scaffoldPlugin } from './core/scaffold.ts';
+import { type ScaffoldExample, type ScaffoldRuntime, scaffoldPlugin, copyManifestFrom } from './core/scaffold.ts';
 import { applyUpdate, checkUpdate, listUpdateStates } from './core/update.ts';
 import { installSummary, uninstallPreview, upgradeDiff, versionGap, appendInstallHistory, readInstallHistory } from './core/install115.ts';
 import { fullUpgradeDiff, rugpullCheck } from './core/update116.ts';
@@ -1418,6 +1418,22 @@ async function cmdPlugin(args: string[]): Promise<number> {
       process.stderr.write(c.red(`✗ --example 只支持 chain / setting / http，收到 "${exampleFlag}"\n`));
       return 2;
     }
+    // 第一百四十四轮⑤：--from <目录> 从现有插件清单复制起步（换 id/name 即可）
+    const fromDir = flag('from');
+    if (fromDir) {
+      const copied = copyManifestFrom(fromDir, id, flag('name'));
+      if (!copied.ok) { process.stderr.write(c.red(`✗ ${copied.message}\n`)); return 1; }
+      const parent = path.resolve(flag('dir') ?? '.');
+      const target = path.join(parent, id);
+      try {
+        if (fs.existsSync(target)) { process.stderr.write(c.red(`✗ ${target} 已存在\n`)); return 1; }
+        fs.mkdirSync(target, { recursive: true });
+        fs.writeFileSync(path.join(target, 'plugin.toml'), copied.manifest, 'utf8');
+      } catch (e) { process.stderr.write(c.red(`✗ 写入失败：${String(e)}\n`)); return 1; }
+      process.stdout.write(c.green(`✓ 已从 ${fromDir} 复制清单到 ${target}（id=${id}${flag('name') ? '，name=' + flag('name') : ''}）\n`));
+      process.stdout.write(c.dim('  下一步：把源目录的实现文件（脚本/资源）一并拷过来，然后 zkit plugin dev 起步\n'));
+      return 0;
+    }
     const r = scaffoldPlugin(id, {
       name: flag('name'),
       // 第六十八轮⑧：--author/--description 免得装完不知道谁写的/干嘛的
@@ -1741,7 +1757,7 @@ async function cmdPlugin(args: string[]): Promise<number> {
     return result.ok ? 0 : 1;
   }
   // ---- 第三十四轮：分发与市场工具 ----
-  if (sub === 'pack') return cmdPluginPack(args.slice(1));
+  if (sub === 'pack') return await cmdPluginPack(args.slice(1));
   if (sub === 'unpack') return cmdPluginUnpack(args.slice(1));
   if (sub === 'verify') return cmdPluginVerify(args.slice(1));
   // 第一百三十七轮⑥：装机自检跑一次并出结论
@@ -1786,7 +1802,11 @@ function cmdPluginLint(args: string[]): number {
     return 0;
   }
   const icon: Record<string, string> = { error: c.red('✗ error'), warn: c.yellow('! warn '), info: c.dim('· info ') };
-  for (const f of findings) process.stdout.write(`  ${icon[f.severity]}  ${c.dim(f.rule)} ${f.target}：${f.message}\n`);
+  for (const f of findings) {
+    process.stdout.write(`  ${icon[f.severity]}  ${c.dim(f.rule)} ${f.target}：${f.message}\n`);
+    // 第一百四十四轮④：修复指引跟在每条发现后面（作者不用翻文档查怎么改）
+    if (f.fixHint) process.stdout.write(c.dim(`      → 怎么改：${f.fixHint}\n`));
+  }
   const errs = findings.filter((f) => f.severity === 'error').length;
   const warns = findings.filter((f) => f.severity === 'warn').length;
   process.stdout.write(c.dim(`  共 ${findings.length} 项（error ${errs} / warn ${warns} / info ${findings.length - errs - warns}）\n`));
@@ -1809,6 +1829,17 @@ function cmdPluginDoc(args: string[]): number {
     if (!res.plugin) { process.stderr.write(c.red(`✗ ${res.errors.join('; ')}\n`)); return 1; }
     plugin = res.plugin;
   }
+  // 第一百四十四轮③：--md <file> 把 Markdown 文档直接落盘（作者拿去放自己仓库 docs/）
+  const mdIdx = args.indexOf('--md');
+  if (mdIdx >= 0) {
+    const file = args[mdIdx + 1];
+    if (!file || file.startsWith('--')) { process.stderr.write('用法：zkit plugin doc <id> --md <输出.md>\n'); return 2; }
+    try {
+      fs.writeFileSync(path.resolve(file), docPlugin(plugin), 'utf8');
+      process.stdout.write(c.green(`✓ 文档已写入 ${path.resolve(file)}（${plugin.actions.length} 个动作）\n`));
+      return 0;
+    } catch (e) { process.stderr.write(c.red(`✗ 写入失败：${String(e)}\n`)); return 1; }
+  }
   if (args.includes('--json')) {
     process.stdout.write(JSON.stringify(docPluginJson(plugin), null, 2) + '\n');
   } else {
@@ -1821,7 +1852,7 @@ function cmdPluginDoc(args: string[]): number {
 const loadPluginRef = await import('./core/manifest.ts');
 
 /** ①③zkit plugin pack <id> [--out 目录] [--list-only]：打包/清单。 */
-function cmdPluginPack(args: string[]): number {
+async function cmdPluginPack(args: string[]): Promise<number> {
   const id = args.find((a) => !a.startsWith('-'));
   if (!id) {
     process.stderr.write('用法：zkit plugin pack <id> [--out 目录] [--list-only 只看清单不落盘]\n');
@@ -1831,14 +1862,14 @@ function cmdPluginPack(args: string[]): number {
   if (args.includes('--list-only')) {
     // 只列文件不打包：先 pack 到临时目录再删——简单直接，pack 本身很快
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'zkit-pack-'));
-    const r = packPlugin(id, tmp);
+    const r = await packPlugin(id, tmp);
     fs.rmSync(tmp, { recursive: true, force: true });
     if (!r.ok) { process.stderr.write(c.red(`✗ ${r.message}\n`)); return 1; }
     process.stdout.write(`${id} 将打包 ${r.files?.length} 个文件（约 ${r.bytes} 字节）：\n`);
     for (const f of r.files ?? []) process.stdout.write(c.dim(`  ${f}\n`));
     return 0;
   }
-  const r = packPlugin(id, outIdx >= 0 ? args[outIdx + 1] : undefined);
+  const r = await packPlugin(id, outIdx >= 0 ? args[outIdx + 1] : undefined);
   if (!r.ok) { process.stderr.write(c.red(`✗ ${r.message}\n`)); return 1; }
   const r2 = r as { integrity?: string };
   process.stdout.write(c.green(`✓ ${r.file}（${r.files?.length} 个文件，${r.bytes} 字节）\n`));
@@ -1928,13 +1959,27 @@ function cmdPublishReady(args: string[]): number {
   }
   const plug: Plugin = plugin;
   const r = publishReady(id, plug);
+  // 第一百四十四轮⑧：doctor 式逐项汇总（通过项也列出来，作者看得见差距全貌）
+  const checks: Array<{ name: string; state: 'ok' | 'warn' | 'error' }> = [];
+  const errTexts = r.problems.filter((x) => x.level === 'error').map((x) => x.text);
+  const warnTexts = r.problems.filter((x) => x.level !== 'error').map((x) => x.text);
+  const has = (frag: string) => [...errTexts, ...warnTexts].some((t) => t.includes(frag));
+  checks.push({ name: '清单可加载', state: 'ok' });
+  checks.push({ name: '版本号语义化', state: has('版本号') ? (errTexts.some((t) => t.includes('版本号')) ? 'error' : 'warn') : 'ok' });
+  checks.push({ name: '动作都有 risk', state: has('risk') ? 'error' : 'ok' });
+  checks.push({ name: '描述与关键词', state: has('summary') || has('keywords') || has('description') ? 'warn' : 'ok' });
+  checks.push({ name: '打包可用', state: 'ok' });
+  const mark = { ok: c.green('✓'), warn: c.yellow('!'), error: c.red('✗') };
+  process.stdout.write(c.bold(`上架自查：${plug.name}（${plug.id}）\n`));
+  for (const ck of checks) process.stdout.write(`  ${mark[ck.state]} ${ck.name}\n`);
   for (const p of r.problems) {
-    const mark = p.level === 'error' ? c.red('✗') : c.yellow('!');
-    process.stdout.write(`${mark} ${p.text}${p.hint ? c.dim(`（${p.hint}）`) : ''}\n`);
+    const mk = p.level === 'error' ? c.red('✗') : c.yellow('!');
+    process.stdout.write(`    ${mk} ${p.text}${p.hint ? c.dim(`（${p.hint}）`) : ''}\n`);
   }
-  if (r.ok && r.problems.length === 0) process.stdout.write(c.green(`✓ ${plug.name} 达到上架标准\n`));
-  else if (r.ok) process.stdout.write(c.yellow(`! 可以上架，但有 ${r.problems.length} 条建议先处理\n`));
-  else process.stdout.write(c.red(`✗ ${r.problems.filter((x) => x.level === 'error').length} 个硬伤，先修再上架\n`));
+  const okN = checks.filter((x) => x.state === 'ok').length;
+  if (r.ok && r.problems.length === 0) process.stdout.write(c.green(`✓ ${plug.name} 达到上架标准（${okN}/${checks.length} 项全过）\n`));
+  else if (r.ok) process.stdout.write(c.yellow(`! 可以上架（${okN}/${checks.length} 项过，${r.problems.length} 条建议先处理）\n`));
+  else process.stdout.write(c.red(`✗ ${errTexts.length} 个硬伤（${okN}/${checks.length} 项过），先修再上架\n`));
   return r.ok ? 0 : 1;
 }
 
