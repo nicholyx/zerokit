@@ -209,3 +209,83 @@ export function orphanTimers(installedIds: string[]): string[] {
     .filter((t) => !ids.has(t.key.split('.')[0] ?? ''))
     .map((t) => t.key);
 }
+
+/* ===================== 第一百三十八轮：执行历史与可观测 ===================== */
+
+/** 单次执行记录：触发时间 / 成败 / 耗时 / 输出快照（截断）。 */
+export interface TimerRun {
+  /** actionKey */
+  key: string;
+  ts: number;
+  ok: boolean;
+  ms: number;
+  /** stdout 快照（截 2KB——够看清结果形状，不至于把文件写爆） */
+  out: string;
+  /** 失败时错误信息（首行级） */
+  err: string;
+  /** 触发来源：auto（到点）/ manual（现在跑）/ catchup（补跑） */
+  why?: 'auto' | 'manual' | 'catchup';
+}
+
+export interface RunsFile {
+  version: 1;
+  /** 全部任务的执行记录混存一张表（按 key 过滤）；封顶 20 条/任务 */
+  runs: TimerRun[];
+}
+
+const RUNS_CAP = 20;
+const OUT_CAP = 2048;
+
+function runsPath(): string {
+  return path.join(HOME, 'timer-runs.json');
+}
+
+/** 读执行历史（坏文件不炸）。 */
+export function loadRuns(): RunsFile {
+  try {
+    const raw = JSON.parse(fs.readFileSync(runsPath(), 'utf8')) as RunsFile;
+    if (raw && Array.isArray(raw.runs)) return raw;
+  } catch { /* 首次/坏文件 → 空 */ }
+  return { version: 1, runs: [] };
+}
+
+/** 追加一条执行记录并按任务封顶（纯函数——不落盘，调用方决定 save）。 */
+export function appendTimerRun(file: RunsFile, key: string, r: Omit<TimerRun, 'key' | 'ts'> & { ts?: number }): void {
+  file.runs.push({ key, ts: r.ts ?? Date.now(), ok: r.ok, ms: r.ms, out: r.out.slice(0, OUT_CAP), err: r.err, why: r.why });
+  file.runs = trimRuns(file);
+}
+
+/** 每任务封顶 RUNS_CAP（保留最新）。 */
+export function trimRuns(file: RunsFile): TimerRun[] {
+  const byKey = new Map<string, TimerRun[]>();
+  for (const run of file.runs) {
+    const list = byKey.get(run.key) ?? [];
+    list.push(run);
+    byKey.set(run.key, list);
+  }
+  const out: TimerRun[] = [];
+  for (const list of byKey.values()) out.push(...list.slice(-RUNS_CAP));
+  out.sort((a, b) => a.ts - b.ts);
+  return out;
+}
+
+/** 取某任务的历史（新→旧）。 */
+export function runsForTimer(file: RunsFile, key: string): TimerRun[] {
+  return file.runs.filter((r) => r.key === key).reverse();
+}
+
+/** 人读摘要行：✓ 12ms 有输出 / ✗ 错误首行。 */
+export function runSummaryLine(run: TimerRun): string {
+  const when = new Date(run.ts).toLocaleString();
+  if (run.ok) return `✓ ${when} · ${run.ms}ms · 输出 ${run.out.length} 字符`;
+  const firstErr = run.err.split('\n')[0] ?? run.err;
+  return `✗ ${when} · ${run.ms}ms · ${firstErr}`;
+}
+
+/** 落盘（原子写）。 */
+export function saveRuns(file: RunsFile): void {
+  ensureDirs();
+  const tmp = `${runsPath()}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(file), 'utf8');
+  fs.renameSync(tmp, runsPath());
+}

@@ -2098,3 +2098,13 @@ td.gsum-label { font-weight: 600; }
 /* ---- 第一百三十五轮：壳内升级横幅 ---- */
 .update-bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; margin: 8px 0; border-radius: 10px; background: color-mix(in srgb, var(--accent, #4f7cff) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent, #4f7cff) 35%, transparent); font-size: 13px; }
 .update-bar a { font-weight: 600; }
+
+/* ===================== 第一百三十八轮：定时任务执行历史 ===================== */
+.timer-hist-run { margin: 4px 0; border-left: 2px solid var(--sp-1, #8884); padding-left: 8px; }
+.timer-hist-run summary { cursor: pointer; font-size: 12px; opacity: 0.9; }
+.timer-hist-run[open] summary { opacity: 1; }
+.timer-hist-out { margin: 4px 0 2px; padding: 6px 8px; background: var(--mono-bg, #8881); border-radius: 6px;
+  font-family: var(--mono, monospace); font-size: 11px; white-space: pre-wrap; word-break: break-all; max-height: 160px; overflow: auto; }
+.timer-hist-out.err { color: var(--danger, #d33); }
+.timer-hist-line.dim { opacity: 0.6; }
+.timer-row .risk-dot { flex: none; margin-left: 2px; }

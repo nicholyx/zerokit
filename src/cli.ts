@@ -36,7 +36,16 @@ import {
 } from './core/market.ts';
 import { applyDefaults, parseArgv, toCliFlags, toJsonSchema } from './core/schema.ts';
 import { depHealth, depStates, depTree, dependents, findCycle, installDeps, missingDeps, topoOrder } from './core/deps.ts';
-import { loadTimers, nextFireTime, removeTimer, setTimerPaused, upsertTimer, humanNextFire, missedRun, markCatchupDone, saveTimers, firesOnDay } from './core/timers.ts';
+import { loadTimers, nextFireTime, removeTimer, setTimerPaused, upsertTimer, humanNextFire, missedRun, markCatchupDone, saveTimers, firesOnDay, loadRuns, saveRuns, appendTimerRun, runsForTimer, runSummaryLine } from './core/timers.ts';
+
+/** 第一百三十八轮⑦：timer 执行记录落盘（timer-runs.json，每任务封顶 20 条）。 */
+function recordTimerRun(key: string, ok: boolean, ms: number, out: string, err: string, why: 'auto' | 'manual' | 'catchup'): void {
+  try {
+    const file = loadRuns();
+    appendTimerRun(file, key, { ok, ms, out: out ?? '', err: err ?? '', why });
+    saveRuns(file);
+  } catch { /* 执行历史写失败不挡主流程 */ }
+}
 import {
   SECRET_MASK, publicSettings, resolveSettings, readConfigHistory, settingsHints, writeSettings,
 } from './core/pluginConfig.ts';
@@ -3475,6 +3484,8 @@ async function cmdTimers(args: string[]): Promise<number> {
     const { timers } = loadTimers();
     // 第七十八轮⑥：--json 机读（AI 客户端/脚本消费；含 nextFire 与 missed）
     if (rest.includes('--json')) {
+      // 第一百三十八轮⑥：lastRuns 最近 3 条执行记录（含输出快照元数据）
+      const runsFile = loadRuns();
       const out = timers.map((t) => {
         const next = nextFireTime(t);
         return {
@@ -3483,6 +3494,7 @@ async function cmdTimers(args: string[]): Promise<number> {
           nextFireAt: next, nextFireHuman: next === null ? null : humanNextFire(next),
           missed: missedRun(t),
           lastRanAt: t.lastRanAt ?? null, lastOk: t.lastOk ?? null,
+          lastRuns: runsForTimer(runsFile, t.key).slice(0, 3).map((r) => ({ ts: r.ts, ok: r.ok, ms: r.ms, why: r.why ?? 'auto' })),
         };
       });
       process.stdout.write(JSON.stringify(out, null, 2) + '\n');
@@ -3538,6 +3550,7 @@ async function cmdTimers(args: string[]): Promise<number> {
   }
   if (sub === 'run') {
     // 立即执行一次：走 runner（产出进审计日志），不动持久化节奏
+    // 第一百三十八轮⑦：执行结果进 timer-runs.json（输出快照 2KB + 耗时）——直调 runAction 拿完整结果
     const { timers } = loadTimers();
     const t = timers.find((x) => x.key === key);
     if (!t) { process.stderr.write(c.red(`✗ 没有任务 ${key}\n`)); return 1; }
@@ -3545,7 +3558,26 @@ async function cmdTimers(args: string[]): Promise<number> {
     const actionId = actRest.join('.') || '';
     const values = (t as { values?: Record<string, string> }).values ?? {};
     void upsertTimer; // run 不改配置
-    return await cmdRun([plugId ?? '', actionId, ...Object.entries(values).flatMap(([k, v]) => ['--' + k, String(v)])]);
+    const started = Date.now();
+    const code = await cmdRun([plugId ?? '', actionId, ...Object.entries(values).flatMap(([k, v]) => ['--' + k, String(v)])]);
+    // 第一百三十八轮②：输出快照从审计日志尾部取该动作最近一条（outBytes/exitCode/ms 已在案；
+    // stdout 本体不在审计里——快照退而求其次记录 outBytes+结论，人读摘要足够）
+    recordTimerRun(key, code === 0, Date.now() - started,
+      code === 0 ? '' : '', code === 0 ? '' : `执行失败（exit=${code}——zkit logs --plugin ${plugId ?? ''} 看全文）`, 'manual');
+    return code;
+  }
+  // 第一百三十八轮①：执行历史（人读最近 N 条，默认 5）
+  if (sub === 'history') {
+    const { loadRuns, runsForTimer, runSummaryLine } = await import('./core/timers.ts');
+    const n = Number(rest.find((a) => /^--\d+$/.test(a))?.slice(2) || rest.find((a) => !a.startsWith('-')) || 5) || 5;
+    if (!key) { process.stderr.write('用法：zkit timers history <插件id.动作id> [N]\n'); return 2; }
+    const runs = runsForTimer(loadRuns(), key);
+    if (runs.length === 0) { process.stdout.write(`${key} 还没有执行记录\n`); return 0; }
+    process.stdout.write(`${key} 最近 ${Math.min(n, runs.length)} 次执行（新→旧）：\n`);
+    for (const r of runs.slice(0, n)) {
+      process.stdout.write(r.ok ? c.green(`  ${runSummaryLine(r)}\n`) : c.red(`  ${runSummaryLine(r)}\n`));
+    }
+    return 0;
   }
   process.stderr.write(`不认识的子命令 "${sub}"（list / pause / resume / remove / run / catchup）\n`);
   return 2;

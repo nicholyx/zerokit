@@ -3646,11 +3646,17 @@ function showTimers() {
   });
 }
 
-/** 面板行渲染：独立函数以便执行后局部刷新（不整页重画）。 */
-function renderTimersRows() {
+/** 面板行渲染：独立函数以便执行后局部刷新（不整页重画）。
+ * 第一百三十八轮：叠加持久化执行史（timer-runs.json 经 /api/timer-runs）——
+ * 会话内 history 只记成败，持久层还带输出快照与触发来源。 */
+async function renderTimersRows() {
   const host = document.getElementById('timersRows');
   if (!host) return;
   const reg = timerRegistry();
+  // 持久执行史（拉不到不挡面板——按空处理）
+  let savedRuns = [];
+  try { savedRuns = (await api('/api/timer-runs')).runs ?? []; } catch { /* 旁路 */ }
+  const runsOf = (k) => savedRuns.filter((r) => r.key === k).slice().reverse();
   const rows = Object.entries(reg).map(([k, tm]) => {
     const hist = tm.history ?? [];
     const last = hist[hist.length - 1];
@@ -3658,15 +3664,20 @@ function renderTimersRows() {
       : last.ok === null ? `跳过（${esc(last.why ?? '')}）`
       : last.ok ? `✓ ${new Date(last.ts).toLocaleTimeString()}`
       : `✗ ${new Date(last.ts).toLocaleTimeString()} ${esc(last.why ?? '')}`;
+    // 第一百三十八轮③：最近一次失败 → 红点显眼（不用点开就知道坏了）
+    const saved = runsOf(k);
+    const lastSaved = saved[0];
+    const failDot = lastSaved && lastSaved.ok === false ? '<span class="risk-dot" data-risk="destructive" title="最近一次执行失败"></span>' : '';
+    const histN = saved.length;
     return `
     <div class="run-row timer-row" data-tk="${esc(k)}">
-      <span class="badge">⏱</span>
+      <span class="badge">⏱</span>${failDot}
       <span class="run-when">${esc(tm.title)}（每 ${esc(String(tm.interval))} 秒${tm.win ? ` · 窗口 ${esc(tm.win)}` : ''}${tm.paused ? ' · 已暂停' : ''}）</span>
       <span class="timer-next" title="下次触发">${tm.paused ? '—' : nextRunLabel(tm.nextAt ?? Date.now())}</span>
       <span class="timer-last" title="最近一次">${lastTxt}</span>
       <button class="ghost mini" data-trun="${esc(k)}" title="立即跑一次，不影响节奏">现在跑</button>
       <button class="ghost mini" data-tpause="${esc(k)}">${tm.paused ? '恢复' : '暂停'}</button>
-      <button class="ghost mini" data-thist="${esc(k)}" title="最近 10 次">历史</button>
+      <button class="ghost mini" data-thist="${esc(k)}" title="持久史 ${histN} 条 + 会话史 10 条">历史${histN ? `（${histN}）` : ''}</button>
       <button class="ghost mini" data-stop="${esc(k)}">停止</button>
     </div>`;
   }).join('');
@@ -3685,7 +3696,15 @@ function renderTimersRows() {
   host.querySelectorAll('[data-thist]').forEach((b) => b.addEventListener('click', () => {
     const tm = timerRegistry()[b.dataset.thist];
     if (!tm) return;
-    const lines = (tm.history ?? []).slice().reverse().map((h) =>
+    // 第一百三十八轮①②：持久史（输出快照可展开）在前，会话史补尾
+    const saved = runsOf(b.dataset.thist);
+    const savedLines = saved.map((h) => `
+      <details class="timer-hist-run">
+        <summary>${h.ok ? '✓' : '✗'} ${new Date(h.ts).toLocaleString()} · ${esc(String(h.ms ?? '?'))}ms · ${esc(h.why ?? 'auto')}</summary>
+        ${h.out ? `<pre class="timer-hist-out">${esc(h.out)}</pre>` : '<div class="timer-hist-line dim">（无输出快照）</div>'}
+        ${h.err ? `<pre class="timer-hist-out err">${esc(h.err)}</pre>` : ''}
+      </details>`).join('');
+    const lines = savedLines + (tm.history ?? []).slice().reverse().map((h) =>
       `<div class="timer-hist-line">${h.ok === null ? '⏭' : h.ok ? '✓' : '✗'} ${new Date(h.ts).toLocaleString()} ${esc(h.why ?? '')}</div>`).join('');
     const row = b.closest('.timer-row');
     const old = row?.querySelector('.timer-hist');
