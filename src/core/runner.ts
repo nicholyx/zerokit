@@ -537,19 +537,24 @@ let timedOut = false;
       clearTimeout(timer);
       stdout += outDecoder.end();
       stderr += errDecoder.end();
-      spill?.end();
-      opts.signal?.removeEventListener('abort', onAbort);
       const timing = { spawnMs, firstByteMs: firstByteMs || (Date.now() - t0), totalMs: Date.now() - t0 };
       // 第一百二十四轮⑤：超时/溢出被杀时保留已收到的部分输出——用户不该因为超时
       // 损失已经产出的内容（比如跑了 9 秒的进度日志，超时在 10 秒那一刻）
       const killed = timedOut || outputOverflow;
-      resolve({
+      const resolveWith = () => resolve({
         exitCode: code, stdout, stderr, truncated, timedOut,
         timing,
         ...(killed && stdout ? { partial: stdout } : {}),
         ...(artifactPath ? { artifactPath } : {}), ...(stopped ? { stopped } : {}),
         ...(outputOverflow ? { outputOverflow } : {}),
       });
+      // 第一百四十七轮②：spill 是异步流，end() 不等落盘——CLI 路径 resolve 后
+      // 立即 process.exit，大输出（2MB 级）还在内核缓冲里没写到磁盘，下游读
+      // 文件会读到 0 字节（并发 3×2MB 实测第 3 个文件 0.0MB）。有溢出时挂
+      // finish 回调再 resolve，保证返回时落盘文件完整。
+      if (spill) { spill.end(resolveWith); return; }
+      opts.signal?.removeEventListener('abort', onAbort);
+      resolveWith();
     });
   });
 }
