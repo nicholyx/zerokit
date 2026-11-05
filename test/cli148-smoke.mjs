@@ -57,9 +57,15 @@ const rows = [
 
 // ④⑤ 组合链（CLI 实跑）：where 过滤后 calc 作用在过滤结果上
 {
-  const r = run(['sysinfo', 'top', '--head', '8', '--where', '内存>1000', '--calc', '标记=1', '--pick', '进程,标记']);
+  // 列名三平台差异（Linux 是「内存占用」）：用 PID 列——三平台同名
+  const r = run(['sysinfo', 'top', '--head', '8', '--where', 'PID>=0', '--calc', '标记=PID*2', '--pick', 'PID,标记']);
   const all = r.stdout + r.stderr;
-  check('④⑤ 组合链 CLI', r.status === 0 && all.includes('进程') && all.includes('标记'), all.slice(0, 80));
+  check('④⑤ 组合链 CLI', r.status === 0 && all.includes('PID') && all.includes('标记'), all.slice(0, 80));
+  const rowsOut = (r.stdout ?? '').split('\n').filter((l) => /^\s*\d+/.test(l));
+  const first = rowsOut[0] ?? '';
+  const pidN = Number((first.trim().split(/\s+/)[0] ?? '0'));
+  const markN = Number((first.trim().split(/\s+/)[1] ?? '0'));
+  check('④⑤ calc 引用过滤后行值', markN === pidN * 2, first);
 }
 
 // ⑥ --pipe
