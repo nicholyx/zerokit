@@ -174,6 +174,19 @@ risk = "destructive"  # 不可逆，必须 --yes / 显式确认
 
 MCP 侧还有第二道闸：有副作用的动作默认拒绝，`zkit mcp allow <插件>.<动作>` 显式授权。
 
+## 11. 发布前自查清单
+
+打包前逐项过一遍，全都 ✓ 再 `zkit plugin publish-ready`：
+
+- [ ] `zkit plugin lint <id>` 零告警（每条告警都带「怎么改」指引）
+- [ ] 每个动作的 `description` 写清「什么时候用」，不只是「是什么」
+- [ ] `risk` 如实声明（`read` / `mutate` / `destructive`——宁可高报不低报）
+- [ ] 参数有 `default` / `options` 的都补上，`secret = true` 的绝不进示例
+- [ ] `timeout` 按真实耗时声明（长任务别裸奔默认 60s）
+- [ ] README 存在（没有的话 `zkit plugin pack` 会自动补一份文档，但自己写的更准）
+- [ ] `zkit plugin doc <id>` 生成的文档读一遍——那是安装方看到的样子
+- [ ] `zkit plugin publish-ready <id>` 5/5 全过
+
 ## 10. 打包分发
 
 ```bash

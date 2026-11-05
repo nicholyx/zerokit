@@ -9,7 +9,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { ID_RE } from './manifest.ts';
+import { loadPlugin, ID_RE } from './manifest.ts';
 import { type LoadResult } from './manifest.ts';
 import { loadDir } from './registry.ts';
 
@@ -83,6 +83,7 @@ name     = "${name}"
 version  = "0.1.0"
 summary  = "__SUMMARY__"
 keywords = ["${id}"]
+description = '''把这句换成长一点的介绍：这个插件解决什么问题、适合谁用。会显示在插件主页正文（没写的主页只有摘要）。'''
 
 ${requires}\
 # ---------------------------------------------------------------- 动作
@@ -103,6 +104,14 @@ ${web ? '# render = "web"：结果交给本插件 web/index.html 渲染（富交
   type        = "string"
   default     = "世界"
   description = "要问候的名字"
+
+  # match 示例：启动器「试一试」与文档示例靠它预填——从用户输入（比如粘贴的
+  # 文本）里捕出参数值自动填表。type 可选 url / files / regex / text，fills
+  # 指向上面声明的参数名。
+  [action.match]
+  type  = "text"
+  fills = "name"
+  label = "名字"
 `;
 }
 
@@ -213,6 +222,31 @@ const EXAMPLE_MANIFESTS: Record<ScaffoldExample, { files: Record<string, string>
 };
 
 /** 生成插件骨架。目录已存在时拒绝（绝不覆盖任何已有文件）。 */
+
+/**
+ * 第一百四十四轮⑤：--from 起步——从现有插件的清单复制改 id/name。
+ * 返回改写后的 manifest 文本（其余键原样保留），供 scaffold 流程落盘。
+ */
+export function copyManifestFrom(source: string, newId: string, newName?: string): { ok: true; manifest: string } | { ok: false; message: string } {
+  const src = source.replace(/\.toml$/, '');
+  let raw: string;
+  try {
+    raw = fs.readFileSync(path.join(src, 'plugin.toml'), 'utf8');
+  } catch {
+    return { ok: false, message: `读不到 ${path.join(src, 'plugin.toml')}——--from 需要指向一个插件目录` };
+  }
+  const load = loadPlugin(src);
+  if (!load.plugin) return { ok: false, message: `源插件清单没过校验：${load.errors.join('；')}` };
+  const oldId = load.plugin.id;
+  // id 出现的形态：带引号的字符串值、数组内、注释外整 token 替换（保守：只替换 id = "..." 行与引用 self.<id>.）
+  let out = raw.replace(/^id\s*=\s*"[^"]*"/m, `id = "${newId}"`);
+  out = out.replace(/self\./g, 'self.'); // self 引用与 id 无关，保底
+  if (newName) out = out.replace(/^name\s*=\s*"[^"]*"/m, `name = "${newName}"`);
+  // keywords 里通常有旧 id——顺手换掉（数组内字符串精确匹配）
+  out = out.replace(new RegExp(`"${oldId}"`, 'g'), `"${newId}"`);
+  return { ok: true, manifest: out };
+}
+
 export function scaffoldPlugin(id: string, opts: ScaffoldOptions = {}): ScaffoldResult {
   if (!ID_RE.test(id)) {
     return {
