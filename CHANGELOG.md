@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.43.0] - 2026-11-05
 
 ### Added
 
@@ -87,17 +87,4 @@
 - 大结果截断提示附恢复路径（「完整结果：CLI 加 --full…」+ 约略行数）——模型被截断后知道怎么拿全量
 - 并发护栏（busy）附当前在途计数与按拥挤度换算的等待毫秒
 - 工具描述中 enum 参数的取值展开（如「取值 2 | 8 | 10 | 16」）——模型不再猜取值范围
-
-## [1.31.0] - 2026-11-04
-
-### Changed
-
-- 测试提速：删掉 batch98/devweb86/doctor84 三个测试里「起前台 ui server 挂满 timeout」的病灶（全量 29 分钟 → 2 分钟）；`--retry` 退避测试加 `ZEROKIT_RETRY_MS` 钩子，测试内 10ms 档
-- `scripts/test-all.mjs` 新增 `--changed`：按 git diff 与 IMPACT_MAP 只跑受影响的测试（test/ 文件映射自身；scripts/.github 基建改动走全量并说明）
-- CHANGELOG 瘦身：主文件只保留近 12 个版本段，更旧的搬进 `docs/reference/changelog-archive.md`（一次性迁移 70 版）；`release-prep` 归档时自动执行搬运
-- 新增 `scripts/README.md`：七个脚本各一句话说明与维护约定
-
-### Fixed
-
-- 测试套件防进程增殖护栏：测试文件内禁止再 spawn 跑测器（曾因自递归 spawn 指数增殖 node 进程拖垮整机）；maint127-smoke 加自检断言锁死
 
