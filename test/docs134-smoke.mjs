@@ -36,7 +36,7 @@ check('134⑥ 下一步交叉链', design.includes('**下一步**') && design.in
 
 // ⑦ overview 完成度行
 const overview = readFileSync(path.join(PKG_ROOT, 'docs/reference/overview.md'), 'utf8');
-check('134⑦ overview deep 完成度行', overview.includes('deep 层自学化'));
+check('134⑦ overview deep 完成度行', overview.includes('deep 层五篇齐了'));
 
 // ⑧ 本文件即测试（自证 ≥6：当前 8 项）
 check('134⑧ 断言数 ≥6', true);
