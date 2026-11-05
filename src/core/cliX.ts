@@ -191,7 +191,9 @@ export function renderTable(rows: Row[]): string {
   const head = line(keys);
   const sep = colW.map((n) => '-'.repeat(n - 1)).join(' ');
   const body = rows.slice(0, 50).map((r) => line(keys.map((k) => String(r[k] ?? ''))));
-  return [head, sep, ...body].join('\n') + '\n';
+  // 第一百四十二轮⑥：截断时长输出末尾提示翻页/截取用法
+  const tail = rows.length > 50 ? [`… 共 ${rows.length} 行，只显示前 50（--head N 取前 N 条 · | head 管道翻页 · --json 拿全量）`] : [];
+  return [head, sep, ...body, ...tail].join('\n') + '\n';
 }
 
 /** ⑦yaml：极简（键: 值 / - 列表），够管道消费，不引依赖。 */
