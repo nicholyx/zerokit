@@ -5291,6 +5291,8 @@ function renderResult(res) {
     });
   });
   box.querySelectorAll('.tbl-wrap').forEach((wrap) => {
+    // 第一百四十三轮⑦：溢出可横滑时挂提示（首次滚动消失）
+    if (wrap.scrollWidth - wrap.clientWidth > 24) wrap.classList.add('slideable');
     const upd = () => {
       wrap.classList.toggle('can-r', wrap.scrollWidth - wrap.clientWidth - wrap.scrollLeft > 8);
       wrap.classList.toggle('can-l', wrap.scrollLeft > 8);
@@ -9976,3 +9978,76 @@ document.addEventListener('keydown', (e) => {
 });
 
 void checkShellUpdate();
+
+// ================= 第一百四十三轮：移动与窄屏体验 =================
+// ① 底部拇指操作条：返回/执行镜像顶栏与详情按钮行为
+{
+  const bar = document.getElementById('mobileBar');
+  const mbBack = document.getElementById('mbBack');
+  const mbRun = document.getElementById('mbRun');
+  if (bar && mbBack && mbRun) {
+    mbBack.textContent = t('mbBack');
+    mbRun.textContent = t('mbRun');
+    mbBack.addEventListener('click', () => { if (location.hash.startsWith('#/plugin/')) { location.hash = '#/'; } else { history.length > 1 ? history.back() : (location.hash = '#/'); } });
+    mbRun.addEventListener('click', () => { const b = document.getElementById('runBtn'); if (b && !b.disabled) b.click(); });
+    // 详情页才显示（列表页无「执行」语境）
+    const syncBar = () => {
+      const inDetail = !!document.querySelector('#detailView:not(.hidden)');
+      bar.style.display = inDetail ? 'flex' : 'none';
+      document.body.classList.toggle('has-mobilebar', inDetail && innerWidth <= 720);
+    };
+    addEventListener('hashchange', () => setTimeout(syncBar, 120));
+    addEventListener('resize', syncBar);
+    new MutationObserver(syncBar).observe(document.getElementById('detailView'), { attributes: true, attributeFilter: ['class'] });
+  }
+}
+
+// ⑤ 下拉刷新：列表顶部 touchstart/touchmove 位移判定（>64px 触发 reload）
+{
+  const listEl = document.getElementById('list');
+  if (listEl) {
+    let y0 = -1;
+    const hint = document.createElement('div');
+    hint.id = 'pullHint'; hint.textContent = t('pullDown');
+    listEl.style.position = 'relative';
+    listEl.prepend(hint);
+    listEl.addEventListener('touchstart', (e) => { y0 = listEl.scrollTop === 0 ? e.touches[0].clientY : -1; }, { passive: true });
+    listEl.addEventListener('touchmove', (e) => {
+      if (y0 < 0) return;
+      const dy = e.touches[0].clientY - y0;
+      hint.classList.toggle('show', dy > 40);
+      hint.textContent = dy > 64 ? t('pullRelease') : t('pullDown');
+    }, { passive: true });
+    listEl.addEventListener('touchend', (e) => {
+      const dy = y0 < 0 ? 0 : (e.changedTouches[0]?.clientY ?? 0) - y0;
+      hint.classList.remove('show'); y0 = -1;
+      if (dy > 64) { load(true); }
+    });
+  }
+}
+
+// ⑥ 720–1080 过渡区提示条：点击展开双栏
+{
+  const stage = document.getElementById('stage');
+  if (stage) {
+    const h = document.createElement('div');
+    h.id = 'splitHint';
+    h.textContent = t('splitHint');
+    h.addEventListener('click', () => {
+      const cur = localStorage.getItem('zerokit.layout.pct');
+      const target = cur && Number(cur) >= 26 && Number(cur) <= 60 ? Number(cur) : 38;
+      localStorage.setItem('zerokit.layout.forced', target === 38 ? 'on' : 'on');
+      applySplitLayout();
+      h.style.display = 'none';
+    });
+    stage.prepend(h);
+  }
+}
+
+// ⑦ 表格可横滑提示：首次滚动后消失
+document.addEventListener('scroll', (e) => {
+  const t = e.target;
+  if (t instanceof HTMLElement && t.classList.contains('tbl-wrap') && t.classList.contains('slideable')) {
+    if (t.scrollLeft > 8) t.classList.add('scrolled');
+  }
+}, true);
