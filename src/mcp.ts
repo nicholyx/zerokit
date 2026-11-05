@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readAudit } from './core/ops.ts';
+import { readAudit, readDenied } from './core/ops.ts';
 import fs from 'node:fs';
 import { buildDoctorReport } from './core/doctor.ts';
 import { diagnose } from './core/suggest.ts';
@@ -7,12 +7,13 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { HOME, PLUGINS_DIR } from './core/paths.ts';
+import { loadTimers, nextFireTime } from './core/timers.ts';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   CallToolRequestSchema, ListToolsRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { type Action, type Plugin, toolName } from './core/manifest.ts';
-import { HOME, PLUGINS_DIR } from './core/paths.ts';
 import { findPlugin, listPlugins } from './core/registry.ts';
 import { applyDefaults, coerceParam, toJsonSchema } from './core/schema.ts';
 import { audit, buildVars, confirmPolicy, runAction } from './core/runner.ts';
@@ -322,7 +323,7 @@ export async function serve(): Promise<number> {
   const server = new Server(
     { name: 'zerokit', version: PACKAGE_VERSION },
     // 第八十九轮⑦：resources 面（只读：插件清单/健康报告）——MCP 规范原生入口
-    { capabilities: { tools: {}, resources: {} } },
+    { capabilities: { tools: {}, resources: { listChanged: false } } },
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -353,9 +354,15 @@ export async function serve(): Promise<number> {
   });
 
   // ---- 第八十九轮⑦：resources 面（只读） ----
+  // 第一百四十轮⑥：只读快照资源扩到 7 个，每个一句人话 description
   const RESOURCES = [
     { uri: 'zerokit://plugins', name: '插件清单', description: '已装插件与动作数、风险构成（只读）', mimeType: 'application/json' },
     { uri: 'zerokit://health', name: '健康报告', description: 'doctor 摘要（错误/警告/通过计数，只读）', mimeType: 'application/json' },
+    { uri: 'zerokit://runs', name: '最近执行', description: '最近 20 条执行记录（时间/动作/成败/耗时），时间倒序', mimeType: 'application/json' },
+    { uri: 'zerokit://runs/{key}', name: '动作执行史', description: '指定动作（插件.动作）的最近 10 条，如 zerokit://runs/quick.b64', mimeType: 'application/json' },
+    { uri: 'zerokit://audit', name: '审计流水', description: '最近 30 条审计（含 denied，标注 caller 与决策理由）', mimeType: 'application/json' },
+    { uri: 'zerokit://watch', name: '监控注册表', description: '监控项快照（动作/阈值/最近值/连续越界次数）', mimeType: 'application/json' },
+    { uri: 'zerokit://timers', name: '定时任务', description: '定时任务与下次触发时间（paused 标注）', mimeType: 'application/json' },
   ];
   server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: RESOURCES }));
   server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
@@ -375,8 +382,51 @@ export async function serve(): Promise<number> {
       const body = { errors: report.summary.errors, warnings: report.summary.warnings, plugins: report.summary.plugins, actions: report.summary.actions };
       return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(body, null, 2) }] };
     }
-    // 负例：未知 uri / 任何写意图都拒绝
-    throw new Error(`不认识这个资源：${uri}（resources 面只读，只提供 zerokit://plugins 与 zerokit://health）`);
+    // ---- 第一百四十轮①—⑤：只读快照资源 ----
+    const allowRuns = () => readAudit().filter((r) => r.decision === 'allow');
+    if (uri === 'zerokit://runs') {
+      const runs = allowRuns().slice(-20).reverse()
+        .map((r) => ({ ts: r.ts, key: `${r.plugin}.${r.action}`, ok: (r.exitCode ?? 1) === 0, ms: r.ms ?? null, caller: r.caller }));
+      const body = { count: runs.length, runs };
+      return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(body, null, 2) }] };
+    }
+    const runMatch = uri.match(/^zerokit:\/\/runs\/([\w.-]+)$/);
+    if (runMatch) {
+      const key = runMatch[1] ?? '';
+      const [pid, act] = key.includes('.') ? key.split('.', 2) : [key, ''];
+      const runs = allowRuns().filter((r) => r.plugin === pid && r.action === act)
+        .slice(-10).reverse()
+        .map((r) => ({ ts: r.ts, ok: (r.exitCode ?? 1) === 0, ms: r.ms ?? null, outBytes: r.outBytes ?? null, summary: (r.reason ?? '').slice(0, 200) || null }));
+      const body = { key, count: runs.length, runs };
+      return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(body, null, 2) }] };
+    }
+    if (uri === 'zerokit://audit') {
+      const merged = [...readAudit(), ...readDenied()].sort((a, b) => (a.ts < b.ts ? 1 : -1)).slice(0, 30);
+      const body = {
+        count: merged.length,
+        entries: merged.map((r) => ({ ts: r.ts, key: `${r.plugin}.${r.action}`, risk: r.risk, caller: r.caller, decision: r.decision, reason: r.reason ?? null })),
+      };
+      return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(body, null, 2) }] };
+    }
+    if (uri === 'zerokit://watch') {
+      // watch.json 由浏览器侧写（server 只透传）——这里纯读快照
+      let body: unknown = { watches: [] };
+      try {
+        const raw = fs.readFileSync(path.join(HOME, 'watch.json'), 'utf8');
+        body = JSON.parse(raw);
+      } catch { /* 无监控文件 = 空注册表 */ }
+      return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(body, null, 2) }] };
+    }
+    if (uri === 'zerokit://timers') {
+      const { timers } = loadTimers();
+      const body = {
+        count: timers.length,
+        timers: timers.map((t) => ({ key: t.key, title: t.title, interval: t.interval, paused: t.paused === true, nextFire: nextFireTime(t) })),
+      };
+      return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(body, null, 2) }] };
+    }
+    // 负例：未知 uri / 任何写意图都拒绝——错误信息列出全部可用资源（第一百四十轮⑧）
+    throw new Error(`不认识这个资源：${uri}。可读资源（只读）：${RESOURCES.map((r) => r.uri).join('、')}`);
   });
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
