@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.53.0] - 2026-11-06
+
+### Added
+
+- `zkit history` 新增 `--grep <词>`（命令行子串过滤，含旗标值）与 `--since Nd/Nh/today`（时间档过滤），与既有 `--plugin/--action/--today/--json` 自由组合
+- 新增 `zkit bookmark`：常用命令组合起别名沉淀——`add <别名> <历史编号|命令行> [--note 备注]` / `list [--json]` / `rm` / `run`；存储在 `~/.zerokit/bookmarks.json`（0600 原子写）
+- `zkit history --rerun-last`（`!!` 同义）：一键重跑最后一条成功命令
+- `zkit history` 默认视图现在展示失败条目（✓/✗ 标记），非交互终端追加「一键重跑」提示行
+
 ## [1.52.0] - 2026-11-05
 
 ### Added
@@ -56,12 +65,7 @@
 
 ## [Unreleased]
 
-### Added
-
-- `zkit history` 新增 `--grep <词>`（命令行子串过滤，含旗标值）与 `--since Nd/Nh/today`（时间档过滤），与既有 `--plugin/--action/--today/--json` 自由组合
-- 新增 `zkit bookmark`：常用命令组合起别名沉淀——`add <别名> <历史编号|命令行> [--note 备注]` / `list [--json]` / `rm` / `run`；存储在 `~/.zerokit/bookmarks.json`（0600 原子写）
-- `zkit history --rerun-last`（`!!` 同义）：一键重跑最后一条成功命令
-- `zkit history` 默认视图现在展示失败条目（✓/✗ 标记），非交互终端追加「一键重跑」提示行
+（下一版攒着）
 
 ## [1.45.0] - 2026-11-05
 
@@ -86,10 +90,4 @@
 ### Added
 
 - **定时任务执行历史**：每次触发落盘一条（时间/成败/耗时/输出快照 2KB/触发来源 auto·manual·catchup），每任务封顶 20 条；`zkit timers history <key> [N]` 人读、`zkit timers list --json` 增 `lastRuns`；面板历史弹层合并持久史与会话史，失败条目行首红点、输出快照与错误可展开；`GET /api/timer-runs`
-
-## [1.41.0] - 2026-11-05
-
-### Added
-
-- **集市装机自检**：安装完成后立刻挑一个「只读且零必填参数」的动作真跑一次，把「装上了」和「装上且能跑」区分开（运行环境缺依赖、清单命令在本机不存在，此前要到第一次执行才暴露）；安装反馈带自检结论与耗时；详情页「⋯ 更多」加「🔍 装机自检」随时重跑；无可自检动作（全 mutate/全必填）显式说明跳过原因，自检绝不产生副作用；`POST /api/plugin/selfcheck`；安装按钮三阶段进度（拉取校验 → 落盘 → 自检）
 
