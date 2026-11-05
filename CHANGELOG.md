@@ -65,6 +65,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- `run --diff`：与上次同命令执行的结果对比（基线按命令指纹存 `~/.zerokit/baselines/`；首行提示首次执行）
+- `run --alert '表达式'`：结果断言哨兵（`列>80`、`值=x`、`ms<500`；满足 exit 0，不满足 exit 2 带实际值——脚本/定时任务可直接当条件用）
+- `run --watch N --diff`：轮询中无变化的轮次不再刷屏（打点表示活着）
+- `zkit ui --log`：server 请求日志落 `~/.zerokit/logs/server.log`（启动行含端口与 pid；请求行 method path status ms，query 参数剥掉——脱敏）
+- `zkit logs server [--tail N] [--follow]`：查看/跟读 server 日志
 （下一版攒着）
 
 ## [1.45.0] - 2026-11-05

@@ -948,12 +948,13 @@ async function cmdRun(args: string[]): Promise<number> {
   const argv: string[] = [];
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i]!;
-    if (a === '--out' || a === '--watch' || a === '--share' || a === '--jq' || a === '--env' || a === '--format' || a === '--retry' || a === '--avg'
+    if (a === '--out' || a === '--watch' || a === '--share' || a === '--jq' || a === '--env' || a === '--format' || a === '--retry' || a === '--avg' || a === '--alert'
         || a === '--sort' || a === '--pick' || a === '--uniq' || a === '--sum' || a === '--head' || a === '--measure'
         || a === '--where' || a === '--calc' || a === '--rename' || a === '--pipe') { i++; continue; }
     if (a.startsWith('--out=') || a.startsWith('--watch=') || a.startsWith('--share=') || a.startsWith('--jq=') || a.startsWith('--env=') || a.startsWith('--format=') || a.startsWith('--retry=') || a.startsWith('--avg=')
         || a.startsWith('--sort=') || a.startsWith('--pick=') || a.startsWith('--uniq=') || a.startsWith('--sum=') || a.startsWith('--head=') || a.startsWith('--measure=')
-        || a.startsWith('--where=') || a.startsWith('--calc=') || a.startsWith('--rename=') || a.startsWith('--pipe=')) continue;
+        || a.startsWith('--where=') || a.startsWith('--calc=') || a.startsWith('--rename=') || a.startsWith('--pipe=') || a.startsWith('--alert=')) continue;
+    if (a === '--diff') continue; // 150①：与上次同命令对比（无值旗标）
     if (['--yes', '-y', '--json', '--copy', '--quiet', '--full', '--stdin-json', '--profile'].includes(a)) continue;
     // 第七十五轮：--sort -列 的降序值（-内存 不是短旗标，前一个是 --sort 就吞掉）
     if (a.startsWith('-') && !a.startsWith('--') && i > 0 && rest[i - 1] === '--sort') continue;
@@ -1263,6 +1264,40 @@ async function cmdRun(args: string[]): Promise<number> {
     process.stdout.write(`中位：spawn ${msTxt(rowsM.find((r) => r.totalMs === mid)?.spawnMs ?? 0)} · 首字节 ${msTxt(rowsM.find((r) => r.totalMs === mid)?.firstByteMs ?? 0)} · 总 ${msTxt(mid)}\n`);
     return 0;
   }
+  // 第一百五十轮①：--diff 与上次同命令执行结果对比（基线按命令指纹存 ~/.zerokit/baselines/）
+  const wantDiff = rest.includes('--diff');
+  if (wantDiff && result.ok) {
+    const { readFileSync, writeFileSync, mkdirSync } = await import('node:fs');
+    const { createHash } = await import('node:crypto');
+    const { HOME } = await import('./core/paths.ts');
+    const { diffResult } = cliX; // 150 纯函数（上面已 import cliX）
+    const fp = createHash('sha1').update(`${pluginId}.${actionId}|${argv.join(' ')}`).digest('hex').slice(0, 12);
+    const baseFile = `${HOME}/baselines/${fp}.json`;
+    try {
+      const prev = JSON.parse(readFileSync(baseFile, 'utf8')) as unknown;
+      const cells = diffResult(prev, result.data);
+      if (cells.length === 0) process.stdout.write(c.green('（与上次一致，0 处变化）\n'));
+      else {
+        process.stdout.write(c.bold(`与上次相比 ${cells.length} 处变化：\n`));
+        for (const d of cells) {
+          const tag = d.kind === 'added' ? c.green('+ 新增') : d.kind === 'removed' ? c.red('- 消失') : c.yellow('~ 变更');
+          const detail = d.kind === 'changed' ? `${JSON.stringify(d.a)} → ${JSON.stringify(d.b)}` : JSON.stringify(d.kind === 'added' ? d.b : d.a);
+          process.stdout.write(`  ${tag} ${d.key} = ${detail.length > 80 ? detail.slice(0, 80) + '…' : detail}\n`);
+        }
+      }
+    } catch { process.stdout.write(c.dim('（首次执行，无基线——本次结果已存为基线）\n')); }
+    try { mkdirSync(`${HOME}/baselines`, { recursive: true }); writeFileSync(baseFile, JSON.stringify(result.data ?? null)); } catch { /* 旁路 */ }
+  }
+  // 第一百五十轮②：--alert '表达式' 哨兵断言（满足 exit 0，不满足 exit 2）
+  const alertIdx150 = rest.indexOf('--alert');
+  if (alertIdx150 >= 0 && rest[alertIdx150 + 1]) {
+    if (!result.ok) { process.stderr.write(c.red('✗ 执行失败，--alert 无法评估\n')); return 1; }
+    const { alertEval } = cliX;
+    const v = alertEval(rest[alertIdx150 + 1]!, result.data, result.ms);
+    if (v.error) { process.stderr.write(c.red(`✗ ${v.error}\n`)); return 1; }
+    if (v.ok) process.stdout.write(c.green(`✓ 哨兵通过：${rest[alertIdx150 + 1]}（实际 ${v.actual}）\n`));
+    else { process.stdout.write(c.red(`✗ 哨兵不满足：${rest[alertIdx150 + 1]}（实际 ${v.actual}）\n`)); return 2; }
+  }
   // 第四十五轮⑧：--watch N 进入轮询，只打印 diff，Ctrl-C 退出
   if (watchSec && result.ok) {
     const sec = cliX.normalizeWatchSec(watchSec);
@@ -1272,7 +1307,11 @@ async function cmdRun(args: string[]): Promise<number> {
       await new Promise((r) => setTimeout(r, sec * 1000));
       const cur = await runAction(plugin, action, { caller: 'cli', values: withDefaults.values });
       if (!cur.ok) { process.stdout.write(c.red(`✗ ${new Date().toLocaleTimeString()} 轮询失败：${cur.error}\n`)); prev = undefined; continue; }
-      for (const line of cliX.diffTopLevel(prev, cur.data)) {
+      const lines = cliX.diffTopLevel(prev, cur.data);
+      // 150③：--watch --diff 组合——无变化轮次不刷屏（打一个点表示活着）
+      if (wantDiff && lines.length === 0) { process.stdout.write('.'); continue; }
+      if (wantDiff && lines.length > 0 && process.stdout.columns) process.stdout.write('\n');
+      for (const line of lines) {
         process.stdout.write(`${c.dim(new Date().toLocaleTimeString())} ${line}\n`);
       }
       prev = cur.data;
@@ -2846,6 +2885,33 @@ function cmdLogs(args: string[]): number {
   // 第一百二十四轮⑧：--slow N 只看耗时超 N 毫秒的执行（慢动作猎枪）
   const slowIdx = args.indexOf('--slow');
   const slowMs = slowIdx >= 0 ? Math.max(0, Number(args[slowIdx + 1]) || 3000) : 0;
+  // 第一百五十轮⑥⑦：logs server——server 请求日志（纯文本行；--tail/--follow 同语义）
+  if (args[0] === 'server') {
+    const sfile = path.join(LOG_DIR, 'server.log');
+    if (!fs.existsSync(sfile)) { process.stdout.write(c.dim(`还没有 server 日志（zkit ui --log 启动后生成）：${sfile}\n`)); return 0; }
+    const slines = fs.readFileSync(sfile, 'utf8').trimEnd().split('\n');
+    for (const l of slines.slice(-tail)) process.stdout.write(l + '\n');
+    if (follow) {
+      process.stdout.write(c.dim('-- 跟读中（Ctrl+C 退出）--\n'));
+      let offset = fs.statSync(sfile).size;
+      const timer = setInterval(() => {
+        try {
+          const size = fs.statSync(sfile).size;
+          if (size > offset) {
+            const fd = fs.openSync(sfile, 'r');
+            const buf = Buffer.alloc(size - offset);
+            fs.readSync(fd, buf, 0, buf.length, offset);
+            fs.closeSync(fd);
+            offset = size;
+            process.stdout.write(buf.toString('utf8'));
+          }
+        } catch { /* 轮询间隙文件被删等 */ }
+      }, 500);
+      const { stdin } = process;
+      if (stdin.isTTY) { stdin.setRawMode(true); stdin.on('data', (d) => { if (d[0] === 3) { clearInterval(timer); process.exit(0); } }); }
+    }
+    return 0;
+  }
   const file = path.join(LOG_DIR, args[0] === 'denied' ? 'denied.log' : 'audit.log');
   if (!fs.existsSync(file)) {
     process.stdout.write(c.dim(`还没有日志：${file}\n`));
