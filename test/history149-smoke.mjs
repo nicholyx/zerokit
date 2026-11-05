@@ -95,12 +95,18 @@ run(['run', 'sysinfo', 'top', '--head', '3']);
   check('④ add 裸命令形态', r9.stdout.includes('✓ 书签 top3') && r9.stdout.includes('--head 3'));
   run(['bookmark', 'rm', 'top3']);
 }
-// 书签文件 0600
+// 书签文件 0600（Windows 不支持 POSIX 权限位，只验内容可读+结构）
 {
-  const st = (await import('node:fs')).statSync(path.join(home, 'bookmarks.json'));
-  run(['bookmark', 'add', 'perm1', '1']); // 确保文件存在后再 stat（上面 rm 光了）
-  const st2 = (await import('node:fs')).statSync(path.join(home, 'bookmarks.json'));
-  check('④ 文件权限 0600', (st2.mode & 0o777) === 0o600, `mode=${(st2.mode & 0o777).toString(8)}`);
+  const fsMod = await import('node:fs');
+  run(['bookmark', 'add', 'perm1', '1']); // 确保文件存在（上面 rm 光了）
+  const st2 = fsMod.statSync(path.join(home, 'bookmarks.json'));
+  const isWin = process.platform === 'win32';
+  const j = JSON.parse(fsMod.readFileSync(path.join(home, 'bookmarks.json'), 'utf8'));
+  if (isWin) {
+    check('④ Windows 下文件可读+结构合法', Array.isArray(j.items) && st2.isFile());
+  } else {
+    check('④ 文件权限 0600', (st2.mode & 0o777) === 0o600, `mode=${(st2.mode & 0o777).toString(8)}`);
+  }
 }
 
 rmSync(home, { recursive: true, force: true });
