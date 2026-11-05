@@ -71,3 +71,5 @@ node src/cli.ts ui --open
 - 想写自己的插件 → [插件清单规范](../reference/plugin-spec.md)
 - 卡住了 → [常见问题](faq.md)
 - 想看全部现成动作 → [动作速查表](../reference/actions-reference.md)
+
+> 想知道动作执行时内核里发生了什么、安全防线各挡什么？进 [深读层](../deep/index.md)：[插件运行时](../deep/runtime.md) / [安全边界](../deep/security.md)。

@@ -907,3 +907,4 @@ zkit show proxy            # 看生成的 MCP 工具名和 inputSchema
 zkit run proxy status      # 直接跑一次
 zkit mcp serve                 # 确认 AI 侧也能看到这些工具
 ```
+> risk 三档的判定逻辑与四道安全防线的威胁模型，见深读 [安全边界](../deep/security.md)；执行模型的占位符/编码/超时细节见 [插件运行时](../deep/runtime.md)。
