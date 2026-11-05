@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [1.42.0] - 2026-11-05
+
+### Added
+
+- **定时任务执行历史**：每次触发落盘一条（时间/成败/耗时/输出快照 2KB/触发来源 auto·manual·catchup），每任务封顶 20 条；`zkit timers history <key> [N]` 人读、`zkit timers list --json` 增 `lastRuns`；面板历史弹层合并持久史与会话史，失败条目行首红点、输出快照与错误可展开；`GET /api/timer-runs`
+
 ## [1.41.0] - 2026-11-05
 
 ### Added
