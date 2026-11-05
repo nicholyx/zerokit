@@ -70,9 +70,9 @@ console.log('guard146-smoke');
 
 // ⑧ commit-msg 第二行粘连检查
 {
-  const r1 = run(path.join(PKG_ROOT, 'scripts', 'check-commit-msg.sh'), ['--message', 'feat(x): 好\n直接粘连的正文']);
-  check('⑧ 粘连 body 被拒', r1.status !== 0 && (r1.stdout + r1.stderr).includes('空一行'));
-  const r2 = run(path.join(PKG_ROOT, 'scripts', 'check-commit-msg.sh'), ['--message', 'feat(x): 好\n\n正文没问题']);
+  const r1 = run('bash', [path.join(PKG_ROOT, 'scripts', 'check-commit-msg.sh'), '--message', 'feat(x): 好\n直接粘连的正文']);
+  check('⑧ 粘连 body 被拒', r1.status !== 0 && (String(r1.stdout ?? '') + String(r1.stderr ?? '')).includes('空一行'));
+  const r2 = run('bash', [path.join(PKG_ROOT, 'scripts', 'check-commit-msg.sh'), '--message', 'feat(x): 好\n\n正文没问题']);
   check('⑧ 规范空行分隔通过', r2.status === 0);
 }
 
