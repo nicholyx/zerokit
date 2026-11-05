@@ -700,6 +700,7 @@ helpSearchTitle: '搜索', helpSearchBody: '支持中文关键词、拼音全拼
     cmdWatch: '监控', cmdWatchHint: '监控面板 #/watch',
     cmdHelp: '帮助', cmdHelpHint: '使用指南 #/help',
     cmdStats: '统计', cmdStatsHint: '使用统计 #/stats',
+    cmdActivity: '最近活动', cmdActivityHint: '执行健康时间线 #/activity',
     cmdLogs: '日志', cmdLogsHint: '审计日志 #/logs',
     cmdMarket: '集市', cmdMarketHint: '插件集市 #/market',
     cmdDoctor: '自检', cmdDoctorHint: '环境自检 #/doctor',
@@ -1026,6 +1027,7 @@ helpSearchTitle: 'Search', helpSearchBody: 'Chinese keywords, full pinyin, or pi
     cmdWatch: 'Watch', cmdWatchHint: 'Watch panel #/watch',
     cmdHelp: 'Help', cmdHelpHint: 'User guide #/help',
     cmdStats: 'Stats', cmdStatsHint: 'Usage stats #/stats',
+    cmdActivity: 'Activity', cmdActivityHint: 'Execution health timeline #/activity',
     cmdLogs: 'Logs', cmdLogsHint: 'Audit log #/logs',
     cmdMarket: 'Market', cmdMarketHint: 'Plugin market #/market',
     cmdDoctor: 'Doctor', cmdDoctorHint: 'Environment check #/doctor',
@@ -2300,6 +2302,7 @@ export const COMMAND_LIST = [
   { id: 'cmdWatch', icon: '⏱', nameKey: 'cmdWatch', hintKey: 'cmdWatchHint', go: '#/watch' },
   { id: 'cmdHelp', icon: '?', nameKey: 'cmdHelp', hintKey: 'cmdHelpHint', go: '#/help' },
   { id: 'cmdStats', icon: '📈', nameKey: 'cmdStats', hintKey: 'cmdStatsHint', go: '#/stats' },
+  { id: 'cmdActivity', icon: '⏱', nameKey: 'cmdActivity', hintKey: 'cmdActivityHint', go: '#/activity' },
   { id: 'cmdLogs', icon: '▤', nameKey: 'cmdLogs', hintKey: 'cmdLogsHint', go: '#/logs' },
   { id: 'cmdMarket', icon: '🛍', nameKey: 'cmdMarket', hintKey: 'cmdMarketHint', go: '#/market' },
   { id: 'cmdDoctor', icon: '✓', nameKey: 'cmdDoctor', hintKey: 'cmdDoctorHint', go: '#/doctor' },
@@ -3981,4 +3984,45 @@ export function lastRunText(actionKey, runStore, now = Date.now()) {
   if (s < 3600) return `${Math.floor(s / 60)} 分钟前`;
   if (s < 86400) return `${Math.floor(s / 3600)} 小时前`;
   return `${Math.floor(s / 86400)} 天前`;
+}
+
+// ==================== 第一百四十一轮：活动面板（执行健康时间线） ====================
+
+/**
+ * 活动统计：成功率 / 平均耗时 / 最慢动作。
+ * 输入是审计记录的精简形态（{ok,ms,key}），面板顶三卡共用。
+ */
+export function activityStats(runs) {
+  const list = Array.isArray(runs) ? runs : [];
+  if (!list.length) return { total: 0, okRate: null, avgMs: null, slowest: null };
+  const ok = list.filter((r) => r.ok).length;
+  const withMs = list.filter((r) => typeof r.ms === 'number');
+  const avgMs = withMs.length ? Math.round(withMs.reduce((a, r) => a + r.ms, 0) / withMs.length) : null;
+  let slowest = null;
+  for (const r of withMs) {
+    if (!slowest || r.ms > slowest.ms) slowest = { key: r.key, ms: r.ms };
+  }
+  return { total: list.length, okRate: Math.round((ok / list.length) * 100), avgMs, slowest };
+}
+
+/** 慢动作档位：>3000 红（slow3）/ >1000 黄（slow1）/ 其它 null。 */
+export function slowTier(ms) {
+  if (typeof ms !== 'number') return null;
+  if (ms > 3000) return 'slow3';
+  if (ms > 1000) return 'slow1';
+  return null;
+}
+
+/** 审计记录 → 活动行（面板消费的精简形态；失败摘要取 error 首行）。 */
+export function auditToActivity(recs) {
+  const list = Array.isArray(recs) ? recs : [];
+  return list.map((r) => ({
+    ts: r.ts,
+    key: `${r.plugin}.${r.action}`,
+    ok: r.decision === 'allow' && (r.exitCode ?? 1) === 0,
+    denied: r.decision === 'deny',
+    ms: typeof r.ms === 'number' ? r.ms : null,
+    caller: r.caller ?? '',
+    error: r.error ? String(r.error).split('\n')[0].slice(0, 140) : (r.decision === 'deny' ? (r.reason ?? '被拒绝') : null),
+  }));
 }

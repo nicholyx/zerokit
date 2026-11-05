@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText } from './extras.js';
+import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote, defaultChip, enumHint, actionHealthBadge, descNeedsFold, inQuietHours, notifyThrottle, pushNotifyLog, parseHm } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -52,7 +52,7 @@ const el = {
   stage: $('stage'),
   listView: $('listView'), detailView: $('detailView'), workbench: $('workbench'),
   psView: $('psView'), psBtn: $('psBtn'), psCount: $('psCount'), clipBtn: $('clipBtn'),
-  logsView: $('logsView'), doctorView: $('doctorView'), listTools: $('listTools'),
+  logsView: $('logsView'), activityView: $('activityView'), doctorView: $('doctorView'), listTools: $('listTools'),
   allowView: $('allowView'),
   updateBar: $('updateBar'), updateText: $('updateText'), updateLink: $('updateLink'),
   updateLater: $('updateLater'), updateDismiss: $('updateDismiss'),
@@ -6076,6 +6076,60 @@ let logsToday = false;
 let logsPlugin = '';
 let logsPlugins = [];
 
+// 第一百四十一轮①—⑧：活动面板——执行健康时间线（#/activity）
+async function showActivity() {
+  hidePanels();
+  el.activityView.classList.remove('hidden');
+  el.activityView.innerHTML = `
+    <div class="ps-head"><h2>最近活动</h2><span class="sub">最近 50 条执行 · 成败与耗时</span></div>
+    <div id="actCards" class="stat-row"></div>
+    <div id="actChips" class="hist-chips"></div>
+    <div id="actList" class="act-list" role="feed" aria-label="执行时间线"></div>`;
+  el.count.textContent = '';
+  try {
+    const r = await fetch('/api/logs?limit=200');
+    const j = await r.json();
+    const acts = auditToActivity((j.entries ?? []).filter((e) => e.decision === 'allow' || e.decision === 'deny')).slice(0, 50);
+    const st = activityStats(acts);
+    // ③ 三指标卡
+    document.getElementById('actCards').innerHTML = `
+      <div class="stat-card"><b>${st.okRate === null ? '—' : st.okRate + '%'}</b><span>成功率（${st.total} 条）</span></div>
+      <div class="stat-card"><b>${st.avgMs === null ? '—' : st.avgMs + 'ms'}</b><span>平均耗时</span></div>
+      <div class="stat-card${st.slowest && st.slowest.ms > 3000 ? ' warn' : ''}"><b>${st.slowest ? st.slowest.ms + 'ms' : '—'}</b><span>最慢：${st.slowest ? esc(st.slowest.key) : '无记录'}</span></div>`;
+    // ④ 插件过滤 chips
+    const plugins = [...new Set(acts.map((a) => a.key.split('.')[0]))].slice(0, 12);
+    document.getElementById('actChips').innerHTML = plugins.map((pl) => `<button class="chip quiet" data-act-plug="${esc(pl)}">${esc(pl)}</button>`).join('');
+    // ①②⑤ 时间线
+    const renderRows = (list) => {
+      document.getElementById('actList').innerHTML = list.length ? list.map((a) => `
+        <div class="act-row${a.ok ? '' : ' bad'}${a.denied ? ' denied' : ''}" data-act-key="${esc(a.key)}">
+          <span class="risk-dot ${a.denied ? 'destructive' : a.ok ? 'read' : 'mutate'}"></span>
+          <span class="act-key">${esc(a.key)}</span>
+          <span class="act-caller">${esc(a.caller || '-')}</span>
+          <span class="act-ms${slowTier(a.ms) ? ' ' + slowTier(a.ms) : ''}">${a.ms === null ? '—' : a.ms + 'ms'}</span>
+          <span class="act-ts">${esc(String(a.ts ?? '').replace('T', ' ').slice(5, 19))}</span>
+          ${a.error ? `<div class="act-err" hidden>${esc(a.error)}</div>` : ''}
+        </div>`).join('') : '<div class="ps-empty" role="status">还没有执行记录——跑一个动作试试</div>';
+      // ② 点击行展开错误摘要
+      document.querySelectorAll('.act-row').forEach((row) => {
+        row.addEventListener('click', () => {
+          const err = row.querySelector('.act-err');
+          if (err) err.hidden = !err.hidden;
+        });
+      });
+    };
+    renderRows(acts);
+    document.querySelectorAll('[data-act-plug]').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        const pl = chip.getAttribute('data-act-plug');
+        renderRows(acts.filter((a) => a.key.startsWith(pl + '.')));
+      });
+    });
+  } catch (e) {
+    document.getElementById('actList').innerHTML = `<div class="ps-empty" role="status">读不到活动：${esc(e.message)}</div>`;
+  }
+}
+
 async function showLogs() {
   mode = 'logs';
   el.modeLabel.textContent = t('modeLogs');
@@ -9351,6 +9405,12 @@ function applyHash() {
     return;
   }
 
+  // 第一百四十一轮⑥：#/activity 活动面板（applyHash 侧）
+  if ((location.hash || '') === '#/activity') {
+    showActivity();
+    return;
+  }
+
   // 第二十二轮⑤：#/help 帮助页（applyHash 侧补——此前只有 hashchange 侧有，刷新深链落回列表）
   if ((location.hash || '') === '#/help') {
     showHelpPanel();
@@ -9465,6 +9525,8 @@ window.addEventListener('hashchange', () => {
   }
   // #/logs 等面板路由：hashchange 直达（applyHash 有同款分支，hash 導航也要）
   if ((location.hash || '') === '#/logs') { showLogs(); return; }
+  // 第一百四十一轮⑥：#/activity 活动面板
+  if ((location.hash || '') === '#/activity') { showActivity(); return; }
   if ((location.hash || '') === '#/dash') { showDash(); return; }
   if ((location.hash || '') === '#/stats') { showStats(); return; }
   if ((location.hash || '') === '#/doctor') { showDoctor(); return; }
@@ -9692,6 +9754,8 @@ $('dlLang')?.addEventListener('click', () => {
   t = makeT(lang);
   applyLang(true);
 });
+// 第一百四十一轮⑦：抽屉直达活动面板
+$('dlActivity')?.addEventListener('click', () => { closeDrawer(); location.hash = '#/activity'; });
 $('dlLogs')?.addEventListener('click', () => { closeDrawer(); $('logsBtn')?.click(); });
 $('dlDoctor')?.addEventListener('click', () => { closeDrawer(); $('doctorBtn')?.click(); });
 $('dlSaved')?.addEventListener('click', () => { closeDrawer(); $('savedBtn')?.click(); });

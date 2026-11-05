@@ -1241,20 +1241,28 @@ timer-hist-line dim">（无输出快照）
 '# ' \+ p\.name \+ '\(`' \+ p\.id \+ '`\) 能力清单',
 '- 版本：v' \+ p\.version \+ '　来源：' \+ p\.source
 '- 摘要：' \+ \(p\.summary \|\| '（无）'\),
-p\.description \? '- 说明：' \+ p\.description 
-return '- \*\*' \+ a\.title \+ '\*\*（`' \+ a\.id 
+p\.description \? '- 说明：' \+ p\.description
+return '- \*\*' \+ a\.title \+ '\*\*（`' \+ a\.id
 \+ \(a\.ui \? '，带界面' : ''\)
-\+ '，参数 ' \+ psr\.text \+ \(psr\.secretMark \? 
+\+ '，参数 ' \+ psr\.text \+ \(psr\.secretMark \?
 '> 由 zerokit 于 ' \+ new Date\(\)\.toLocaleSt
 \(\) => \{ el\.count\.textContent = `已复制 \$\{p\.
 \(\) => \{ el\.count\.textContent = '复制失败——剪贴
 \$\{qc\.keywords\.length \? `<div class="pqc-
 \$\{a\.ui \? '<span class="badge" title="带交互
 <span class="pa-params" title="参数：\$\{esc\(
-<span class="pa-lastrun">\$\{lr \? esc\(lr\) 
+<span class="pa-lastrun">\$\{lr \? esc\(lr\)
 <button class="ghost" id="homeCopyDoc" t
 if \(required\) parts\.push\(`必填 \$\{required\}
 if \(optional\) parts\.push\(`可选 \$\{optional\}
 if \(!parts\.length\) parts\.push\('无参数'\);
 mixText: `只读 \$\{mix\.read\} · 变更 \$\{mix\.muta
 if \(s < 60\) return '刚刚';
+<div class="ps-head"><h2>最近活动</h2><span 
+<div id="actList" class="act-list" role=
+<div class="stat-card"><b>\$\{st\.okRate ==
+<div class="stat-card"><b>\$\{st\.avgMs ===
+<div class="stat-card\$\{st\.slowest && st\.
+document\.getElementById\('actList'\)\.inner
+error: r\.error \? String\(r\.error\)\.split\('
+<button class="drawer-link" id="dlActivi

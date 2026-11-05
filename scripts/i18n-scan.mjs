@@ -54,7 +54,10 @@ for (const f of FILES) {
 if (process.argv.includes('--write-whitelist')) {
   // 把当前 findings 以精确片段形式追加白名单（首跑登记用）
   const adds = findings.map((x) => x.text.slice(0, 40).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  writeFileSync(WL_PATH, [...whitelist, ...adds].join('\n') + '\n');
+  // 第一百四十一轮：--write-whitelist 保留文件头部注释行（曾两次吞头导致 i18n100 断言挂）
+  const curLines = existsSync(WL_PATH) ? readFileSync(WL_PATH, 'utf8').split('\n') : [];
+  const header = curLines.filter((l) => l.startsWith('#'));
+  writeFileSync(WL_PATH, [...header, ...whitelist, ...adds].join('\n') + '\n');
   console.log(`已登记 ${adds.length} 条到白名单`);
   process.exit(0);
 }
