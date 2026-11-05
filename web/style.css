@@ -992,6 +992,87 @@ td.cell-clip { max-width: 260px; overflow: hidden; text-overflow: ellipsis; whit
 .list .item:focus-visible { outline-offset: -2px; }
 
 /* 减少动态：系统开了「减弱动态效果」就停掉所有过渡 */
+
+/* ================= 第一百四十三轮：移动与窄屏体验 ================= */
+/* ① 窄屏详情底部拇指操作条：← 返回 / ▶ 执行（不再够顶栏） */
+@media (max-width: 720px) {
+  #mobileBar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 55;
+    display: flex; gap: 10px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: color-mix(in srgb, var(--bg-panel, #1e1e1e) 92%, transparent);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border-top: 1px solid var(--line);
+  }
+  #mobileBar .mb-btn {
+    flex: 1; min-height: 44px; border-radius: 10px; border: 1px solid var(--line);
+    background: transparent; color: var(--fg); font-size: 15px; cursor: pointer;
+  }
+  #mobileBar .mb-run { background: var(--accent, #5aa9ff); color: #fff; border: none; font-weight: 600; }
+  body.has-mobilebar { padding-bottom: 72px; }   /* 内容让位，遮最后一行 */
+}
+@media (min-width: 721px) { #mobileBar { display: none; } }
+
+/* ② 列表滑动惯性 + 窄屏隐藏滚动条 */
+#list { -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; }
+@media (max-width: 720px) {
+  #list::-webkit-scrollbar { display: none; }
+  #list { scrollbar-width: none; }
+}
+
+/* ③ 触屏目标 ≥44px（pointer:coarse 下再加一档） */
+@media (pointer: coarse) and (max-width: 720px) {
+  li.item { min-height: 44px; }
+  .chip, .filter-chip { min-height: 40px; padding: 6px 14px; }
+  .rtab-x, .colvis-btn { min-width: 40px; min-height: 40px; }
+  .search-row input { min-height: 44px; }
+}
+
+/* ④ 触屏无键盘：快捷键提示条让位（hover:none 且 pointer:coarse 才藏） */
+@media (hover: none) and (pointer: coarse) {
+  .kbd-hint, .shortcut-row { display: none; }
+}
+
+/* ⑥ 720–1080 过渡区：可展开双栏的提示条 */
+#splitHint {
+  display: none; align-items: center; gap: 8px; justify-content: center;
+  padding: 6px; margin: 4px 0; border: 1px dashed var(--line); border-radius: 8px;
+  font-size: 12px; color: var(--fg-dim, #8b93a1); cursor: pointer;
+}
+@media (min-width: 721px) and (max-width: 1080px) {
+  #splitHint { display: flex; }
+}
+
+/* ⑦ 表格可横滑提示：右缘渐隐 mask，首次滚动后消失 */
+.tbl-wrap.slideable { position: relative; }
+.tbl-wrap.slideable::after {
+  content: ''; position: absolute; top: 0; right: 0; bottom: 0; width: 36px;
+  background: linear-gradient(to left, var(--bg-panel, #1e1e1e), transparent);
+  animation: zk-slide-pulse 1.6s ease-in-out infinite;
+}
+.tbl-wrap.slideable.scrolled::after { display: none; }
+@keyframes zk-slide-pulse { 0%, 100% { opacity: .9; } 50% { opacity: .3; } }
+
+/* ⑧ 命令面板窄屏全屏化（容器是动态 #paletteOverlay + .palette-box） */
+@media (max-width: 720px) {
+  #paletteOverlay { padding: 0; }
+  #paletteOverlay .palette-box { width: 100%; height: 100vh; max-height: 100vh; border-radius: 0; margin: 0; }
+}
+
+/* ⑨ 触屏 hover 退化按压：hover:none 下悬停效果换 active */
+@media (hover: none) {
+  li.item:hover, .res-menu-item:hover, .btn:hover, .chip:hover { background: transparent; transform: none; }
+  li.item:active, .res-menu-item:active, .btn:active, .chip:active { background: rgba(127, 127, 127, .18); transform: scale(.98); }
+}
+
+/* ⑤ 下拉刷新指示条 */
+#pullHint {
+  position: absolute; top: -34px; left: 50%; transform: translateX(-50%);
+  padding: 4px 14px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--bg-panel, #1e1e1e); font-size: 12px; color: var(--fg-dim, #8b93a1);
+  opacity: 0; transition: opacity .15s; pointer-events: none;
+}
+#pullHint.show { opacity: 1; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important; transition-duration: 0.01ms !important;
