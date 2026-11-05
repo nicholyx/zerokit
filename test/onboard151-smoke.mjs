@@ -44,7 +44,9 @@ const ob = await import('../src/core/onboard.ts');
   fsMod.writeFileSync(path.join(h, '.onboarded'), 'x', { mode: 0o600 });
   const after = ob.onboardState(h);
   check('⑥ 标记写入后 onboarded=true', before.onboarded === false && after.onboarded === true);
-  check('⑥ 标记 0600', (fsMod.statSync(path.join(h, '.onboarded')).mode & 0o777) === 0o600);
+  // Windows 无 POSIX 权限位（第一百四十九轮教训）：非 win32 才验 0600
+  if (process.platform !== 'win32') check('⑥ 标记 0600', (fsMod.statSync(path.join(h, '.onboarded')).mode & 0o777) === 0o600);
+  else check('⑥ Windows 标记文件存在', fsMod.existsSync(path.join(h, '.onboarded')));
   rmSync(h, { recursive: true, force: true });
 }
 
