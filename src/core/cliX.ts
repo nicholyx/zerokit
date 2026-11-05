@@ -419,3 +419,44 @@ export function renameColumn(rows: Row[], spec: string): { rows: Row[]; error?: 
   if (!allKeys.includes(from)) return { rows, error: `--rename 列 "${from}" 不存在（可用：${allKeys.join('、') || '（无）'}）` };
   return { rows: rows.map((r) => { const { [from]: v, ...rest } = r; return { ...rest, [to]: v }; }) };
 }
+
+// ---- 第一百五十轮：哨兵与对比 ----
+/** 150①：两次结果的差异行集（键并集逐行比；值变/新增/消失三类）。 */
+export interface DiffCell { key: string; a?: unknown; b?: unknown; kind: 'changed' | 'added' | 'removed' }
+export function diffResult(prev: unknown, curr: unknown): DiffCell[] {
+  const norm = (v: unknown): Record<string, unknown> | null => {
+    if (v && typeof v === 'object' && !Array.isArray(v)) return v as Record<string, unknown>;
+    return null; // 非对象（标量/数组）走整体对比，由调用方包装成 {值: v}
+  };
+  const wrap = (v: unknown): Record<string, unknown> => norm(v) ?? { 值: v };
+  const A = wrap(prev), B = wrap(curr);
+  const keys = [...new Set([...Object.keys(A), ...Object.keys(B)])];
+  const out: DiffCell[] = [];
+  for (const k of keys) {
+    const a = A[k], b = B[k];
+    const sa = JSON.stringify(a) ?? 'undefined', sb = JSON.stringify(b) ?? 'undefined';
+    if (sa === sb) continue;
+    if (!(k in A)) out.push({ key: k, b, kind: 'added' });
+    else if (!(k in B)) out.push({ key: k, a, kind: 'removed' });
+    else out.push({ key: k, a, b, kind: 'changed' });
+  }
+  return out;
+}
+
+/** 150②：--alert 表达式求值（列 操作符 值；ms 是内置伪列=本次耗时）。返回 ok/实际值/错误文案。 */
+export function alertEval(expr: string, data: unknown, ms?: number): { ok: boolean; actual?: string; error?: string } {
+  const m = /^([\p{L}\p{N}_][\p{L}\p{N}_.]*)(>=|<=|>|<|=|~)(.+)$/u.exec(expr.trim());
+  if (!m) return { ok: false, error: `--alert "${expr}" 看不懂（写法：列>5、列=值、ms<500）` };
+  const col = m[1] ?? '', op = m[2] ?? '', raw = (m[3] ?? '').trim().replace(/^["']|["']$/g, '');
+  let cell: unknown;
+  if (col === 'ms') cell = ms;
+  else if (data !== null && data !== undefined && typeof data === 'object' && !Array.isArray(data) && col in (data as Record<string, unknown>)) cell = (data as Record<string, unknown>)[col];
+  else if (col === '值' && (data === null || typeof data !== 'object' || Array.isArray(data))) cell = data; // 标量/数组结果的「值」伪列
+  else return { ok: false, error: `--alert 列 "${col}" 不在结果里（对象结果用其中的键，标量结果用「值」，计时用「ms」）` };
+  if (op === '~') return { ok: String(cell ?? '').includes(raw), actual: String(cell ?? '') };
+  if (op === '=') return { ok: String(cell ?? '') === raw, actual: String(cell ?? '') };
+  const a = numVal(cell), b = numVal(raw);
+  if (a === null || b === null) return { ok: false, error: `--alert "${col}" 或 "${raw}" 不是数字，比不了（字符串用 = 或 ~）` };
+  const ok = op === '>' ? a > b : op === '<' ? a < b : op === '>=' ? a >= b : a <= b;
+  return { ok, actual: String(cell) };
+}

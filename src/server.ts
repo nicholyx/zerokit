@@ -380,8 +380,34 @@ function readBody(req: http.IncomingMessage): Promise<Record<string, unknown>> {
   });
 }
 
+// 第一百五十轮④⑧：server 请求日志——环境变量 ZEROKIT_SERVER_LOG 指向文件时启用。
+// 行格式：ts method path status ms（query 剥掉——脱敏，不落参数值）
+export function serverLogLine(method: string, pathname: string, status: number, ms: number): string {
+  return `${new Date().toISOString()} ${method} ${pathname} ${status} ${ms}`;
+}
+// fs 惰性取：finish 回调是同步的，模块顶已 import fs 就直接用（见文件头 import fs）
+function attachRequestLog(req: http.IncomingMessage, res: http.ServerResponse, startedAt: number): void {
+  const target = process.env.ZEROKIT_SERVER_LOG;
+  if (!target) return;
+  res.on('finish', () => {
+    try {
+      let pathname = '/';
+      try { pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname; } catch { /* 保持兜底 */ }
+      const line = serverLogLine(req.method ?? '?', pathname, res.statusCode, Date.now() - startedAt) + '\n';
+      appendSync(target, line);
+    } catch { /* 日志是旁路 */ }
+  });
+}
+
+/** 同步追加（finish 回调里用；坏路径静默——日志是旁路）。 */
+function appendSync(file: string, text: string): void {
+  try { fs.appendFileSync(file, text); } catch { /* 旁路 */ }
+}
+
 export function createServer(): http.Server {
   return http.createServer(async (req, res) => {
+    const startedAt = Date.now();
+    attachRequestLog(req, res, startedAt);
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     const isApi = url.pathname.startsWith('/api/');
 
@@ -1550,6 +1576,18 @@ export function startServer(options: ServerOptions = {}): Promise<{ url: string;
 export async function cli(args: string[], opts: { openPath?: string } = {}): Promise<number> {
   const portIdx = args.indexOf('--port');
   const port = portIdx >= 0 ? Number(args[portIdx + 1]) : 0;
+  // 第一百五十轮④⑤：--log 落 ~/.zerokit/logs/server.log（追加写；启动行含端口与 pid）
+  if (args.includes('--log')) {
+    const pathMod = await import('node:path');
+    const fsMod = await import('node:fs');
+    const home = (await import('./core/paths.ts')).HOME;
+    const logDir = pathMod.join(home, 'logs');
+    fsMod.mkdirSync(logDir, { recursive: true });
+    const logFile = pathMod.join(logDir, 'server.log');
+    process.env.ZEROKIT_SERVER_LOG = logFile;
+    fsMod.appendFileSync(logFile, `=== 启动 ${new Date().toISOString()} pid=${process.pid} ===\n`);
+    process.stdout.write(`日志：${logFile}\n`);
+  }
   const { url } = await startServer({ port: Number.isFinite(port) ? port : 0 });
 
   // 被宿主进程（Tauri 壳、脚本）当子进程拉起时，读取端可能在拿到地址后就关掉了，

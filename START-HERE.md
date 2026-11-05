@@ -82,6 +82,20 @@ node src/cli.ts history --grep b64
 node src/cli.ts history --rerun-last
 ```
 
+想盯一个变化的量、或给脚本当条件判断：
+
+```bash
+# 和上次比，只看变化（首次执行会存基线）
+node src/cli.ts run sysinfo overview --diff
+
+# 哨兵断言：满足 exit 0，不满足 exit 2（shell 里可直接 && / ||）
+node src/cli.ts run sysinfo overview --alert 'ms<500'
+
+# server 请求日志（出问题别猜，看日志）
+node src/cli.ts ui --log          # 启动时提示日志路径
+node src/cli.ts logs server --tail 20
+```
+
 ---
 
 ## 四、可选：接给 AI 客户端当 MCP 工具
@@ -183,7 +197,7 @@ PowerShell 用 `$env:https_proxy="http://127.0.0.1:<端口>"`（其余两个同�
 ## 七、这个项目现在是什么状态
 
 内核、四个面、插件集市、原生壳、uTools 插件兼容层都已跑通，各有测试
-（`node scripts/test-all.mjs`，100 个文件，2444 项断言，不联网、不花钱）。<!-- zk-version -->当前版本 v1.53.0<!-- /zk-version -->
+（`node scripts/test-all.mjs`，101 个文件，2470 项断言，不联网、不花钱）。<!-- zk-version -->当前版本 v1.53.0<!-- /zk-version -->
 
 已知的缺口和明确不做的事，都列在 `docs/reference/overview.md` 的「待办」和「已知差距」两节里——
 那份是诚实的账本，建议看一眼再判断这个项目值不值得用。
