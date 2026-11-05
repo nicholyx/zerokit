@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans } from './extras.js';
+import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote, defaultChip, enumHint, actionHealthBadge, descNeedsFold, inQuietHours, notifyThrottle, pushNotifyLog, parseHm } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -6679,6 +6679,35 @@ async function showPlugins() {
   await renderPlugins();
 }
 
+/**
+ * 第一百三十九轮⑤：能力清单 Markdown——导出与「复制 doc」共用同一份，
+ * 保证两条出口内容永远一致（导出新增的参数摘要/🖥 也进剪贴板版）。
+ */
+function buildCapabilitiesMd(p) {
+  return [
+    '# ' + p.name + '(`' + p.id + '`) 能力清单',
+    '',
+    '- 版本：v' + p.version + '　来源：' + p.sourceText,
+    '- 摘要：' + (p.summary || '（无）'),
+    p.description ? '- 说明：' + p.description : '',
+    '',
+    '## 动作',
+    ...p.actions.map((a) => {
+      const psr = paramSummary(a.fields);
+      return '- **' + a.title + '**（`' + a.id + '`）：风险 `' + a.risk + '`'
+        + (a.steps?.length ? '，组合 ' + a.steps.length + ' 步' : '')
+        + (a.ui ? '，带界面' : '')
+        + '，参数 ' + psr.text + (psr.secretMark ? '（含密钥）' : '')
+        + ' —— ' + (a.description || a.title);
+    }),
+    '',
+    p.pluginDeps?.length ? '## 插件依赖\n' + p.pluginDeps.map((d) => '- `' + d.id + '`' + (d.installed ? '（已装）' : '（未装）')).join('\n') : '',
+    p.settings?.length ? '## 设置项\n' + p.settings.map((x) => '- `' + x.name + '`' + (x.required ? '（必填）' : '') + (x.secret ? '（密钥）' : '')).join('\n') : '',
+    '',
+    '> 由 zerokit 于 ' + new Date().toLocaleString() + ' 生成',
+  ].filter(Boolean).join('\n');
+}
+
 /** 插件主页：一个插件在四个面里到底是什么——动作、设置、依赖、来源，一页看完 */
 async function showPluginHome(id) {
   hidePanels();
@@ -6700,6 +6729,7 @@ async function showPluginHome(id) {
   if (!p) {
     el.plugView.innerHTML = `<div class="ps-empty" role="status">找不到插件 ${esc(id)}</div>
       <div class="actions"><button class="primary" id="homeBackList">返回插件列表</button></div>`;
+
     $('homeBackList').addEventListener('click', showPlugins);
     return;
   }
@@ -6708,37 +6738,19 @@ async function showPluginHome(id) {
   // 给的是「人能审阅」的形状——同事装之前先看这份就知道它会动什么。
   if (p.source?.type === 'market') checkPluginUpdate(p);
   // 锚点滚动：详情页顶部就是动作区，但插件列表很长时，锚点让「回到这个插件」一步到位
-  $('homeExport')?.addEventListener('click', () => {
-    const md = [
-      `# ${p.name}（\`${p.id}\`）能力清单`,
-      '',
-      `- 版本：v${p.version}　来源：${p.sourceText}`,
-      `- 摘要：${p.summary || '（无）'}`,
-      p.description ? `- 说明：${p.description}` : '',
-      '',
-      '## 动作',
-      ...p.actions.map((a) => '- **' + a.title + '**（`' + a.id + '`）：风险 `' + a.risk + '`'
-        + (a.steps?.length ? '，组合 ' + a.steps.length + ' 步' : '') + ' —— ' + (a.description || a.title)),
-      '',
-      p.pluginDeps?.length ? '## 插件依赖\n' + p.pluginDeps.map((d) => '- `' + d.id + '`' + (d.installed ? '（已装）' : '（未装）')).join('\n') : '',
-      p.settings?.length ? '## 设置项\n' + p.settings.map((x) => '- `' + x.name + '`' + (x.required ? '（必填）' : '') + (x.secret ? '（密钥）' : '')).join('\n') : '',
-      '',
-      `> 由 zerokit 于 ${new Date().toLocaleString()} 生成`,
-    ].filter(Boolean).join('\n');
-    const blob = new Blob([md], { type: 'text/markdown' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${p.id}-capabilities.md`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  });
-
   const settings = p.settings ?? [];
   const deps = p.pluginDeps ?? [];
+  // 第一百三十九轮①②：能力速查卡——风险构成 + 关键词 chips（点击直达搜索）
+  const qc = pluginQuickCard(p);
   el.plugView.innerHTML = `
     <div class="ps-head">
       <h2>${esc(p.name)} <span class="aid">${esc(p.id)} · v${esc(p.version)}</span></h2>
       <span class="sub">${esc(p.sourceText)}</span>
+    </div>
+    <div class="plug-quick-card">
+      <div class="pqc-summary">${esc(qc.summary || p.description || '')}</div>
+      <div class="pqc-mix"><span class="risk-dot read" data-risk="read"></span>${esc(qc.mixText)} <b>${qc.actions}</b> 个动作</div>
+      ${qc.keywords.length ? `<div class="pqc-kws">${qc.keywords.map((k) => `<span class="chip" data-kw="${esc(k)}" role="button" tabindex="0" title="搜索「${esc(k)}」">${esc(k)}</span>`).join('')}</div>` : ''}
     </div>
     <div class="plug-home-desc">${esc(p.description || p.summary || '')}</div>
     <span id="plugUpdateBadge" class="badge upd-badge hidden" style="display:none"></span>
@@ -6758,6 +6770,8 @@ async function showPluginHome(id) {
         <div class="stat-card"><b>${st.runs}</b><span>累计执行${st.lastUsed !== null ? ` · 最近 ${st.lastUsed} 分钟前` : ''}</span></div>
         <div class="stat-card${st.health === 'warn' ? ' warn' : ''}"><b>${st.health === 'ok' ? '健康' : '注意'}</b><span>${st.health === 'ok' ? '依赖齐全' : '缺命令依赖'}</span></div>
       </div>`;
+
+
     })()}
     ${(() => {
       // 第二十六轮⑦：标签 chips
@@ -6766,12 +6780,19 @@ async function showPluginHome(id) {
     })()}
     <h3 class="plug-home-h">动作 <input id="plugActFilter" class="plug-act-filter" placeholder="在 ${p.actions.length} 个动作里搜索…" /></h3>
     <div class="plug-home-actions" id="plugActList">
-      ${p.actions.map((a) => `
+      ${p.actions.map((a) => {
+        // 第一百三十九轮③⑦：参数摘要（必填/可选/🔑）+ 🖥 带界面 + 上次执行
+        const ps = paramSummary(a.fields);
+        const lr = lastRunText(`${p.id}.${a.id}`, runStore);
+        return `
         <button class="plug-action" data-action="${esc(a.id)}">
           <span class="pa-title">${esc(a.title)}</span>
           <span class="badge ${esc(a.risk)}">${esc(riskText(a.risk))}</span>
           ${a.steps?.length ? `<span class="badge">组合 ${a.steps.length} 步</span>` : ''}
-        </button>`).join('')}
+          ${a.ui ? '<span class="badge" title="带交互界面">🖥</span>' : ''}
+          <span class="pa-params" title="参数：${esc(ps.text)}${ps.secrets ? `，含 ${ps.secrets} 个密钥` : ''}">${esc(ps.text)}${ps.secretMark}</span>
+          <span class="pa-lastrun">${lr ? esc(lr) : '还没跑过'}</span>
+        </button>`; }).join('')}
     </div>
     ${settings.length ? `<h3 class="plug-home-h">设置项</h3>
       <div class="plug-home-settings">
@@ -6784,12 +6805,41 @@ async function showPluginHome(id) {
     ${deps.length ? `<h3 class="plug-home-h">依赖树</h3><pre class="dep-tree">${esc(depTreeLines(p.id, deps).join('\n'))}</pre>` : ''}
     <div class="actions">
       <button class="ghost" id="homeExport" title="导出这个插件的能力清单（Markdown）">导出能力清单</button>
+      <button class="ghost" id="homeCopyDoc" title="复制能力清单 Markdown 到剪贴板">复制 doc</button>
       <button class="ghost" id="homeCopyInstall" title="复制安装命令（命令行里一键装）">复制安装命令</button>
       <button class="ghost" id="homeCompare" title="与另一个插件对比动作与风险">对比…</button>
       ${p.source?.type === 'market' ? '<button class="ghost" id="plugUpdateBtn">检查更新</button>' : ''}
       <button class="ghost" id="homeBackList">返回插件列表</button>
       <button class="primary" id="homeBack">返回</button>
     </div>`;
+  // 第一百三十九轮②⑤：关键词 chip 直达搜索；「复制 doc」与导出同一份 Markdown
+  el.plugView.querySelectorAll('[data-kw]').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const kw = chip.getAttribute('data-kw') ?? '';
+      // 真缺陷修复：插件主页在 plugView 里，改 hash 只会换面板路由——必须走 exitPlugins 回列表态再搜
+      exitPlugins();
+      el.q.value = kw;
+      renderList();
+      el.q.focus();
+    });
+  });
+  $('homeCopyDoc')?.addEventListener('click', () => {
+    const md = buildCapabilitiesMd(p);
+    navigator.clipboard?.writeText(md).then(
+      () => { el.count.textContent = `已复制 ${p.name} 的能力清单（Markdown）`; },
+      () => { el.count.textContent = '复制失败——剪贴板不可用'; },
+    );
+  });
+  $('homeExport')?.addEventListener('click', () => {
+    const md = buildCapabilitiesMd(p);
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${p.id}-capabilities.md`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
 
   el.plugView.querySelectorAll('[data-action]').forEach((btn) => {
     const a = p.actions.find((x) => x.id === btn.dataset.action);

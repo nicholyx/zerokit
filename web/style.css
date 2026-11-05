@@ -2108,3 +2108,24 @@ td.gsum-label { font-weight: 600; }
 .timer-hist-out.err { color: var(--danger, #d33); }
 .timer-hist-line.dim { opacity: 0.6; }
 .timer-row .risk-dot { flex: none; margin-left: 2px; }
+
+/* ==================== 第一百三十九轮：插件能力速查卡 ==================== */
+.plug-quick-card {
+  border: 1px solid var(--line, #d8dce3);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--fg, #333) 4%, transparent);
+  padding: 12px 14px;
+  margin: 10px 0 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pqc-summary { font-size: 13px; color: var(--fg-dim, #666); }
+.pqc-mix { font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.pqc-mix b { font-size: 15px; }
+.pqc-kws { display: flex; flex-wrap: wrap; gap: 6px; }
+.pqc-kws .chip { cursor: pointer; }
+.pqc-kws .chip:hover { border-color: var(--accent, #3b82f6); }
+.pa-params { font-size: 11.5px; color: var(--fg-dim, #888); margin-left: auto; white-space: nowrap; }
+.pa-lastrun { font-size: 11.5px; color: var(--fg-dim, #999); white-space: nowrap; }
+[data-theme="dark"] .plug-quick-card { background: color-mix(in srgb, var(--fg, #ccc) 7%, transparent); }
