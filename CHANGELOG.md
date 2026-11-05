@@ -42,6 +42,7 @@
 - 压测脚本 `scripts/stress.mjs`：并发 8 动作（seq 无串台）、失败混入审计不丢行、3×2MB 大输出并行（溢出落盘各自独立）、3 进程并发写审计无交叉半行；`--quick` 最小档供测试调用。
 - `scripts/bench.mjs` 补稳定性段：4 并发轻量探针（avg/max 耗时），完整压测指向 stress.mjs。
 - `test/stress147-smoke.mjs` 10 项：并发/审计原子/落盘独立性实测 + 事件委托与 interval 配平的泄漏判据静态断言（addEventListener 数字不是泄漏判据——重建式渲染里旧节点随 innerHTML 整体 GC）。
+- 修复大输出溢出落盘的竞态：spill 流 `end()` 不等落盘就 resolve，CLI 路径立即退出时 2MB 级文件还在内核缓冲里，下游读到 0 字节（并发 3×2MB 实测第 3 个文件 0.0MB）——现在挂 finish 回调再返回。
 
 ## [1.45.0] - 2026-11-05
 
