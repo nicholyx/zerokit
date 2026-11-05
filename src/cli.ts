@@ -4178,11 +4178,57 @@ async function main(): Promise<number> {
     case 'interactive':
     case 'im':
       return cmdInteractive(rest);
-    case undefined:
+    case undefined: {
       // 第四十五轮①：裸 zkit 在 TTY 下进交互模式；管道/CI 仍是帮助
+      // 第一百五十一轮①②⑥：空数据目录首跑改引导页；已初始化仍是紧凑帮助
+      const ob = await import('./core/onboard.ts');
+      const state = ob.onboardState((await import('./core/paths.ts')).HOME);
+      if (process.argv.includes('--skip-onboarding')) { ob.markOnboarded(); process.stdout.write('已跳过引导（不再显示）。zkit --help 看全部命令。\n'); return 0; }
+      if (!state.onboarded && !process.argv.includes('--help')) {
+        const cmd = process.argv[1] ? (process.argv[1].endsWith('.ts') ? 'node src/cli.ts' : 'zkit') : 'zkit';
+        if (process.stdin.isTTY) {
+          process.stdout.write(c.bold('zerokit 首次运行\n\n'));
+          for (const l of ob.guideLines(state, cmd)) process.stdout.write(l + '\n');
+          // 完成任一步就写标记：引导只完整出现一次，之后回到紧凑帮助
+          if (state.hasPlugins && state.hasRun) ob.markOnboarded();
+          return 0;
+        }
+        // 非 TTY：脚本可消费的命令清单
+        for (const l of ob.scriptLines(cmd)) process.stdout.write(l + '\n');
+        return 0;
+      }
       if (process.stdin.isTTY && !process.argv.includes('--help')) return cmdInteractive(rest);
       process.stdout.write(HELP);
       return 0;
+    }
+    case 'doctor':
+      // 第一百五十一轮⑤：doctor --first-run 只查引导三件事
+      if (rest.includes('--first-run')) {
+        const ob = await import('./core/onboard.ts');
+        const state = ob.onboardState((await import('./core/paths.ts')).HOME);
+        process.stdout.write(c.bold('首次运行体检（三件事）：\n'));
+        process.stdout.write(`  ${state.hasPlugins ? c.green('✓') : c.red('✗')} 示例插件${state.hasPlugins ? '已装' : '未装'}——zkit plugin bundled\n`);
+        process.stdout.write(`  ${state.hasRun ? c.green('✓') : c.red('✗')} ${state.hasRun ? '已跑过动作' : '还没跑过动作'}——zkit run sysinfo overview\n`);
+        process.stdout.write(`  ${state.hasUi ? c.green('✓') : c.red('✗')} ${state.hasUi ? '界面起过' : '界面还没起过'}——zkit ui --open\n`);
+        return state.hasPlugins && state.hasRun ? 0 : 1;
+      }
+      return cmdDoctor();
+    case 'hello': {
+      // 第一百五十一轮③：zkit hello——交互式欢迎（非 TTY 降级为引导清单）
+      const ob = await import('./core/onboard.ts');
+      const state = ob.onboardState((await import('./core/paths.ts')).HOME);
+      const cmd = process.argv[1] && process.argv[1].endsWith('.ts') ? 'node src/cli.ts' : 'zkit';
+      const done = state.hasPlugins && state.hasRun && state.hasUi;
+      process.stdout.write(c.bold(done ? '三步全部完成，你已经上手了。\n' : '欢迎！你的进度：\n') + '\n');
+      for (const l of ob.guideLines(state, cmd)) process.stdout.write(l + '\n');
+      return 0;
+    }
+    case '--skip-onboarding': {
+      const ob = await import('./core/onboard.ts');
+      ob.markOnboarded();
+      process.stdout.write('已跳过引导（不再显示）。zkit --help 看全部命令。\n');
+      return 0;
+    }
     case 'help':
     case '-h':
     case '--help':
@@ -4219,8 +4265,6 @@ async function main(): Promise<number> {
       return cmdWelcome();
     case 'update':
       return cmdUpdate(rest);
-    case 'doctor':
-      return cmdDoctor();
     case 'desktop':
       return cmdDesktop(rest);
     case 'stats':

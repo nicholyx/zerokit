@@ -70,6 +70,8 @@ node src/cli.ts run ip public
 `doctor` 里如果提示 `python` 缺失，**不影响其它插件**——只有 `proxy`
 （那个接管已有工具的示例）需要它。
 
+第一次跑？直接敲 `node src/cli.ts`（不带参数）就有三步引导——装插件、跑第一个动作、起界面，每步的命令都能直接复制。跑熟了 `node src/cli.ts hello` 随时看进度，`--skip-onboarding` 不再显示。
+
 顺带两个省事的入口（跑过几条命令后再用）：
 
 ```bash
@@ -197,7 +199,7 @@ PowerShell 用 `$env:https_proxy="http://127.0.0.1:<端口>"`（其余两个同�
 ## 七、这个项目现在是什么状态
 
 内核、四个面、插件集市、原生壳、uTools 插件兼容层都已跑通，各有测试
-（`node scripts/test-all.mjs`，101 个文件，2470 项断言，不联网、不花钱）。<!-- zk-version -->当前版本 v1.54.0<!-- /zk-version -->
+（`node scripts/test-all.mjs`，102 个文件，2486 项断言，不联网、不花钱）。<!-- zk-version -->当前版本 v1.54.0<!-- /zk-version -->
 
 已知的缺口和明确不做的事，都列在 `docs/reference/overview.md` 的「待办」和「已知差距」两节里——
 那份是诚实的账本，建议看一眼再判断这个项目值不值得用。
