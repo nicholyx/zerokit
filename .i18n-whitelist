@@ -1239,3 +1239,6 @@ if\ \(sc\.ok\)\ marketMsg\(`已安装「\$\{nm\}」·\ 自检\ ✓\ 能跑（\$\
 else\ marketMsg\(`已安装「\$\{nm\}」·\ 但自检\ ✗\ 跑不起来：\$\{sc\.error\ \|\|\ '退出码非零'\}`,\ 'warn',\ p\.id\ \|\|\ p\.entry\?\.id\);
 marketMsg\(`已安装「\$\{nm\}」·\ 自检跳过（\$\{sc\.probe\.reason\}）`,\ 'ok',\ p\.id\ \|\|\ p\.entry\?\.id\);
 marketMsg\(`已安装「\$\{nm\}」`,\ 'ok',\ p\.id\ \|\|\ p\.entry\?\.id\);
+# 第一百三十八轮：定时任务历史（risk-dot title 是状态图示；无输出快照是结构占位）
+title="最近一次执行失败"
+timer-hist-line dim">（无输出快照）

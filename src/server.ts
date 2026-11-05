@@ -541,6 +541,12 @@ export function createServer(): http.Server {
         json(res, 200, { timers: timers.map((t) => ({ ...t, nextAt: nextFireTime(t) ?? 0 })) });
         return;
       }
+      // 第一百三十八轮①②：定时任务执行历史（timer-runs.json，UI 面板消费）
+      if (url.pathname === '/api/timer-runs' && req.method === 'GET') {
+        const { loadRuns } = await import('./core/timers.ts');
+        json(res, 200, loadRuns());
+        return;
+      }
       if (url.pathname === '/api/timers' && req.method === 'POST') {
         const body = await readBody(req);
         const { upsertTimer, removeTimer, setTimerPaused } = await import('./core/timers.ts');
