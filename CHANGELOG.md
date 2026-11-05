@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.54.0] - 2026-11-06
+
+### Added
+
+- `run --diff`：与上次同命令执行的结果对比（基线按命令指纹存 `~/.zerokit/baselines/`；首行提示首次执行）
+- `run --alert '表达式'`：结果断言哨兵（`列>80`、`值=x`、`ms<500`；满足 exit 0，不满足 exit 2 带实际值——脚本/定时任务可直接当条件用）
+- `run --watch N --diff`：轮询中无变化的轮次不再刷屏（打点表示活着）
+- `zkit ui --log`：server 请求日志落 `~/.zerokit/logs/server.log`（启动行含端口与 pid；请求行 method path status ms，query 参数剥掉——脱敏）
+- `zkit logs server [--tail N] [--follow]`：查看/跟读 server 日志
+
 ## [1.53.0] - 2026-11-06
 
 ### Added
@@ -65,13 +75,6 @@
 
 ## [Unreleased]
 
-### Added
-
-- `run --diff`：与上次同命令执行的结果对比（基线按命令指纹存 `~/.zerokit/baselines/`；首行提示首次执行）
-- `run --alert '表达式'`：结果断言哨兵（`列>80`、`值=x`、`ms<500`；满足 exit 0，不满足 exit 2 带实际值——脚本/定时任务可直接当条件用）
-- `run --watch N --diff`：轮询中无变化的轮次不再刷屏（打点表示活着）
-- `zkit ui --log`：server 请求日志落 `~/.zerokit/logs/server.log`（启动行含端口与 pid；请求行 method path status ms，query 参数剥掉——脱敏）
-- `zkit logs server [--tail N] [--follow]`：查看/跟读 server 日志
 （下一版攒着）
 
 ## [1.45.0] - 2026-11-05
@@ -91,10 +94,4 @@
 ### Added
 
 - **插件能力速查卡**：插件主页顶部新增风险构成（只读 N · 变更 N · 高风险 N）与关键词 chips（点击直达搜索）；动作行补参数摘要（必填/可选/🔑 密钥标记）、🖥 带界面徽标、上次执行相对时间（无记录显示「还没跑过」）；「复制 doc」按钮与导出能力清单共用同一份 Markdown（含参数摘要与界面标注）
-
-## [1.42.0] - 2026-11-05
-
-### Added
-
-- **定时任务执行历史**：每次触发落盘一条（时间/成败/耗时/输出快照 2KB/触发来源 auto·manual·catchup），每任务封顶 20 条；`zkit timers history <key> [N]` 人读、`zkit timers list --json` 增 `lastRuns`；面板历史弹层合并持久史与会话史，失败条目行首红点、输出快照与错误可展开；`GET /api/timer-runs`
 
