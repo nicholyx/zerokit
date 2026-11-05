@@ -136,3 +136,16 @@ if (worst.length) {
 }
 
 }
+
+// —— 稳定性（第一百四十七轮）：并发与大输出不进 CI，手动档 ——
+// 完整压测见 scripts/stress.mjs（并发 8 / 大输出 3×2MB / 审计原子性）。
+// bench 只补一个轻量并发探针：4 个只读动作并行跑，报最慢/平均。
+{
+  const { runFour } = await import('./stress-probe.mjs').catch(() => ({ runFour: null }));
+  if (runFour) {
+    const t0 = now();
+    const times = await runFour();
+    const avg = (times.reduce((a, b) => a + b, 0) / times.length).toFixed(0);
+    console.log(`稳定·并发4：avg=${avg}ms max=${Math.max(...times)}ms`);
+  }
+}
