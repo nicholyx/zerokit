@@ -76,6 +76,32 @@ else
   fail=1
 fi
 
+# 第一百四十六轮⑦：U+FFFD 扫描进 lint（多轮中文写入事故的机器化）
+if python3 - <<'FFFD'
+import pathlib, sys
+bad = [str(p) for p in pathlib.Path('.').rglob('*')
+       if p.is_file() and '.git' not in p.parts and 'node_modules' not in p.parts
+       and 'target' not in p.parts and '.trellis' not in p.parts
+       and chr(0xfffd) in p.read_text(encoding='utf-8', errors='ignore')]
+print('FFFD 命中：' + ', '.join(bad) if bad else 'OK    U+FFFD 扫描（零替换字符）')
+sys.exit(1 if bad else 0)
+FFFD
+then
+  :
+else
+  echo "FAIL  U+FFFD 扫描（写入时混入替换字符）"
+  fail=1
+fi
+
+# 第一百四十六轮：质量护栏——CHANGELOG 格式/文档数字同步/绝对路径/版本行，
+# 四条人肉纪律的机器化（三次 CHANGELOG 空行事故的根治）
+if node scripts/guard146.mjs; then
+  echo "OK    质量护栏（guard146）"
+else
+  echo "FAIL  质量护栏（guard146）—— node scripts/guard146.mjs 看详情"
+  fail=1
+fi
+
 # zizmor：CI 用容器跑，本地有 docker 才跑
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   if docker run --rm -v "$PWD":/repo:ro \
