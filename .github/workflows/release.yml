@@ -90,7 +90,7 @@ jobs:
       matrix:
         include:
           - label: mac-arm64
-            os: macos-14
+            os: macos-15      # macos-14 池 2026-11-05 起取不到 runner（瞬时取消、0 步、无日志）——升 macos-15 池
             args: '--target aarch64-apple-darwin'
           - label: mac-x64
             os: macos-15-intel
