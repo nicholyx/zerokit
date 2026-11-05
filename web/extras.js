@@ -3940,3 +3940,45 @@ export function parseHm(s) {
   if (h > 23 || mm > 59) return null;
   return h * 60 + mm;
 }
+
+// ==================== 第一百三十九轮：插件能力速查卡 ====================
+
+/** ③ 动作参数摘要：必填 N / 可选 N / secret 计数，纯函数可单测。 */
+export function paramSummary(fields) {
+  const list = Array.isArray(fields) ? fields : [];
+  const required = list.filter((f) => f && f.required).length;
+  const optional = list.length - required;
+  const secrets = list.filter((f) => f && f.secret).length;
+  const parts = [];
+  if (required) parts.push(`必填 ${required}`);
+  if (optional) parts.push(`可选 ${optional}`);
+  if (!parts.length) parts.push('无参数');
+  return { text: parts.join(' / '), required, optional, secrets, secretMark: secrets > 0 ? ' 🔑' : '' };
+}
+
+/** ①② 速查卡聚合：风险构成 + 关键词 chips（≤8 个，去重），纯函数。 */
+export function pluginQuickCard(p) {
+  const acts = Array.isArray(p?.actions) ? p.actions : [];
+  const mix = { read: 0, mutate: 0, destructive: 0 };
+  for (const a of acts) if (a && a.risk && a.risk in mix) mix[a.risk]++;
+  const kw = [...new Set((p?.keywords ?? []).filter(Boolean))].slice(0, 8);
+  return {
+    name: p?.name ?? '', summary: p?.summary ?? '', actions: acts.length,
+    mix, keywords: kw,
+    mixText: `只读 ${mix.read} · 变更 ${mix.mutate} · 高风险 ${mix.destructive}`,
+    hasParams: acts.some((a) => Array.isArray(a?.fields) && a.fields.length > 0),
+  };
+}
+
+/** ④ 动作上次执行：从 runStore（{actionKey:[{ts}]}）取最新 ts 的相对时间；无记录 null。 */
+export function lastRunText(actionKey, runStore, now = Date.now()) {
+  const runs = runStore?.[actionKey];
+  if (!Array.isArray(runs) || !runs.length) return null;
+  const last = runs[0]?.ts ?? null;
+  if (last === null) return null;
+  const s = Math.max(0, Math.floor((now - last) / 1000));
+  if (s < 60) return '刚刚';
+  if (s < 3600) return `${Math.floor(s / 60)} 分钟前`;
+  if (s < 86400) return `${Math.floor(s / 3600)} 小时前`;
+  return `${Math.floor(s / 86400)} 天前`;
+}

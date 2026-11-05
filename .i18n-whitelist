@@ -1,7 +1,5 @@
-# i18n 扫描白名单（第一百轮建立）
-# 每行一条正则片段。这里的项是「已盘点、显式记账」的硬编码中文负债——
-# 界面可见文案应逐步迁入 web/extras.js 的 I18N 表并从本表移除。
-# 新增代码不允许追加本表（CI 会挂），迁入 I18N 后删对应行。
+# i18n 白名单：每行一条正则片段，登记「已知可接受」的硬编码中文（导出文档本体、中文注释等）。
+# 规则：新增渲染路径的中文必须走 I18N 键；只有文档导出/CLI 输出这类「本体就是中文」的才登记在此。新增代码不允许追加本表——要加先在 PR 里说明理由。
 if \(!list\.includes\('默认'\) && \(curProfileN
 <button data-ai-toggle="\$\{aiAssistOn\(\) \?
 <button data-scope-wipe="searches" title
@@ -9,9 +7,9 @@ if \(!list\.includes\('默认'\) && \(curProfileN
 <button data-profile="\$\{esc\(n\)\}" class="
 searches: \{ key: 'zerokit\.searches', lab
 saved: \{ key: 'zerokit\.saved-results', l
-timers: \{ key: 'zerokit\.timers', label: 
+timers: \{ key: 'zerokit\.timers', label:
 if \(badge\) badge\.textContent = cnt > 0 \?
-if \(cnt === 0\) \{ el\.count\.textContent = 
+if \(cnt === 0\) \{ el\.count\.textContent =
 return localStorage\.getItem\('zerokit\.pro
 const data = await res\.json\(\)\.catch\(\(\) =
 if \(explain && mi >= 0\) explain\.push\(\[pa
@@ -21,14 +19,14 @@ if \(explain && mi >= 0\) explain\.push\(\[pa
 const dep = p\.requiresOk \? '' : `<span c
 \$\{a\.steps\?\.length \? `<span class="badge"
 \$\{smart \? `<span class="badge smart-badg
-<span class="item-desc1 desc">\$\{smart \? 
-<button class="star\$\{fav \? ' on' : ''\}" 
+<span class="item-desc1 desc">\$\{smart \?
+<button class="star\$\{fav \? ' on' : ''\}"
 return `<li class="recent-block"><div cl
-\? `<div class="hist-chips\$\{q\.trim\(\) \? ' 
+\? `<div class="hist-chips\$\{q\.trim\(\) \? '
 \.map\(\(x\) => `<span class="chip-wrap"><bu
 <button class="chip quiet" id="clearHist
 if \(btn\) \{ btn\.disabled = true; btn\.text
-const j = await r\.json\(\)\.catch\(\(\) => \(\{ 
+const j = await r\.json\(\)\.catch\(\(\) => \(\{
 if \(btn\) \{ btn\.disabled = false; btn\.tex
 <span class="sub">总耗时 \$\{formatMs\(totalMs
 <li data-fail="\$\{i\}" title="\$\{esc\(classi
@@ -67,11 +65,11 @@ if \(i >= 0\) \{ favorites\.splice\(i, 1\); el
 else \{ favorites\.push\(key\); el\.count\.tex
 el\.count\.textContent = existed \? `已在篮子里：
 el\.count\.textContent = `\$\{filtered\.lengt
-✗ 缺少依赖：\$\{esc\(plugin\.missingDeps\.join\(', 
+✗ 缺少依赖：\$\{esc\(plugin\.missingDeps\.join\(',
 <div class="chain-dry"><button class="gh
 \? '动作参数 \+ 内置占位符'
 : `上一步结果 \{\$\{esc\(steps\[i - 1\]\.as\)\}\} / \{pr
-const aliasNote = `<div class="mem-note 
+const aliasNote = `<div class="mem-note
 <input id="aliasInput" placeholder="起个短名
 <div class="mem-note nick-note">昵称：
 <input id="nickInput" placeholder="给这个动作
@@ -84,7 +82,7 @@ const aliasNote = `<div class="mem-note
 return `<span class="trend-chip" data-tr
 \? `<div class="warn-chip" role="status">
 `<button type="button" class="ghost mini
-<button type="button" class="ghost mini 
+<button type="button" class="ghost mini
 <div class="desc">\$\{esc\(action\.descripti
 \$\{action\.risk !== 'read' \? `<div class="
 <button class="ghost" id="hkBtn" title="
@@ -125,7 +123,7 @@ last\.stdout \? `输出：\$\{String\(last\.stdout\)\.
 box\.innerHTML = '<div class="help">读取配置中
 if \(!r\.settings\?\.length\) \{ box\.innerHTML
 <div class="cmd-box-head">插件配置 · \$\{esc\(p
-<span class="plug-setting-note">\$\{x\.set 
+<span class="plug-setting-note">\$\{x\.set
 placeholder="\$\{x\.secret && x\.set \? '已设置（
 <div class="actions"><button class="prim
 box\.innerHTML = `<div class="help" style
@@ -174,7 +172,7 @@ el\.modeLabel\.textContent = '时间线';
 \.map\(\(sm\) => String\(sm\.err \?\? '未知错误'\)\.sl
 body: `⚠ \$\{w\.title\} 连续失败 \$\{failStreakNow
 body: `⇄ \$\{w\.title\} 结果有变化（第 \$\{w\.changes\}
-<circle class="ring-fg" cx="18" cy="18" 
+<circle class="ring-fg" cx="18" cy="18"
 <button class="ghost mini" id="watchStop
 el\.modeLabel\.textContent = '性能';
 <div class="pane-head"><h2>性能</h2>
@@ -210,7 +208,7 @@ if \(!validWindow\(win\)\) \{ el\.count\.textCo
 <button class="ghost" data-close>关闭</but
 el\.modeLabel\.textContent = '📋 剪贴板';
 <span class="clip-text" title="\$\{esc\(c\.t
-<button class="ghost" data-write="\$\{i\}" 
+<button class="ghost" data-write="\$\{i\}"
 <button class="ghost" data-del="\$\{i\}" ti
 : '<div class="empty" role="status">还没有剪
 <h2>📋 剪贴板历史</h2>
@@ -226,7 +224,7 @@ setTimeout\(\(\) => \{ ev\.currentTarget\.text
 if \(!r\.ok\) \{ el\.count\.textContent = `导入失
 el\.count\.textContent = `导入完成：新增 \$\{added\}
 const lastTxt = !last \? '还没跑过'
-: last\.ok === null \? `跳过（\$\{esc\(last\.why 
+: last\.ok === null \? `跳过（\$\{esc\(last\.why
 <span class="run-when">\$\{esc\(tm\.title\)\}（
 <span class="timer-next" title="下次触发">\$\{
 <span class="timer-last" title="最近一次">\$\{
@@ -247,7 +245,7 @@ b\.disabled = false; b\.textContent = '▶ 执
 \? '这个动作会改动或删除数据，且不可自动撤销。请确认命令行内容与你的预期一致。
 : '这个动作会改动系统或插件状态（写文件、发请求、起进程等）。';
 <h3>确认执行</h3>
-<div class="cmd-line">\$\{esc\(res\.command 
+<div class="cmd-line">\$\{esc\(res\.command
 \$\{\(action\.fields \?\? \[\]\)\.length \? `<detai
 <table class="cmp-table"><caption class=
 \? '<span class="dim">（空，用默认）</span>'
@@ -286,7 +284,7 @@ else alert\('这两次记录没存结果数据（可能是老记录），重跑�
 alert\('这两次记录没存结果数据（可能是老记录），重跑一次后再对比。'\);
 if \(rows0\.length < 2\) \{ el\.count\.textCon
 if \(!merged\) \{ el\.count\.textContent = '合
-note: `合并视图：第 1、2 条记录按「\$\{key\}」列拼接（左连接）` 
+note: `合并视图：第 1、2 条记录按「\$\{key\}」列拼接（左连接）`
 el\.count\.textContent = `已合并 \$\{merged\.len
 <h3>绑定到 \$\{esc\(title\)\}</h3>
 \$\{hk\}\$\{owner && owner !== actionKeyStr \?
@@ -305,7 +303,7 @@ if \(hint\) hint\.textContent = '未绑定（F1–F12
 if \(runBtn2\) \{ runBtn2\.disabled = false;
 el\.count\.textContent = '链已结束';
 el\.count\.textContent = `链第 \$\{chainSteps\.
-bar\.innerHTML = `链：\$\{chainSteps\.map\(\(s, 
+bar\.innerHTML = `链：\$\{chainSteps\.map\(\(s,
 <button class="ghost mini chain-step" da
 if \(next\.length >= 8 && next\.every\(\(t\) =
 box\.setAttribute\('aria-label', '结果内容'\);
@@ -315,7 +313,7 @@ title="\$\{esc\(t\.note \? `备注：\$\{t\.note\}` : '
 <span class="rtab-x" data-rx="\$\{esc\(t\.id
 \+ \(resultTabs\.length >= 2 \? '<button cla
 const v = prompt\('给这个结果写句备注（页签悬停可见，复制可附带
-el\.count\.textContent = t\.note \? '备注已保存' 
+el\.count\.textContent = t\.note \? '备注已保存'
 el\.count\.textContent = t\.pinned \? '已固定（不
 if \(!cur \|\| !other\) \{ el\.count\.textConte
 <h4>⇄ 对比：\$\{esc\(ta\.name\)\} vs \$\{esc\(tb\.nam
@@ -350,8 +348,8 @@ spark\.title = `首行「\$\{col\}」最近 \$\{series\.len
 <button class="ghost" id="saveRes" title
 <button class="ghost" id="mdRes" title="
 <button class="ghost" id="shareMdRes" ti
-<button class="ghost" id="shareHtmlRes" 
-<button class="ghost" id="shareCopyRes" 
+<button class="ghost" id="shareHtmlRes"
+<button class="ghost" id="shareCopyRes"
 \$\{res\.data !== undefined \? `<button clas
 <button class="ghost" id="jsonRes" title
 \$\{toJsonl\(res\.data\) \? `<button class="gh
@@ -401,11 +399,11 @@ setTimeout\(\(\) => \{ const b = \$\('aiRes'\);
 current: \{ res, name: detail \? `\$\{detail
 \} catch \{ ev\.currentTarget\.textContent =
 setTimeout\(\(\) => \{ const b = \$\('ctxRes'\)
-<h3>结果对比\$\{pairMode \? '（自选两次）' : '（上一次 → 
+<h3>结果对比\$\{pairMode \? '（自选两次）' : '（上一次 →
 <label><input type="checkbox" id="diffOn
 <label><input type="checkbox" id="diffSi
 <div class="actions"><button class="prim
-\$\{diffs\.length \? '<button class="ghost" 
+\$\{diffs\.length \? '<button class="ghost"
 if \(diffs\.length === 0\) return '<div cla
 return `<table class="grid diff-table"><
 const md = \['\| 字段 \| 较早 \| 最新 \|', '\| --- \|
@@ -423,7 +421,7 @@ el\.count\.textContent = `插件页面报错：\$\{String\(
 if \(!bars\.length\) return `<div class="he
 return `<div class="bar-chart" role="img
 if \(data\.length === 0\) return `<div clas
-return `<tr><td>\$\{esc\(k\)\}</td><td\$\{num\} 
+return `<tr><td>\$\{esc\(k\)\}</td><td\$\{num\}
 `<th class="sortable\$\{numeric\[c\] \? ' num
 const title = clip \? ` title="\$\{esc\(val\.
 \? `<td class="gsum-label">└ \$\{esc\(String
@@ -435,7 +433,7 @@ const gear = `<span class="colvis-btn" d
 `<button class="ghost mini dens-btn\$\{d =
 const overFields = cols\.length > 30 \? `<
 const qbar = `<div class="rquery"><input
-\$\{bigTable \? `<div class="tcount"><span 
+\$\{bigTable \? `<div class="tcount"><span
 \.then\(\(\) => \{ el\.count\.textContent = `已复
 \.catch\(\(\) => \{ el\.count\.textContent = '复
 pop\.innerHTML = `<div class="pop-title">
@@ -446,7 +444,7 @@ const quickChips = `<button class="chip\$
 <input id="logQuery" class="log-query" p
 <button class="ghost" id="logCsv" title=
 <button class="ghost" id="logFile">\$\{log
-<div id="logList" class="log-list"><div 
+<div id="logList" class="log-list"><div
 if \(!es\.length\) \{ el\.count\.textContent =
 el\.count\.textContent = `已导出 \$\{es\.length\}
 \} catch \(err\) \{ el\.count\.textContent = `
@@ -458,7 +456,7 @@ el\.count\.textContent = `已导出 \$\{es\.length\}
 : `<div class="ps-empty" role="status">\$
 el\.doctorView\.innerHTML = `<div class="p
 <div class="log-tools"><button class="gh
-<div id="docBody"><div class="ps-empty" 
+<div id="docBody"><div class="ps-empty"
 \$\('docBody'\)\.innerHTML = `<div class="ps
 return n >= 2 \? ` <span class="persist-t
 <span class="doc-val">\$\{esc\(p\.id \|\| p\.di
@@ -477,7 +475,7 @@ const local = m\.local \? '<span class="ba
 <td>\$\{a\.risk === 'read' \? `<button class
 <b>审查「\$\{esc\(p\.entry\?\.name \|\| p\.id\)\}」</b>
 <span class="aid">来自集市 \$\{esc\(p\.market\)\}<
-<span class="badge \$\{p\.errors\?\.length \? 
+<span class="badge \$\{p\.errors\?\.length \?
 <thead><tr><th>动作</th><th>风险</th><th>真实命
 <tbody>\$\{rows \|\| '<tr><td colspan="3">清单
 一并安装缺失的插件依赖：\$\{missing\.map\(\(d\) => esc\(typ
@@ -507,7 +505,7 @@ marketMsg\(res\.message \|\| '已移除', 'ok'\);
 marketMsg\(`\$\{op === 'refresh' \? '刷新' : '
 el\.marketView\.innerHTML = `<div class="p
 <div class="actions"><button class="prim
-<h2>集市（\$\{marketData\.markets\.length\} 个 · 
+<h2>集市（\$\{marketData\.markets\.length\} 个 ·
 <span class="sub">任何 git 仓库 \+ market\.jso
 <input id="marketSrc" placeholder="添加集市：
 <button class="primary" id="marketAddBtn
@@ -521,7 +519,7 @@ el\.plugView\.innerHTML = `<div class="ps-
 `# \$\{p\.name\}（\\`\$\{p\.id\}\\`）能力清单`,
 `- 版本：v\$\{p\.version\}　来源：\$\{p\.sourceText\}`,
 `- 摘要：\$\{p\.summary \|\| '（无）'\}`,
-p\.description \? `- 说明：\$\{p\.description\}` 
+p\.description \? `- 说明：\$\{p\.description\}`
 '## 动作',
 \.\.\.p\.actions\.map\(\(a\) => '- \*\*' \+ a\.title
 \+ \(a\.steps\?\.length \? '，组合 ' \+ a\.steps\.le
@@ -529,9 +527,9 @@ p\.pluginDeps\?\.length \? '## 插件依赖\\n' \+ p\.p
 p\.settings\?\.length \? '## 设置项\\n' \+ p\.sett
 `> 由 zerokit 于 \$\{new Date\(\)\.toLocaleStri
 <div class="plug-home-history">📥 装于 \$\{e
-<span class="badge">\$\{p\.actions\.length\} 
+<span class="badge">\$\{p\.actions\.length\}
 \$\{deps\.length \? `<span class="badge">插件依
-\$\{settings\.length \? `<span class="badge 
+\$\{settings\.length \? `<span class="badge
 \$\{p\.requiresOk \? '' : '<span class="badg
 <div class="stat-card"><b>\$\{st\.actions\}<
 <div class="stat-card"><b>\$\{st\.runs\}</b>
@@ -583,10 +581,10 @@ return `<div class="usage-panel"><div cl
 <span class="u-count">\$\{t\.runs\} 次</span>
 <input id="installSrc" placeholder="粘贴 g
 <button class="primary" id="installBtn">
-<button class="ghost" id="newPluginBtn" 
+<button class="ghost" id="newPluginBtn"
 <label class="market-check"><input type=
 <button class="ghost" id="plugBatchCheck
-<input type="checkbox" class="plug-sel" 
+<input type="checkbox" class="plug-sel"
 \$\{p\.requiresOk \? '' : '<span class="badg
 \$\{p\.pluginDepsOk === false \? '<span clas
 \$\{\(p\.settings \|\| \[\]\)\.some\(\(x\) => x\.missi
@@ -598,7 +596,7 @@ return `<div class="usage-panel"><div cl
 <div class="plug-card-body">\$\{esc\(p\.summ
 \? ` · 依赖 \$\{p\.pluginDeps\.map\(\(d\) => \(d\.in
 \$\{\(tags\)\.map\(\(t\) => `<span class="tag">\$
-<input class="tag-input" placeholder="\+ 
+<input class="tag-input" placeholder="\+
 <div class="actions"><button class="prim
 <div class="cmd-box-head">新建插件 —— 生成能直接跑
 <label>插件 id（小写字母/数字/连字符）<input id="npId
@@ -614,7 +612,7 @@ batchNote\.textContent = `正在检查 \$\{ids\.leng
 batchNote\.textContent = `完成：\$\{updated\} 个
 shareBtn\.textContent = '已复制';
 shareBtn\.textContent = '复制失败';
-setTimeout\(\(\) => \{ shareBtn\.textContent 
+setTimeout\(\(\) => \{ shareBtn\.textContent
 control = `<select \$\{common\}><option val
 const ph = s\.secret && s\.masked \? '已设置（留
 const note = s\.source === 'default' \? '默
@@ -634,7 +632,7 @@ if \(!pv\.needConfirm\) throw new Error\(pv\.
 : `<span style="color:var\(--bad\)">\$\{esc\(
 一并安装缺失的依赖（\$\{esc\(p\.missingPluginDeps\.join
 \$\('pvOk'\)\.textContent = '安装中…';
-if \(!r\.ok\) throw new Error\(r\.message \|\| 
+if \(!r\.ok\) throw new Error\(r\.message \|\|
 \? `<br><span class="ok">已补装依赖：\$\{esc\(r\.de
 \? `<br><span style="color:var\(--bad\)">仍缺
 \$\('pvOk'\)\.textContent = '确认安装';
@@ -645,20 +643,20 @@ c\.removedActions\?\.length \? `<span style=
 有更新：v\$\{esc\(c\.current\)\} → <b>v\$\{esc\(c\.lat
 <button class="primary" id="updOk">更新到 v
 b\.textContent = '更新中…';
-if \(!r\.ok\) throw new Error\(r\.message \|\| 
+if \(!r\.ok\) throw new Error\(r\.message \|\|
 b\.textContent = '重试更新';
 btn\.textContent = '检查更新';
 <h3>卸载插件</h3>
 <div class="risk-note">插件目录会被整个删掉；数据目录里的
 <button class="ghost" id="rmCancel">取消</
 <button class="primary" id="rmOk">确认卸载</
-if \(!r\.ok\) throw new Error\(r\.message \|\| 
+if \(!r\.ok\) throw new Error\(r\.message \|\|
 if \(s < 60\) return `\$\{s\} 秒`;
 if \(m < 60\) return `\$\{m\} 分 \$\{s % 60\} 秒`;
 return `\$\{Math\.floor\(m / 60\)\} 小时 \$\{m % 6
 const greet = h < 5 \? '夜深了' : h < 11 \? '
 if \(running > 0\) bits\.push\(`\$\{running\} 个
-if \(watches > 0\) bits\.push\(`⏱\$\{watches\} 
+if \(watches > 0\) bits\.push\(`⏱\$\{watches\}
 el\.psView\.innerHTML = '<div class="ps-em
 <span class="ps-item-meta">PID \$\{esc\(p\.p
 <span class="badge read">由 zerokit 托管</s
@@ -686,7 +684,7 @@ note\.textContent = '（已恢复上次会话——重新加载页面后对话�
 <button class="primary" id="wbSend">发送</
 el\.count\.textContent = `\$\{entries\.length
 \$\('wbTools'\)\.textContent = `\$\{info\.tools
-`模型还没配置好：\$\{info\.reason\}\\n\$\{info\.hint \|\| 
+`模型还没配置好：\$\{info\.reason\}\\n\$\{info\.hint \|\|
 \+ '（想先试界面可以在 config\.toml 里写 provider = "
 \$\('wbModel'\)\.textContent = `读取模型配置失败：\$\{e
 box\.innerHTML = `<span class="suggest-la
@@ -713,7 +711,7 @@ btn\.textContent = '发送';
 <div class="ds-line"><b>\$\{st\.avgMs \? for
 \$\{st\.topName \? `<div class="ds-top">最常用：
 <div class="ps-head"><h2>\$\{dashGreeting\(
-<span class="sub">一屏看全：收藏 / 最近执行 / 监控 / 
+<span class="sub">一屏看全：收藏 / 最近执行 / 监控 /
 <section class="dash-card"><h3>⭐ 快捷动作</h
 <section class="dash-card"><h3>🕘 最近执行</
 <section class="dash-card"><h3>⏱ 监控</h3>
@@ -724,18 +722,18 @@ btn\.textContent = '发送';
 <h3 class="plug-home-h">偏好快照（两组切换）</h3>
 <div class="help">工作、生活各存一套（主题/强调色/字体/收藏
 一键切换整套偏好。快照存在本机，不进任何云端。</div>
-<button class="ghost" id="snapSaveA">存入 
-<button class="ghost" id="snapSaveB">存入 
+<button class="ghost" id="snapSaveA">存入
+<button class="ghost" id="snapSaveB">存入
 <button class="primary" id="snapUse">切换到
 <button class="ghost" id="statsBack">返回<
 \$\{total \? '<button class="primary" id="d
 <button class="ghost" id="reportCopy">复制
 <button class="primary" id="reportClose"
 e\.currentTarget\.textContent = '✓ 已复制';
-\} catch \{ e\.currentTarget\.textContent = 
+\} catch \{ e\.currentTarget\.textContent =
 \$\('snapState'\) && \(\$\('snapState'\)\.textCo
-\+ `\$\{snapA \? ' · A 已存' : ''\}\$\{snapB \? ' 
-if \(!snap\) \{ \$\('snapState'\)\.textContent 
+\+ `\$\{snapA \? ' · A 已存' : ''\}\$\{snapB \? '
+if \(!snap\) \{ \$\('snapState'\)\.textContent
 msg\.textContent = '✓ 已导出';
 \} catch \(e\) \{ msg\.textContent = `导出失败：\$\{
 msg\.textContent = `✓ 已导入 \$\{n\} 项，刷新后生效`;
@@ -759,7 +757,7 @@ if \(a\.key !== c\.key\) \{ el\.count\.textCont
 box\.innerHTML = `<div class="ps-head"><h
 <button class="ghost mini" id="cmpClose"
 <table class="cmp-table"><caption class=
-view\.innerHTML = `<div class="ps-empty" 
+view\.innerHTML = `<div class="ps-empty"
 <div class="ps-head"><h2>MCP 授权</h2>
 <span class="sub">有副作用的动作默认拒绝 AI 调用；在这里显
 <div class="allow-summary">\$\{data\.allowe
@@ -770,7 +768,7 @@ el\.devView\.innerHTML = `<div class="ps-h
 <span class="sub">dev 链接插件的清单摘要、文件树、沙箱控制
 <div class="log-tools"><button class="gh
 <button class="ghost" id="devExit">退出面板<
-<div id="devBody"><div class="ps-empty" 
+<div id="devBody"><div class="ps-empty"
 \$\('devBody'\)\.innerHTML = `<div class="ps
 \$\('devBody'\)\.innerHTML = `<div class="ps
 <details class="dev-files"><summary>文件树（
@@ -828,7 +826,7 @@ el\.count\.textContent = '检测到 dev 插件清单变更——
 \{ icon: '🅐', label: '语言：English', hint:
 \{ icon: '📤', label: '导出备份', hint: '下载全部
 <input id="paletteQ" type="text" placeho
-<div class="palette-foot">↑↓ 选择 · Enter 
+<div class="palette-foot">↑↓ 选择 · Enter
 </li>`\)\.join\(''\) \|\| '<li class="palette-
 if \(g !== lastGroup\) \{ parts\.push\(`<li c
 icon: '⚡', label: `执行 \$\{quick\.plugin\}\.\$\{
@@ -839,7 +837,7 @@ navigator\.clipboard\.writeText\(cfg\)\.then\(
 navigator\.clipboard\.writeText\(ctx\)\.then\(
 el\.count\.textContent = '已清空搜索';
 el\.count\.textContent = '已复制选中行';
-\}\)\.catch\(\(\) => \{ el\.count\.textContent = 
+\}\)\.catch\(\(\) => \{ el\.count\.textContent =
 el\.count\.textContent = favorites\.include
 el\.count\.textContent = `第 \$\{pick \+ 1\} 项：
 el\.count\.textContent = '剪贴板是空的';
@@ -897,16 +895,16 @@ panel\.innerHTML = `<div class="ps-head">
 lines\.push\(`# CLI（http 动作）`, `zkit run \$
 lines\.push\(`# CLI（组合 \$\{action\.steps\.leng
 lines\.push\('', '# MCP 工具（AI 客户端里叫这个名字）',
-if \(deepLink\) lines\.push\('', '# 启动器深链', 
+if \(deepLink\) lines\.push\('', '# 启动器深链',
 out\.push\(`> 失败：\$\{String\(res\.error\)\.repla
 else out\.push\('\| 字段 \| 值 \|', '\| --- \| ---
 out\.push\('', `> \$\{res\.ok \? '成功' : '失败'\}\$
 const fa = \(x === undefined\) \? '（无）' : \(
 const fb = \(y === undefined\) \? '（无）' : \(
-if \(fa !== fb\) out\.push\(\{ path: path \|\| 
+if \(fa !== fb\) out\.push\(\{ path: path \|\|
 if \(!runs\.length\) return \{ title: '今天的 z
-lines\.push\(`今天跑了 \$\{today\.length\} 次动作（成功 
-lines\.push\('用得最多的是：' \+ top\.map\(\(\[k, n\]\) 
+lines\.push\(`今天跑了 \$\{today\.length\} 次动作（成功
+lines\.push\('用得最多的是：' \+ top\.map\(\(\[k, n\]\)
 return `「\$\{name\} · \$\{aid\}」\$\{n\} 次`;
 if \(failCount\) lines\.push\(`有 \$\{failCount
 else lines\.push\('全部成功，稳。'\);
@@ -943,7 +941,7 @@ if \(!Number\.isFinite\(n\)\) \{ errs\.push\(\{ n
 if \(f\.min !== undefined && n < f\.min\) er
 if \(f\.max !== undefined && n > f\.max\) er
 const crumbs = \[\{ kind: 'list', label: '
-export function toHtmlTable\(data, title 
+export function toHtmlTable\(data, title
 \{ sec: 0, label: '关' \},
 \{ sec: 5, label: '5 秒' \},
 \{ sec: 10, label: '10 秒' \},
@@ -980,10 +978,10 @@ if \(!name\) return \{ ok: false, error: '名
 if \(name\.length > 20\) return \{ ok: false
 if \(/\[\\\\/\\u0000-\\u001f\]/\.test\(name\)\) ret
 if \(list\.length <= 1\) return \{ profiles:
-if \(!\(name in \(profiles \?\? \{\}\)\)\) return 
-if \(!\(from in \(profiles \?\? \{\}\)\)\) return 
+if \(!\(name in \(profiles \?\? \{\}\)\)\) return
+if \(!\(from in \(profiles \?\? \{\}\)\)\) return
 if \(v\.name !== from && v\.name in \(profil
-: \{ fallback: '结果', now: '刚刚', sec: \(n\) 
+: \{ fallback: '结果', now: '刚刚', sec: \(n\)
 if \(cmd\.group === 'page'\) return '页面';
 if \(cmd\.group === 'op'\) return '操作';
 try \{ j = JSON\.parse\(text\); \} catch \{ re
@@ -1000,7 +998,7 @@ out\.push\(`\$\{pad\}  └ \$\{d\.id\}\$\{d\.installed
 '看看': \['', '查看', '显示'\],
 export const QUERY_STOPWORDS = \['看看', '显
 const name = opts\.name \|\| '结果';
-const more = data\.length > 50 \? `\\n\\n（共 
+const more = data\.length > 50 \? `\\n\\n（共
 return head \+ \(props \|\| '（空对象）'\);
 const lines = \['# zerokit 上下文', ''\];
 lines\.push\('## 刚执行的结果', '', toAiMarkdown
@@ -1008,14 +1006,14 @@ lines\.push\('## 最近执行', ''\);
 lines\.push\(`- \$\{r\.plugin\}\.\$\{r\.action\}（\$\{
 lines\.push\('## 可用插件', ''\);
 lines\.push\(`- \*\*\$\{p\.id\}\*\*（\$\{p\.name\}）：\$\{a
-return \['\| 时间 \| 值 \| 变化 \|', '\| --- \| --- 
+return \['\| 时间 \| 值 \| 变化 \|', '\| --- \| ---
 \{ label: '每 1 分钟', sec: 60 \},
 \{ label: '每 5 分钟', sec: 300 \},
 \{ label: '每 10 分钟', sec: 600 \},
 \{ label: '每 30 分钟', sec: 1800 \},
 \{ label: '每 1 小时', sec: 3600 \},
 if \(d <= 0\) return '马上';
-if \(d < 60_000\) return `\$\{Math\.ceil\(d / 
+if \(d < 60_000\) return `\$\{Math\.ceil\(d /
 if \(d < 3_600_000\) return `\$\{Math\.ceil\(d
 if \(d < 86_400_000\) return `\$\{Math\.ceil\(
 return `\$\{Math\.ceil\(d / 86_400_000\)\} 天后`
@@ -1031,7 +1029,7 @@ title: '一个插件都没有',
 hint: '终端跑 plugin bundled 装自带示例，或去集市找。装完
 \{ kind: 'timeout', test: /timed\? \?out\|ET
 title: '执行超时',
-steps: \['等一会再试；插件清单里可用 timeout 声明更长超时', 
+steps: \['等一会再试；插件清单里可用 timeout 声明更长超时',
 \{ kind: 'not-found', test: /ENOENT\|no su
 title: '文件或目录不存在',
 steps: \['检查路径拼写；插件的工作目录是它自己的安装目录', '辅助文件
@@ -1042,7 +1040,7 @@ title: '文件在但跑不起来',
 steps: \['脚本缺执行位：chmod \+x', '跨平台插件用 \{pyth
 \{ kind: 'command-not-found', test: /comm
 title: '依赖的程序没装',
-steps: \['zkit doctor 列出各插件缺的运行时', '装完重跑 
+steps: \['zkit doctor 列出各插件缺的运行时', '装完重跑
 title: '程序报错退出（非零退出码）',
 steps: \['看下方原始输出定位报错行', '同参数重试一次排除偶发'\] \}
 \{ kind: 'parse-fail', test: /JSON\|parse\|
@@ -1059,7 +1057,7 @@ if \(skipped\) parts\.push\(`∅ 未跑 \$\{skipped\}
 if \(!s\) return \{ kind: 'empty', why: '空'
 if \(/\^\\d\{10\}\$/\.test\(s\)\) return \{ kind: '
 if \(/\^\\d\{13\}\$/\.test\(s\)\) return \{ kind: '
-if \(/\^https\?:\\/\\/\\S\+\$/i\.test\(s\)\) return 
+if \(/\^https\?:\\/\\/\\S\+\$/i\.test\(s\)\) return
 if \(ok\) return \{ kind: 'ip', why: '点分四段且
 try \{ JSON\.parse\(s\); return \{ kind: 'jso
 return \{ kind: 'path', why: '以 / ~/ 盘符开头
@@ -1074,7 +1072,7 @@ return text\.slice\(0, SHARE_CUT\) \+ '\\n\\n…
 if \(l\.startsWith\('<details>'\)\) \{ out\.pus
 const title = `\$\{meta\.plugin \?\? ''\}\.\$\{me
 const more = params\.length > 6 \? ` …共 \$\{
-return `参数：\$\{parts\.join\('  '\)\}\$\{more\}（\* 
+return `参数：\$\{parts\.join\('  '\)\}\$\{more\}（\*
 if \(looksLikeTs && f\.type !== 'number' &
 return \{ field: f\.name, reason: '剪贴板像时间戳
 if \(!looksLikeTs && /\^-\?\\d\+\(\?:\\\.\\d\+\)\?\$/\.
@@ -1089,16 +1087,16 @@ if \(hour < 12\) return '午安';
 if \(hour < 18\) return '下午好';
 return '晚上好';
 case 'favs': return \{ title: '还没有收藏', hi
-case 'runs': return \{ title: '还没有执行记录', 
+case 'runs': return \{ title: '还没有执行记录',
 case 'watch': return \{ title: '没有在跑的监控',
 try \{ j = JSON\.parse\(String\(text \?\? ''\)\)
-if \(!j \|\| typeof j !== 'object'\) return 
+if \(!j \|\| typeof j !== 'object'\) return
 if \(j\.app !== 'zerokit' \|\| j\.kind !== 'z
 if \(!\('result' in j\)\) return \{ ok: false
 if \(!j\?\.savedAt \|\| Number\.isNaN\(Date\.par
 normal: \{ label: '常规', listPct: 38 \},
 'wide-list': \{ label: '宽列表', listPct: 50
-'wide-detail': \{ label: '宽详情', listPct: 
+'wide-detail': \{ label: '宽详情', listPct:
 return c\.failed \? `全部 \$\{c\.total\} 项完成（\$\{c
 const parts = \[`\$\{c\.queued\} 排队`, `\$\{c\.ru
 if \(c\.failed\) parts\[2\] \+= `（含 \$\{c\.failed
@@ -1113,14 +1111,14 @@ if \(c\.failed\) parts\[2\] \+= `（含 \$\{c\.failed
 <aside id="drawer" class="drawer drawer-
 <span>设置与管理</span>
 <button class="ghost" id="drawerClose" a
-<button class="drawer-link" id="dlLang" 
-<button class="drawer-link" id="dlLogs" 
+<button class="drawer-link" id="dlLang"
+<button class="drawer-link" id="dlLogs"
 <button class="drawer-link" id="dlDoctor
 <button class="drawer-link" id="dlSaved"
 <button class="drawer-link" id="dlImport
 <button class="drawer-link" id="dlTimers
 <button class="drawer-link" id="dlBrief"
-<button class="drawer-link" id="dlHelp" 
+<button class="drawer-link" id="dlHelp"
 <button class="drawer-link" id="dlWatch"
 placeholder="输入插件名或动作，回车执行…   （开头打 \? 切到工
 <button class="ghost q-clear hidden" id=
@@ -1139,7 +1137,6 @@ aria-label="读剪贴板并识别内容">剪贴板</button>
 <span class="foot-link" id="doctorBtn" t
 <span class="foot-link" id="helpBtn" tit
 <span class="foot-link" id="guideBtn" ti
-# I18N 表本身（中文的家）
 已开启定时执行：每
 <div class="tl-wc-cell">平均耗时<b>\$\{wc\.cur\.avgMs \? f
 <div class="brief-cell">平均耗时<b>\$\{b\.avgMs\}ms</b></div>
@@ -1239,6 +1236,25 @@ if\ \(sc\.ok\)\ marketMsg\(`已安装「\$\{nm\}」·\ 自检\ ✓\ 能跑（\$\
 else\ marketMsg\(`已安装「\$\{nm\}」·\ 但自检\ ✗\ 跑不起来：\$\{sc\.error\ \|\|\ '退出码非零'\}`,\ 'warn',\ p\.id\ \|\|\ p\.entry\?\.id\);
 marketMsg\(`已安装「\$\{nm\}」·\ 自检跳过（\$\{sc\.probe\.reason\}）`,\ 'ok',\ p\.id\ \|\|\ p\.entry\?\.id\);
 marketMsg\(`已安装「\$\{nm\}」`,\ 'ok',\ p\.id\ \|\|\ p\.entry\?\.id\);
-# 第一百三十八轮：定时任务历史（risk-dot title 是状态图示；无输出快照是结构占位）
 title="最近一次执行失败"
 timer-hist-line dim">（无输出快照）
+'# ' \+ p\.name \+ '\(`' \+ p\.id \+ '`\) 能力清单',
+'- 版本：v' \+ p\.version \+ '　来源：' \+ p\.source
+'- 摘要：' \+ \(p\.summary \|\| '（无）'\),
+p\.description \? '- 说明：' \+ p\.description 
+return '- \*\*' \+ a\.title \+ '\*\*（`' \+ a\.id 
+\+ \(a\.ui \? '，带界面' : ''\)
+\+ '，参数 ' \+ psr\.text \+ \(psr\.secretMark \? 
+'> 由 zerokit 于 ' \+ new Date\(\)\.toLocaleSt
+\(\) => \{ el\.count\.textContent = `已复制 \$\{p\.
+\(\) => \{ el\.count\.textContent = '复制失败——剪贴
+\$\{qc\.keywords\.length \? `<div class="pqc-
+\$\{a\.ui \? '<span class="badge" title="带交互
+<span class="pa-params" title="参数：\$\{esc\(
+<span class="pa-lastrun">\$\{lr \? esc\(lr\) 
+<button class="ghost" id="homeCopyDoc" t
+if \(required\) parts\.push\(`必填 \$\{required\}
+if \(optional\) parts\.push\(`可选 \$\{optional\}
+if \(!parts\.length\) parts\.push\('无参数'\);
+mixText: `只读 \$\{mix\.read\} · 变更 \$\{mix\.muta
+if \(s < 60\) return '刚刚';
