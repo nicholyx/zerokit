@@ -996,6 +996,11 @@ async function cmdRun(args: string[]): Promise<number> {
   const withDefaults = applyDefaults(action, parsed.values);
   if (withDefaults.errors.length > 0) {
     for (const e of withDefaults.errors) process.stderr.write(c.red(`✗ ${e}`) + '\n');
+    // 第一百四十九轮⑦：参数校验失败也进历史（exitCode=1）——否则「失败回放」缺了最常见的一类
+    (await import('./core/cliX.ts')).appendHistory({
+      ts: new Date().toISOString(), plugin: plugin.id, action: action.id,
+      argv: (await import('./core/cliX.ts')).stripControlFlags(argv), exitCode: 1,
+    });
     paramTable();
     return 2;
   }
@@ -1045,7 +1050,9 @@ async function cmdRun(args: string[]): Promise<number> {
   let result: Awaited<ReturnType<typeof runAction>> = await runAction(plugin, action, { caller: 'cli', values: withDefaults.values });
   for (const [k, v] of savedEnv) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
   // 第四十五轮⑤：成功执行进历史（重放要干净的参数面）
-  if (result.ok) {
+  // 第一百四十九轮⑦：失败也进历史（exitCode=1）——history 默认视图 ✓/✗ 全量展示，
+  // --failed 回放失败、--rerun 编号仍只数成功记录（语义不变，旧用法不破）。
+  {
     const cliX = await import('./core/cliX.ts');
     cliX.appendHistory({
       ts: new Date().toISOString(), plugin: plugin.id, action: action.id,
@@ -2532,6 +2539,65 @@ async function cmdRuns(args: string[]): Promise<number> {
   return 1;
 }
 
+/** 第一百四十九轮：bookmark——常用命令组合起别名。add/list/rm/run，list --json 机读。 */
+async function cmdBookmark(args: string[]): Promise<number> {
+  const bm = await import('./core/bookmarks.ts');
+  const cliX = await import('./core/cliX.ts');
+  const sub = args[0];
+  if (sub === 'add') {
+    const name = args[1];
+    if (!name) { process.stderr.write('用法：zkit bookmark add <别名> <历史编号 | run 命令行...> [--note 备注]\n'); return 1; }
+    const histNum = Number(args[2]);
+    let argv: string[] | undefined;
+    if (Number.isInteger(histNum) && histNum > 0) {
+      // 历史编号：按 history 默认视图（成功记录、1=最新）取——与 --rerun N 同语义
+      const list = cliX.readHistory().filter((e) => e.exitCode === 0).slice(-30).reverse();
+      const e = list.find((_, i) => i + 1 === histNum);
+      if (!e) { process.stderr.write(`没有第 ${histNum} 条成功记录（zkit history 看编号）。\n`); return 1; }
+      argv = cliX.historyToArgv(e);
+    } else if (args[2] === 'run' || args[2] === 'bookmark') {
+      argv = args.slice(2); // 用户贴了 zkit run p a --k v → 去掉 zkit 头
+    } else if (args[2]) {
+      argv = ['run', ...args.slice(2)]; // 直接给 p a --k v，补 run 头
+    }
+    if (!argv || argv.length < 3) { process.stderr.write('要书签的命令不完整：zkit bookmark add <别名> <编号 | run 插件 动作 [参数...]>\n'); return 1; }
+    const noteIdx = argv.indexOf('--note'); // note 只在裸形态有效；放 add 尾部更常见——兼容两种
+    let note: string | undefined;
+    const nIdx = args.indexOf('--note');
+    if (nIdx >= 0 && args[nIdx + 1]) note = args[nIdx + 1];
+    else if (noteIdx >= 0 && argv[noteIdx + 1]) { note = argv[noteIdx + 1]; argv = argv.filter((_, i) => i !== noteIdx && i !== noteIdx + 1); }
+    const err = bm.addBookmark(name, argv, note);
+    if (err) { process.stderr.write(`✗ ${err}\n`); return 1; }
+    process.stdout.write(c.green(`✓ 书签 ${name} → zkit ${argv.join(' ')}\n`) + c.dim(`重跑：zkit bookmark run ${name}\n`));
+    return 0;
+  }
+  if (sub === 'list') {
+    const items = bm.readBookmarks();
+    if (args.includes('--json')) { process.stdout.write(JSON.stringify(items, null, 2) + '\n'); return 0; }
+    if (items.length === 0) { process.stdout.write('还没有书签。加一个：zkit bookmark add <别名> <历史编号>\n'); return 0; }
+    process.stdout.write(c.bold(`书签（${items.length} 个）：\n`));
+    for (const b of items) {
+      process.stdout.write(`  ${c.bold(b.name)}  zkit ${b.argv.join(' ')}${b.note ? c.dim(`  # ${b.note}`) : ''}\n`);
+    }
+    return 0;
+  }
+  if (sub === 'rm') {
+    if (!args[1]) { process.stderr.write('用法：zkit bookmark rm <别名>\n'); return 1; }
+    const err = bm.removeBookmark(args[1]);
+    if (err) { process.stderr.write(`✗ ${err}\n`); return 1; }
+    process.stdout.write(c.green(`✓ 已删 ${args[1]}\n`));
+    return 0;
+  }
+  if (sub === 'run') {
+    const b = args[1] ? bm.findBookmark(args[1]) : undefined;
+    if (!b) { process.stderr.write(`没有别名 ${args[1] ?? ''}（zkit bookmark list 看现有的）\n`); return 1; }
+    process.stdout.write(c.dim(`重跑书签：zkit ${b.argv.join(' ')}\n`));
+    return cmdRun(b.argv.slice(1));
+  }
+  process.stderr.write(`用法：zkit bookmark add <别名> <历史编号|命令行> [--note 备注] | list [--json] | rm <别名> | run <别名>\n`);
+  return 1;
+}
+
 async function cmdHistory(args: string[]): Promise<number> {
   const cliX = await import('./core/cliX.ts');
   // 第七十一轮④：--failed 只看失败记录，附诊断建议（复用 suggest.ts 的规则表）
@@ -2564,6 +2630,16 @@ async function cmdHistory(args: string[]): Promise<number> {
     return 0;
   }
   const list = cliX.readHistory().filter((e) => e.exitCode === 0).slice(-30).reverse();
+  // 第一百四十九轮⑦：默认视图全量展示（含失败 ✓/✗ 标记）；--rerun 编号仍指成功记录
+  const fullList = cliX.readHistory().slice(-30).reverse();
+  // 第一百四十九轮⑥：--rerun-last（'!!' 同义）——失败后微调重跑的入口降到一键
+  if (args.includes('--rerun-last') || args.includes('!!')) {
+    const e = list[0];
+    if (!e) { process.stderr.write('历史为空，没有可重跑的。\n'); return 1; }
+    const argv = cliX.historyToArgv(e);
+    process.stdout.write(c.dim(`重跑：zkit ${argv.join(' ')}\n`));
+    return cmdRun(argv.slice(1));
+  }
   const rerunIdx = args.indexOf('--rerun');
   if (rerunIdx >= 0 && args[rerunIdx + 1]) {
     const n = Number(args[rerunIdx + 1]);
@@ -2592,6 +2668,7 @@ async function cmdHistory(args: string[]): Promise<number> {
     return 0;
   }
   // 第九十二轮①②③④⑥⑧：过滤旗标（--failed 已有独立段在上；这里组合 --today/--plugin/--action/--json）
+  // 第一百四十九轮①③：--grep 子串过滤（含旗标）；--since 2d/5h/today 通用时间档
   const flagVal = (name: string): string | undefined => {
     const i = args.indexOf(name);
     return i >= 0 ? args[i + 1] : undefined;
@@ -2600,19 +2677,24 @@ async function cmdHistory(args: string[]): Promise<number> {
   const wantPlugin = flagVal('--plugin');
   const wantAction = flagVal('--action');
   const wantJson = args.includes('--json');
-  if (wantToday || wantPlugin || wantAction || wantJson) {
-    let rows = cliX.readHistory().slice().reverse();
-    if (wantToday) {
-      // 「今天」按本地时区零点锚定（CI 跨时区的教训：不能拿 UTC 拼日期比）
-      const d = new Date(); d.setHours(0, 0, 0, 0);
-      rows = rows.filter((e) => Date.parse(e.ts) >= d.getTime());
-    }
+  const wantGrep = flagVal('--grep');
+  const wantSince = flagVal('--since');
+  if (wantToday || wantPlugin || wantAction || wantJson || wantGrep !== undefined || wantSince !== undefined) {
+    const bm = await import('./core/bookmarks.ts');
+    let rows = bm.filterHistoryEntries(cliX.readHistory().slice().reverse(), {
+      grep: wantGrep,
+      sinceMs: wantToday ? (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); })() : bm.parseSinceArg(wantSince),
+    });
     if (wantPlugin) rows = rows.filter((e) => e.plugin === wantPlugin);
     if (wantAction) {
       const dot = wantAction.indexOf('.');
       const p = dot > 0 ? wantAction.slice(0, dot) : undefined;
       const a = dot > 0 ? wantAction.slice(dot + 1) : wantAction;
       rows = rows.filter((e) => e.action === a && (!p || e.plugin === p));
+    }
+    if (wantGrep !== undefined && wantSince !== undefined && rows.length === 0 && wantSince && !/^\d+[dh]$|^today$/.test(wantSince)) {
+      process.stderr.write(`✗ --since 不认识「${wantSince}」——用 Nd（天）/Nh（小时）/today\n`);
+      return 1;
     }
     if (wantJson) { process.stdout.write(JSON.stringify(rows, null, 2) + '\n'); return 0; }
     if (rows.length === 0) {
@@ -2627,12 +2709,18 @@ async function cmdHistory(args: string[]): Promise<number> {
     }
     return 0;
   }
-  const n = Math.min(tailN || Number(args[0]) || 10, list.length);
-  process.stdout.write(c.bold(`最近 ${n} 条（zkit history --rerun N 可重跑）：\n`));
+  const n = Math.min(tailN || Number(args[0]) || 10, fullList.length);
+  process.stdout.write(c.bold(`最近 ${n} 条（✓/✗ 含失败；zkit history --rerun N 重跑成功的第 N 条）：\n`));
   for (let i = 0; i < n; i++) {
-    const e = list[i];
+    const e = fullList[i];
     if (!e) continue;
-    process.stdout.write(`  ${String(i + 1).padStart(3)}  ${c.dim(e.ts.slice(5, 19))}  zkit run ${e.plugin} ${e.action} ${e.argv.join(' ')}\n`);
+    const mark = e.exitCode === 0 ? c.green('✓') : c.red('✗');
+    process.stdout.write(`  ${String(i + 1).padStart(3)}  ${c.dim(e.ts.slice(5, 19))}  ${mark} zkit run ${e.plugin} ${e.action} ${e.argv.join(' ')}\n`);
+  }
+  // 第一百四十九轮⑧：非 TTY（管道/CI）下没有方向键历史——尾部给上一条复制行，微调重跑不用翻
+  const last = fullList[0];
+  if (!process.stdout.isTTY && last) {
+    process.stdout.write(c.dim(`上一条（复制微调）：zkit run ${last.plugin} ${last.action} ${last.argv.join(' ')}\n`) + c.dim(`一键重跑：zkit history --rerun-last\n`));
   }
   return 0;
 }
@@ -4089,6 +4177,9 @@ async function main(): Promise<number> {
       return cmdLast(rest);
     case 'history':
       return cmdHistory(rest);
+    // 第一百四十九轮：书签——常用命令组合起别名沉淀
+    case 'bookmark':
+      return await cmdBookmark(rest);
     // 第一百二十九轮：执行历史消费面
     case 'runs':
       return await cmdRuns(rest);
