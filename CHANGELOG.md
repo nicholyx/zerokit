@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.48.0] - 2026-11-05
+
+### Added
+
+- `plugin new --from <目录>`：从现有插件清单复制起步（自动换 id/name），适合「照着 quick 写一个」的场景
+- `plugin lint` 每条告警附「怎么改」修复指引（L01–L12 全覆盖）
+- `plugin doc --md <file>`：文档直接落盘，不用重定向
+- `plugin publish-ready` doctor 式逐项汇总（清单/版本/risk/描述/打包 5 项 ✓/!/✗）
+- `plugin pack` 出目录不存在自动创建；无 README 的插件打包时自动补一份生成的文档
+- 模板质量提升：新插件首跑 `plugin lint` 即零告警（补长 description、match 示例）；cookbook 新增「发布前自查清单」一节
+
 ## [1.47.0] - 2026-11-05
 
 ### Added
@@ -13,15 +24,6 @@
 - 移动与窄屏体验：≤720px 详情页底部拇指操作条（← 返回 / ▶ 执行，safe-area 适配）；列表惯性滚动 + 窄屏隐藏滚动条；触屏目标 ≥44px；无键盘设备隐藏快捷键提示条；列表下拉刷新手势（64px 阈值松手触发）；720–1080 过渡区「展开双栏」提示条；表格可横滑渐隐提示（首次滚动消失）；命令面板窄屏全屏化；hover:none 下悬停效果退化为按压效果。新增文案全部走 I18N 双语键
 
 ## [Unreleased]
-### Added
-
-- `plugin new --from <目录>`：从现有插件清单复制起步（自动换 id/name），适合「照着 quick 写一个」的场景
-- `plugin lint` 每条告警附「怎么改」修复指引（L01–L12 全覆盖）
-- `plugin doc --md <file>`：文档直接落盘，不用重定向
-- `plugin publish-ready` doctor 式逐项汇总（清单/版本/risk/描述/打包 5 项 ✓/!/✗）
-- `plugin pack` 出目录不存在自动创建；无 README 的插件打包时自动补一份生成的文档
-- 模板质量提升：新插件首跑 `plugin lint` 即零告警（补长 description、match 示例）；cookbook 新增「发布前自查清单」一节
-
 
 （下一版攒着）
 
@@ -80,12 +82,4 @@
 - 监控面板自刷新：采样计数/变更次数/相对时间/成败点阵 2 秒节流就地更新，不用重进面板（此前面板显示的是打开那一刻的快照）
 - `zkit doctor --trend`：最近 8 次体检的错误/警告趋势表与判读（错误升/警告升/平稳）
 - `doctor --json` 与启动器环境自检页新增 `trend` 字段（rows+verdict），CLI 与 UI 三处同源
-
-## [1.36.0] - 2026-11-04
-
-### Added
-
-- 监控通知链路补全：变化通知带 5 分钟节流与点击跳转 `#/watch`，无权限时降级面板提示；`#/watch` 面板新增「通知记录」小节（最近 10 条，静默/节流状态可追溯）与「静默时段」设置（HH:mm，支持跨午夜）；每个监控可单独开关通知（默认开，随 watch.json 持久化）
-- `zkit watch list [--json]`：读 `watch.json` 输出监控明细（interval/runs/changes/lastChanged/notify），机读友好
-- `zkit doctor` 带监控在册数与通知权限说明
 
