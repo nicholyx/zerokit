@@ -100,7 +100,7 @@ uTools 开始收费了。想找一个替代品，找了一圈发现真正的问�
 - [x] 第一百四十二轮（v1.46.0）：CLI 输出与体验打磨——help 分节索引/建议带说明/doctor --fix 摘要/长表翻页提示/config 最近用到/allow add 风险人话；修 list --json 旗标被吞缺陷（issue #479）
 - [x] 第一百四十三轮（v1.47.0）：移动与窄屏体验——拇指操作条/惯性滚动/44px 触控目标/下拉刷新/命令面板全屏化/按压替代悬停（issue #482）
 - [x] 第一百四十七轮（v1.51.0）：压测与稳定性——并发 8 动作 seq 无串台、失败混入审计不丢行、3×2MB 大输出溢出落盘各自独立、3 进程并发写审计无交叉半行（appendFileSync 单行原子）；结论：重建式渲染模型下 addEventListener 数量不是泄漏判据（document/window 级绑定有守卫、setInterval/clearInterval 配平才是）；stress.mjs 入库（--quick 档进测试）、bench 补并发探针、stress147-smoke 10 项（issue #498）
-- [x] 第一���四十八轮（v1.52.0）：CLI 输出管道——`--where 列>值` 过滤、`--calc 新列=表达式`（四则+括号+列名）、`--rename 旧=新`、`--pipe 命令`（表格文本喂 shell 管道）；与 pick/sort/uniq/head/sum 固定序组合，错误都带「怎么改」提示（issue #502）
+- [x] 第一百四十八轮（v1.52.0）：CLI 输出管道——`--where 列>值` 过滤、`--calc 新列=表达式`（四则+括号+列名）、`--rename 旧=新`、`--pipe 命令`（表格文本喂 shell 管道）；与 pick/sort/uniq/head/sum 固定序组合，错误都带「怎么改」提示（issue #502）
 - [x] 第一百四十九轮（v1.53.0）：history 与重跑体验——`--grep 子串`/`--since Nd/Nh/today` 过滤、`zkit bookmark`（add/list/rm/run，0600 原子写）、`--rerun-last` 一键重跑、默认视图含 ✓/✗ 失败标记、非交互终端重跑提示（issue #505）
 - [x] 第一百四十六轮（v1.50.0）：质量护栏——CHANGELOG 格式/文档数字同步/绝对路径/版本行四断言进 lint.sh、verify-remote.sh push/tag 复核、FFFD 进 lint、提交信息空行分隔（issue #495）
 - [x] 第一百四十五轮（v1.49.0）：deep 文档补全——《插件运行时》与《安全边界》两篇深读文落坑位、index/quickstart/plugin-spec 交叉链、已知差距销账（issue #488）
