@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.50.0] - 2026-11-05
+
+### Added
+
+- 质量护栏十项（人肉纪律机器化）：CHANGELOG 格式断言（[Unreleased] 空行三次事故的根治）进 lint.sh；文档测试数字同步断言（overview/START-HERE 与 test/ 实际文件数一致）；docs 本机绝对路径红线扫描；START-HERE 版本行 === package.json 断言；`scripts/verify-remote.sh` push 后远端复核 + tag 前双确认（对象存在 + 远端 main HEAD）；U+FFFD 扫描进 lint.sh；提交信息 subject 与 body 必须空行分隔
+
 ## [1.49.0] - 2026-11-05
 
 ### Added
@@ -30,11 +36,6 @@
 - 移动与窄屏体验：≤720px 详情页底部拇指操作条（← 返回 / ▶ 执行，safe-area 适配）；列表惯性滚动 + 窄屏隐藏滚动条；触屏目标 ≥44px；无键盘设备隐藏快捷键提示条；列表下拉刷新手势（64px 阈值松手触发）；720–1080 过渡区「展开双栏」提示条；表格可横滑渐隐提示（首次滚动消失）；命令面板窄屏全屏化；hover:none 下悬停效果退化为按压效果。新增文案全部走 I18N 双语键
 
 ## [Unreleased]
-
-### Added
-
-- 质量护栏十项（人肉纪律机器化）：CHANGELOG 格式断言（[Unreleased] 空行三次事故的根治）进 lint.sh；文档测试数字同步断言（overview/START-HERE 与 test/ 实际文件数一致）；docs 本机绝对路径红线扫描；START-HERE 版本行 === package.json 断言；`scripts/verify-remote.sh` push 后远端复核 + tag 前双确认（对象存在 + 远端 main HEAD）；U+FFFD 扫描进 lint.sh；提交信息 subject 与 body 必须空行分隔
-
 
 （下一版攒着）
 
@@ -79,10 +80,4 @@
 ### Added
 
 - 桌面壳健壮性第二波：记忆位置落在已拔掉的显示器上时钳回主屏；托盘菜单加「重新载入界面」与开发者工具（debug 构建）；tooltip 显示版本与端口；窗口标题带版本号；单实例守卫（二次启动聚焦已有窗口）；接入 autostart 插件（能力已授权，UI 开关随后续版本）；壳内启动检查新版本并在抽屉出升级横幅（断网静默）
-
-## [1.38.0] - 2026-11-04
-
-### Added
-
-- 深读层自学化起步：`docs/deep/design.md` 补导语块/篇内目录/三处「记住这条」callout/尾部交叉链，新增 `docs/deep/index.md` 导读页；check-docs 新增 deep 代码块 `file=` 标签路径校验
 
