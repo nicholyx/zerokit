@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-11-05（第一百四十六轮，v1.50.0）
+> 最后更新：2026-11-06（第一百四十九轮，v1.53.0）
 
 ## 性能基线（第五十八轮建立，2026-10-28，Apple M4 / Node 22）
 
@@ -100,6 +100,8 @@ uTools 开始收费了。想找一个替代品，找了一圈发现真正的问�
 - [x] 第一百四十二轮（v1.46.0）：CLI 输出与体验打磨——help 分节索引/建议带说明/doctor --fix 摘要/长表翻页提示/config 最近用到/allow add 风险人话；修 list --json 旗标被吞缺陷（issue #479）
 - [x] 第一百四十三轮（v1.47.0）：移动与窄屏体验——拇指操作条/惯性滚动/44px 触控目标/下拉刷新/命令面板全屏化/按压替代悬停（issue #482）
 - [x] 第一百四十七轮（v1.51.0）：压测与稳定性——并发 8 动作 seq 无串台、失败混入审计不丢行、3×2MB 大输出溢出落盘各自独立、3 进程并发写审计无交叉半行（appendFileSync 单行原子）；结论：重建式渲染模型下 addEventListener 数量不是泄漏判据（document/window 级绑定有守卫、setInterval/clearInterval 配平才是）；stress.mjs 入库（--quick 档进测试）、bench 补并发探针、stress147-smoke 10 项（issue #498）
+- [x] 第一百四十八轮（v1.52.0）：CLI 输出管道——`--where 列>值` 过滤、`--calc 新列=表达式`（四则+括号+列名）、`--rename 旧=新`、`--pipe 命令`（表格文本喂 shell 管道）；与 pick/sort/uniq/head/sum 固定序组合，错误都带「怎么改」提示（issue #502）
+- [x] 第一百四十九轮（v1.53.0）：history 与重跑体验——`--grep 子串`/`--since Nd/Nh/today` 过滤、`zkit bookmark`（add/list/rm/run，0600 原子写）、`--rerun-last` 一键重跑、默认视图含 ✓/✗ 失败标记、非交互终端重跑提示（issue #505）
 - [x] 第一百四十六轮（v1.50.0）：质量护栏——CHANGELOG 格式/文档数字同步/绝对路径/版本行四断言进 lint.sh、verify-remote.sh push/tag 复核、FFFD 进 lint、提交信息空行分隔（issue #495）
 - [x] 第一百四十五轮（v1.49.0）：deep 文档补全——《插件运行时》与《安全边界》两篇深读文落坑位、index/quickstart/plugin-spec 交叉链、已知差距销账（issue #488）
 - [x] 第一百四十四轮（v1.48.0）：插件作者体验——plugin new --from 复制起步/lint 修复指引/doc --md 落盘/publish-ready 5 项汇总/pack 自动补 README/模板首跑零告警/cookbook 发布前自查清单（issue #485）
@@ -245,7 +247,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 
 ### 质量
 
-- 99 个文件、**2416 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
+- 100 个文件、**2444 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
 - `tsc --noEmit` 干净——**而且 CI 真的在跑它**（`typecheck` job）。
   曾经这里写着"干净"但没有任何地方执行这条命令，于是两个只有类型检查才看得见的
   错误在核心里躺了很久（`proxy.ts` 的 Buffer 泛型不兼容、`scaffold.ts` 的类型混用）。

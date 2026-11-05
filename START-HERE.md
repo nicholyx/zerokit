@@ -70,6 +70,18 @@ node src/cli.ts run ip public
 `doctor` 里如果提示 `python` 缺失，**不影响其它插件**——只有 `proxy`
 （那个接管已有工具的示例）需要它。
 
+顺带两个省事的入口（跑过几条命令后再用）：
+
+```bash
+# 常用命令组合起别名，以后一条命令重跑
+node src/cli.ts bookmark add top5 1 --note 日常巡检   # 1 是 history 里的编号
+node src/cli.ts bookmark run top5
+
+# 忘了编号就过滤着找；一键重跑最后一条成功的
+node src/cli.ts history --grep b64
+node src/cli.ts history --rerun-last
+```
+
 ---
 
 ## 四、可选：接给 AI 客户端当 MCP 工具
@@ -171,7 +183,7 @@ PowerShell 用 `$env:https_proxy="http://127.0.0.1:<端口>"`（其余两个同�
 ## 七、这个项目现在是什么状态
 
 内核、四个面、插件集市、原生壳、uTools 插件兼容层都已跑通，各有测试
-（`node scripts/test-all.mjs`，99 个文件，2416 项断言，不联网、不花钱）。<!-- zk-version -->当前版本 v1.52.0<!-- /zk-version -->
+（`node scripts/test-all.mjs`，100 个文件，2444 项断言，不联网、不花钱）。<!-- zk-version -->当前版本 v1.52.0<!-- /zk-version -->
 
 已知的缺口和明确不做的事，都列在 `docs/reference/overview.md` 的「待办」和「已知差距」两节里——
 那份是诚实的账本，建议看一眼再判断这个项目值不值得用。
