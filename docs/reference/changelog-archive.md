@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [1.38.0] - 2026-11-04
+
+### Added
+
+- 深读层自学化起步：`docs/deep/design.md` 补导语块/篇内目录/三处「记住这条」callout/尾部交叉链，新增 `docs/deep/index.md` 导读页；check-docs 新增 deep 代码块 `file=` 标签路径校验
+
 ## [1.37.0] - 2026-11-04
 
 ### Added
