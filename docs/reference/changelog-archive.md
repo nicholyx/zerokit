@@ -2,6 +2,14 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [1.36.0] - 2026-11-04
+
+### Added
+
+- 监控通知链路补全：变化通知带 5 分钟节流与点击跳转 `#/watch`，无权限时降级面板提示；`#/watch` 面板新增「通知记录」小节（最近 10 条，静默/节流状态可追溯）与「静默时段」设置（HH:mm，支持跨午夜）；每个监控可单独开关通知（默认开，随 watch.json 持久化）
+- `zkit watch list [--json]`：读 `watch.json` 输出监控明细（interval/runs/changes/lastChanged/notify），机读友好
+- `zkit doctor` 带监控在册数与通知权限说明
+
 ## [1.35.0] - 2026-11-04
 
 ### Added
