@@ -72,6 +72,9 @@ ${c.bold('zerokit')} —— 一份清单，四个面：启动器 / CLI / MCP / W
 
 ${c.bold('用法')}  zkit <命令> [参数]
 
+${c.dim('分节：基本 · 配置 · 插件 · 执行与历史 · 观测 · MCP 与 AI · 桌面 · 运维')}
+${c.dim('逐条参考：zkit man（可 man zkit 外部翻阅）')}
+
 ${c.bold('基本')}
   list, ls                列出已安装插件与动作（--json --brief 精简机读输出）
                           list --health 一屏健康状态（--json 机读；非零退出码=有异常）
@@ -275,6 +278,14 @@ function readLine(): Promise<string> {
 
 // ---------------------------------------------------------------- 命令实现
 
+// 第一百四十二轮④：插件最近一次执行的相对描述（审计驱动，无记录返回 null）
+function pluginLastRun(pluginId: string): { at: string; ok: boolean } | null {
+  try {
+    const hit = readAudit().find((r) => r.plugin === pluginId);
+    return hit ? { at: hit.ts, ok: hit.decision === 'allow' && hit.exitCode === 0 } : null;
+  } catch { return null; }
+}
+
 function cmdList(): number {
   const entries = listPlugins();
   // 第四十五轮⑨：plugin list --health 列健康状态列（--json 时机器可读）
@@ -298,7 +309,8 @@ function cmdList(): number {
   // 不带颜色码、不带动作明细；缺参照常全量人类可读输出
   const briefIdx = process.argv.indexOf('--brief');
   const jsonIdx = process.argv.indexOf('--json');
-  if (briefIdx >= 0 || (jsonIdx >= 0 && briefIdx >= 0)) {
+  // 第一百四十二轮④：--json 单独也给机读（此前被吞走人类分支）；brief 补 lastRun（审计驱动）
+  if (briefIdx >= 0 || jsonIdx >= 0) {
     const out = entries.map((e) => e.plugin
       ? (() => {
           const missSet = resolveSettings(e.plugin).missing.length;
@@ -309,9 +321,11 @@ function cmdList(): number {
           // 审计「这个插件哪来的」不用翻数据目录
           const src = readSource(e.plugin.dir);
           const installedFrom = src ? `${src.type}${src.url ? ` ${src.url}` : ''}${src.installedAt ? ` @${src.installedAt.slice(0, 10)}` : ''}` : 'unknown';
+          const lr = pluginLastRun(e.plugin.id);
           return { id: e.plugin.id, name: e.plugin.name, version: e.plugin.version,
             actions: e.plugin.actions.length, riskMix: risks,
             installedFrom,
+            ...(lr ? { lastRun: lr } : {}),
             health: missDep === 0 && missSet === 0 ? 'ok'
               : [missDep ? `缺依赖 ${missDep}` : '', missSet ? `缺设置 ${missSet}` : ''].filter(Boolean).join('，') || 'ok' };
         })()
@@ -455,6 +469,16 @@ function readStdinValue(): Promise<string> {
 }
 
 /** 第六十八轮④：zkit config 无参数——全部插件的设置状态总览（配了什么/缺什么一眼看全）。 */
+// 第一百四十二轮⑦：CLI 版相对时间（毫秒时间戳 → 人话）
+function relTimeText(ts: number): string {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return '刚刚';
+  if (s < 3600) return `${Math.floor(s / 60)} 分钟前`;
+  if (s < 86400) return `${Math.floor(s / 3600)} 小时前`;
+  if (s < 86400 * 30) return `${Math.floor(s / 86400)} 天前`;
+  return new Date(ts).toISOString().slice(0, 10);
+}
+
 function cmdConfigOverview(): number {
   const entries = listPlugins().filter((e) => e.plugin);
   const withSettings = entries.filter((e) => e.plugin!.settings.length > 0);
@@ -495,7 +519,10 @@ function cmdConfigOverview(): number {
     const tag = missing > 0 ? c.yellow(`缺 ${missing} 项必填`)
       : view.invalid.length > 0 ? c.red(`${view.invalid.length} 项不合法`)
       : c.green('✓ 配齐');
-    process.stdout.write(`  ${pad(p.id, 14)} ${set}/${total} 已设置  ${tag}\n`);
+    // 第一百四十二轮⑦：每插件一行「最近用到」（审计驱动，无记录显示「还没用过」）
+    const lr = pluginLastRun(p.id);
+    const when = lr ? relTimeText(new Date(lr.at).getTime()) : '还没用过';
+    process.stdout.write(`  ${pad(p.id, 14)} ${set}/${total} 已设置  ${tag}  ${c.dim(`最近：${when}`)}\n`);
   }
   const noSettings = entries.length - withSettings.length;
   if (noSettings > 0) process.stdout.write(c.dim(`  （另有 ${noSettings} 个插件无设置项）\n`));
@@ -2224,6 +2251,9 @@ async function cmdDoctor(): Promise<number> {
     const { ensureDirs } = await import('./core/paths.ts');
     ensureDirs();
     process.stdout.write(c.green('✓ 数据目录结构已确保齐全\n'));
+    // 第一百四十二轮⑤：--fix 前后各一行摘要（修了什么/没修什么）
+    process.stdout.write(c.bold(`⟐ --fix 摘要：清理残留目录 ${orphans.length} 个；数据目录补齐 ✓\n`));
+    process.stdout.write(c.dim('  没修的：清单错误、缺设置项、缺依赖——这些要人工动（见下方明细）\n'));
   }
   process.stdout.write(c.bold('环境自检\n'));
   // 第九十五轮④：1.0 体检段——版本与里程碑信息（与 package.json 同源）
@@ -2892,6 +2922,18 @@ function cmdAllow(args: string[]): number {
     if (!Number.isFinite(ttl) || ttl < -1) {
       process.stderr.write(c.red(`✗ ttl 必须是不小于 -1 的数字（收到 "${args[2]}"）\n`));
       return 2;
+    }
+    // 第一百四十二轮⑧：授权前显示这个动作会读/写什么（风险人话 + 实际命令）
+    {
+      const [pid, ...arest] = key.split('.');
+      const ent = listPlugins().find((e) => e.plugin?.id === pid)?.plugin;
+      const act = ent?.actions.find((a) => a.id === arest.join('.'));
+      if (act) {
+        const riskHr = act.risk === 'read' ? '只读：不改任何状态' : act.risk === 'mutate' ? '会改动：写文件/改配置/发请求' : '高风险：不可逆的破坏性操作';
+        process.stdout.write(`授权后 AI 将能执行：${c.bold(key)}\n  风险：${act.risk === 'read' ? c.green(riskHr) : act.risk === 'mutate' ? c.yellow(riskHr) : c.red(riskHr)}\n`);
+      } else {
+        process.stdout.write(c.yellow(`! 没找到动作 ${key} 的清单（可能未安装）——仍按授权记录写入\n`));
+      }
     }
     auditNs.saveAllow(auditNs.upsertAllow(list, key, ttl));
     process.stdout.write(c.green(`✓ 已授权 ${key}（${ttl === -1 ? '永久' : ttl + ' 天'}）\n`));
@@ -3701,6 +3743,15 @@ async function cmdWeb(args: string[]): Promise<number> {
   });
 }
 
+// 第一百四十二轮②：未知命令建议附一句话说明
+const COMMAND_DESC: Record<string, string> = {
+  run: '执行一个动作', last: '重放最近一次执行', history: '历史倒序', list: '已装插件与动作',
+  show: '动作参数与风险', doctor: '环境自检（--fix 顺手修）', ps: '正在运行的东西', kill: '结束进程/服务',
+  config: '插件设置项', plugin: '插件的安装卸载开发', market: '插件集市', logs: '服务与审计日志',
+  stats: '使用统计', mcp: 'AI 工具面（MCP）', timers: '定时任务', audit: '审计记录',
+  data: '数据目录管理', backup: '备份（含插件清单）', restore: '从备份恢复', ui: '启动器界面',
+  bench: '性能测量', health: '一屏健康状态', env: '环境变量一览', path: '数据目录位置',
+};
 const KNOWN_COMMANDS = ['allow', 'bench', 'audit', 'data', 'completion', 'config', 'desktop', 'doctor', 'env', 'welcome', 'gc', 'health', 'history', 'help', 'kill', 'last', 'list', 'logs', 'ls', 'man', 'market', 'mcp', 'path', 'plugin', 'ps', 'timers', 'run', 'runs', 'show', 'stats', 'ui', 'web', 'which'];
 
 // 第四十六轮②：man——不引依赖的终端命令参考（stdout 全量文本，man zkit 可外部包一层）
@@ -3969,7 +4020,17 @@ async function main(): Promise<number> {
       // 第三十五轮①：打错命令给最接近的建议，而不是只甩一份全量帮助
       process.stderr.write(c.red(`未知命令：${cmd}`) + '\n');
       const hint = suggestLineMulti(String(cmd), KNOWN_COMMANDS);
-      if (hint) process.stderr.write(c.yellow(`  ${hint}`) + '\n');
+      if (hint) {
+        process.stderr.write(c.yellow(`  ${hint}`) + '\n');
+        // 第一百四十二轮②：建议行后跟一句话说明，让「你是不是想找」可以直接决策
+        const seen = new Set<string>();
+        for (const m of hint.matchAll(/[a-z-]{2,}/g)) {
+          if (seen.has(m[0])) continue;
+          seen.add(m[0]);
+          const d = COMMAND_DESC[m[0]];
+          if (d) process.stderr.write(c.dim(`    ${m[0]} —— ${d}`) + '\n');
+        }
+      }
       process.stdout.write(HELP);
       return 2;
     }
