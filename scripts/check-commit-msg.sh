@@ -81,6 +81,7 @@ CHECKED_COUNT=0
 
 check_one() {
   local subject="$1"
+  local second="${2:-}"
 
   if should_skip "$subject"; then
     printf '  \033[2m跳过（无需校验）\033[0m %s\n' "$subject"
@@ -90,6 +91,13 @@ check_one() {
   CHECKED_COUNT=$((CHECKED_COUNT + 1))
 
   if [[ "$subject" =~ $PATTERN ]]; then
+    # 第一百四十六轮⑧：subject 与 body 之间必须空行分隔（否则 GitHub 渲染粘连）
+    if [[ -n "$second" && ! "$second" =~ ^#[[:space:]] ]]; then
+      FAILED_COUNT=$((FAILED_COUNT + 1))
+      printf '  \033[31m✗\033[0m %s\n' "$subject"
+      printf '      \033[33m→ 标题行后必须空一行再写正文（当前第二行非空：『%s』）。\033[0m\n' "${second:0:30}"
+      return 1
+    fi
     printf '  \033[32m✓\033[0m %s\n' "$subject"
     return 0
   fi
@@ -125,13 +133,14 @@ printf '\n\033[1m校验提交信息\033[0m\n'
 
 case "$MODE" in
   message)
-    check_one "$VALUE" || true
+    check_one "$VALUE" "$(printf '%s' "$VALUE" | sed -n '2p')" || true
     ;;
   file)
     [[ -f "$VALUE" ]] || { echo "文件不存在：$VALUE" >&2; exit 1; }
     # 只取第一行（标题行），忽略注释
     subject="$(head -n 1 "$VALUE" | sed 's/[[:space:]]*$//')"
-    check_one "$subject" || true
+    second="$(sed -n '2p' "$VALUE" | sed 's/[[:space:]]*$//')"
+    check_one "$subject" "$second" || true
     ;;
   range)
     if ! git rev-parse --git-dir >/dev/null 2>&1; then

@@ -31,6 +31,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- 质量护栏十项（人肉纪律机器化）：CHANGELOG 格式断言（[Unreleased] 空行三次事故的根治）进 lint.sh；文档测试数字同步断言（overview/START-HERE 与 test/ 实际文件数一致）；docs 本机绝对路径红线扫描；START-HERE 版本行 === package.json 断言；`scripts/verify-remote.sh` push 后远端复核 + tag 前双确认（对象存在 + 远端 main HEAD）；U+FFFD 扫描进 lint.sh；提交信息 subject 与 body 必须空行分隔
+
+
 （下一版攒着）
 
 ## [1.45.0] - 2026-11-05
