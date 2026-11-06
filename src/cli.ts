@@ -2675,6 +2675,11 @@ async function cmdBookmark(args: string[]): Promise<number> {
   const bm = await import('./core/bookmarks.ts');
   const cliX = await import('./core/cliX.ts');
   const sub = args[0];
+  // 第一百五十九轮③：补全用的机读书签名清单（一行一个，shell 补全直接 compgen）
+  if (sub === 'names') {
+    for (const b of bm.readBookmarks()) process.stdout.write(`${b.name}\n`);
+    return 0;
+  }
   if (sub === 'add') {
     const name = args[1];
     if (!name) { process.stderr.write('用法：zkit bookmark add <别名> <历史编号 | run 命令行...> [--note 备注]\n'); return 1; }
@@ -4173,15 +4178,23 @@ function cmdCompletion(args: string[]): number {
     return 2;
   };
   if (shell === 'bash') {
+    const acts = subsRunActions();
     process.stdout.write(`# zkit bash 补全：eval "$(zkit completion bash)"
 _zkit() {
   local cur prev
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
+  # bookmark run/rm 后补书签名（书签是动态的，补全时实时问 zkit 自己）——必须在 case 之前：
+  # prev=run 会被下面的 run 分支拦截，书签上下文就永远到不了
+  if [[ "\${COMP_WORDS[1]}" == "bookmark" && ( "\$prev" == "run" || "\$prev" == "rm" ) ]]; then
+    COMPREPLY=( \$(compgen -W "\$(zkit bookmark names 2>/dev/null)" -- "\$cur") ); return
+  fi
   case "\$prev" in
-    run) COMPREPLY=( \$(compgen -W "$(subsRunPlugins)" -- "\$cur") ); return;;
+    run) COMPREPLY=( \$(compgen -W "${acts}" -- "\$cur") ); return;;
+    bookmark) COMPREPLY=( \$(compgen -W "add list rm run" -- "\$cur") ); return;;
   esac
-  if [[ "\$cur" == -* ]]; then COMPREPLY=( \$(compgen -W "--json --brief --health --yes --quiet --copy --interactive --stdin-json --help --version" -- "\$cur") ); return; fi
+  if [[ "\$cur" == --keep* ]]; then COMPREPLY=( \$(compgen -W "--keep30d --keep12h --keeppermanent" -- "\$cur") ); return; fi
+  if [[ "\$cur" == -* ]]; then COMPREPLY=( \$(compgen -W "--json --brief --health --yes --quiet --copy --interactive --stdin-json --keep --since --grep --diff --alert --notify --pipe --where --calc --rename --sort --pick --uniq --head --sum --out --jq --path --format --full --help --version" -- "\$cur") ); return; fi
   COMPREPLY=( \$(compgen -W "${subs}" -- "\$cur") )
 }
 complete -F _zkit zkit
@@ -4189,17 +4202,39 @@ complete -F _zkit zkit
     return 0;
   }
   if (shell === 'zsh') {
+    const actsZ = subsRunActions();
     process.stdout.write(`#compdef zkit
 # zkit zsh 补全：zkit completion zsh > ~/.zfunc/_zkit
 _zkit() {
   local -a cmds
   cmds=(${subs.split(' ').join(' ')})
-  _arguments '1: :($cmds)' '*::arg:->args'
-  case $words[1] in
-    run) _values '插件' $(zkit list --brief 2>/dev/null | python3 -c 'import json,sys;[print(p["id"]) for p in json.load(sys.stdin)]' 2>/dev/null) ;;
+  _arguments '1: :(\$cmds)' '*::arg:->args'
+  case \$words[1] in
+    run) _values '动作' \${(z)ZKIT_ACTIONS} ;;
+    bookmark) _values '子命令' add list rm run ;;
   esac
+  if (( CURRENT == 3 )) && [[ \$words[1] == bookmark && \$words[2] == (run|rm) ]]; then
+    _values '书签' \$(zkit bookmark names 2>/dev/null)
+  fi
 }
+ZKIT_ACTIONS="${actsZ}"
 _zkit "$@"
+`);
+    return 0;
+  }
+  // 第一百五十九轮⑤：fish——无函数机制，纯命令+动作候选
+  if (shell === 'fish') {
+    const acts = subsRunActions();
+    process.stdout.write(`# zkit fish 补全：zkit completion fish > ~/.config/fish/completions/zkit.fish
+# 命令表
+complete -c zkit -n '__fish_use_subcommand' -a "${subs}"
+# run 的动作（点分）：重装插件后重新生成一次
+complete -c zkit -n '__fish_seen_subcommand_from run' -a "${acts}"
+# bookmark 子命令与书签（动态）
+complete -c zkit -n '__fish_seen_subcommand_from bookmark; and not __fish_seen_subcommand_from add list rm run' -a 'add list rm run'
+complete -c zkit -n '__fish_seen_subcommand_from bookmark; and __fish_seen_subcommand_from run rm' -a '(zkit bookmark names 2>/dev/null)'
+# 常用旗标
+complete -c zkit -l json -l quiet -l brief -l health -l yes -l help -d 'zkit 旗标'
 `);
     return 0;
   }
@@ -4216,6 +4251,20 @@ complete -c zkit -s V -l version -d '版本'
 }
 
 /** run 子命令的插件名补全词表（装了什么补什么）。 */
+/** 第一百五十九轮①②：run 的动作候选——点分「插件.动作」形式（含两段形式首段插件名）。 */
+function subsRunActions(): string {
+  try {
+    const out: string[] = [];
+    for (const e of listPlugins()) {
+      const pl = e.plugin;
+      if (!pl?.id) continue;
+      out.push(pl.id);
+      for (const a of pl.actions ?? []) out.push(`${pl.id}.${a.id}`);
+    }
+    return out.join(' ');
+  } catch { return ''; }
+}
+
 function subsRunPlugins(): string {
   try {
     return listPlugins().map((e) => e.plugin?.id ?? '').filter(Boolean).join(' ');
