@@ -79,7 +79,7 @@ console.log('guard146-smoke');
 // ⑨ 文档数字同步在 guard + 当前树通过
 {
   const r = run(process.execPath, [path.join(PKG_ROOT, 'scripts', 'guard146.mjs')]);
-  check('⑨ guard 对当前树全过', r.status === 0 && (r.stdout ?? '').includes('文档数字同步'));
+  check('⑨ guard 对当前树全过', r.status === 0 && (r.stdout ?? '').includes('文档数字同步'), JSON.stringify({ out: (r.stdout ?? '').slice(-150), err: (r.stderr ?? '').slice(-150) }));
 }
 
 // ⑩ lint.sh 接线 guard
