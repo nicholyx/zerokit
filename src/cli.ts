@@ -25,7 +25,7 @@ import { fullUpgradeDiff, rugpullCheck } from './core/update116.ts';
 import { type AppUpdateCheck, evalAppUpdate, fetchLatestRelease, readCurrentVersion } from './core/appupdate.ts';
 import { checkRequires } from './core/resolve.ts';
 import { buildDoctorReport, toHistoryEntry, appendDoctorHistory, readDoctorHistory, diffDoctorHistory, persistCount, doctorSummaryLine, doctorTrend, trendVerdict } from './core/doctor.ts';
-import { dataInventory, isDataScope, wipePreview, wipeData, dataStats, auditDataEvent, type DataScope } from './core/datamap.ts';
+import { dataInventory, isDataScope, wipePreview, wipeData, dataStats, auditDataEvent, usageByArea, findJunk, cleanJunk, type DataScope } from './core/datamap.ts';
 import { killAllProcesses, killProcess, listProcesses } from './core/runtime.ts';
 import { readSource } from './core/sources.ts';
 import { makeSnapshot, parseSnapshot, restoreSnapshot, diffSnapshot } from './core/migrate.ts';
@@ -2471,6 +2471,13 @@ async function cmdDoctor(): Promise<number> {
       process.stdout.write(c.dim('审计：暂无记录\n'));
     }
   }
+  // 第一百六十轮⑦：数据目录容量体检——超 100MB 警告（本地工具不该无感膨胀）
+  {
+    const u = usageByArea();
+    if (u.totalBytes > 100 * 1024 * 1024) {
+      process.stdout.write(c.yellow(`数据目录 ${(u.totalBytes / 1048576).toFixed(1)} MB 超 100 MB 阈值（zkit data usage 分项 · zkit data junk 找垃圾）\n`));
+    }
+  }
   // 第三十五轮⑦⑧：--fix 自动修可修项 + 半安装插件检测
   const fix = process.argv.includes('--fix');
   const orphans = findOrphanPlugins(report.dirs.plugins);
@@ -3738,6 +3745,71 @@ async function cmdData(args: string[]): Promise<number> {
     console.log(`执行历史 ${st.runs} 条（最老 ${st.oldestRunTs ? new Date(st.oldestRunTs).toLocaleString() : '—'}）`);
     console.log(`插件设置 ${st.settings} 个 · 定时任务 ${st.timers} 个`);
     console.log(`审计日志 ${fmtBytes(st.auditBytes)}`);
+    return 0;
+  }
+  // ---- 第一百六十轮：数据健康与存储体检 ----
+  if (sub === 'usage') {
+    const u = usageByArea();
+    const audits = readAudit();
+    const firstTs = audits[0]?.ts ? Date.parse(audits[0].ts) : NaN;
+    const oldestAge = audits.length > 0 && Number.isFinite(firstTs)
+      ? Math.max(1, Math.round((Date.now() - firstTs) / 86400000))
+      : 0;
+    if (rest[0] === '--json') {
+      console.log(JSON.stringify({ ...u, audit: { count: audits.length, oldestAgeDays: oldestAge } }));
+      return 0;
+    }
+    console.log(`数据目录容量（${HOME_PATH()}）：\n`);
+    for (const a of u.areas) {
+      console.log(`  ${a.name.padEnd(10)} ${fmtBytes(a.bytes).padStart(9)}  ${a.files} 个文件`);
+    }
+    console.log(`  ${'（散文件）'.padEnd(10)} ${fmtBytes(u.looseBytes).padStart(9)}  config.json / history.json 等顶层文件`);
+    console.log(`\n合计 ${fmtBytes(u.totalBytes)}。审计 ${audits.length} 条记录${oldestAge ? `，最老 ${oldestAge} 天` : ''}`);
+    console.log('垃圾识别：zkit data junk · 清理：zkit data clean');
+    return 0;
+  }
+  if (sub === 'junk' || sub === 'clean') {
+    const junk = findJunk();
+    const auto = junk.filter((j) => j.kind !== 'bak-file');
+    const baks = junk.filter((j) => j.kind === 'bak-file');
+    const freed = auto.reduce((s, j) => s + j.bytes, 0);
+    if (sub === 'junk') {
+      if (rest[0] === '--json') { console.log(JSON.stringify(junk)); return 0; }
+      if (junk.length === 0) { console.log('没有发现垃圾项（.tmp-* 残留 / 孤儿目录 / 超保留快照 / .bak 备份）。'); return 0; }
+      console.log('垃圾识别（自动可清 ' + `${auto.length} 项，可释放 ${fmtBytes(freed)}）：\n`);
+      for (const j of auto) console.log(`  [${j.kind}] ${j.what} — ${j.path}（${fmtBytes(j.bytes)}）`);
+      if (baks.length) {
+        console.log(`\n另有 ${baks.length} 份 .bak 审计备份（logs --keep 的刻意产物，不自动删）：`);
+        for (const b of baks) console.log(`  [bak-file] ${b.path}（${fmtBytes(b.bytes)}）`);
+      }
+      console.log('\n清理：zkit data clean（预览）→ zkit data clean --yes（真删）');
+      return 0;
+    }
+    // clean
+    if (auto.length === 0) { console.log('没有可自动清理的垃圾项。'); return 0; }
+    console.log(`将删除 ${auto.length} 项（释放约 ${fmtBytes(freed)}）：`);
+    for (const j of auto) console.log(`  [${j.kind}] ${j.path}`);
+    if (!rest.includes('--yes')) {
+      console.log('\n这是预览。确认执行加 --yes：zkit data clean --yes（.bak 备份与审计/历史/设置不会被碰）');
+      return 0;
+    }
+    const r = cleanJunk(junk);
+    auditDataEvent('data:write', 'cli', `clean ${r.removed.length} 项 ${fmtBytes(r.freedBytes)}`);
+    console.log(`已删除 ${r.removed.length} 项，释放 ${fmtBytes(r.freedBytes)}。`);
+    return 0;
+  }
+  if (sub === 'snapshots') {
+    const snapDir = path.join(HOME_PATH(), 'snapshots');
+    let snaps: { name: string; bytes: number }[] = [];
+    try {
+      snaps = fs.readdirSync(snapDir).map((f) => ({ name: f, bytes: fs.statSync(path.join(snapDir, f)).size }));
+    } catch { /* 无快照目录 */ }
+    if (rest[0] === '--json') { console.log(JSON.stringify(snaps)); return 0; }
+    if (snaps.length === 0) { console.log('没有快照。制作：zkit data snapshot'); return 0; }
+    snaps.sort((a, b) => b.bytes - a.bytes);
+    console.log(`快照 ${snaps.length} 份（${snapDir}）：`);
+    for (const s of snaps) console.log(`  ${s.name.padEnd(44)} ${fmtBytes(s.bytes)}`);
+    if (snaps.length > 10) console.log(`\n超过 10 份：最旧的已被 zkit data junk 识别为可清理项。`);
     return 0;
   }
   if (sub === 'wipe') {
