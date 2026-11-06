@@ -2,6 +2,15 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [1.53.0] - 2026-11-06
+
+### Added
+
+- `zkit history` 新增 `--grep <词>`（命令行子串过滤，含旗标值）与 `--since Nd/Nh/today`（时间档过滤），与既有 `--plugin/--action/--today/--json` 自由组合
+- 新增 `zkit bookmark`：常用命令组合起别名沉淀——`add <别名> <历史编号|命令行> [--note 备注]` / `list [--json]` / `rm` / `run`；存储在 `~/.zerokit/bookmarks.json`（0600 原子写）
+- `zkit history --rerun-last`（`!!` 同义）：一键重跑最后一条成功命令
+- `zkit history` 默认视图现在展示失败条目（✓/✗ 标记），非交互终端追加「一键重跑」提示行
+
 ## [1.52.0] - 2026-11-05
 
 ### Added
