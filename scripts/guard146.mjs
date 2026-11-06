@@ -20,7 +20,7 @@ const die = (msg) => { console.error(`FAIL  ${msg}`); bad = 1; };
 {
   const cl = readFileSync(path.join(ROOT, 'CHANGELOG.md'), 'utf8');
   const unrel = cl.indexOf('## [Unreleased]');
-  if (unrel < 0) die('CHANGELOG 没有 [Unreleased] 段');
+  if (unrel < 0) die('CHANGELOG 没有 [Unreleased] 段——release 分支归档后要补回空壳段（## [Unreleased]\n\n（下一版攒着）\n\n）');
   const next = cl.indexOf('\n## [', unrel + 1);
   const seg = cl.slice(unrel, next < 0 ? undefined : next);
   const hasCat = /### (Added|Changed|Deprecated|Removed|Fixed|Security)/.test(seg);

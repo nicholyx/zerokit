@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+（下一版攒着）
+
 ## [1.68.0] - 2026-11-07
 
 ### Fixed
