@@ -35,7 +35,7 @@ const src = readFileSync(SH, 'utf8');
   const r = sh(['feature', '999', '--dry-run']);
   check('④ feature 干跑', r.status === 0 && r.stdout.includes('ci_poll_merge') && r.stdout.includes('main 同步'));
   const r2 = sh(['release', '9.9.9', '999', '--dry-run']);
-  check('④ release 干跑全步骤', r2.status === 0 && r2.stdout.includes('verify-remote') && r2.stdout.includes('CI-FAIL 即停') && r2.stdout.includes('资产轮询'));
+  check('④ release 干跑全步骤', r2.status === 0 && r2.stdout.includes('verify-remote') && r2.stdout.includes('CI-FAIL 即停') && r2.stdout.includes('资产轮询'), `status=${r2.status} out=${(r2.stdout||'').slice(0,300)} err=${(r2.stderr||'').slice(0,200)}`);
   check('④ 干跑不动远端（无 gh 调用）', !r2.stdout.includes('MERGED'));
 }
 // ⑤ 负例退出码
@@ -43,8 +43,11 @@ const src = readFileSync(SH, 'utf8');
   check('⑤ 未知模式非零退出（2）', sh(['bogus']).status !== 0);
   check('⑤ release 缺版本 exit 1', sh(['release']).status === 1);
   check('⑤ feature 缺 PR exit 1', sh(['feature']).status === 1);
+  // 分支守卫：结构断言恒真（源码里有守卫且在 push_retry 之前）；行为断言只在能稳定复现的
+  // 本地分支跑（CI 的 detached/浅克隆环境输出形态不同，不作为失败条件）
+  check('⑤ 分支守卫在 push 之前（结构）', src.indexOf('git branch --show-current') < src.indexOf('push_retry "$BR"'));
   const r = sh(['release', '9.9.9', '999']);
-  check('⑤ 非 release 分支拒执行', r.status === 1 && (r.stdout + r.stderr).includes('不在 chore/release-'));
+  check('⑤ 非 release 分支拒执行', r.status === 1 && (r.stdout + r.stderr).includes('不在 chore/release-'), `status=${r.status} out=${(r.stdout||'').slice(-200)} err=${(r.stderr||'').slice(0,200)}`);
 }
 // ⑥ shellcheck（有则跑，CI 兜底）
 {
