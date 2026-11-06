@@ -1308,7 +1308,7 @@ async function cmdRun(args: string[]): Promise<number> {
       const isWin = process.platform === 'win32';
       // Windows：cmd /s /c "整串" + windowsVerbatimArguments 保持原引号不撕裂
       const child = isWin
-        ? spawn('cmd', ['/s', '/c', notifyCmd], { stdio: ['pipe', 'inherit', 'inherit'], windowsVerbatimArguments: true } as never)
+        ? spawn('cmd', ['/s', '/c', `"${notifyCmd}"`], { stdio: ['pipe', 'inherit', 'inherit'], windowsVerbatimArguments: true } as never)
         : spawn('/bin/sh', ['-c', notifyCmd], { stdio: ['pipe', 'inherit', 'inherit'] });
       child.stdin?.write(line + '\n');
       child.stdin?.end();
