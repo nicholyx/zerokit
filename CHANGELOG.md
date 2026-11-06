@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+（下一版攒着）
+
+## [1.64.0] - 2026-11-06
+
 ### Added
 
 - 项目门面：仓库 topics（15 个真实关键词）与 description 校准（五个面 + 桌面壳 + 迭代/测试规模）；README 快速开始改用点分简写、补 Release 版本徽章、「下载安装包」节（三平台资产表 + 免构建 npm 路径并列）、「参与贡献」节（十条军规引用）；overview「一句话现状」重写对齐一百六十一轮
@@ -102,13 +106,4 @@
 - `run --watch N --diff`：轮询中无变化的轮次不再刷屏（打点表示活着）
 - `zkit ui --log`：server 请求日志落 `~/.zerokit/logs/server.log`（启动行含端口与 pid；请求行 method path status ms，query 参数剥掉——脱敏）
 - `zkit logs server [--tail N] [--follow]`：查看/跟读 server 日志
-
-## [1.53.0] - 2026-11-06
-
-### Added
-
-- `zkit history` 新增 `--grep <词>`（命令行子串过滤，含旗标值）与 `--since Nd/Nh/today`（时间档过滤），与既有 `--plugin/--action/--today/--json` 自由组合
-- 新增 `zkit bookmark`：常用命令组合起别名沉淀——`add <别名> <历史编号|命令行> [--note 备注]` / `list [--json]` / `rm` / `run`；存储在 `~/.zerokit/bookmarks.json`（0600 原子写）
-- `zkit history --rerun-last`（`!!` 同义）：一键重跑最后一条成功命令
-- `zkit history` 默认视图现在展示失败条目（✓/✗ 标记），非交互终端追加「一键重跑」提示行
 
