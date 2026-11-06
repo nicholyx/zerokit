@@ -918,6 +918,8 @@ async function cmdRun(args: string[]): Promise<number> {
   const fmtIdx = rest.indexOf('--format');
   const fmtNext = fmtIdx >= 0 ? rest[fmtIdx + 1] : undefined;
   const fmtVal = fmtIdx >= 0 && fmtNext && ['yaml', 'csv', 'table', 'md', 'tsv'].includes(fmtNext) ? fmtNext : undefined;
+  // 第一百六十三轮⑤：--format '{{ms}}ms {{rows}}行' 轻模板（{{ms}}/{{rows}}/{{ok}}/{{key}} 四占位符；{{ 开头识别）
+  const fmtTpl = fmtIdx >= 0 && fmtNext && fmtNext.startsWith('{{') && fmtNext.endsWith('}}') || (fmtIdx >= 0 && fmtNext && /\{\{\w+\}\}/.test(fmtNext)) ? fmtNext : undefined;
   const outFmt = fmtVal ?? (outIdx >= 0 && rest[outIdx + 1] && ['yaml', 'csv', 'table'].includes(rest[outIdx + 1]!) ? rest[outIdx + 1] : undefined);
   const doCopy = rest.includes('--copy');
   // 第六十八轮②：--jq <路径> 轻量查询（.data.ip / .data.items[0].name 这类点路径）
@@ -960,13 +962,14 @@ async function cmdRun(args: string[]): Promise<number> {
   const argv: string[] = [];
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i]!;
-    if (a === '--out' || a === '--watch' || a === '--share' || a === '--jq' || a === '--path' || a === '--env' || a === '--format' || a === '--retry' || a === '--avg' || a === '--alert' || a === '--notify' || a === '--notify-file'
+    if (a === '--stdin' || a === '--timeout' || a === '--retries' || a === '--retry-delay' || a === '--out' || a === '--watch' || a === '--share' || a === '--jq' || a === '--path' || a === '--env' || a === '--format' || a === '--retry' || a === '--avg' || a === '--alert' || a === '--notify' || a === '--notify-file'
         || a === '--sort' || a === '--pick' || a === '--uniq' || a === '--sum' || a === '--head' || a === '--measure'
         || a === '--where' || a === '--calc' || a === '--rename' || a === '--pipe') { i++; continue; }
     if (a.startsWith('--out=') || a.startsWith('--watch=') || a.startsWith('--share=') || a.startsWith('--jq=') || a.startsWith('--env=') || a.startsWith('--format=') || a.startsWith('--retry=') || a.startsWith('--avg=')
         || a.startsWith('--sort=') || a.startsWith('--pick=') || a.startsWith('--uniq=') || a.startsWith('--sum=') || a.startsWith('--head=') || a.startsWith('--measure=')
         || a.startsWith('--where=') || a.startsWith('--calc=') || a.startsWith('--rename=') || a.startsWith('--pipe=') || a.startsWith('--alert=') || a.startsWith('--notify=') || a.startsWith('--notify-file=')) continue;
     if (a === '--diff') continue; // 150①：与上次同命令对比（无值旗标）
+    if (a === '--no-lock') continue; // 163④：锁逃生（无值旗标）
     if (['--yes', '-y', '--json', '--copy', '--quiet', '--full', '--stdin-json', '--profile'].includes(a)) continue;
     // 第七十五轮：--sort -列 的降序值（-内存 不是短旗标，前一个是 --sort 就吞掉）
     if (a.startsWith('-') && !a.startsWith('--') && i > 0 && rest[i - 1] === '--sort') continue;
@@ -974,9 +977,22 @@ async function cmdRun(args: string[]): Promise<number> {
   }
   const parsed0 = parseArgv(action, argv);
   // 第九十一轮②：--stdin-json 从 stdin 读参数 JSON（脚本管道友好：echo '{"text":"x"}' | zkit run quick.b64 --stdin-json）
-  const parsed = rest.includes('--stdin-json')
+  let parsed = rest.includes('--stdin-json')
     ? { ...parsed0, values: { ...parsed0.values, ...readStdinJsonArgs() }, errors: parsed0.errors.filter((e) => !e.includes('必填')) }
     : parsed0;
+  // 第一百六十三轮②：--stdin <key> 从 stdin 读一行作为指定参数值（密钥不进 shell history）
+  {
+    const si = rest.indexOf('--stdin');
+    const sv = si >= 0 ? rest[si + 1] : undefined;
+    if (si >= 0 && sv && !sv.startsWith('-')) {
+      const key = sv;
+      const declared = (action.params ?? []).some((pa) => pa.name === key);
+      if (!declared) { process.stderr.write(`✗ --stdin ${key}：这个动作没有名为「${key}」的参数\n`); return 2; }
+      const line = fs.readFileSync(0, 'utf8').split(/\r?\n/, 1)[0] ?? '';
+      if (!line.trim()) { process.stderr.write(`✗ --stdin ${key}：stdin 是空的（期望一行值）\n`); return 2; }
+      parsed = { ...parsed, values: { ...parsed.values, [key]: line } , errors: parsed.errors.filter((e) => !e.includes(key)) };
+    }
+  }
   if (parsed.help) {
     process.stdout.write(`zkit run ${pluginId} ${actionId}\n  ${action.description}\n\n`);
     for (const f of toCliFlags(action)) {
@@ -1060,7 +1076,53 @@ async function cmdRun(args: string[]): Promise<number> {
     savedEnv.push([k, process.env[k]]);
     process.env[k] = v;
   }
-  let result: Awaited<ReturnType<typeof runAction>> = await runAction(plugin, action, { caller: 'cli', values: withDefaults.values });
+  // 第一百六十三轮③：--timeout <秒> 单次覆盖（清单位声明优先级更高，脚本里临时收紧用）
+  const toIdx = rest.indexOf('--timeout');
+  if (toIdx >= 0) {
+    const tv = Number(rest[toIdx + 1]);
+    if (!Number.isFinite(tv) || tv <= 0) { process.stderr.write('✗ --timeout 必须是正数秒\n'); return 2; }
+    action.timeout = tv;
+  }
+  // 第一百六十三轮⑥：--retries N --retry-delay S（默认 0 次不重试 / 间隔 2 秒；只重试执行失败，不重试被拒）
+  const retriesIdx = rest.indexOf('--retries');
+  const retries = retriesIdx >= 0 ? Math.max(0, Math.floor(Number(rest[retriesIdx + 1]) || 0)) : 0;
+  const delayIdx = rest.indexOf('--retry-delay');
+  const retryDelayMs = delayIdx >= 0 ? Math.max(0, (Number(rest[delayIdx + 1]) || 2)) * 1000 : 2000;
+  // 第一百六十三轮④：并发实例锁——同插件同动作互斥（脚本并发跑同一动作时排队而不是互相踩）；
+  // 陈锁 >1h 视为死锁可抢；--no-lock 逃生（批量编排里有意并发时用）
+  const noLock = rest.includes('--no-lock');
+  let lockPath: string | null = null;
+  if (!noLock) {
+    const lockDir = path.join(HOME_PATH(), 'locks');
+    fs.mkdirSync(lockDir, { recursive: true });
+    lockPath = path.join(lockDir, `${pluginId}.${actionId}.lock`);
+    const FRESH_MS = 60 * 60 * 1000;
+    for (let spin = 0; spin < 40; spin++) {
+      try {
+        if (fs.existsSync(lockPath)) {
+          const st = fs.statSync(lockPath);
+          if (Date.now() - st.mtimeMs > FRESH_MS) fs.rmSync(lockPath, { force: true }); // 陈锁可抢
+          else { if (spin === 0) process.stderr.write(c.dim(`（${pluginId}.${actionId} 正在别处执行，等待…）\n`)); await new Promise((r) => setTimeout(r, 500)); continue; }
+        }
+        fs.writeFileSync(lockPath, String(process.pid), { flag: 'wx' });
+        break;
+      } catch (e: unknown) {
+        if (spin === 39) { process.stderr.write(`✗ 等锁超时（20 秒）：${pluginId}.${actionId}\n`); return 2; }
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+  }
+  let result: RunResult;
+  try {
+    result = await runAction(plugin, action, { caller: 'cli', values: withDefaults.values });
+    for (let attempt = 0; attempt < retries && result.ok === false; attempt++) {
+      if (retryDelayMs > 0) await new Promise((r) => setTimeout(r, retryDelayMs));
+      process.stderr.write(c.dim(`（第 ${attempt + 1}/${retries} 次重试…）\n`));
+      result = await runAction(plugin, action, { caller: 'cli', values: withDefaults.values });
+    }
+  } finally {
+    if (lockPath) { try { fs.rmSync(lockPath, { force: true }); } catch { /* 陈锁已被别人抢走 */ } }
+  }
   for (const [k, v] of savedEnv) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
   // 第四十五轮⑤：成功执行进历史（重放要干净的参数面）
   // 第一百四十九轮⑦：失败也进历史（exitCode=1）——history 默认视图 ✓/✗ 全量展示，
@@ -1145,7 +1207,13 @@ async function cmdRun(args: string[]): Promise<number> {
   // 第七十四轮④⑤：--format md / tsv；②：--full 展开大结果（默认 30 行截断）
   const wantFull = rest.includes('--full');
   const dispRows = hasPipe ? tfRows : undefined;
-  if (!pipeCmd) if (outFmt === 'yaml') {
+  if (fmtTpl && result.ok) {
+    // 模板渲染在所有格式分支之前：一行输出给脚本 cut/grep 用
+    const rowsN = Array.isArray(result.data) ? result.data.length : (typeof result.data === 'object' && result.data ? Object.keys(result.data).length : 1);
+    const ms = result.ms;
+    const key = `${pluginId}.${actionId}`;
+    process.stdout.write(fmtTpl.replace(/\{\{ms\}\}/g, String(ms)).replace(/\{\{rows\}\}/g, String(rowsN)).replace(/\{\{ok\}\}/g, 'true').replace(/\{\{key\}\}/g, key) + '\n');
+  } else if (!pipeCmd) if (outFmt === 'yaml') {
     process.stdout.write(cliX.renderYaml(result.data));
   } else if (outFmt === 'csv') {
     process.stdout.write(cliX.renderCsv(dispRows ?? cliX.toRows(result.data)));
@@ -2675,6 +2743,72 @@ async function cmdRuns(args: string[]): Promise<number> {
 
   process.stderr.write(`用法：zkit runs list [--limit N] [--json] | show <序号> [--replay] [--json] | export | gc --days N [--yes]\n`);
   return 1;
+}
+
+/** 第一百六十三轮：cron——脚本化定时任务的登记与补打。add/list/rm/run；接线交给系统调度器。 */
+async function cmdCron(args: string[]): Promise<number> {
+  const ct = await import('./core/crontab.ts');
+  const home = HOME_PATH();
+  const sub = args[0];
+  const usage = '用法：zkit cron add <名字> -- <zkit 命令…> [--note 说明] | list [--json] | rm <名字> | run';
+  if (sub === 'add') {
+    const dd = args.indexOf('--');
+    if (dd < 0) { process.stderr.write('add 需要在 -- 之后给出要定时跑的 zkit 命令\n' + usage + '\n'); return 2; }
+    const name = args[1];
+    if (name === undefined) { process.stderr.write('缺名字\n' + usage + '\n'); return 2; }
+    const v = ct.validCronName(name);
+    if (v !== true) { process.stderr.write(v + '\n'); return 2; }
+    const noteIdx = args.lastIndexOf('--note');
+    const note = noteIdx > dd && noteIdx + 1 < args.length ? args[noteIdx + 1] : undefined;
+    const argv = args.slice(dd + 1, noteIdx > dd ? noteIdx : args.length);
+    if (argv.length === 0) { process.stderr.write('-- 之后没有命令\n' + usage + '\n'); return 2; }
+    if (argv[0] === 'cron') { process.stderr.write('cron 条目不能再调 cron（防自递归）\n'); return 2; }
+    const entries = ct.loadCrontab(home);
+    if (ct.cronNameTaken(entries, name)) { process.stderr.write(`已有同名条目：${name}（zkit cron rm ${name} 先删）\n`); return 2; }
+    entries.push({ name, argv, createdAt: new Date().toISOString(), ...(note ? { note } : {}) });
+    ct.saveCrontab(home, entries);
+    console.log(`已登记：${name} → zkit ${argv.join(' ')}`);
+    const zkit = process.argv[1] ?? 'zkit';
+    for (const line of ct.cronWiringHint(`node ${zkit}`)) console.log(line);
+    return 0;
+  }
+  if (sub === 'list') {
+    const entries = ct.loadCrontab(home);
+    if (args.includes('--json')) { console.log(JSON.stringify(entries)); return 0; }
+    if (entries.length === 0) { console.log('（没有定时任务。zkit cron add <名字> -- run … 登记）'); return 0; }
+    for (const e of entries) console.log(`${e.name}  zkit ${e.argv.join(' ')}${e.note ? '  # ' + e.note : ''}`);
+    return 0;
+  }
+  if (sub === 'rm') {
+    const name = args[1];
+    const entries = ct.loadCrontab(home);
+    const i = entries.findIndex((e) => e.name === name);
+    if (i < 0) { process.stderr.write(`没有这个条目：${name}\n`); return 2; }
+    entries.splice(i, 1);
+    ct.saveCrontab(home, entries);
+    console.log(`已删除：${name}`);
+    return 0;
+  }
+  if (sub === 'run') {
+    const entries = ct.loadCrontab(home);
+    if (entries.length === 0) { console.log('（没有定时任务要跑）'); return 0; }
+    const { spawnSync } = await import('node:child_process');
+    const zkitBin = process.execPath;
+    const entry = process.argv[1] ?? 'src/cli.ts';
+    let worst = 0;
+    for (const e of entries) {
+      // 每条独立子进程：锁/环境/退出码互不污染，与真实调度器逐条跑一致
+      const r = spawnSync(zkitBin, [entry, ...e.argv], { encoding: 'utf8', timeout: 120000, env: process.env });
+      const code = r.status ?? 1;
+      if (r.stdout) process.stdout.write(r.stdout);
+      if (r.stderr) process.stderr.write(r.stderr);
+      console.log(`${code === 0 ? '✓' : '✗'} ${e.name}（exit ${code}）`);
+      if (code > worst) worst = code;
+    }
+    return worst; // 有失败不瞒：调度器日志能看见
+  }
+  process.stderr.write(usage + '\n');
+  return sub === undefined || sub === 'help' ? 0 : 2;
 }
 
 /** 第一百四十九轮：bookmark——常用命令组合起别名。add/list/rm/run，list --json 机读。 */
@@ -4405,6 +4539,17 @@ async function main(): Promise<number> {
     case 'man':
       process.stdout.write(MAN_PAGE);
       return 0;
+    case 'exit-codes': {
+      // 第一百六十三轮①：退出码契约（以实际代码行为为准盘点固化）
+      const rows = [
+        ['0', '成功——动作执行完成且（如有）哨兵断言满足'],
+        ['1', '动作执行失败——插件返回非零、超时或被停止（脚本里「值得重试」的那类）'],
+        ['2', '用法或环境错 / 哨兵断言未触发——参数不对、插件缺失、JSON 坏、--alert 不满足都走这里（脚本里「不要盲目重试」的那类）'],
+      ];
+      for (const [code, meaning] of rows) process.stdout.write(`  ${code}  ${meaning}\n`);
+      process.stdout.write('  详情：docs/guide/scripting.md\n');
+      return 0;
+    }
     case 'interactive':
     case 'im':
       return cmdInteractive(rest);
@@ -4520,6 +4665,9 @@ async function main(): Promise<number> {
     // 第一百四十九轮：书签——常用命令组合起别名沉淀
     case 'bookmark':
       return await cmdBookmark(rest);
+    // 第一百六十三轮：cron——脚本化定时任务登记与补打
+    case 'cron':
+      return await cmdCron(rest);
     // 第一百二十九轮：执行历史消费面
     case 'runs':
       return await cmdRuns(rest);
