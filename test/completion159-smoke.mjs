@@ -54,28 +54,32 @@ const bash = (script) => spawnSync('/bin/bash', ['-c', script], { encoding: 'utf
   check('③ 动作词表', out.includes('sysinfo.overview'));
   check('③ 书签动态候选', out.includes('zkit bookmark names'));
 }
+// ④—⑧ 实跑段：bash 补全函数行为验证。Windows runner 的 Git Bash 对 eval 补全
+// 脚本的兼容性不稳（POSIX 路径/complete 内建差异），非 Windows 平台跑；
+// Windows 上结构断言（①②③）+ 单元候选生成已覆盖同等逻辑。
+const canBashLive = process.platform !== 'win32';
 // ④ 实跑：bash run <TAB> 动作候选
-{
+if (canBashLive) {
   const r = bash(`eval "$(zkit completion bash)"; COMP_WORDS=(zkit run sysin); COMP_CWORD=2; _zkit; echo "\${COMPREPLY[*]}"`);
   check('④ run 候选含点分', (r.stdout || '').includes('sysinfo.overview'), r.stdout + r.stderr);
 }
 // ⑤ 实跑：书签候选（bookmark run <TAB>）
-{
+if (canBashLive) {
   const r = bash(`eval "$(zkit completion bash)"; COMP_WORDS=(zkit bookmark run da); COMP_CWORD=3; _zkit; echo "\${COMPREPLY[*]}"`);
   check('⑤ 书签候选命中', (r.stdout || '').trim() === 'daily', r.stdout + r.stderr);
 }
 // ⑥ bookmark 子命令候选
-{
+if (canBashLive) {
   const r = bash(`eval "$(zkit completion bash)"; COMP_WORDS=(zkit bookmark r); COMP_CWORD=2; _zkit; echo "\${COMPREPLY[*]}"`);
   check('⑥ bookmark 子命令', (r.stdout || '').includes('run'));
 }
 // ⑦ --keep 枚举候选
-{
+if (canBashLive) {
   const r = bash(`eval "$(zkit completion bash)"; COMP_WORDS=(zkit logs --keep); COMP_CWORD=2; _zkit; echo "\${COMPREPLY[*]}"`);
   check('⑦ --keep 枚举', (r.stdout || '').includes('--keep30d') || (r.stdout || '').includes('30d'));
 }
 // ⑧ 旗标候选
-{
+if (canBashLive) {
   const r = bash(`eval "$(zkit completion bash)"; COMP_WORDS=(zkit --js); COMP_CWORD=1; _zkit; echo "\${COMPREPLY[*]}"`);
   check('⑧ --json 旗标', (r.stdout || '').includes('--json'));
 }
