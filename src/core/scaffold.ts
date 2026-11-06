@@ -76,6 +76,10 @@ function manifestTmpl(id: string, name: string, runtime: ScaffoldRuntime, web: b
 #   zkit run ${id} hello         # 跑起来看看
 #   zkit plugin validate .       # 随手校验清单
 #   zkit plugin add .            # 满意后转成正式副本
+#
+# 体检指引（发布前必跑）：
+#   zkit plugin lint . --score   # 质量分 + 最值得先修的三项（L01–L20 规则见 docs/reference/plugin-spec.md）
+#   zkit plugin doc .            # 从清单生成动作参考（可直接当 README 核心段）
 
 [plugin]
 id       = "${id}"

@@ -851,6 +851,21 @@ zkit plugin lint <id> --json  # 机读（errorCount > 0 时退出码非零，可
 
 配套：`zkit plugin doc <id|目录>` 从清单生成 Markdown 动作参考（可直接当 README 核心段），`--json` 出机读版。
 
+### 常见症状 → 规则号反查
+
+| 症状 | 先查 |
+| --- | --- |
+| 启动器下拉框是空的 | L13（enum 缺 options） |
+| chain 跑完取不到值 | L14 / L15（use 语法、output 声明、模板别名） |
+| 输出中文乱码 | L16（encoding） |
+| 装上就静默少动作 | L20（重复 id 后者覆盖前者） |
+| 服务状态永远「未知」 | L19（port / pidFile） |
+| 装机时用户被卡住要输东西 | L08（secret 必填无默认） |
+| 「试一试」预填不生效 | L04 / L05（match 表 / fills 引用） |
+| 动作能跑但 AI 不选它 | L01–L03（描述太薄——搜索与路由都吃它） |
+
+质量分（`plugin lint <id> --score`）：error -15 / warn -6 / info -2，A ≥90 / B ≥75 / C ≥60 / D。批量看全部插件：`plugin lint --all`（分数升序，先修最上面的）。
+
 ## 完整示例
 
 ```toml

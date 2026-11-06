@@ -10,7 +10,7 @@ import { pluginHealthCard, findLostPlugins, purgePreview, appendPluginEvent } fr
 import { actionStats, gcAudit, readAudit, readAuditDetailed, recentErrors, SLOW_MS } from './core/ops.ts';
 import { packPluginWithManifest as packPlugin, publishReady, unpackPlugin, verifyInstalled } from './core/distro.ts';
 import * as distroNs from './core/distro.ts';
-import { lintPlugin, docPlugin, docPluginJson } from './core/lintdoc.ts';
+import { lintPlugin, lintScore, docPlugin, docPluginJson } from './core/lintdoc.ts';
 import * as auditNs from './core/audit.ts';
 import { needsConfirm, rememberApproval } from './core/approvals.ts';
 import type { ConfirmPolicy } from './core/runner.ts';
@@ -1879,9 +1879,29 @@ async function cmdPlugin(args: string[]): Promise<number> {
 
 /** ①⑤⑥zkit plugin lint <id|目录>：清单体检。error 非零退出（CI 可用），warn/info 不影响。 */
 function cmdPluginLint(args: string[]): number {
-  const rest = args.filter((a) => !a.startsWith('-'));
+  const ruleFlagIdx = args.indexOf('--rule');
+  const rest = args.filter((a) => !a.startsWith('-') && !/^L\d+$/.test(a));
+  const noRule = (args.find((a) => a.startsWith('--rule=')) ?? '').split('=')[1] ?? (ruleFlagIdx >= 0 ? args[ruleFlagIdx + 1] : undefined);
+  // 第一百五十三轮③：--all 批量体检全部已装插件
+  if (args.includes('--all')) {
+    const plugins = listPlugins();
+    if (plugins.length === 0) { process.stdout.write('（没有已装插件——zkit plugin bundled 先装示例）\n'); return 0; }
+    const rows: { id: string; score: number; grade: string; errs: number; warns: number; infos: number }[] = [];
+    for (const entry of plugins) {
+      const pid = entry.plugin?.id ?? path.basename(entry.dir);
+      if (!entry.plugin || entry.errors.length > 0) { rows.push({ id: pid, score: 0, grade: 'D', errs: Math.max(1, entry.errors.length), warns: 0, infos: 0 }); continue; }
+      const f = lintPlugin(entry.plugin);
+      const sc = lintScore(f);
+      rows.push({ id: pid, score: sc.score, grade: sc.grade, errs: sc.bySeverity.error ?? 0, warns: sc.bySeverity.warn ?? 0, infos: sc.bySeverity.info ?? 0 });
+    }
+    rows.sort((a, b) => a.score - b.score); // 最需要修的排前面
+    process.stdout.write(c.bold(`批量体检（${rows.length} 个插件，分数升序——先修上面的）\n`));
+    process.stdout.write('  分数  等级  error/warn/info  插件\n');
+    for (const r of rows) process.stdout.write(`  ${String(r.score).padStart(3)}   ${r.grade}    ${r.errs}/${r.warns}/${r.infos}        ${r.id}${r.errs > 0 ? c.red('（有 error，装不了）') : ''}\n`);
+    return rows.some((r) => r.errs > 0) ? 1 : 0;
+  }
   const target = rest[0];
-  if (!target) { process.stderr.write('用法：zkit plugin lint <id|目录> [--json]\n'); return 2; }
+  if (!target) { process.stderr.write('用法：zkit plugin lint <id|目录> [--json] [--score] [--rule L13] [--all]\n'); return 2; }
   let dir: string | null = null;
   if (fs.existsSync(path.join(target, 'plugin.toml'))) dir = path.resolve(target);
   else {
@@ -1897,12 +1917,18 @@ function cmdPluginLint(args: string[]): number {
     process.stdout.write(c.dim('  清单本身加载失败，先修上面的错误再体检。\n'));
     return 1;
   }
-  const findings = lintPlugin(res.plugin);
+  let findings = lintPlugin(res.plugin);
+  // 第一百五十三轮⑦：--rule L13 按规则号过滤（配合文档规则表定位）
+  if (noRule) findings = findings.filter((f) => f.rule === noRule);
   if (args.includes('--json')) {
-    process.stdout.write(JSON.stringify({ id: res.plugin.id, findings, errorCount: findings.filter((f) => f.severity === 'error').length }, null, 2) + '\n');
+    const sc = lintScore(findings);
+    process.stdout.write(JSON.stringify({ id: res.plugin.id, score: sc.score, grade: sc.grade, findings, errorCount: findings.filter((f) => f.severity === 'error').length }, null, 2) + '\n');
     return findings.some((f) => f.severity === 'error') ? 1 : 0;
   }
   process.stdout.write(c.bold(`体检报告：${res.plugin.name}（${res.plugin.id}）\n`));
+  const scAll = lintScore(findings);
+  // 第一百五十三轮①：默认显示质量分（--score 才给建议 top3；默认输出保持紧凑）
+  process.stdout.write(`  质量：${scAll.grade}（${scAll.score}/100）\n`);
   if (findings.length === 0) {
     process.stdout.write(c.green('  ✓ 全部通过，零发现\n'));
     return 0;
@@ -1916,6 +1942,14 @@ function cmdPluginLint(args: string[]): number {
   const errs = findings.filter((f) => f.severity === 'error').length;
   const warns = findings.filter((f) => f.severity === 'warn').length;
   process.stdout.write(c.dim(`  共 ${findings.length} 项（error ${errs} / warn ${warns} / info ${findings.length - errs - warns}）\n`));
+  // 第一百五十三轮②：--score 附改进建议 top3
+  if (args.includes('--score')) {
+    process.stdout.write(c.bold('  最值得先修的三项：\n'));
+    for (const sg of scAll.suggestions) {
+      process.stdout.write(`    [${sg.severity}] ${c.dim(sg.rule)} ${sg.message}\n`);
+      if (sg.fixHint) process.stdout.write(c.dim(`      → 怎么改：${sg.fixHint}\n`));
+    }
+  }
   return errs > 0 ? 1 : 0;
 }
 
@@ -1941,7 +1975,7 @@ function cmdPluginDoc(args: string[]): number {
     const file = args[mdIdx + 1];
     if (!file || file.startsWith('--')) { process.stderr.write('用法：zkit plugin doc <id> --md <输出.md>\n'); return 2; }
     try {
-      fs.writeFileSync(path.resolve(file), docPlugin(plugin), 'utf8');
+      fs.writeFileSync(path.resolve(file), docPlugin(plugin, { toc: !args.includes('--no-toc') }), 'utf8');
       process.stdout.write(c.green(`✓ 文档已写入 ${path.resolve(file)}（${plugin.actions.length} 个动作）\n`));
       return 0;
     } catch (e) { process.stderr.write(c.red(`✗ 写入失败：${String(e)}\n`)); return 1; }
