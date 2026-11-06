@@ -6,7 +6,7 @@ import { orphanTimers } from './timers.ts';
 // 产出一份结构化报告：CLI 负责用颜色打印，HTTP 面负责原样转 JSON。
 // 判定规则只有一份，两个面不会各说各话。
 import process from 'node:process';
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { HOME, PLUGINS_DIR } from './paths.ts';
 import path from 'node:path';
@@ -384,6 +384,24 @@ export async function buildDoctorReport(): Promise<DoctorReport> {
         problems: [{ level: 'error', text: `依赖成环：${cycle.join(' → ')}——环上的插件无法确定安装/升级顺序`, hint: 'zkit plugin lint 逐个看清单，把环拆开（互相依赖通常意味着应该合并成一个插件）' }],
       });
     }
+  }
+  // 第一百六十六轮⑧：settings/<id>.json 权限合规（0600；Windows 无 POSIX 位跳过）
+  if (process.platform !== 'win32') {
+    try {
+      const sdir = HOME + '/settings';
+      if (existsSync(sdir)) {
+        for (const f of readdirSync(sdir)) {
+          const owner = f.replace(/\.json$/, '');
+          const target = plugins.find((x) => x.id === owner);
+          const mode = statSync(sdir + '/' + f).mode & 0o777;
+          if (mode !== 0o600) {
+            const prob = { level: 'warning' as const, text: `settings/${f} 权限 ${mode.toString(8)}（建议 0600）`, hint: 'zkit config 写入会自动收紧；手工编辑过的文件可 chmod 600 修复' };
+            if (target) target.problems.push(prob);
+            else plugins.push({ id: owner, dir: '', name: owner, ok: false, actions: 0, problems: [prob] });
+          }
+        }
+      }
+    } catch { /* 尽力 */ }
   }
   for (const p of plugins) {
     for (const problem of p.problems) {
