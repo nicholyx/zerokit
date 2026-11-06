@@ -1258,7 +1258,7 @@ if \(optional\) parts\.push\(`可选 \$\{optional\}
 if \(!parts\.length\) parts\.push\('无参数'\);
 mixText: `只读 \$\{mix\.read\} · 变更 \$\{mix\.muta
 if \(s < 60\) return '刚刚';
-<div class="ps-head"><h2>最近活动</h2><span 
+<div class="ps-head"><h2>最近活动</h2><span
 <div id="actList" class="act-list" role=
 <div class="stat-card"><b>\$\{st\.okRate ==
 <div class="stat-card"><b>\$\{st\.avgMs ===
@@ -1267,3 +1267,13 @@ document\.getElementById\('actList'\)\.inner
 error: r\.error \? String\(r\.error\)\.split\('
 <button class="drawer-link" id="dlActivi
 id="mobileBar" aria-label="快捷操作"
+\? `<div class="jp-row branch\$\{r\.collapse
+<span class="jp-badge t-\$\{r\.type\}">\$\{r\.t
+: `<div class="jp-row leaf" data-jp="\$\{i
+return `<div class="view-switch" role="t
+<button class="chip\$\{wantTree \? '' : ' o
+<button class="chip\$\{wantTree \? ' on' : 
+\? `<div class="jp-row branch collapsed" 
+: `<div class="jp-row leaf" data-jp="x\$\{
+label: isArr \? `\$\{entries\.length\} 项` : `
+return \{ kind: 'branch', depth: 0, path:

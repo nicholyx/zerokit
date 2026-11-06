@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity } from './extras.js';
+import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote, defaultChip, enumHint, actionHealthBadge, descNeedsFold, inQuietHours, notifyThrottle, pushNotifyLog, parseHm } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -4920,7 +4920,11 @@ function renderResult(res) {
     const btn = ev.currentTarget;
     // 第十七轮①②：清单 copy_template 优先；Shift+点=美化 JSON（默认紧凑）
     let text = copyText;
-    if (detail?.action?.copy_template) {
+    // 第一百五十四轮⑧：JSON 面板态复制格式化全文（树视图看着结构，复制拿完整 JSON）
+    const jpOn = !!document.querySelector('#result .json-panel');
+    if (jpOn && res.data !== undefined) {
+      text = JSON.stringify(res.data, null, 2);
+    } else if (detail?.action?.copy_template) {
       const rendered = renderCopyTemplate(detail.action.copy_template, res);
       if (rendered !== null) text = rendered;
     } else if (ev.shiftKey && res.data !== undefined) {
@@ -5278,6 +5282,14 @@ function renderResult(res) {
   }));
   bindTableSorts(box);
   bindResultMenu(box, res);
+  // 第一百五十四轮⑥：KV ↔ JSON 树切换（点击 chip 重画；状态按动作落 localStorage）
+  box.querySelectorAll('.view-switch [data-jv]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const want = btn.dataset.jv === 'tree';
+      writeJson(`zerokit.jsonview.${detail154Key()}`, want);
+      refreshResult();
+    });
+  });
   // 第三十九轮③②：行点击展开 JSON 详情 + 横滚阴影
   box.querySelectorAll('table.grid tbody tr[data-rowjson]').forEach((tr) => {
     tr.addEventListener('click', (ev) => {
@@ -5580,6 +5592,27 @@ function renderBars(rows) {
     </div>`).join('')}</div>`;
 }
 
+// 第一百五十四轮⑥：KV↔JSON 树切换的记忆键（按动作记，跨会话保留）
+function detail154Key() {
+  return detail ? `${detail.plugin.id}.${detail.action.id}` : 'adhoc';
+}
+
+/** JSON 面板 HTML（jsonPanelRows 行模型 → DOM）。render==='json' 与 KV 切换态共用。 */
+function jsonPanelHtml(data) {
+  const prows = jsonPanelRows(data);
+  const id = `jp${++resultSeq}`;
+  const cellHtml = (r, i) => r.kind === 'branch'
+    ? `<div class="jp-row branch${r.collapsedByDefault ? ' collapsed' : ''}" data-jp="${i}" data-jp-path="${esc(r.path)}" style="padding-left:${r.depth * 14}px" title="${esc(r.path)}（点击复制路径）">
+        <i class="jp-caret">${r.collapsedByDefault ? '▸' : '▾'}</i><b class="jp-key">${esc(r.path.split('.').pop()?.replace(/^\[(\d+)\]$/, '[$1]') ?? r.path)}</b>
+        <span class="jp-badge t-${r.type}">${r.type === 'arr' ? `${r.childCount} 项` : `${r.childCount} 键`}</span>
+      </div>`
+    : `<div class="jp-row leaf" data-jp="${i}" data-jp-path="${esc(r.path)}" style="padding-left:${r.depth * 14}px" title="${esc(r.path)}（点击复制路径）">
+        <span class="jp-key">${esc(r.path.split('.').pop()?.replace(/^\[(\d+)\]$/, '[$1]') ?? '')}</span>
+        <span class="jp-val t-${r.type}">${esc(maskState() ? maskSecrets(String(r.text)) : String(r.text))}</span>
+      </div>`;
+  return `<div class="json-panel" id="${id}" data-jp-root="1">${prows.map(cellHtml).join('')}</div>`;
+}
+
 function renderData(data, render, tableId = '') {
   if (render === 'bars') {
     const rows = barsData(data);
@@ -5594,34 +5627,17 @@ function renderData(data, render, tableId = '') {
   }
   if (data && typeof data === 'object') {
     if (render === 'json') {
-      // 折叠树：键多/嵌套深时树比一整坨 JSON 可读；浅对象仍走 KV
-      const lines = jsonTreeLines(data);
-      const deep = lines.some((l) => l.depth >= 1);
-      if (deep) {
-        const id = `jt${++resultSeq}`;
-        return `<div class="json-tree" id="${id}">${lines.map((l, i) => `
-          <div class="jt-row${l.isLeaf ? ' leaf' : ' branch'}" data-jt="${i}" style="padding-left:${l.depth * 14}px">
-            ${l.isLeaf ? '' : '<i class="jt-dot">▾</i>'}${l.key !== '' ? `<b>${esc(l.key)}</b>: ` : ''}<span>${esc(maskState() ? maskSecrets(l.preview) : l.preview)}</span>
-          </div>`).join('')}</div>`;
-      }
-      // 第一百二十三轮③：长 JSON 折叠——>40 行时按段折叠（jsonFoldSpans 算位置，
-      // details/summary 原生交互可聚焦，读屏可进；小对象照旧整块）
-      const rawJson = maskState() ? maskSecrets(JSON.stringify(data, null, 2)) : JSON.stringify(data, null, 2);
-      const jl = rawJson.split('\n');
-      const spans = jsonFoldSpans(jl, 20);
-      if (spans.length && jl.length > 40) {
-        let outL = []; let cursor = 0;
-        for (const sp of spans) {
-          outL = outL.concat(jl.slice(cursor, sp.foldStart + 1));
-          outL.push(`<details class="json-fold"><summary>${esc(t('jsonFoldSummary')(sp.hidden))}</summary>${esc(jl.slice(sp.foldStart + 1, sp.foldEnd).join('\n'))}</details>`);
-          cursor = sp.foldEnd;
-        }
-        outL = outL.concat(jl.slice(cursor));
-        return `<pre class="out json-foldable">${outL.map((x) => x.startsWith('<details') ? x : esc(x)).join('\n')}</pre>`;
-      }
-      return `<pre class="out">${esc(rawJson)}</pre>`;
+      // 第一百五十四轮①—⑧：JSON 面板——可折叠/展开、路径定位、类型着色、
+      // 大数组默认折成「N 项」、深嵌套默认折、Ctrl+F 原生查找。
+      return jsonPanelHtml(data);
     }
-    return renderKV(data);
+    // 第一百五十四轮⑥：KV 视图旁加「JSON 树」切换（两者并存；状态随 tableId 记忆）
+    const tid154 = `jpview-${resultSeq}`;
+    const wantTree = readJson(`zerokit.jsonview.${detail154Key()}`) === true;
+    return `<div class="view-switch" role="tablist" aria-label="结果视图">
+        <button class="chip${wantTree ? '' : ' on'}" data-jv="kv" role="tab" aria-selected="${!wantTree}">表格</button>
+        <button class="chip${wantTree ? ' on' : ''}" data-jv="tree" role="tab" aria-selected="${wantTree}">JSON 树</button>
+      </div>${wantTree ? jsonPanelHtml(data) : renderKV(data)}`;
   }
   // 第三十九轮⑥：null/undefined 也不是一句"完成"就完了
   if (data === null || data === undefined) {
@@ -6012,8 +6028,6 @@ function bindTableSorts(scope) {
       if (!row.classList.contains('branch')) return;
       row.addEventListener('click', () => {
         const idx = Number(row.dataset.jt);
-        const depth = jsonTreeLines(currentResult?.data ?? {}).length ? undefined : undefined;
-        // 折叠：本行 depth 之后、直到下一个 <= depth 的行
         const all = rows;
         const myDepth = Number(row.style.paddingLeft.replace(/px$/, '')) / 14;
         let hide = false;
@@ -6027,6 +6041,61 @@ function bindTableSorts(scope) {
       });
     });
   });
+  // 第一百五十四轮①②③：JSON 面板交互（容器级委托，innerHTML 重建后仍有效）
+  scope.querySelectorAll('.json-panel').forEach((panel) => {
+    if (panel.dataset.jpBound) return;
+    panel.dataset.jpBound = '1';
+    panel.addEventListener('click', async (e) => {
+      const row = e.target.closest('.jp-row');
+      if (!row) return;
+      const path = row.dataset.jpPath;
+      // ② 点击复制路径（叶子与分支都给路径）
+      try { await navigator.clipboard.writeText(path); toast(`已复制路径 ${path}`, 'ok'); } catch { /* 剪贴板不可用静默 */ }
+      // ①③ 折叠/展开：分支行点击后切换其子行（用 path 前缀判断归属）
+      if (!row.classList.contains('branch')) return;
+      const collapsed = row.classList.contains('collapsed');
+      const caret = row.querySelector('.jp-caret');
+      const badge = row.querySelector('.jp-badge');
+      const count = badge?.textContent?.match(/(\d+)/)?.[1] ?? '';
+      if (collapsed) {
+        // 展开：默认折叠的大容器子行不在 DOM——按需生成
+        if (!row.dataset.jpLoaded) {
+          const got = jsonGetByParts(currentResult?.data ?? {}, prefixParts(path));
+          if (got.hit && got.value !== null && typeof got.value === 'object') {
+            const kids = jsonExpandChildren(got.value, path);
+            const frag = document.createDocumentFragment();
+            const t154 = document.createElement('template');
+            t154.innerHTML = kids.map((r, i) => r.kind === 'branch'
+              ? `<div class="jp-row branch collapsed" data-jp="x${i}" data-jp-path="${esc(r.path)}" style="padding-left:${(r.depth + rowDepth(row) + 1) * 14}px" title="${esc(r.path)}（点击复制路径）"><i class="jp-caret">▸</i><b class="jp-key">${esc(r.path.split('.').pop() ?? '')}</b><span class="jp-badge t-${r.type}">▸ ${r.childCount} ${r.type === 'arr' ? '项' : '键'}</span></div>`
+              : `<div class="jp-row leaf" data-jp="x${i}" data-jp-path="${esc(r.path)}" style="padding-left:${(r.depth + rowDepth(row) + 1) * 14}px" title="${esc(r.path)}（点击复制路径）"><span class="jp-key">${esc(r.path.split('.').pop()?.replace(/^\[(\d+)\]$/, '[$1]') ?? '')}</span><span class="jp-val t-${r.type}">${esc(maskState() ? maskSecrets(String(r.text)) : String(r.text))}</span></div>`).join('');
+            frag.appendChild(t154.content);
+            row.after(frag);
+            row.dataset.jpLoaded = '1';
+          }
+        }
+        row.classList.remove('collapsed');
+        toggleSubtree(panel, row, false);
+        if (caret) caret.textContent = '▾';
+      } else {
+        row.classList.add('collapsed');
+        toggleSubtree(panel, row, true);
+        if (caret) caret.textContent = '▸';
+      }
+      void count;
+    });
+  });
+  function rowDepth(r) { return Number(r.style.paddingLeft.replace(/px$/, '')) / 14; }
+  function toggleSubtree(panel, row, hide) {
+    const myD = rowDepth(row);
+    const myPath = row.dataset.jpPath;
+    let el = row.nextElementSibling;
+    while (el) {
+      if (el.classList.contains('jp-row') && rowDepth(el) > myD && (el.dataset.jpPath ?? '').startsWith(myPath)) {
+        el.classList.toggle('hidden', hide);
+        el = el.nextElementSibling;
+      } else break;
+    }
+  }
 }
 
 // ---------------------------------------------------------------- 工作台（占位）
