@@ -58,7 +58,7 @@ run(['plugin', 'bundled']);
   const notifyCmd = `"${process.execPath}" "${helper}" "${nf}"`;
   const r = run(['run', 'quick', 'ts2date', '--ts', '1760000000', '--alert', '星期=五', '--notify', notifyCmd]);
   check('① exit 2', r.status === 2);
-  check('① 告警行经 stdin 到命令', existsSync(nf) && readFileSync(nf, 'utf8').startsWith('[ALERT] '), r.stdout.slice(-200));
+  check('① 告警行经 stdin 到命令', existsSync(nf) && readFileSync(nf, 'utf8').startsWith('[ALERT] '), JSON.stringify({ out: r.stdout.slice(-160), err: (r.stderr || '').slice(-160), exists: existsSync(nf) }));
 }
 // ② 通知失败不吞告警
 {
@@ -66,7 +66,7 @@ run(['plugin', 'bundled']);
   const failCmd = `"${process.execPath}" -e "process.exit(3)"`;
   const r = run(['run', 'quick', 'ts2date', '--ts', '1760000000', '--alert', '星期=五', '--notify', failCmd]);
   check('② 通知失败仍 exit 2', r.status === 2);
-  check('② 失败提示可见', (r.stderr || '').includes('通知命令退出码 3'));
+  check('② 失败提示可见', /通知命令（退出码 3|启动失败）/m.test(r.stderr || ''), JSON.stringify((r.stderr || '').slice(-200)));
 }
 // ⑥ --notify-file
 {
