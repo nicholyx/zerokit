@@ -50,10 +50,12 @@ run(['plugin', 'bundled']);
 // ① --notify 收到告警行
 {
   const nf = path.join(home, 'notify.txt');
-  // Windows 用 node 把 stdin 落盘（cat 不存在；cmd 重定向在 spawn 数组参数下不可靠）
-  const notifyCmd = isWin
-    ? `"${process.execPath}" -e "const fs=require('fs');fs.writeFileSync(${JSON.stringify(JSON.stringify(nf))},fs.readFileSync(0,'utf8'))"`
-    : `cat > ${JSON.stringify(nf)}`;
+  // 跨平台统一：写一个小 sink 脚本，notify 命令就是「用 node 跑它」——
+  // 避开 cat 缺失 / cmd 引号撕裂 / 双层转义三座大山
+  const helper = path.join(home, 'sink.cjs');
+  const { writeFileSync: wf } = await import('node:fs');
+  wf(helper, "const fs=require('fs');fs.writeFileSync(process.argv[2],fs.readFileSync(0,'utf8'));\n");
+  const notifyCmd = `"${process.execPath}" "${helper}" "${nf}"`;
   const r = run(['run', 'quick', 'ts2date', '--ts', '1760000000', '--alert', '星期=五', '--notify', notifyCmd]);
   check('① exit 2', r.status === 2);
   check('① 告警行经 stdin 到命令', existsSync(nf) && readFileSync(nf, 'utf8').startsWith('[ALERT] '), r.stdout.slice(-200));
