@@ -49,7 +49,7 @@ ci_poll_merge() { # ci_poll_merge <PR> —— 轮询 CI + merge + 复核
     p="$(echo "$out" | grep -cE 'pending' || true)"
     echo "  poll$i pass=$n fail=$f pending=$p"
     if [[ "$f" -gt 0 ]]; then
-      echo "CI-FAIL（PR #$pr）："; echo "$out" | grep fail | head -3
+      echo "CI-FAIL（PR #${pr}）："; echo "$out" | grep fail | head -3
       return 1                      # CI-FAIL 绝不继续（v1.59.1 事故：fail 后 merge 循环空转、tag 打错提交）
     fi
     [[ "$n" = "12" ]] && green=1 && break
@@ -75,7 +75,7 @@ remote_main_sha() { gh api repos/nicholyx/zerokit/branches/main --jq .commit.sha
 if [[ "$MODE" = "feature" ]]; then
   PR="${2:?缺 feature PR 号}"
   echo "== feature 模式：合并 PR #$PR =="
-  [[ $DRY = 1 ]] && { echo "（dry-run）将执行：ci_poll_merge $PR → main 同步"; exit 0; }
+  [[ $DRY = 1 ]] && { echo "（dry-run）将执行：ci_poll_merge ${PR} → main 同步"; exit 0; }
   ci_poll_merge "$PR" || exit 1
   SHA="$(remote_main_sha)" || { echo "FAIL  拿不到远端 main sha"; exit 1; }
   echo "main=$SHA"
@@ -87,20 +87,20 @@ if [[ "$MODE" = "feature" ]]; then
 fi
 
 # ---------- release 模式 ----------
-[[ "$MODE" = "release" ]] || { echo "FAIL  未知模式：$MODE（feature | release）"; exit 2; }
+[[ "$MODE" = "release" ]] || { echo "FAIL  未知模式：${MODE}（feature | release）"; exit 2; }
 VER="${2:?缺版本号（如 1.63.0）}"
 PR="${3:?缺 release PR 号}"
 BR="chore/release-v$VER"
-echo "== release 模式：v$VER（PR #$PR）=="
+echo "== release 模式：v${VER}（PR #${PR}）=="
 
 if [[ $DRY = 1 ]]; then
   cat <<'PLAN'
 （dry-run）将执行：
-  1. 确认在 $BR 分支（release-prep 已跑、Unreleased 空段已重建）
-  2. push_retry $BR → verify-remote
+  1. 确认在 ${BR} 分支（release-prep 已跑、Unreleased 空段已重建）
+  2. push_retry ${BR} → verify-remote
   3. gh pr create（如未建，PR #$PR 已给定则跳过）
-  4. ci_poll_merge $PR（CI-FAIL 即停）
-  5. remote_main_sha + cat-file 双确认 → ls-remote tag 为空 → tag v$VER 打在 release merge 上
+  4. ci_poll_merge ${PR}（CI-FAIL 即停）
+  5. remote_main_sha + cat-file 双确认 → ls-remote tag 为空 → tag v${VER} 打在 release merge 上
   6. push_retry tag → 资产轮询至 3 件
 PLAN
   exit 0
@@ -109,7 +109,7 @@ fi
 # 前置：当前分支应为 release 分支且已提交（放在一切远端操作之前——
 # detached/其它分支上跑 release 模式属于误用，必须在 push 前拦下）
 cur="$(git branch --show-current)"
-[[ "$cur" = "$BR" ]] || { echo "FAIL  当前分支是「${cur:-（detached）}」，不在 $BR（先完成 release-prep 与空段重建）"; exit 1; }
+[[ "$cur" = "$BR" ]] || { echo "FAIL  当前分支是「${cur:-（detached）}」，不在 ${BR}（先完成 release-prep 与空段重建）"; exit 1; }
 [[ -z "$(git status --porcelain)" ]] || { echo "FAIL  工作区不干净（先提交）"; exit 1; }
 
 push_retry "$BR" || exit 1
@@ -124,7 +124,7 @@ echo "main=$SHA"
 git fetch origin main --quiet 2>/dev/null || true
 [[ "$(git cat-file -t "$SHA" 2>/dev/null || true)" = "commit" ]] || { echo "FAIL  本地没有 $SHA 对象"; exit 1; }
 if git ls-remote --tags origin "v$VER" 2>/dev/null | grep -q "v$VER"; then
-  echo "FAIL  远端已存在 v$VER（幂等保护）"; exit 1
+  echo "FAIL  远端已存在 v${VER}（幂等保护）"; exit 1
 fi
 git tag "v$VER" "$SHA"
 push_retry "v$VER" || exit 1

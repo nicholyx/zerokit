@@ -49,6 +49,15 @@ const src = readFileSync(SH, 'utf8');
   const r = sh(['release', '9.9.9', '999']);
   check('⑤ 非 release 分支拒执行', r.status === 1 && (r.stdout + r.stderr).includes('不在 chore/release-'), `status=${r.status} out=${(r.stdout||'').slice(-200)} err=${(r.stderr||'').slice(0,200)}`);
 }
+// ⑥b C locale 回归（CI 的 macOS runner 是非 UTF-8 locale——bash 3.2 下 $VAR 紧邻
+// 多字节中文会把变量名读长成 unbound variable，本地 UTF-8 复现不了，必须显式测）
+{
+  const r = spawnSync('/bin/bash', [SH, 'release', '9.9.9', '999', '--dry-run'], { encoding: 'utf8', timeout: 30000, env: { ...process.env, LC_ALL: 'C', LANG: 'C' } });
+  check('⑥b C locale 干跑（CI 形态）', r.status === 0 && r.stdout.includes('release 模式'), `err=${(r.stderr||'').slice(0,120)}`);
+  const r2 = spawnSync('/bin/bash', [SH, 'release', '9.9.9', '999'], { encoding: 'utf8', timeout: 30000, env: { ...process.env, LC_ALL: 'C', LANG: 'C' } });
+  check('⑥b C locale 分支拒执行', r2.status === 1, `err=${(r2.stderr||'').slice(0,120)}`);
+}
+
 // ⑥ shellcheck（有则跑，CI 兜底）
 {
   const sc = spawnSync('shellcheck', [SH]);
