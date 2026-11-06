@@ -3,6 +3,7 @@
 [![CI](https://github.com/nicholyx/zerokit/actions/workflows/ci.yml/badge.svg)](https://github.com/nicholyx/zerokit/actions/workflows/ci.yml)
 [![OSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/nicholyx/zerokit/badge.svg)](https://securityscorecards.dev/viewer/?uri=github.com/nicholyx/zerokit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/nicholyx/zerokit)](https://github.com/nicholyx/zerokit/releases/latest)
 
 > 一份清单，四个面：**启动器 / CLI / MCP / Web**。不绑定宿主的插件集市。
 
@@ -38,7 +39,7 @@ node src/cli.ts market add .           # 把本仓库当集市加进去（仓库
 node src/cli.ts market search          # 看看有什么
 node src/cli.ts plugin install sysinfo # 安装（先把全部能力摊开给你看，确认后才装；脚本里加 --yes 跳过确认）
 node src/cli.ts doctor                 # 环境自检（依赖、插件清单）
-node src/cli.ts run sysinfo overview   # 跑一个动作
+node src/cli.ts run sysinfo.overview    # 跑一个动作（点分简写；两段式 `run sysinfo overview` 等价）
 node src/cli.ts ui --open              # 打开启动器：顶部「集市」标签可直接浏览、预览、安装
                                        # （工作台在搜索框打 ? 开头）
 eval "$(node src/cli.ts completion bash)"   # 顺手开 shell 补全（也有 zsh / fish）
@@ -67,7 +68,20 @@ zkit ui --open          # 顺便打开浏览器
 这一层完全在前端本地算，不联网也不经过服务端；汉字表是生成期产物
 （`node scripts/gen-pinyin.mjs`，运行时不引任何依赖）。
 
-也可以套上原生壳（全局热键 Alt+Space、托盘、无边框窗口）：
+### 下载安装包（免 Node 环境）
+
+每个 [Release](https://github.com/nicholyx/zerokit/releases/latest) 附带三平台安装包，
+流水线构建、不本地打包：
+
+| 平台 | 资产 |
+|---|---|
+| macOS（Apple Silicon） | `zerokit_X.Y.Z_aarch64.dmg` |
+| macOS（Intel） | `zerokit_X.Y.Z_x64.dmg` |
+| Windows | `zerokit_X.Y.Z_x64-setup.exe` |
+
+安装包内嵌 Node 运行时（启动即用）；开发者路径仍是上面的 `npm install`（免构建、直接跑 TS 源码）。
+
+也可以从源码套上原生壳（全局热键 Alt+Space、托盘、无边框窗口）：
 
 ```bash
 cd apps/desktop/src-tauri && cargo run
@@ -203,17 +217,23 @@ mcp-allow.json      已授权给 AI 调用的有副作用动作
 > **[docs/reference/overview.md](docs/reference/overview.md)**；每一版改了什么看
 > [CHANGELOG](CHANGELOG.md)；全部现成动作看[动作速查表](docs/reference/actions-reference.md)。
 
-核心能力（均已实测通过，v0.2.0 → v1.39.0 共一百三十七轮迭代）：
+核心能力（均已实测通过，v0.2.0 → v1.63.0 共一百六十一轮迭代，111 个测试文件 2642 项断言）：
 
-- 内核 + 四个面（CLI / MCP / 启动器 / 桌面壳）+ 插件集市 + AI 工作台
-- 启动器 70+ 项体验（拼音搜索、键盘流、监控、备份、配置档、双语、视觉微交互……）
-- 插件开发闭环（脚手架 / lint 十级体检 / 文档生成 / pack 分发）
-- 发布工具化（release-prep 自检归档）与三平台 CI
+- 内核 + 五个面（CLI / MCP / 启动器 / AI 工作台 / Web 渲染）+ 插件集市 + Tauri 桌面壳
+- 启动器 200+ 项体验（拼音搜索、键盘流、结果页签、监控、备份、配置档、双语、沙箱、哨兵……）
+- 插件开发闭环（脚手架 / lint 二十级体检 / 文档生成 / pack 分发 / dev 链接热改）
+- 运维面（审计/历史/书签/数据体检）+ 发布工具化（release-prep 自检 + release-chain 一条龙）
 
 测试：`node scripts/test-all.mjs`（86 个文件 2220 项断言，不联网、不花钱）。
 基准：`node scripts/bench.mjs`。
 
 还没有的：OS 级能力（读活动窗口/模拟键鼠）、插件签名与来源校验——详见账本「待办」。
+
+## 参与贡献
+
+[CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md) 里有完整的十条军规（跨平台坑、
+断言写法、提交规范）——都是真实事故换来的。带
+`good first issue` 标签的是适合首次贡献的切入点。
 
 ## 设计取舍
 
