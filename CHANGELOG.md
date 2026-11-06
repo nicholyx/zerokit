@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-（下一版攒着）
+### Added
+
+- 维护者工具：`scripts/release-chain.sh` 发布链一条龙——CI 轮询（12 checks / 11+MERGEABLE 捷径）、merge 复核、tag 双确认与幂等保护、https→SSH remote 网络降级、release 资产等待；`feature <PR>` / `release <版本> <PR>` 两模式，`--dry-run` 干跑。CI-FAIL 即停（固化 v1.59.1 事故判据）
 
 ## [1.62.0] - 2026-11-06
 
