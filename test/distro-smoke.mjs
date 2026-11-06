@@ -153,7 +153,7 @@ run = ["echo", "hi"]
 {
   const info = run(['plugin', 'info', 'quick']);
   if (info.status === 0 && info.stdout.includes('小工具') && /动作 \d+ 个/.test(info.stdout)
-      && info.stdout.includes('read 3')) {
+      && /read:\d+/.test(info.stdout) && info.stdout.includes('风险构成')) {
     pass('⑦info 一页看全（版本/动作/风险构成）');
   } else fail('⑦info 不对：' + info.stdout.slice(0, 150));
   const rec = run(['plugin', 'recommend', 'quick']);

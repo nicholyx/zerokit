@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { suggestLine, suggestLineMulti, diagnose, diagnoseExitCode, timeoutDiagnosis, missingSettingHint, foreignPath, findOrphanPlugins } from './core/suggest.ts';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 import { type Plugin, type RiskLevel, toolName } from './core/manifest.ts';
 import { HOME, LOG_DIR, PLUGINS_DIR } from './core/paths.ts';
@@ -1778,9 +1779,17 @@ async function cmdPlugin(args: string[]): Promise<number> {
   }
   if (sub === 'bundled') {
     const installed = installBundled();
-    process.stdout.write(installed.length > 0
-      ? `已安装示例插件：${installed.join(', ')}\n`
-      : '示例插件都已安装过了。\n');
+    if (installed.length === 0) { process.stdout.write('示例插件都已安装过了。\n'); return 0; }
+    process.stdout.write(`已安装示例插件：${installed.join(', ')}\n`);
+    // 第一百六十六轮⑥：装完摘要——每个插件动作数+风险构成+一条上手命令
+    for (const pid of installed) {
+      const pl = findPlugin(pid)?.plugin;
+      if (!pl) continue;
+      const mix: Record<string, number> = {};
+      for (const a of pl.actions) mix[a.risk] = (mix[a.risk] ?? 0) + 1;
+      const first = pl.actions[0];
+      process.stdout.write(c.dim(`  ${pid}：${pl.actions.length} 个动作（${Object.entries(mix).map(([k, n]) => `${k}:${n}`).join(' ')}）${first ? ` · 试：zkit run ${pid} ${first.id} --help` : ''}\n`));
+    }
     return 0;
   }
   if (sub === 'add') {
@@ -1818,6 +1827,114 @@ async function cmdPlugin(args: string[]): Promise<number> {
     return depCode;
   }
   // 第一百二十五轮①：单插件深度体检——不是全局 doctor 的缩影，回答「这一个还好吗」
+  // 第一百六十六轮⑤：plugin doctor <id>——单插件体检（清单 lint + 依赖 + 数据权限 + 失败率）
+  if (sub === 'doctor') {
+    const id = args[1];
+    if (!id) { process.stderr.write('用法：zkit plugin doctor <插件>\n'); return 2; }
+    const entry = findPlugin(id);
+    if (!entry?.plugin) { process.stderr.write(`✗ 没有找到插件 ${id}\n`); return 1; }
+    const pl = entry.plugin;
+    let issues = 0;
+    process.stdout.write(c.bold(`${pl.name} ${id} 体检\n`));
+    // 清单 lint（复用第四十轮 lintPlugin，只数 error）
+    try {
+      const { lintPlugin } = await import('./core/lintdoc.ts');
+      const findings = lintPlugin(pl);
+      const errs = findings.filter((f) => f.severity === 'error');
+      const warns = findings.filter((f) => f.severity === 'warn');
+      process.stdout.write(errs.length === 0 && warns.length === 0
+        ? c.green('  ✓ 清单体检 0 问题\n')
+        : `  ${errs.length ? c.red('✗ ' + errs.length + ' 项 error') : c.green('✓ 0 error')} · ${warns.length ? c.yellow('⚠ ' + warns.length + ' 项 warn') : '0 warn'}\n`);
+      for (const f of errs.slice(0, 5)) { process.stdout.write(c.red(`    ${f.rule} ${f.message}\n`)); issues++; }
+    } catch { process.stdout.write(c.dim('  （lint 模块不可用，跳过清单体检）\n')); }
+    // 依赖
+    const miss = missingDeps(pl);
+    process.stdout.write(miss.length === 0 ? c.green('  ✓ 依赖齐全\n') : c.red(`  ✗ 缺依赖：${miss.join(', ')}\n`));
+    if (miss.length) issues++;
+    // 数据目录权限（settings/<id>.json 0600）
+    const sf = path.join(HOME, 'settings', `${id}.json`);
+    try {
+      if (fs.existsSync(sf)) {
+        const mode = fs.statSync(sf).mode & 0o777;
+        process.stdout.write(mode === 0o600 ? c.green('  ✓ 配置文件 0600\n') : c.yellow(`  ! 配置文件权限 ${mode.toString(8)}（建议 0600，zkit config 写入自动收紧）\n`));
+      }
+    } catch { /* 忽略 */ }
+    // 最近失败率（审计近 50 条该插件的记录）
+    try {
+      const { readAudit } = await import('./core/ops.ts');
+      const recs = readAudit().filter((r) => r.plugin === id).slice(0, 50);
+      if (recs.length >= 5) {
+        const fails = recs.filter((r) => r.decision === 'deny' || (r.exitCode ?? 0) > 0).length;
+        const rate = Math.round((fails / recs.length) * 100);
+        const rateTxt = rate === 0
+          ? c.green(`  ✓ 最近 ${recs.length} 次 0 失败`)
+          : rate >= 30
+            ? c.red(`  ✗ 最近 ${recs.length} 次失败率 ${rate}%`)
+            : c.yellow(`  ! 最近 ${recs.length} 次失败率 ${rate}%`);
+        process.stdout.write(rateTxt + '\n');
+      } else process.stdout.write(c.dim(`  （执行记录 ${recs.length} 条，不足 5 条不评失败率）\n`));
+    } catch { /* 审计不可读就跳过 */ }
+    return issues === 0 ? 0 : 1;
+  }
+  // 第一百六十六轮②：plugin info——单插件一页看清（版本/来源/动作/风险/数据痕迹）
+  if (sub === 'info') {
+    const id = args[1];
+    if (!id) { process.stderr.write('用法：zkit plugin info <插件> [--json]\n'); return 2; }
+    const entry = findPlugin(id);
+    if (!entry?.plugin) { process.stderr.write(`✗ 没有找到插件 ${id}\n`); return 1; }
+    const pl = entry.plugin;
+    const riskMix: Record<string, number> = {};
+    for (const a of pl.actions) riskMix[a.risk] = (riskMix[a.risk] ?? 0) + 1;
+    const settingsFile = path.join(HOME, 'settings', `${id}.json`);
+    let settingsInfo = '无';
+    try {
+      if (fs.existsSync(settingsFile)) {
+        const keys = Object.keys(JSON.parse(fs.readFileSync(settingsFile, 'utf8')));
+        settingsInfo = keys.length ? `${keys.length} 项（${keys.slice(0, 5).join('、')}${keys.length > 5 ? '…' : ''}）` : '空文件';
+      }
+    } catch { settingsInfo = '（读取失败）'; }
+    const hist = readInstallHistory(HOME).filter((e) => e.plugin === id).slice(-3).reverse();
+    const info = {
+      id: pl.id, name: pl.name, version: pl.version,
+      actions: pl.actions.length, riskMix,
+      settings: settingsInfo,
+      installHistory: hist.map((e) => `${e.kind}@${(e.ts ?? '').slice(0, 10)}`),
+      dataNote: '卸载默认保留数据目录；--purge 才连带清配置',
+    };
+    if (args.includes('--json')) { console.log(JSON.stringify(info)); return 0; }
+    process.stdout.write(`${c.bold(pl.name)} ${c.dim(id)} v${pl.version}\n`);
+    process.stdout.write(`  动作 ${pl.actions.length} 个 · 风险构成 ${Object.entries(riskMix).map(([k, n]) => `${k}:${n}`).join(' ')}\n`);
+    process.stdout.write(`  配置：${settingsInfo}\n`);
+    if (hist.length) process.stdout.write(`  最近流水：${info.installHistory.join(' → ')}\n`);
+    process.stdout.write(c.dim(`  ${info.dataNote}\n`));
+    return 0;
+  }
+  // 第一百六十六轮⑦：plugin reinstall——同源重拉（坏掉的重装；保留数据目录）
+  if (sub === 'reinstall') {
+    const id = args[1];
+    if (!id) { process.stderr.write('用法：zkit plugin reinstall <插件>\n'); return 2; }
+    const hist = readInstallHistory(HOME).filter((e) => e.plugin === id);
+    const last = hist[hist.length - 1];
+    const entry = findPlugin(id);
+    // 自带清单以仓库 plugins/ 目录为准——卸载干净（无目录无历史）的自带插件也认
+    const repoPluginsDir = fileURLToPath(new URL('../plugins/', import.meta.url));
+    let isBundled = false;
+    try { isBundled = fs.existsSync(path.join(repoPluginsDir, id, 'plugin.toml')); } catch { /* 忽略 */ }
+    if (!entry && !last && !isBundled) { process.stderr.write(`✗ 没有找到插件 ${id}，也没有安装记录\n`); return 1; }
+    // 来源推断：bundled（自带）优先，其次集市/目录源（detail 里带 source）
+    const detail = last?.detail ?? '';
+    process.stdout.write(c.dim(`重装 ${id}（来源：${entry ? '已装' : '已卸载'}${detail ? ' · ' + detail : ''}）\n`));
+    // 自带插件：remove + bundled 重装（bundled 对已存在目录跳过，先删再装）
+    if (isBundled || detail.includes('bundled') || detail.includes('自带')) {
+      removePlugin(id);
+      const r = installBundledPlugin(id);
+      process.stdout.write(r.ok ? c.green(`✓ 已重装 ${id}（自带源）\n`) : c.red(`✗ ${r.message}\n`));
+      if (r.ok) appendInstallHistory(HOME, { ts: new Date().toISOString(), plugin: id, kind: 'install', detail: 'reinstall: bundled' });
+      return r.ok ? 0 : 1;
+    }
+    process.stderr.write(c.yellow(`! ${id} 不是自带插件——非自带源的重装走：\n  zkit plugin update ${id}（同源升级）\n  或先 remove 再从原来源 install\n`));
+    return 2;
+  }
   if (sub === 'health') {
     const id = args[1];
     if (!id) { process.stderr.write('用法：zkit plugin health <插件>\n'); return 2; }
@@ -1856,6 +1973,23 @@ async function cmdPlugin(args: string[]): Promise<number> {
   if (sub === 'remove' || sub === 'rm') {
     const purge = args.includes('--purge');
     const id = args[1];
+    // 第一百六十六轮④：卸载预览——不删任何东西，只摊开将删的目录与数据清单
+    if (args.includes('--dry-run')) {
+      if (!id) { process.stderr.write('用法：zkit plugin remove <插件> --dry-run\n'); return 2; }
+      const t = findPlugin(id)?.plugin;
+      const dir = findPlugin(id)?.dir;
+      process.stdout.write(c.bold(`预览：卸载 ${id}\n`));
+      if (t) {
+        process.stdout.write(`  将删目录：${dir}\n`);
+        process.stdout.write(`  将失去：${t.actions.length} 个动作（${t.name}）\n`);
+      } else process.stdout.write(c.yellow(`  （${id} 未加载——失联目录直接删）\n`));
+      const pp = purgePreview(HOME, id);
+      process.stdout.write(`  数据默认保留${purge ? c.red('（--purge：将清 ' + pp.settingsFiles.length + ' 个配置文件）') : c.dim('（--purge 才清 ' + pp.settingsFiles.length + ' 个配置文件）')}\n`);
+      for (const f of pp.settingsFiles) process.stdout.write(c.dim(`    ${f}\n`));
+      const users = dependents(id);
+      if (users.length) process.stdout.write(c.yellow(`  ⚠ 依赖它的插件：${users.join(', ')}（将被留下跑不起来）\n`));
+      return 0;
+    }
     if (!id) {
       process.stderr.write('用法：zkit plugin remove <插件> [--force] [--purge]\n');
       return 2;
