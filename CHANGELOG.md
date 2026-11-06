@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+（下一版攒着）
+
+## [1.59.0] - 2026-11-06
+
 ### Added
 
 - **哨兵通知：`run --notify <cmd>`**——`--alert` 不满足时把稳定格式的告警行（`[ALERT] 时间 | 命令 | 规则 | 实际值`）经 stdin 交给外部命令（发邮件、写 IM、接 webhook 都行）；通知命令失败不吞告警（提示后仍 exit 2）；`--notify-file <path>` 变体追加写文件；与 `--watch` 可组合
@@ -102,10 +106,4 @@
 - `plugin publish-ready` doctor 式逐项汇总（清单/版本/risk/描述/打包 5 项 ✓/!/✗）
 - `plugin pack` 出目录不存在自动创建；无 README 的插件打包时自动补一份生成的文档
 - 模板质量提升：新插件首跑 `plugin lint` 即零告警（补长 description、match 示例）；cookbook 新增「发布前自查清单」一节
-
-## [1.47.0] - 2026-11-05
-
-### Added
-
-- CLI 输出与体验打磨：`--help` 头部加分节索引与 `zkit man` 指引；未知命令建议附一句话说明；修复 `list --json` 不带 `--brief` 时机读旗标被吞的缺陷，brief 补 `lastRun` 字段（审计驱动）；`doctor --fix` 执行后补「修了什么/没修什么」摘要；长表格（>50 行）末尾提示 `--head N` / 管道翻页；`config` 概览每插件补「最近用到」相对时间；`allow add` 授权前显示风险人话与实际动作名
 
