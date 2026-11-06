@@ -458,7 +458,7 @@ function openThemePop() {
     const raw = prompt(t('profileNewPrompt'));
     if (raw == null) return;
     const v = validProfileName(raw);
-    if (!v.ok) { el.count.textContent = v.error; return; }
+    if (!v.ok) { $('count').textContent = v.error; return; }
     createProfileFromCurrent(v.name);
     pop.classList.add('hidden');
     openThemePop();
@@ -4915,6 +4915,7 @@ function renderResult(res) {
         <button class="ghost" id="shareMdRes" title="${t('shareMdTip')}">⧉ ${t('shareMd')}</button>
         <button class="ghost" id="shareHtmlRes" title="${t('shareHtmlTip')}">⧉ ${t('shareHtml')}</button>
         <button class="ghost" id="shareCopyRes" title="${t('shareCopyTip')}">⧉ ${t('shareCopy')}</button>
+        <button class="ghost" id="shareZRes" title="${t('shareZTip')}">📨 ${t('shareZ')}</button>
         ${res.data !== undefined ? `<button class="ghost" id="csvRes" title="${t('csvTip')}">${t('exportCsv')}</button>
         <button class="ghost" id="jsonRes" title="${t('jsonTip')}">${t('exportJson')}</button>
         ${toJsonl(res.data) ? `<button class="ghost" id="jsonlRes" title="${t('jsonlTip')}">${t('exportJsonl')}</button>
@@ -5239,6 +5240,24 @@ function renderResult(res) {
     };
     exportAs('shareMdRes', toShareMarkdown(res.data, shareMeta), 'text/markdown;charset=utf-8', 'md');
     exportAs('shareHtmlRes', toShareHtml(res.data, shareMeta), 'text/html;charset=utf-8', 'html');
+    // 第一百六十九轮①：.zshare 分享包下载（与 CLI buildSharePack 同构；指纹走 WebCrypto ⑦）
+    const zbtn = document.getElementById('shareZRes');
+    if (zbtn) zbtn.addEventListener('click', async () => {
+      const pack = {
+        app: 'zerokit', shareVersion: 1, createdAt: new Date().toISOString(),
+        action: `${detail.plugin.id}.${detail.action.id}`,
+        risk: detail.action.risk,
+        argv: ['zkit', 'run', `${detail.plugin.id}.${detail.action.id}`,
+          ...Object.entries(shareMeta.params ?? {}).flatMap(([k, v]) => [`--${k}`, String(v ?? '')])],
+        params: shareMeta.params,
+        result: detail.action.risk === 'read' ? res.data : undefined,
+        env: { os: navigator.platform || 'web', node: '-', appVersion: __zerokitVersion() },
+      };
+      const fname = `share-${pack.action.replace(/[^\w.-]/g, '_')}-${pack.createdAt.replace(/[:T]/g, '-').slice(0, 17)}.zshare`;
+      pack.env.appVersion = await webShareVersion();
+      exportAs('shareZRes', JSON.stringify(pack, null, 2), 'application/json;charset=utf-8', 'zshare');
+      try { localStorage.setItem('zerokit.last-zshare', fname); } catch { /* 忽略 */ }
+    });
     const btn = document.getElementById('shareCopyRes');
     if (btn) btn.addEventListener('click', async () => {
       try {
@@ -9721,7 +9740,97 @@ function lev(a, b) {
   return dp[m][n];
 }
 
+
+// ==================== 第一百六十九轮：Web 端 .zshare 闭环 ====================
+let __cachedAppVersion = '';
+async function webShareVersion() {
+  if (__cachedAppVersion) return __cachedAppVersion;
+  try { const r = await fetch('/api/version'); const j = await r.json(); __cachedAppVersion = j.version ?? '-web-'; }
+  catch { __cachedAppVersion = '-web-'; }
+  return __cachedAppVersion;
+}
+
+/** ⑦ WebCrypto SHA-256 指纹（与 CLI createHash 同结果） */
+async function webFingerprint(pack) {
+  const text = JSON.stringify(pack);
+  const buf = new TextEncoder().encode(text);
+  const dig = await crypto.subtle.digest('SHA-256', buf);
+  const hex = [...new Uint8Array(dig)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+  return (hex.match(/.{4}/g) ?? []).join(' ');
+}
+
+/** ⑧ 校验（与 CLI validateSharePack 同语义同文案） */
+function webValidateSharePack(raw) {
+  if (typeof raw !== 'object' || raw === null) return { ok: false, error: '分享包不是 JSON 对象' };
+  if (raw.app !== 'zerokit') return { ok: false, error: '这不是 zerokit 的分享包（app 字段不符）' };
+  if (raw.shareVersion !== 1) return { ok: false, error: `分享包版本 ${String(raw.shareVersion)} 不认识——本机只认 1，可能来自更新的 zerokit` };
+  for (const k of ['createdAt', 'action', 'risk', 'argv', 'env']) {
+    if (!(k in raw)) return { ok: false, error: `分享包缺字段 ${k}——文件可能被截断` };
+  }
+  if (!Array.isArray(raw.argv) || !raw.argv.length) return { ok: false, error: '分享包的 argv 不是非空数组' };
+  return { ok: true, pack: raw };
+}
+
+/** ②③④⑤ 导入分享包视图：校验→展示→重放 */
+async function showShareImport(file) {
+  let raw;
+  try { raw = JSON.parse(await file.text()); }
+  catch { $('count').textContent = '分享包不是合法 JSON——文件可能损坏或传错了个普通文件'; return; }
+  const v = webValidateSharePack(raw);
+  if (!v.ok) { el.count.textContent = v.error; return; }
+  const pack = v.pack;
+  const fp = await webFingerprint(pack);
+  const replay = replayPolicyWeb(pack);
+  const rows = pack.result !== undefined && Array.isArray(pack.result)
+    ? `<div class="table-wrap"><table class="tbl"><thead><tr>${Object.keys(pack.result[0] ?? {}).slice(0, 6).map((c) => `<th>${c}</th>`).join('')}</tr></thead>
+       <tbody>${pack.result.slice(0, 8).map((r2) => `<tr>${Object.values(r2).slice(0, 6).map((cv) => `<td>${String(cv ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+       ${pack.result.length > 8 ? `<div class="e-hint">${pack.result.length} 行——前 8 行预览，完整数据在包里</div>` : ''}`
+    : (pack.result !== undefined ? `<pre class="code">${JSON.stringify(pack.result, null, 2).slice(0, 600)}</pre>` : `<div class="e-hint">不带结果（非只读动作）</div>`);
+  const host = $('result');
+  if (!host) return;
+  host.innerHTML = `
+    <div class="view-head">
+      <span class="badge from-share">📨 来自分享包</span>
+      <b>${pack.action}</b> <span class="risk-dot" data-risk="${pack.risk}"></span>
+      <span class="dim">${pack.risk}</span>
+    </div>
+    <div class="share-meta">
+      制作：${String(pack.createdAt).replace('T', ' ').slice(0, 19)} · ${pack.env.os} · zerokit ${pack.env.appVersion}<br>
+      指纹：<code>${fp}</code><br>
+      命令：<code>${pack.argv.join(' ')}</code>
+      ${pack.note ? `<br>备注：${pack.note}` : ''}
+    </div>
+    ${rows}
+    <div class="action-tier">
+      ${replay.allowed
+        ? `<button class="primary run-main" id="replayShareBtn">▶ 在本机重放</button>`
+        : `<span class="e-hint">✗ ${replay.reason}</span>`}
+    </div>`;
+  const rb = document.getElementById('replayShareBtn');
+  if (rb) rb.addEventListener('click', () => replayShareInWeb(pack));
+}
+
+function replayPolicyWeb(pack) {
+  if (pack.risk === 'destructive') {
+    return { allowed: false, reason: `分享包的动作是 destructive（${pack.action}）——重放会有不可逆副作用，拒绝。需要的话看分享包里的结果，或手工确认后自己跑` };
+  }
+  return { allowed: true };
+}
+
+/** ③ 重放：read 直接跑（POST /api/run）；mutate 先确认 */
+async function replayShareInWeb(pack) {
+  const [pid, aid] = pack.action.split('.');
+  if (pack.risk === 'mutate' && !confirm(`重放 ${pack.action}（mutate）？
+命令：${pack.argv.join(' ')}`)) return;
+  try {
+    const j = await api('/api/run', { method: 'POST', body: { plugin: pid, action: aid, values: pack.params ?? {} } });
+    if (j && j.error === undefined) { $('count').textContent = `✓ 重放完成`; renderResult(j.result ?? j); }
+    else $('count').textContent = `✗ 重放失败：${j.error ?? '未知'}`;
+  } catch (e2) { $('count').textContent = `✗ 重放失败：${e2.message}`; }
+}
+
 window.__zerokit = {
+  showShareImport,
   // 第一百一十四轮：批量调试/截图断言出口
   __batchState: () => ({ curKey: batchCurKey, baskets: [...batchMap.keys()], curLen: curBatch().length }),
 
@@ -9920,6 +10029,13 @@ $('dlImportSnap')?.addEventListener('click', () => {
 $('dlTimers')?.addEventListener('click', () => { closeDrawer(); $('timersBtn')?.click(); });
 $('dlBrief')?.addEventListener('click', () => { closeDrawer(); $('briefBtn')?.click(); });
 $('dlHelp')?.addEventListener('click', () => { closeDrawer(); $('guideBtn')?.click(); });
+  // 第一百六十九轮②：导入分享包入口（抽屉 → 文件选择 → 导入视图）
+  $('dlShareImport')?.addEventListener('click', () => { closeDrawer(); $('shareImportFile')?.click(); });
+  $('shareImportFile')?.addEventListener('change', async (ev) => {
+    const f = (ev.target)?.files?.[0];
+    if (f) await showShareImport(f);
+    (ev.target).value = '';
+  });
 $('dlWatch')?.addEventListener('click', () => { closeDrawer(); location.hash = '#/watch'; });
 // 第四十七轮：抽屉内的主题区入口（themePop 现在常驻抽屉，由 drawerBtn 打开时渲染）
 document.addEventListener('keydown', (e) => {

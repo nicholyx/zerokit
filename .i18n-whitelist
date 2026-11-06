@@ -1279,7 +1279,7 @@ label: isArr \? `\$\{entries\.length\} 项` : `
 return \{ kind: 'branch', depth: 0, path:
 <div><h4>键盘流（第五十二轮\+）</h4><ul>
 <li><kbd>F</kbd> 收藏/取消 · <kbd>T</kbd> 打标
-<li><kbd>Y / E</kbd> 结果复制/导出 · <kbd>X / 
+<li><kbd>Y / E</kbd> 结果复制/导出 · <kbd>X /
 <li><kbd>Alt\+点击</kbd> 进批量篮 · <kbd>Alt\+↑↓
 <li><kbd>d</kbd> 列表密度循环 · <kbd>r / m</kb
 <li><kbd>Ctrl\+\.</kbd> 停止执行 · <kbd>Ctrl\+R
@@ -1291,3 +1291,28 @@ const theme = resolveTheme\(localStorage\.
 `列表密度：\$\{dens\}（d 键循环）`,
 `排序：\$\{sortMode === 'recent' \? '最近使用（m 键）
 `主题：\$\{theme\}（Ctrl\+Shift\+D 切换）`,
+if \(typeof raw !== 'object' \|\| raw === n
+if \(raw\.app !== 'zerokit'\) return \{ ok:
+if \(raw\.shareVersion !== 1\) return \{ ok:
+if \(!\(k in raw\)\) return \{ ok: false, err
+if \(!Array\.isArray\(raw\.argv\) \|\| !raw\.arg
+catch \{ el\.count\.textContent = '分享包不是合法
+\$\{pack\.result\.length > 8 \? `<div class="
+: \(pack\.result !== undefined \? `<pre cla
+<span class="badge from-share">📨 来自分享包<
+制作：\$\{String\(pack\.createdAt\)\.replace\('T',
+指纹：<code>\$\{fp\}</code><br>
+命令：<code>\$\{pack\.argv\.join\(' '\)\}</code>
+\$\{pack\.note \? `<br>备注：\$\{pack\.note\}` : ''
+\? `<button class="primary run-main" id="
+return \{ allowed: false, reason: `分享包的动作
+if \(pack\.risk === 'mutate' && !confirm\(`
+命令：\$\{pack\.argv\.join\(' '\)\}`\)\) return;
+if \(j\.ok\) \{ el\.count\.textContent = `✓ 重放
+else el\.count\.textContent = `✗ 重放失败：\$\{j\.
+\} catch \(e2\) \{ el\.count\.textContent = `✗
+<button class="drawer-link" id="dlShareI
+catch \{ \$\('count'\)\.textContent = '分享包不是合
+if \(j && j\.error === undefined\) \{ \$\('cou
+else \$\('count'\)\.textContent = `✗ 重放失败：\$\{
+\} catch \(e2\) \{ \$\('count'\)\.textContent = 
