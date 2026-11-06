@@ -909,7 +909,7 @@ async function cmdRun(args: string[]): Promise<number> {
   const outFmt = fmtVal ?? (outIdx >= 0 && rest[outIdx + 1] && ['yaml', 'csv', 'table'].includes(rest[outIdx + 1]!) ? rest[outIdx + 1] : undefined);
   const doCopy = rest.includes('--copy');
   // 第六十八轮②：--jq <路径> 轻量查询（.data.ip / .data.items[0].name 这类点路径）
-  const jqIdx = rest.indexOf('--jq');
+  const jqIdx = rest.indexOf('--jq') >= 0 ? rest.indexOf('--jq') : rest.indexOf('--path');
   const jqNext = jqIdx >= 0 ? rest[jqIdx + 1] : undefined;
   const jqExpr = jqIdx >= 0 && jqNext && !jqNext.startsWith('--') ? jqNext : undefined;
   // 第六十八轮①：--out <file> 结果落文件（文本写原文、JSON 写格式化）。
@@ -948,7 +948,7 @@ async function cmdRun(args: string[]): Promise<number> {
   const argv: string[] = [];
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i]!;
-    if (a === '--out' || a === '--watch' || a === '--share' || a === '--jq' || a === '--env' || a === '--format' || a === '--retry' || a === '--avg' || a === '--alert'
+    if (a === '--out' || a === '--watch' || a === '--share' || a === '--jq' || a === '--path' || a === '--env' || a === '--format' || a === '--retry' || a === '--avg' || a === '--alert'
         || a === '--sort' || a === '--pick' || a === '--uniq' || a === '--sum' || a === '--head' || a === '--measure'
         || a === '--where' || a === '--calc' || a === '--rename' || a === '--pipe') { i++; continue; }
     if (a.startsWith('--out=') || a.startsWith('--watch=') || a.startsWith('--share=') || a.startsWith('--jq=') || a.startsWith('--env=') || a.startsWith('--format=') || a.startsWith('--retry=') || a.startsWith('--avg=')
@@ -1061,13 +1061,16 @@ async function cmdRun(args: string[]): Promise<number> {
     });
   }
   // 第六十八轮②：--jq 点路径查询（在 --out/--copy 之前改写 result.data）
+  // 第一百五十四轮⑤：--path 是 --jq 的同义别名（「路径」直觉命名），交互模式提示已定位
   if (jqExpr && result.ok) {
-    const picked = jqPath(result.data ?? JSON.parse(result.stdout || 'null'), jqExpr);
+    const jqRoot = typeof result.data === 'string' ? JSON.parse(result.data) : (result.data ?? JSON.parse(result.stdout || 'null'));
+    const picked = jqPath(jqRoot, jqExpr);
     if (picked.hit) result.data = picked.value;
     else {
       process.stderr.write(c.red(`✗ --jq ${jqExpr} 没取到值（${picked.why}）\n`));
       return 1;
     }
+    if (process.stdout.isTTY) process.stderr.write(c.dim(`已定位：${jqExpr}（结果只含这一支）\n`));
   }
   // 第六十八轮①：--out 文件——文本写原文、JSON 写两空格格式化
   // 第四十五轮③④⑦：输出格式 / 复制 / 安静模式

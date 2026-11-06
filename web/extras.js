@@ -4036,3 +4036,76 @@ export function auditToActivity(recs) {
     error: r.error ? String(r.error).split('\n')[0].slice(0, 140) : (r.decision === 'deny' ? (r.reason ?? '被拒绝') : null),
   }));
 }
+
+/**
+ * 第一百五十四轮：JSON 面板——大结果的结构浏览与路径定位。
+ * 折叠策略与路径生成都是纯函数，渲染在 app.js。
+ */
+
+/** JSON 值的类型标签（叶子着色用）。'num'|'str'|'bool'|'null'|'obj'|'arr'。 */
+export function jsonNodeType(v) {
+  if (v === null) return 'null';
+  if (Array.isArray(v)) return 'arr';
+  if (typeof v === 'number') return 'num';
+  if (typeof v === 'string') return 'str';
+  if (typeof v === 'boolean') return 'bool';
+  return 'obj';
+}
+
+/** 节点行模型：带 path、类型、默认折叠决策。
+ * value：整个 JSON；prefix：到当前节点为止的路径段数组（'items' / '2'）。
+ * 输出行序 = DOM 行序（先序遍历）。 */
+export function jsonPanelRows(value, prefix = [], depth = 0, out = []) {
+  const path = (segs) => '.' + segs.map((s) => /^\d+$/.test(s) ? `[${s}]` : s).join('.').replace(/\.\[/g, '[');
+  if (value === null || typeof value !== 'object') {
+    out.push({ kind: 'leaf', depth, path: path(prefix), type: jsonNodeType(value), text: JSON.stringify(value) });
+    return out;
+  }
+  const isArr = Array.isArray(value);
+  const entries = Object.entries(value);
+  // 大数组/大对象默认折叠：>100 项给「N 项」占位
+  const big = entries.length > 100;
+  out.push({
+    kind: 'branch', depth, path: path(prefix), type: isArr ? 'arr' : 'obj',
+    label: isArr ? `${entries.length} 项` : `${entries.length} 键`,
+    collapsedByDefault: big || depth > 8,   // ③ 大数组默认折；④ >8 层深折
+    childCount: entries.length,
+  });
+  if (big) return out;   // 折叠时不铺子行（展开时按需渲染）
+  for (const [k, v] of entries) {
+    jsonPanelRows(v, [...prefix, k], depth + 1, out);
+  }
+  return out;
+}
+
+/** 展开一个默认折叠的大容器时取它的直接子行（一层）。
+ * 返回与 jsonPanelRows 同构的行，deep 子容器仍折叠。 */
+export function jsonExpandChildren(value, prefix = []) {
+  const segs = prefix.slice(1).length ? [] : [];
+  // prefix 形如 '.items[2].name'——这里按调用方给的 value 已定位，铺一层
+  const entries = value === null || typeof value !== 'object' ? [] : Object.entries(value);
+  const isArr = Array.isArray(value);
+  return entries.map(([k, v]) => {
+    const p = '.' + [...prefixParts(prefix), k].map((s) => /^\d+$/.test(s) ? `[${s}]` : s).join('.').replace(/\.\[/g, '[');
+    if (v !== null && typeof v === 'object') {
+      const n = Array.isArray(v) ? v.length : Object.keys(v).length;
+      return { kind: 'branch', depth: 0, path: p, type: Array.isArray(v) ? 'arr' : 'obj', label: `${n} ${Array.isArray(v) ? '项' : '键'}`, collapsedByDefault: true, childCount: n };
+    }
+    return { kind: 'leaf', depth: 0, path: p, type: jsonNodeType(v), text: JSON.stringify(v) };
+  });
+}
+
+/** 路径字符串 → 段数组（'.a.b[2].c' → ['a','b','2','c']）。 */
+export function prefixParts(p) {
+  return String(p).replace(/^\./, '').split(/\.|\[|\]/).filter(Boolean);
+}
+
+/** 按路径段数组从 JSON 里取值（与 CLI --jq/--path 同语义）。 */
+export function jsonGetByParts(value, parts) {
+  let cur = value;
+  for (const p of parts) {
+    if (cur === null || typeof cur !== 'object') return { hit: false, value: undefined };
+    cur = cur[p];
+  }
+  return { hit: true, value: cur };
+}
