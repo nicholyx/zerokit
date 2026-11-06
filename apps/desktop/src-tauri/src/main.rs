@@ -503,6 +503,8 @@ fn main() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        // 第一百六十五轮②：zerokit:// OS 级深链——Windows/Linux 运行时注册，macOS 走 Info.plist
+        .plugin(tauri_plugin_deep_link::init())
         .manage(CoreProcess(Mutex::new(None)))
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -547,6 +549,30 @@ fn main() {
                 None => {
                     builder = builder.inner_size(880.0, 640.0).center();
                 }
+            }
+            // 第一百六十五轮②③：注册 zerokit:// 协议（Windows/Linux 运行时注册；macOS 在
+            // Info.plist 里声明）。注册失败不致命——降级为 UI 内深链仍可用。
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                let _ = app.deep_link().register_all();
+            }
+            // 第一百六十五轮③：深链事件——zerokit://插件.动作?k=v → 唤起窗口 → 导航
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                let wh = handle.clone();
+                let _ = app.deep_link().on_open_url(move |event| {
+                    for url in event.urls() {
+                        let raw = url.as_str().to_string();
+                        let Some(win) = wh.get_webview_window("main") else { continue };
+                        let _ = win.show();
+                        let _ = win.set_focus();
+                        // zerokit://插件.动作?k=v → #/插件/动作?k=v（转交 UI 既有 hash 深链）
+                        let rest = raw.strip_prefix("zerokit://").unwrap_or(&raw).to_string();
+                        let hash = if rest.is_empty() { "#/".to_string() } else { format!("#{rest}") };
+                        let js = format!("if(location.origin.startsWith('http')){{location.hash={}}}", serde_json::to_string(&hash).unwrap_or_else(|_| "\"#/\"".to_string()));
+                        let _ = win.eval(&js);
+                    }
+                });
             }
             let window = builder.build()?;
 

@@ -933,3 +933,14 @@ zkit run proxy status      # 直接跑一次
 zkit mcp serve                 # 确认 AI 侧也能看到这些工具
 ```
 > risk 三档的判定逻辑与四道安全防线的威胁模型，见深读 [安全边界](../deep/security.md)；执行模型的占位符/编码/超时细节见 [插件运行时](../deep/runtime.md)。
+
+
+## 分享与深链（zerokit://）
+
+装了桌面壳的机器支持 OS 级深链：`zerokit://插件.动作?字段=值` 点击即唤起壳并
+直达该动作详情页（参数已预填，**不自动执行**——打开就跑会让分享链接变成钓鱼面）。
+
+生成链接：`zkit deep-link quick.b64 --text 你好`（目标不存在 exit 1；secret 参数
+会生成但带明文警告）。Web UI 的二维码弹窗也提供双形态：网页链接（任何机器）与
+zerokit:// 链接（装壳机器直达）。协议注册：macOS 走 Info.plist（壳内置），Windows/Linux
+由壳启动时运行时注册；`zkit doctor` 报注册状态。
