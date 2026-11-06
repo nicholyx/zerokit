@@ -70,6 +70,71 @@ async function selfcheckOf(id: string): Promise<import('./core/selfcheck.ts').Se
 
 const WEB_DIR = path.join(PKG_ROOT, 'web');
 const SESSION_TOKEN = crypto.randomBytes(24).toString('hex');
+
+// 第一百六十四轮：API 面契约——端点方法表（405 用）与机读描述（/api/openapi.json 用）。
+// 新端点进这张表；忘了进表只损失 405 的诚实（仍 404），进表方法错才致命。
+const API_METHODS: Record<string, string[]> = {
+  '/api/health': ['GET'],
+  '/api/version': ['GET'],
+  '/api/openapi.json': ['GET'],
+  '/api/plugins': ['GET'],
+  '/api/ps': ['GET'],
+  '/api/logs': ['GET'],
+  '/api/doctor': ['GET'],
+  '/api/markets': ['GET'],
+  '/api/watch': ['GET', 'PUT'],
+  '/api/timer-runs': ['GET'],
+  '/api/update-check': ['GET'],
+  '/api/preview': ['POST'],
+  '/api/run': ['POST'],
+  '/api/stop': ['POST'],
+  '/api/kill': ['POST'],
+  '/api/open': ['POST'],
+  '/api/edit': ['POST'],
+  '/api/approve': ['POST'],
+  '/api/batch-done': ['POST'],
+  '/api/plugin/config': ['GET', 'POST'],
+  '/api/dev/poll': ['GET'],
+  '/api/dev/status': ['GET'],
+  '/api/market/add': ['POST'],
+  '/api/market/install': ['POST'],
+  '/api/market/preview': ['POST'],
+  '/api/market/refresh': ['POST'],
+  '/api/market/remove': ['POST'],
+  '/api/market/tryrun': ['POST'],
+  '/api/mcp/allow': ['GET', 'POST'],
+  '/api/plugin/check': ['POST'],
+  '/api/plugin/install': ['POST'],
+  '/api/plugin/new': ['POST'],
+  '/api/plugin/remove': ['POST'],
+  '/api/plugin/selfcheck': ['POST'],
+  '/api/plugin/update': ['POST'],
+  '/api/prefs/export': ['POST'],
+  '/api/prefs/import': ['POST'],
+  '/api/timers': ['GET', 'POST'],
+  '/api/webstore': ['POST'],
+  '/api/ai': ['GET'],
+  '/api/chat': ['POST'],
+  '/api/chat/approve': ['POST'],
+};
+const API_SPEC = {
+  openapi: '3.1.0',
+  info: { title: 'zerokit local API', version: SERVER_VERSION, description: 'zkit ui 起的本地 HTTP 面。GET 只读免令牌；POST 需 X-ZeroKit-Token（页面注入的会话令牌）。默认只绑 127.0.0.1 且校验 Origin。' },
+  'x-zerokit-api': 1,
+  paths: {
+    '/api/health': { get: { summary: '探活+体检（无鉴权）', responses: { '200': { description: 'app/version/api/uptimeSec/pid/plugins.installed/runningTasks/dataHomeBytes' } } } },
+    '/api/version': { get: { summary: '版本与协议版本', responses: { '200': { description: 'app/version/api' } } } },
+    '/api/openapi.json': { get: { summary: '本文档', responses: { '200': { description: 'OpenAPI 3.1 子集' } } } },
+    '/api/plugins': { get: { summary: '插件列表（健康卡）' } },
+    '/api/ps': { get: { summary: '运行中的托管进程与服务' } },
+    '/api/logs': { get: { summary: '审计日志（?limit=）' } },
+    '/api/doctor': { get: { summary: '环境自检' } },
+    '/api/markets': { get: { summary: '集市索引' } },
+    '/api/run': { post: { summary: '执行动作（body: plugin/action/values）', security: [{ token: [] }] } },
+    '/api/stop': { post: { summary: '停止执行（body: key，缺省停全部）' } },
+  },
+  components: { securitySchemes: { token: { type: 'apiKey', in: 'header', name: 'X-ZeroKit-Token' } } },
+};
 const CONFIRM_SECRET = crypto.randomBytes(32);
 
 /** 工作台会话：持有该会话的模型上下文与待审批的调用 */
@@ -244,6 +309,12 @@ function saveWatchFile(body: unknown): boolean {
   fs.writeFileSync(tmp, JSON.stringify(file));
   fs.renameSync(tmp, watchFilePath());
   return true;
+}
+
+
+/** 第一百六十四轮④：错误信封统一——{ok:false,error,hint}。json() 的成功路径不加 ok 字段（兼容既有消费者），错误路径全走这里。 */
+function fail(res: http.ServerResponse, code: number, error: string, hint = ''): void {
+  json(res, code, { ok: false, error, hint });
 }
 
 function json(res: http.ServerResponse, code: number, body: unknown): void {
@@ -422,7 +493,7 @@ export function createServer(): http.Server {
         ok = false;
       }
       if (!ok) {
-        json(res, 403, { error: `拒绝来源 ${origin}（防止被外部网页调用本地服务）` });
+        fail(res, 403, `拒绝来源 ${origin}（防止被外部网页调用本地服务）`);
         return;
       }
     }
@@ -430,24 +501,60 @@ export function createServer(): http.Server {
     if (isApi && req.method === 'POST') {
       const token = req.headers['x-zerokit-token'];
       if (token !== SESSION_TOKEN) {
-        json(res, 403, { error: '缺少或错误的会话令牌' });
+        fail(res, 403, '缺少或错误的会话令牌');
         return;
       }
     }
 
     try {
+      // 164③：method 校验——路径存在但方法不对时 405+Allow（比 404 诚实）
+      const allowed = API_METHODS[url.pathname];
+      if (allowed && !allowed.includes(req.method ?? '')) {
+        res.writeHead(405, { 'content-type': 'application/json; charset=utf-8', allow: allowed.join(', '), 'cache-control': 'no-store' });
+        res.end(JSON.stringify({ ok: false, error: `这个端点只接受 ${allowed.join(' / ')}`, hint: 'Method Not Allowed' }));
+        return;
+      }
       // ⑥无鉴权探活端点：给监控/巡检脚本用（不泄露任何数据面信息，
       // 只有存活+版本+uptime）。GET 且无敏感内容，刻意不设防。
       if (url.pathname === '/api/health' && req.method === 'GET') {
+        // 164②：扩展体检——插件计数/运行中任务/数据目录大小（仍不泄露名字等数据面信息）
+        const plugins = wirePlugins();
+        let dataHomeBytes = 0;
+        try {
+          const du = (d: string): number => {
+            let n = 0;
+            for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+              const fp = path.join(d, e.name);
+              if (e.isDirectory()) n += du(fp);
+              else { try { n += fs.statSync(fp).size; } catch { /* 并发删除 */ } }
+            }
+            return n;
+          };
+          dataHomeBytes = du(HOME);
+        } catch { /* 目录缺失按 0 */ }
         json(res, 200, {
           app: 'zerokit',
           version: SERVER_VERSION,
+          api: 1,
           uptimeSec: Math.round(process.uptime()),
           pid: process.pid,
+          plugins: { installed: plugins.length },
+          runningTasks: runningRuns.size,
+          dataHomeBytes,
         });
         return;
       }
-      if (url.pathname === '/api/plugins') {
+      // 164①：版本独立端点（api:1 是协议版本——错误信封/OpenAPI 属于 api:1 契约，破坏性变更要升 2）
+      if (url.pathname === '/api/version' && req.method === 'GET') {
+        json(res, 200, { app: 'zerokit', version: SERVER_VERSION, api: 1 });
+        return;
+      }
+      // 164⑤：机读描述——手写 schema（端点/方法/一句话/令牌要求），工具链可自举发现
+      if (url.pathname === '/api/openapi.json' && req.method === 'GET') {
+        json(res, 200, API_SPEC);
+        return;
+      }
+      if (url.pathname === '/api/plugins' && req.method === 'GET') {
         json(res, 200, { plugins: wirePlugins() });
         return;
       }
@@ -458,14 +565,14 @@ export function createServer(): http.Server {
       if (url.pathname === '/api/webstore' && req.method === 'POST') {
         const body = (await readBody(req)) as Record<string, unknown>;
         const pid = String(body.plugin ?? '');
-        if (!/^[\w.-]{1,64}$/.test(pid)) { json(res, 400, { error: '非法插件 id' }); return; }
+        if (!/^[\w.-]{1,64}$/.test(pid)) { fail(res, 400, '非法插件 id'); return; }
         const key = body.key as string | undefined;
         let r;
         if (body.op === 'get') r = storeGet(pid, key as string);
         else if (body.op === 'set') r = storeSet(pid, key as string, body.value);
         else if (body.op === 'remove') r = storeRemove(pid, key as string);
         else if (body.op === 'keys') r = storeKeys(pid);
-        else { json(res, 400, { error: 'op 只支持 get/set/remove/keys' }); return; }
+        else { fail(res, 400, 'op 只支持 get/set/remove/keys'); return; }
         json(res, r.ok ? 200 : 400, r);
         return;
       }
@@ -524,7 +631,7 @@ export function createServer(): http.Server {
           try {
             const parsed = parsedRaw as { items?: { plugin: string; action: string; ok: boolean; ms: number }[] };
             const items = Array.isArray(parsed.items) ? parsed.items : [];
-            if (!items.length) { json(res, 400, { ok: false, error: 'items 为空' }); return; }
+            if (!items.length) { fail(res, 400, 'items 为空'); return; }
             const totalMs = items.reduce((s2, it) => s2 + (Number(it.ms) || 0), 0);
             audit({
               ts: new Date().toISOString(),
@@ -540,7 +647,7 @@ export function createServer(): http.Server {
             } as import('./core/runner.ts').AuditRecord);
             json(res, 200, { ok: true, total: items.length, totalMs });
           } catch (e) {
-            json(res, 400, { ok: false, error: `请求体解析失败：${String(e)}` });
+            fail(res, 400, `请求体解析失败：${String(e)}`);
           }
         });
         return;
@@ -555,7 +662,7 @@ export function createServer(): http.Server {
       if (url.pathname === '/api/watch' && req.method === 'PUT') {
         const body = await readBody(req);
         const ok = saveWatchFile(body);
-        if (!ok) { json(res, 400, { error: 'watch 文件需要 watches 数组' }); return; }
+        if (!ok) { fail(res, 400, 'watch 文件需要 watches 数组'); return; }
         json(res, 200, { ok: true });
         return;
       }
@@ -584,14 +691,14 @@ export function createServer(): http.Server {
         }
         if (op === 'pause' || op === 'resume') {
           const st = setTimerPaused(String(body['key'] ?? ''), op === 'pause');
-          if (st === null) { json(res, 404, { error: '任务不存在' }); return; }
+          if (st === null) { fail(res, 404, '任务不存在'); return; }
           json(res, 200, { ok: true, paused: st });
           return;
         }
         if (op === 'upsert') {
           const t = body['timer'] as Record<string, unknown> | undefined;
           if (!t || typeof t['key'] !== 'string' || typeof t['interval'] !== 'number') {
-            json(res, 400, { error: 'timer 需要 key 与 interval' });
+            fail(res, 400, 'timer 需要 key 与 interval');
             return;
           }
           const file = upsertTimer({
@@ -603,7 +710,7 @@ export function createServer(): http.Server {
           json(res, 200, { ok: true, count: file.timers.length });
           return;
         }
-        json(res, 400, { error: 'op 需要 upsert / pause / resume / remove' });
+        fail(res, 400, 'op 需要 upsert / pause / resume / remove');
         return;
       }
 
@@ -691,12 +798,12 @@ export function createServer(): http.Server {
         const body = await readBody(req);
         const plugin = findPlugin(String(body['plugin'] ?? ''))?.plugin;
         if (!plugin) {
-          json(res, 404, { error: '插件不存在' });
+          fail(res, 404, '插件不存在');
           return;
         }
         const action = plugin.actions.find((a) => a.id === String(body['action'] ?? ''));
         if (!action) {
-          json(res, 404, { error: '动作不存在' });
+          fail(res, 404, '动作不存在');
           return;
         }
         const rawValues = (body['values'] ?? {}) as Record<string, unknown>;
@@ -706,7 +813,7 @@ export function createServer(): http.Server {
           if (raw === undefined || raw === null || raw === '') continue;
           const coerced = coerceParam(param, raw);
           if (coerced.error) {
-            json(res, 400, { error: `${param.name}：${coerced.error}` });
+            fail(res, 400, `${param.name}：${coerced.error}`);
             return;
           }
           values[param.name] = coerced.value;
@@ -742,7 +849,7 @@ export function createServer(): http.Server {
           : String(body['plugin'] ?? '');
         const entry = findPlugin(id);
         if (!entry?.plugin) {
-          json(res, 404, { error: `没有找到插件 ${id}` });
+          fail(res, 404, `没有找到插件 ${id}`);
           return;
         }
         if (req.method === 'GET') {
@@ -750,12 +857,12 @@ export function createServer(): http.Server {
           return;
         }
         if (req.method !== 'POST') {
-          json(res, 405, { error: '只支持 GET / POST' });
+          fail(res, 405, '只支持 GET / POST');
           return;
         }
         const patch = body['patch'];
         if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
-          json(res, 400, { error: 'patch 必须是「设置项名 → 值」的对象' });
+          fail(res, 400, 'patch 必须是「设置项名 → 值」的对象');
           return;
         }
         const r = writeSettings(entry.plugin, patch as Record<string, unknown>);
@@ -792,11 +899,11 @@ export function createServer(): http.Server {
         const abs = path.resolve(target);
         const inSandbox = [DATA_DIR, LOG_DIR, PKG_ROOT].some((base) => abs.startsWith(path.resolve(base) + path.sep) || abs === path.resolve(base));
         if (!target || !path.isAbsolute(abs) || !inSandbox) {
-          json(res, 400, { error: '只允许打开 zerokit 数据/日志/程序目录内的路径' });
+          fail(res, 400, '只允许打开 zerokit 数据/日志/程序目录内的路径');
           return;
         }
         if (!fs.existsSync(abs)) {
-          json(res, 404, { error: `路径不存在：${abs}` });
+          fail(res, 404, `路径不存在：${abs}`);
           return;
         }
         const { spawn } = await import('node:child_process');
@@ -887,7 +994,7 @@ export function createServer(): http.Server {
         const body = await readBody(req);
         const source = String(body['source'] ?? '').trim();
         if (!source) {
-          json(res, 400, { error: '缺少来源：给一个 git 仓库地址或本地目录' });
+          fail(res, 400, '缺少来源：给一个 git 仓库地址或本地目录');
           return;
         }
         const preview = previewAdd(source);
@@ -918,7 +1025,7 @@ export function createServer(): http.Server {
           return;
         }
         if (!sameToken(body['confirm'], installToken('install', preview.source))) {
-          json(res, 403, { error: '确认令牌不对：请重新预览后再确认' });
+          fail(res, 403, '确认令牌不对：请重新预览后再确认');
           return;
         }
         const isLocal = !/^(https?:\/\/|git@)/.test(preview.source)
@@ -971,7 +1078,7 @@ export function createServer(): http.Server {
         const body = await readBody(req);
         const source = String(body['source'] ?? '').trim();
         if (!source) {
-          json(res, 400, { error: '缺少集市地址：git 地址、owner/repo 或本地目录' });
+          fail(res, 400, '缺少集市地址：git 地址、owner/repo 或本地目录');
           return;
         }
         const result = addMarket(source);
@@ -983,7 +1090,7 @@ export function createServer(): http.Server {
         const body = await readBody(req);
         const name = String(body['name'] ?? '');
         if (!removeMarket(name)) {
-          json(res, 404, { error: `没有这个集市：${name}` });
+          fail(res, 404, `没有这个集市：${name}`);
           return;
         }
         json(res, 200, {
@@ -1008,7 +1115,7 @@ export function createServer(): http.Server {
         const market = typeof body['market'] === 'string' ? body['market'] : undefined;
         const preview = previewInstall(id, market);
         if (!preview) {
-          json(res, 404, { error: `所有集市里都没有插件 "${id}"` });
+          fail(res, 404, `所有集市里都没有插件 "${id}"`);
           return;
         }
         json(res, 200, {
@@ -1036,16 +1143,16 @@ export function createServer(): http.Server {
         const preview = previewInstall(id, market);
         const plugin = preview?.load.plugin;
         if (!preview || !plugin) {
-          json(res, 404, { error: `集市里没有插件 "${id}"，或清单没通过校验` });
+          fail(res, 404, `集市里没有插件 "${id}"，或清单没通过校验`);
           return;
         }
         const action = plugin.actions.find((a) => a.id === actionId);
         if (!action) {
-          json(res, 404, { error: `插件 ${id} 没有动作 ${actionId}` });
+          fail(res, 404, `插件 ${id} 没有动作 ${actionId}`);
           return;
         }
         if (action.risk !== 'read') {
-          json(res, 403, { error: '只放行只读动作的试运行——有副作用的动作请安装后再用（会走确认弹窗）' });
+          fail(res, 403, '只放行只读动作的试运行——有副作用的动作请安装后再用（会走确认弹窗）');
           return;
         }
         const rawValues = (body['values'] ?? {}) as Record<string, unknown>;
@@ -1055,7 +1162,7 @@ export function createServer(): http.Server {
           if (raw === undefined || raw === null || raw === '') continue;
           const coerced = coerceParam(param, raw);
           if (coerced.error) {
-            json(res, 400, { error: `${param.name}：${coerced.error}` });
+            fail(res, 400, `${param.name}：${coerced.error}`);
             return;
           }
           values[param.name] = coerced.value;
@@ -1083,11 +1190,11 @@ export function createServer(): http.Server {
         const market = typeof body['market'] === 'string' ? body['market'] : undefined;
         const hit = findEntry(id, market);
         if (!hit) {
-          json(res, 404, { error: `所有集市里都没有插件 "${id}"` });
+          fail(res, 404, `所有集市里都没有插件 "${id}"`);
           return;
         }
         if (!sameToken(String(body['confirm'] ?? ''), installToken('market', `${hit.market}:${id}`))) {
-          json(res, 403, { error: '确认令牌不对：请重新预览后再确认' });
+          fail(res, 403, '确认令牌不对：请重新预览后再确认');
           return;
         }
         const result = installFromMarket(id, hit.market);
@@ -1125,7 +1232,7 @@ export function createServer(): http.Server {
         const id = String(body['id'] ?? '');
         const entry = findPlugin(id);
         if (!entry?.plugin) {
-          json(res, 404, { error: `没有插件 ${id}` });
+          fail(res, 404, `没有插件 ${id}`);
           return;
         }
         json(res, 200, await selfcheckOf(id));
@@ -1153,7 +1260,7 @@ export function createServer(): http.Server {
         const id = String(body['id'] ?? '');
         const confirm = typeof body['confirm'] === 'string' ? body['confirm'] : '';
         if (!confirm || !sameToken(confirm, installToken('update', id))) {
-          json(res, 403, { error: '缺少或错误的确认令牌：先 POST /api/plugin/check 看能力变化' });
+          fail(res, 403, '缺少或错误的确认令牌：先 POST /api/plugin/check 看能力变化');
           return;
         }
         const result = applyUpdate(id);
@@ -1166,7 +1273,7 @@ export function createServer(): http.Server {
         const body = await readBody(req);
         const id = String(body['id'] ?? '');
         if (!listPlugins().some((e) => e.plugin?.id === id)) {
-          json(res, 404, { error: `没有插件 ${id}` });
+          fail(res, 404, `没有插件 ${id}`);
           return;
         }
         const users = dependents(id);
@@ -1183,7 +1290,7 @@ export function createServer(): http.Server {
           return;
         }
         if (!sameToken(confirm, installToken('remove', id))) {
-          json(res, 403, { error: '确认令牌不对' });
+          fail(res, 403, '确认令牌不对');
           return;
         }
         const ok = removePlugin(id);
@@ -1231,7 +1338,7 @@ export function createServer(): http.Server {
         const body = await readBody(req);
         const prefs = body['prefs'];
         if (!prefs || typeof prefs !== 'object' || Array.isArray(prefs)) {
-          json(res, 400, { error: 'prefs 要是一个对象' });
+          fail(res, 400, 'prefs 要是一个对象');
           return;
         }
         const payload = { version: 1, exportedAt: new Date().toISOString(), prefs };
@@ -1244,7 +1351,7 @@ export function createServer(): http.Server {
         const payload = body['payload'];
         const prefs = (payload as Record<string, unknown> | undefined)?.['prefs'];
         if (!prefs || typeof prefs !== 'object' || Array.isArray(prefs)) {
-          json(res, 400, { error: '文件形状不对：要有 payload.prefs 对象' });
+          fail(res, 400, '文件形状不对：要有 payload.prefs 对象');
           return;
         }
         const clean: Record<string, unknown> = {};
@@ -1282,18 +1389,18 @@ export function createServer(): http.Server {
         const revoke = body['revoke'] === true;
         // key 只认「插件id.动作id」的形状——防手滑把别的东西写进名单
         if (!/^[\w.-]+\.[\w.-]+$/.test(key)) {
-          json(res, 400, { error: '授权目标要写成 插件id.动作id 的形状' });
+          fail(res, 400, '授权目标要写成 插件id.动作id 的形状');
           return;
         }
         const mcp = await import('./mcp.ts');
         const [pluginId, actionId] = key.split('.');
         const hit = mcp.collectTools().find((t) => t.plugin.id === pluginId && t.action.id === actionId);
         if (!hit) {
-          json(res, 404, { error: `没有这个动作：${key}` });
+          fail(res, 404, `没有这个动作：${key}`);
           return;
         }
         if (hit.action.risk === 'read') {
-          json(res, 400, { error: '只读动作默认放行，不需要授权' });
+          fail(res, 400, '只读动作默认放行，不需要授权');
           return;
         }
         const allow = mcp.loadAllow();
@@ -1325,7 +1432,7 @@ export function createServer(): http.Server {
         const message = String(body['message'] ?? '').trim();
         const sessionId = String(body['sessionId'] ?? '') || crypto.randomBytes(8).toString('hex');
         if (!message) {
-          json(res, 400, { error: '消息为空' });
+          fail(res, 400, '消息为空');
           return;
         }
 
@@ -1382,7 +1489,7 @@ export function createServer(): http.Server {
         const allow = body['allow'] === true;
         const wb = sessions.get(sessionId);
         if (!wb) {
-          json(res, 404, { error: '这个会话已经过期了，重新发一条消息即可' });
+          fail(res, 404, '这个会话已经过期了，重新发一条消息即可');
           return;
         }
         json(res, 200, { ok: wb.resolveApproval(callId, allow) });
@@ -1396,12 +1503,12 @@ export function createServer(): http.Server {
         const entry = listPlugins().find((e) => e.plugin?.id === pluginId);
         const action = entry?.plugin?.actions.find((a) => a.id === actionId);
         if (!action) {
-          json(res, 404, { error: '没有这个动作' });
+          fail(res, 404, '没有这个动作');
           return;
         }
         if (action.risk === 'destructive') {
           // 高风险动作不参与「记住」，每次都问
-          json(res, 400, { error: '高风险动作不支持记住，每次都要确认' });
+          fail(res, 400, '高风险动作不支持记住，每次都要确认');
           return;
         }
         rememberApproval(pluginId, actionId);
@@ -1418,12 +1525,12 @@ export function createServer(): http.Server {
         const entry = listPlugins().find((e) => e.plugin?.id === pluginId);
         const plugin = entry?.plugin;
         if (!plugin) {
-          json(res, 404, { error: `没有插件 ${pluginId}` });
+          fail(res, 404, `没有插件 ${pluginId}`);
           return;
         }
         const action = plugin.actions.find((a) => a.id === actionId);
         if (!action) {
-          json(res, 404, { error: `插件 ${pluginId} 里没有动作 ${actionId}` });
+          fail(res, 404, `插件 ${pluginId} 里没有动作 ${actionId}`);
           return;
         }
 
@@ -1519,7 +1626,7 @@ export function createServer(): http.Server {
           return;
         }
         const ac = runningRuns.get(key);
-        if (!ac) { json(res, 404, { error: '该动作当前没有在执行' }); return; }
+        if (!ac) { fail(res, 404, '该动作当前没有在执行'); return; }
         ac.abort();
         runningRuns.delete(key);
         json(res, 200, { stopped: true });
@@ -1548,7 +1655,7 @@ export function createServer(): http.Server {
         serveStatic(res, url.pathname);
         return;
       }
-      json(res, 405, { error: '不支持的方法' });
+      fail(res, 405, '不支持的方法');
     } catch (e) {
       json(res, 500, { error: (e as Error).message });
     }
