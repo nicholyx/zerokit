@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+（下一版攒着）
+
+## [1.61.0] - 2026-11-06
+
 ### Changed
 
 - 依赖养护：npm 三包（@modelcontextprotocol/sdk 1.32.2 / smol-toml 1.9.1 / pinyin-pro 3.29.5）、cargo minor-patch 组、GitHub Actions 依赖组与 setup-node 4→7 全部升到位（三平台 CI 全绿验证）
@@ -105,10 +109,4 @@
 - `scripts/bench.mjs` 补稳定性段：4 并发轻量探针（avg/max 耗时），完整压测指向 stress.mjs。
 - `test/stress147-smoke.mjs` 10 项：并发/审计原子/落盘独立性实测 + 事件委托与 interval 配平的泄漏判据静态断言（addEventListener 数字不是泄漏判据——重建式渲染里旧节点随 innerHTML 整体 GC）。
 - 修复大输出溢出落盘的竞态：spill 流 `end()` 不等落盘就 resolve，CLI 路径立即退出时 2MB 级文件还在内核缓冲里，下游读到 0 字节（并发 3×2MB 实测第 3 个文件 0.0MB）——现在挂 finish 回调再返回。
-
-## [1.50.0] - 2026-11-05
-
-### Added
-
-- 质量护栏十项（人肉纪律机器化）：CHANGELOG 格式断言（[Unreleased] 空行三次事故的根治）进 lint.sh；文档测试数字同步断言（overview/START-HERE 与 test/ 实际文件数一致）；docs 本机绝对路径红线扫描；START-HERE 版本行 === package.json 断言；`scripts/verify-remote.sh` push 后远端复核 + tag 前双确认（对象存在 + 远端 main HEAD）；U+FFFD 扫描进 lint.sh；提交信息 subject 与 body 必须空行分隔
 
