@@ -2,6 +2,16 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [1.52.0] - 2026-11-05
+
+### Added
+
+- `zkit run --calc 新列=表达式`：计算列（已有列名、数字与 `+ - * /`，可加括号；如 `--calc 内存MB=内存/1048576`）。
+- `--where 条件`：行过滤，三形态 `列>5` / `列=值` / `列~子串`，可重复按序应用。
+- `--rename 旧列=新列`：显示层列改名（不影响 `--json` 原始数据）。
+- `--pipe "shell 命令"`：表格文本经 stdin 接外部命令（如 `--pipe "grep -i mac"`）；与 `--quiet`/`--json` 互斥。
+- 输出旗标组合顺序固定并在 `--help` 说明：jq → where → calc → rename → pick → sort → uniq → head → sum → pipe；负例（未知列/除零/坏表达式）都带「→ 怎么改」提示。
+
 ## [1.51.0] - 2026-11-05
 
 ### Added

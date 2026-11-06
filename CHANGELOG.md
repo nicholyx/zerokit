@@ -2,12 +2,17 @@
 
 ## [Unreleased]
 
+（下一版攒着）
+
+## [1.63.0] - 2026-11-06
+
 ### Added
+
+- 维护者工具：`scripts/release-chain.sh` 发布链一条龙——CI 轮询（12 checks / 11+MERGEABLE 捷径）、merge 复核、tag 双确认与幂等保护、https→SSH remote 网络降级、release 资产等待；`feature <PR>` / `release <版本> <PR>` 两模式，`--dry-run` 干跑。CI-FAIL 即停（固化 v1.59.1 事故判据）
 
 ### Fixed
 
 - 修复 `release-chain.sh` 在非 UTF-8 locale（CI 的 macOS runner）下 `$VER` 紧邻全角字符被 bash 3.2 读成更长变量名而报 unbound variable 的问题——变量与中文之间一律加大括号，并加 C-locale 回归测试；同时把 release 模式的分支守卫移到一切远端操作之前（detached HEAD 上误跑不再可能真推分支）
-- 维护者工具：`scripts/release-chain.sh` 发布链一条龙——CI 轮询（12 checks / 11+MERGEABLE 捷径）、merge 复核、tag 双确认与幂等保护、https→SSH remote 网络降级、release 资产等待；`feature <PR>` / `release <版本> <PR>` 两模式，`--dry-run` 干跑。CI-FAIL 即停（固化 v1.59.1 事故判据）
 
 ## [1.62.0] - 2026-11-06
 
@@ -104,14 +109,4 @@
 - 新增 `zkit bookmark`：常用命令组合起别名沉淀——`add <别名> <历史编号|命令行> [--note 备注]` / `list [--json]` / `rm` / `run`；存储在 `~/.zerokit/bookmarks.json`（0600 原子写）
 - `zkit history --rerun-last`（`!!` 同义）：一键重跑最后一条成功命令
 - `zkit history` 默认视图现在展示失败条目（✓/✗ 标记），非交互终端追加「一键重跑」提示行
-
-## [1.52.0] - 2026-11-05
-
-### Added
-
-- `zkit run --calc 新列=表达式`：计算列（已有列名、数字与 `+ - * /`，可加括号；如 `--calc 内存MB=内存/1048576`）。
-- `--where 条件`：行过滤，三形态 `列>5` / `列=值` / `列~子串`，可重复按序应用。
-- `--rename 旧列=新列`：显示层列改名（不影响 `--json` 原始数据）。
-- `--pipe "shell 命令"`：表格文本经 stdin 接外部命令（如 `--pipe "grep -i mac"`）；与 `--quiet`/`--json` 互斥。
-- 输出旗标组合顺序固定并在 `--help` 说明：jq → where → calc → rename → pick → sort → uniq → head → sum → pipe；负例（未知列/除零/坏表达式）都带「→ 怎么改」提示。
 
