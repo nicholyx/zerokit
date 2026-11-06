@@ -2,7 +2,14 @@
 
 ## [Unreleased]
 
-（下一版攒着）
+### Changed
+
+- 依赖养护：npm 三包（@modelcontextprotocol/sdk 1.32.2 / smol-toml 1.9.1 / pinyin-pro 3.29.5）、cargo minor-patch 组、GitHub Actions 依赖组与 setup-node 4→7 全部升到位（三平台 CI 全绿验证）
+
+### Added
+
+- CLI：`zkit completion bash|zsh|fish` 三 shell 补全——40+ 子命令、`run` 的点分动作候选（含 sysinfo.overview 全量）、`bookmark run/rm` 书签动态候选（新增 `zkit bookmark names` 机读端点）、`--keep` 枚举与常用旗标候选；zsh 版去除 python3 运行时依赖
+- 修复：bash 补全的 `run` 候选此前因模板插值错误静默为空（写的是 `$(subsRunPlugins)` 字面量而非 `${…}` 插值），本轮修为构建时展开
 
 ## [1.60.0] - 2026-11-06
 
