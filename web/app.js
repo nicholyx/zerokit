@@ -2258,19 +2258,32 @@ function openDetail(plugin, action, prefill) {
   renderWatchBar();
 
   // 二维码：深链 → SVG，模态展示（离线生成，不联网）
+  // 第一百六十五轮⑦：双形态——HTTP（浏览器打开）/ zerokit://（装了壳点击直达）
   $('qrBtn')?.addEventListener('click', () => {
-    const deepLink = `${location.origin}${location.pathname}#/${plugin.id}/${action.id}`;
+    const httpLink = `${location.origin}${location.pathname}#/${plugin.id}/${action.id}`;
+    const zkLink = `zerokit://${plugin.id}.${action.id}`;
     const overlay = document.createElement('div');
     overlay.className = 'overlay';
-    overlay.innerHTML = `
+    const paint = (which) => {
+      const link = which === 'zk' ? zkLink : httpLink;
+      overlay.innerHTML = `
       <div class="modal qr-modal">
         <h3>扫码直达这个动作</h3>
-        <div class="qr-box">${qrSvg(deepLink, { scale: 5, margin: 3 })}</div>
-        <div class="help" style="word-break:break-all">${esc(deepLink)}</div>
-        <div class="actions"><button class="ghost" id="qrClose">关闭</button></div>
+        <div class="qr-box">${qrSvg(link, { scale: 5, margin: 3 })}</div>
+        <div class="help" style="word-break:break-all">${esc(link)}</div>
+        <div class="help">${which === 'zk' ? 'zerokit:// 链接——装了桌面壳的机器扫码/点击后直接唤起' : esc(t('qrHintWeb'))}</div>
+        <div class="actions">
+          <button class="ghost ${which === 'http' ? 'primary' : ''}" id="qrHttp">${t('qrLinkWeb')}</button>
+          <button class="ghost ${which === 'zk' ? 'primary' : ''}" id="qrZk">${t('qrLinkZk')}</button>
+          <button class="ghost" id="qrClose">${t('close')}</button>
+        </div>
       </div>`;
+      overlay.querySelector('#qrHttp').addEventListener('click', () => paint('http'));
+      overlay.querySelector('#qrZk').addEventListener('click', () => paint('zk'));
+      overlay.querySelector('#qrClose').addEventListener('click', () => overlay.remove());
+    };
+    paint('http');
     document.body.appendChild(overlay);
-    overlay.querySelector('#qrClose').addEventListener('click', () => overlay.remove());
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
   });
 
@@ -9608,7 +9621,19 @@ function applyHash() {
     for (const [k, v] of new URLSearchParams(m[3]).entries()) prefill[k] = v;
   }
   const entry = entries.find((e) => e.plugin.id === m[1] && (!m[2] || e.action.id === m[2]));
-  if (entry) openDetail(entry.plugin, entry.action, prefill);
+  if (entry) { openDetail(entry.plugin, entry.action, prefill); return; }
+  // 第一百六十五轮⑧：zerokit:// 深链目标校验——未知目标（插件卸载/链接拼错）落回主页并提示，
+  // 而不是留在旧界面装作无事（用户以为跳转成功了）
+  el.q.value = '';
+  detail = null;
+  el.detailView.classList.add('hidden');
+  el.detailView.innerHTML = '';
+  hidePanels();
+  renderList();
+  const msg = t('deepLinkGone')(m[1] + (m[2] ? '.' + m[2] : ''));
+  el.count.textContent = msg;
+  // 渲染管线里还有异步重画（骨架屏→数据、面板切换）会覆盖 #count——下一帧再压一次
+  requestAnimationFrame(() => { el.count.textContent = msg; });
 }
 
 window.addEventListener('hashchange', () => {
@@ -9652,8 +9677,11 @@ window.addEventListener('hashchange', () => {
     return;
   }
   // 第十八轮⑥补：从面板（#/watch 等）回到当前详情的深链——
-  // detail 变量还在（面板没清它），但视图被面板藏了，这里恢复出来
+  // detail 变量还在（面板没清它），但视图被面板藏了，这里恢复出来。
+  // 第一百六十五轮⑧补：hash 指向的目标变了不能吃旧 detail——重走 applyHash
   if (detail && /#\/[\w.-]+\/[\w.-]+/.test(location.hash || '') && el.detailView.classList.contains('hidden')) {
+    const hm165 = /^#\/([\w.-]+)\/([\w.-]+)/.exec(location.hash || '');
+    if (hm165 && (detail.plugin.id !== hm165[1] || detail.action.id !== hm165[2])) { applyHash(); return; }
     hidePanels();
     mode = 'detail';
     el.modeLabel.textContent = t('modeDetail');
@@ -9662,6 +9690,10 @@ window.addEventListener('hashchange', () => {
     return;
   }
   if (!detail) applyHash();
+  else {
+    const hm165b = /^#\/([\w.-]+)\/([\w.-]+)/.exec(location.hash || '');
+    if (hm165b && (detail.plugin.id !== hm165b[1] || detail.action.id !== hm165b[2])) applyHash();
+  }
   // 第一百零六轮修：从面板（#/help 等）把 hash 改回列表态（#/ 或 #/?..）时，
   // applyHash 对列表态是 fallthrough（无分支）——面板不会自己收掉，列表被盖住。
   if (!/#\/[\w.-]+/.test(location.hash || '#/')) {

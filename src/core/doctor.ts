@@ -59,7 +59,7 @@ export interface DoctorReport {
   dirs: { home: string; plugins: string };
   plugins: DoctorPlugin[];
   /** 第三十二轮⑩：桌面壳（可选组件）的安装状态。没装是 warning 级提示，不是 error。 */
-  desktop: { installed: boolean; path?: string; hotkey?: string };
+  desktop: { installed: boolean; path?: string; hotkey?: string; deepLinkRegistered?: boolean };
   /** 第六十三轮⑧：孤儿定时任务 key（timers.json 引用的插件已卸载）。 */
   orphanTimerKeys: string[];
   summary: { plugins: number; actions: number; errors: number; warnings: number };
@@ -196,6 +196,35 @@ function findDesktopShell(): { installed: boolean; path?: string } {
   ];
   const hit = candidates.find((p) => { try { return existsSync(p); } catch { return false; } });
   return hit ? { installed: true, path: hit } : { installed: false };
+}
+
+
+/** 第一百六十五轮⑤：zerokit:// 深链注册探测——doctor 只报事实，不代改注册表。 */
+function deepLinkRegistered(): boolean {
+  try {
+    if (process.platform === 'win32') {
+      const { execFileSync } = require('node:child_process') as typeof import('node:child_process');
+      const out = execFileSync('reg', ['query', 'HKCU\\Software\\Classes\\zerokit', '/ve'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+      return /URL/i.test(out);
+    }
+    if (process.platform === 'darwin') {
+      const shellExe = findDesktopShell();
+      if (!shellExe.path) return false;
+      // 本地构建的 app bundle：Info.plist 由 tauri.conf.json 的 schemes 生成
+      const plist = shellExe.path.replace(/zerokit-desktop$/, '') + '../../Info.plist';
+      if (!existsSync(plist)) return false;
+      return readFileSync(plist, 'utf8').includes('zerokit');
+    }
+    // linux：~/.local/share/applications 里有没有带 x-scheme-handler/zerokit 的 .desktop
+    const dir = HOME + '/../.local/share/applications';
+    if (!existsSync(dir)) return false;
+    const { readdirSync } = require('node:fs') as typeof import('node:fs');
+    return readdirSync(dir).some((f) => {
+      try {
+        return f.endsWith('.desktop') && readFileSync(dir + '/' + f, 'utf8').includes('x-scheme-handler/zerokit');
+      } catch { return false; }
+    });
+  } catch { return false; }
 }
 
 /** 第六十七轮⑦：从清单原文判断动作是否显式写了 timeout（绕开默认值注入）。 */
@@ -401,7 +430,7 @@ export async function buildDoctorReport(): Promise<DoctorReport> {
     },
     tools,
     dirs: { home: HOME, plugins: PLUGINS_DIR },
-    desktop: { installed: shell.installed, path: shell.path, hotkey },
+    desktop: { installed: shell.installed, path: shell.path, hotkey, deepLinkRegistered: shell.installed ? deepLinkRegistered() : undefined },
     orphanTimerKeys,
     plugins,
     history: historyBefore.slice(0, 5),

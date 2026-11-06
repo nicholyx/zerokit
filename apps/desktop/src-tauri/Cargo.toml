@@ -13,7 +13,8 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-single-instance = "2"   # 第一百三十五轮⑧：二次启动聚焦已有窗口
-tauri-plugin-autostart = "2"         # 第一百三十五轮④：开机自启开关
+tauri-plugin-autostart = "2"
+tauri-plugin-deep-link = "2"   # 第一百六十五轮②：zerokit:// OS 级深链唤起         # 第一百三十五轮④：开机自启开关
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 

@@ -440,6 +440,8 @@ export const I18N = {
   panelDescMarket: '插件集市：浏览、搜索、预览再安装，装完这里就是升级入口。',
   panelDescBrief: '每日简报：今天跑了什么、成功多少、最快最慢，30 秒回顾。',
   zh: {
+  qrLinkWeb: '网页链接', qrLinkZk: 'zerokit:// 链接', qrHintWeb: '浏览器链接——任何机器都能打开（未装壳走 Web UI）',
+  deepLinkGone: (a) => `深链里的 ${a} 不存在（插件可能被卸载）`,
   storageUsage: '存储占用',
   storageStat: (size, keys) => `存储占用: ${size}（${keys} 键）`,
   storageTitle: 'zerokit.* 键的总字节占用（只读统计，清理走备份/擦除）',
@@ -759,6 +761,8 @@ helpSearchTitle: '搜索', helpSearchBody: '支持中文关键词、拼音全拼
   helpSearchPh: '搜主题…'
   },
   en: {
+  qrLinkWeb: 'Web link', qrLinkZk: 'zerokit:// link', qrHintWeb: 'Browser link — opens on any machine (Web UI if shell not installed)',
+  deepLinkGone: (a) => `Deep-link target ${a} does not exist (plugin may be uninstalled)`,
   panelDescLogs: 'Every run and denial lands here — filter by decision or plugin, export CSV/JSON.',
   panelDescStats: 'Usage stats: most-run actions, success rate and latency at a glance.',
   panelDescDoctor: 'Environment & supply-chain checkup: missing deps, manifest issues, integrity — each with a fix.',

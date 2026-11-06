@@ -33,5 +33,14 @@
     ],
     "shortDescription": "一份清单，四个面：启动器 / CLI / MCP / Web",
     "longDescription": "zerokit 桌面壳。真正的功能在 Node 内核里，这里只负责全局热键、托盘和无边框窗口。"
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "zerokit"
+        ]
+      }
+    }
   }
 }

@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-（下一版攒着）
+### Added
+
+- OS 级深链 `zerokit://插件.动作?字段=值`：桌面壳注册协议（macOS Info.plist / Windows+Linux 运行时注册），点击唤起壳并直达动作详情页（参数预填、不自动执行）；`zkit deep-link` 链接生成器（目标校验 exit 1、secret 参数明文警告）；Web UI 二维码双形态（网页链接 / zerokit:// 链接）；未知深链目标回列表并提示；`doctor` 报协议注册状态
 
 ## [1.66.0] - 2026-11-07
 

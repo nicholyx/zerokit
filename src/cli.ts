@@ -2592,6 +2592,9 @@ async function cmdDoctor(): Promise<number> {
   // 第三十二轮⑩：桌面壳是可选组件，单独一行说清状态
   process.stdout.write(report.desktop.installed
     ? `  ${c.green('✓')} 桌面壳已安装${report.desktop.hotkey ? c.dim(`（热键 ${report.desktop.hotkey}）`) : ''}\n`
+      + (report.desktop.deepLinkRegistered === false
+        ? `  ${c.yellow('!')} zerokit:// 深链未注册——浏览器里点 zerokit:// 链接唤不起壳（zkit desktop 看安装指引）\n`
+        : report.desktop.deepLinkRegistered ? `  ${c.green('✓')} zerokit:// 深链已注册（浏览器链接可唤起）\n` : '')
     : `  ${c.yellow('!')} 桌面壳未安装（可选，不影响 CLI / Web / MCP）\n`);
   for (const tool of report.tools) {
     process.stdout.write(tool.ok
@@ -2743,6 +2746,44 @@ async function cmdRuns(args: string[]): Promise<number> {
 
   process.stderr.write(`用法：zkit runs list [--limit N] [--json] | show <序号> [--replay] [--json] | export | gc --days N [--yes]\n`);
   return 1;
+}
+
+/** 第一百六十五轮：deep-link——zerokit://插件.动作?k=v OS 级深链生成器。 */
+async function cmdDeepLink(args: string[]): Promise<number> {
+  const target = args[0];
+  if (!target || !target.includes('.')) {
+    process.stderr.write('用法：zkit deep-link 插件.动作 [--字段 值 …]\n例：zkit deep-link quick.b64 --text 你好\n');
+    return 2;
+  }
+  const [pluginId, ...actParts] = target.split('.');
+  const actionId = actParts.join('.');
+  // 校验目标存在——生成的链接跳向不存在的动作只会落回主页，不如生成时就拦
+  const reg = await import('./core/registry.ts');
+  const entries = reg.listPlugins();
+  const plugin = entries.find((x) => x.plugin?.id === pluginId)?.plugin;
+  const action = plugin?.actions.find((a) => a.id === actionId);
+  if (!plugin || !action) {
+    process.stderr.write(`没有这个动作：${target}${entries.some((x) => x.plugin?.id === pluginId) ? `（插件 ${pluginId} 存在，动作不存在）` : ''}\n先用 zkit list 看可用动作。\n`);
+    return 1;
+  }
+  // 参数对：--k v 收集；secret 参数给提醒（链接会明文带着它）
+  const params: string[] = [];
+  const secretNames = new Set(action.params.filter((x) => x.secret).map((x) => x.name));
+  const warned: string[] = [];
+  for (let i = 1; i < args.length; i++) {
+    const a = args[i]!;
+    if (!a.startsWith('--')) { process.stderr.write(`不认识的参数「${a}」——只接受 --字段 值 对\n`); return 2; }
+    const k = a.slice(2);
+    const v = args[i + 1];
+    if (v === undefined) { process.stderr.write(`--${k} 缺值\n`); return 2; }
+    params.push(`${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
+    if (secretNames.has(k)) warned.push(k);
+    i++;
+  }
+  const qs = params.length ? `?${params.join('&')}` : '';
+  console.log(`zerokit://${target}${qs}`);
+  if (warned.length) process.stderr.write(`⚠ 参数 ${warned.join('、')} 是 secret——这个链接会明文携带它，别贴到公开场合。\n`);
+  return 0;
 }
 
 /** 第一百六十三轮：cron——脚本化定时任务的登记与补打。add/list/rm/run；接线交给系统调度器。 */
@@ -4668,6 +4709,9 @@ async function main(): Promise<number> {
     // 第一百六十三轮：cron——脚本化定时任务登记与补打
     case 'cron':
       return await cmdCron(rest);
+    // 第一百六十五轮：zerokit:// 深链生成器
+    case 'deep-link':
+      return await cmdDeepLink(rest);
     // 第一百二十九轮：执行历史消费面
     case 'runs':
       return await cmdRuns(rest);
