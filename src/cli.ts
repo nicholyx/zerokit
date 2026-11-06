@@ -1306,14 +1306,14 @@ async function cmdRun(args: string[]): Promise<number> {
       // 通知命令是「程序 + 参数」形态（如 `node sink.cjs out.txt`），重定向/管道
       // 这类 shell 语法本来就不该出现在通知命令里（落盘变体请用 --notify-file）。
       const isWin = process.platform === 'win32';
-      const parts = notifyCmd.match(/"[^"]+"|\S+/g) ?? [notifyCmd];
-      const argv155 = isWin ? parts.slice(1) : ['-c', notifyCmd];
-      const prog155 = isWin ? (parts[0] ?? '').replace(/^"|"$/g, '') : '/bin/sh';
-      const child = spawn(prog155, argv155, { stdio: ['pipe', 'inherit', 'inherit'] });
+      // Windows：cmd /s /c "整串" + windowsVerbatimArguments 保持原引号不撕裂
+      const child = isWin
+        ? spawn('cmd', ['/s', '/c', notifyCmd], { stdio: ['pipe', 'inherit', 'inherit'], windowsVerbatimArguments: true } as never)
+        : spawn('/bin/sh', ['-c', notifyCmd], { stdio: ['pipe', 'inherit', 'inherit'] });
       child.stdin?.write(line + '\n');
       child.stdin?.end();
-      const code = await new Promise<number>((r) => { child.on('error', () => r(-1)); child.on('close', (cc) => r(cc ?? 0)); });
-      if (code !== 0) process.stderr.write(c.yellow(`（通知命令退出码 ${code}——告警本身仍以退出码 2 为准）\n`));
+      const code = await new Promise<number>((r) => { child.on('error', (e) => { process.stderr.write(c.yellow(`（通知命令启动失败：${String(e instanceof Error ? e.message : e)}——告警本身仍以退出码 2 为准）\n`)); r(-1); }); child.on('close', (cc) => r(cc ?? 0)); });
+      if (code > 0) process.stderr.write(c.yellow(`（通知命令退出码 ${code}——告警本身仍以退出码 2 为准）\n`));
     }
     if (notifyFile) {
       try { (await import('node:fs')).appendFileSync(notifyFile, line + '\n'); } catch (e) { process.stderr.write(c.yellow(`（通知文件写失败：${String(e)}）\n`)); }
