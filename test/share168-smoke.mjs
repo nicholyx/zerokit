@@ -55,7 +55,7 @@ let shareFile = '';
 }
 {
   const r = run(['share', '--view', shareFile]);
-  check('⑥ 查看：指纹+环境+命令', r.status === 0 && r.stdout.includes('指纹') && r.stdout.includes('darwin') && r.stdout.includes('zkit run quick.b64'));
+  check('⑥ 查看：指纹+环境+命令', r.status === 0 && r.stdout.includes('指纹') && r.stdout.includes(process.platform === 'win32' ? 'win32' : process.platform) && r.stdout.includes('zkit run quick.b64'));
   const r2 = run(['share', shareFile]);
   check('⑥ 位置参数也能查看', r2.status === 0 && r2.stdout.includes('分享包'));
   const r3 = run(['share', '--view', shareFile, '--markdown']);
