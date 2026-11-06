@@ -4,10 +4,16 @@
 
 （下一版攒着）
 
-## [1.69.0] - 2026-11-07
+## [1.70.0] - 2026-11-07
 
 ### Added
+
 - 结果分享与团队协作：`zkit share <插件.动作> [--params JSON] [--note] [--qr]` 生成 `.zshare` 分享包（结果+重放命令+环境指纹，read 动作带结果、mutate/destructive 只带命令）；`zkit run --from-share <file>` 一键重放（destructive 直接拒绝、mutate 要 --yes、插件不在本机给装法）；`zkit share --view <file>`（指纹+环境+命令，--markdown 出可贴 issue 的摘要）；`--qr` 出块状指纹（两台机器比对是否同一份分享包）；伪造/缺字段/版本不符的包都拒绝并说人话。
+
+## [1.69.0] - 2026-11-07
+
+
+### Added
 
 - `zkit why <报错原文>`——把报错翻译成「发生了什么 + 下一步敲什么」，与 Web 错误知识库同源（同一份 ERROR_BOOK，CLI 侧 createRequire 转发 import）；`--last` 直接解释最近一条失败记录；认不出诚实说 exit 1 并给排查方向；`--json` 机读 {kind,cause,next}。
 - `zkit config <插件> env`——生成脚本里引用设置项的环境变量引导（bash `export` / `--shell fish` `set -x`），值恒掩码只给键名；`--json` 机读。
@@ -91,12 +97,4 @@
 
 - **`zkit run 插件.动作` 点分简写**——文档里大量 `run sysinfo.overview` 写法此前实跑报用法错（只认两段形式），现在两种写法等价；报错也点名插件本体（`nothere` 而非 `nothere.x`）
 - **文档旅程一致性审计**——quickstart/README/START-HERE/man/cookbook 的命令逐条真跑校准：README 安装命令补 `--yes` 说明（交互确认是设计但文档没提）、quickstart 补点分简写说明、man 十二个核心命令与实现全对齐
-
-## [1.59.0] - 2026-11-06
-
-### Added
-
-- **哨兵通知：`run --notify <cmd>`**——`--alert` 不满足时把稳定格式的告警行（`[ALERT] 时间 | 命令 | 规则 | 实际值`）经 stdin 交给外部命令（发邮件、写 IM、接 webhook 都行）；通知命令失败不吞告警（提示后仍 exit 2）；`--notify-file <path>` 变体追加写文件；与 `--watch` 可组合
-- **审计保留策略：`logs --keep 30d`**——过期审计行删除前整体备份到 `logs/audit-<日期>.bak`，幂等可重跑（`permanent` 全保留）；坏行/无时间戳行保守保留
-- **doctor 报审计规模**——记录条数与最老记录年龄（保留策略的决策依据）
 
