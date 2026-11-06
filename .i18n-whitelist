@@ -1272,8 +1272,22 @@ id="mobileBar" aria-label="快捷操作"
 : `<div class="jp-row leaf" data-jp="\$\{i
 return `<div class="view-switch" role="t
 <button class="chip\$\{wantTree \? '' : ' o
-<button class="chip\$\{wantTree \? ' on' : 
-\? `<div class="jp-row branch collapsed" 
+<button class="chip\$\{wantTree \? ' on' :
+\? `<div class="jp-row branch collapsed"
 : `<div class="jp-row leaf" data-jp="x\$\{
 label: isArr \? `\$\{entries\.length\} 项` : `
 return \{ kind: 'branch', depth: 0, path:
+<div><h4>键盘流（第五十二轮\+）</h4><ul>
+<li><kbd>F</kbd> 收藏/取消 · <kbd>T</kbd> 打标
+<li><kbd>Y / E</kbd> 结果复制/导出 · <kbd>X / 
+<li><kbd>Alt\+点击</kbd> 进批量篮 · <kbd>Alt\+↑↓
+<li><kbd>d</kbd> 列表密度循环 · <kbd>r / m</kb
+<li><kbd>Ctrl\+\.</kbd> 停止执行 · <kbd>Ctrl\+R
+<li><kbd>Ctrl\+Shift\+V</kbd> 剪贴板识别建议</li>
+<div><h4>当前状态</h4><ul id="cheat-now"></u
+const dens = \{ compact: '紧凑', normal: '舒
+const theme = resolveTheme\(localStorage\.
+`上下文：\$\{detail \? '动作详情（Esc 返回列表）' : '动作列表
+`列表密度：\$\{dens\}（d 键循环）`,
+`排序：\$\{sortMode === 'recent' \? '最近使用（m 键）
+`主题：\$\{theme\}（Ctrl\+Shift\+D 切换）`,

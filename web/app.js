@@ -1707,6 +1707,8 @@ function actionTitleOf(key) {
 }
 
 function openDetail(plugin, action, prefill) {
+  // 第一百五十七轮⑥：离开列表前记住滚动位置（返回时恢复）
+  { const sc = el.list?.parentElement; if (sc) { try { sessionStorage.setItem('zk.listScroll', String(sc.scrollTop)); } catch { /* 忽略 */ } } }
   detail = { plugin, action };
   // 第一百一十四轮①：切到新动作 = 换一份篮子（旧篮子留在 batchMap，回来还在）
   const nk = actionKey(plugin.id, action.id);
@@ -2555,6 +2557,20 @@ function syncBatchView() {
 
 function backToList() {
   detail = null;
+  // 第一百五十七轮⑥：返回列表时滚回离开时的位置（openDetail 存，renderList 完成后恢复）
+  const sc = el.list?.parentElement;
+  const saved = Number(sessionStorage.getItem('zk.listScroll') ?? -1);
+  // 虚拟列表渲染是异步多帧的：双 rAF 后再恢复，且连续试 3 帧（scrollTop 被虚拟渲染重置就再压回去）
+  if (saved >= 0 && sc) {
+    let tries = 0;
+    const restore = () => {
+      if (Math.abs(sc.scrollTop - saved) > 4) sc.scrollTop = saved;
+      else { sessionStorage.removeItem('zk.listScroll'); return; }
+      if (++tries < 3) requestAnimationFrame(restore);
+      else sessionStorage.removeItem('zk.listScroll');
+    };
+    requestAnimationFrame(() => requestAnimationFrame(restore));
+  }
   // 第一百二十九轮⑧：Ctrl+R 快速重放最近一次执行（确认弹层拦截破坏性动作）
   if (e.key === 'r' && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
     const lastRun = (runStore ? Object.values(runStore).flat() : []).filter(Boolean).sort((a, b) => String(b?.ts ?? '').localeCompare(String(a?.ts ?? '')))[0];
@@ -8622,17 +8638,33 @@ function showHotkeyCheat() {
           <li><kbd>[ / ]</kbd> 切换结果页签</li>
           <li><kbd>Ctrl/⌘+Enter</kbd> 执行当前动作</li>
         </ul></div>
-        <div><h4>键盘流（新）</h4><ul>
-          <li><kbd>F</kbd> 收藏/取消当前项</li>
-          <li><kbd>T</kbd> 给当前项打标签（数字选）</li>
-          <li><kbd>Y / E</kbd> 结果区复制/导出</li>
-          <li><kbd>Alt+↑↓</kbd> 批量篮内移位</li>
+        <div><h4>键盘流（第五十二轮+）</h4><ul>
+          <li><kbd>F</kbd> 收藏/取消 · <kbd>T</kbd> 打标签（数字选）</li>
+          <li><kbd>Y / E</kbd> 结果复制/导出 · <kbd>X / M</kbd> 结果 CSV/Markdown</li>
+          <li><kbd>Alt+点击</kbd> 进批量篮 · <kbd>Alt+↑↓</kbd> 篮内移位</li>
+          <li><kbd>d</kbd> 列表密度循环 · <kbd>r / m</kbd> 插件序/最近序</li>
+          <li><kbd>Ctrl+.</kbd> 停止执行 · <kbd>Ctrl+R</kbd> 重放最近</li>
+          <li><kbd>Ctrl+Shift+V</kbd> 剪贴板识别建议</li>
         </ul></div>
+        <div><h4>当前状态</h4><ul id="cheat-now"></ul></div>
       </div>
       <div class="palette-foot">Esc 关闭</div>
     </div>`;
   ov.addEventListener('click', (ev) => { if (ev.target === ov) ov.remove(); });
   document.body.appendChild(ov);
+  // 第一百五十七轮③：当前状态区——上下文（详情/列表）+ 密度 + 排序 + 主题，看速查即知当前态
+  const now = ov.querySelector('#cheat-now');
+  if (now) {
+    const dens = { compact: '紧凑', normal: '舒适', loose: '宽松' }[localStorage.getItem('zerokit.ldensity') || 'normal'] ?? '舒适';
+    const theme = resolveTheme(localStorage.getItem(PREF.theme) ?? 'auto') === 'dark' ? '深色' : '浅色';
+    const items157 = [
+      `上下文：${detail ? '动作详情（Esc 返回列表）' : '动作列表'}`,
+      `列表密度：${dens}（d 键循环）`,
+      `排序：${sortMode === 'recent' ? '最近使用（m 键）' : '插件序（r 键）'}`,
+      `主题：${theme}（Ctrl+Shift+D 切换）`,
+    ];
+    now.innerHTML = items157.map((x) => `<li>${x}</li>`).join('');
+  }
 }
 
 /** 命令面板：一个输入框直达任何动作 / 页面。数据全是本地，不新增接口。 */
@@ -8675,7 +8707,7 @@ function showPalette() {
   ];
   overlay.innerHTML = `
     <div class="modal palette">
-      <input id="paletteQ" type="text" placeholder="输入动作名、插件名或页面名…" autocomplete="off" spellcheck="false">
+      <input id="paletteQ" type="text" placeholder="搜动作、插件、页面或命令（? 键看全部快捷键）…" autocomplete="off" spellcheck="false">
       <div class="palette-chips hidden" id="paletteChips"></div>
       <ul id="paletteList" role="listbox"></ul>
       <div class="palette-foot">↑↓ 选择 · Enter 打开 · 1-9 直选 · Tab 补全 · Esc 关闭</div>
@@ -8924,6 +8956,14 @@ document.addEventListener('keydown', (e) => {
     showPalette();
     return;
   }
+  // 第一百五十七轮③：? 速查浮层全局化——从任何页面（含详情/日志/集市）可唤起，
+  // 且显示当前上下文（第八十五轮同款教训：mode 分支早退会挡掉全局键）
+  if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey
+    && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName ?? '')) {
+    e.preventDefault();
+    showHotkeyCheat();
+    return;
+  }
   if (mode === 'plugins') {
     if (e.key === 'Escape') { e.preventDefault(); exitPlugins(); }
     return;
@@ -9037,12 +9077,6 @@ document.addEventListener('keydown', (e) => {
     const cur = resultTabs.findIndex((t) => t.id === activeTab);
     const nxt = resultTabs[cycleTabIndex(cur < 0 ? 0 : cur, resultTabs.length, e.key === ']' ? 1 : -1)];
     if (nxt) { activeTab = nxt.id; renderResult(nxt.res); renderTabBar(); }
-    return;
-  }
-  // 第二十四轮⑧：? 键盘速查浮层
-  if (!typing && e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-    e.preventDefault();
-    showHotkeyCheat();
     return;
   }
   // 第六十九轮⑤：Tab 键在列表态快速过滤——只看带参数/无参数动作（再按切回全部）
