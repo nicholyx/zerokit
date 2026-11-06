@@ -1302,9 +1302,14 @@ async function cmdRun(args: string[]): Promise<number> {
   const dispatchAlert = async (line: string): Promise<void> => {
     if (notifyCmd && notifyCmd !== '--notify-file') {
       const { spawn } = await import('node:child_process');
-      // Windows 无 /bin/sh——按平台分流（cmd /c 走 cmd 语法，重定向等直接可用）
+      // Windows 无 /bin/sh，cmd /c 又会撕裂引号——不用 shell：按空白切参数直接 spawn。
+      // 通知命令是「程序 + 参数」形态（如 `node sink.cjs out.txt`），重定向/管道
+      // 这类 shell 语法本来就不该出现在通知命令里（落盘变体请用 --notify-file）。
       const isWin = process.platform === 'win32';
-      const child = spawn(isWin ? 'cmd' : '/bin/sh', isWin ? ['/c', notifyCmd] : ['-c', notifyCmd], { stdio: ['pipe', 'inherit', 'inherit'] });
+      const parts = notifyCmd.match(/"[^"]+"|\S+/g) ?? [notifyCmd];
+      const argv155 = isWin ? parts.slice(1) : ['-c', notifyCmd];
+      const prog155 = isWin ? (parts[0] ?? '').replace(/^"|"$/g, '') : '/bin/sh';
+      const child = spawn(prog155, argv155, { stdio: ['pipe', 'inherit', 'inherit'] });
       child.stdin?.write(line + '\n');
       child.stdin?.end();
       const code = await new Promise<number>((r) => child.on('close', (cc) => r(cc ?? 0)));
