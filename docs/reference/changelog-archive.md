@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [1.44.0] - 2026-11-05
+
+### Added
+
+- **MCP 资源面第三波（只读快照）**：新增 5 个 resources——`zerokit://runs`（最近 20 条执行：时间/动作/成败/耗时/caller）、`zerokit://runs/<插件.动作>`（该动作最近 10 条）、`zerokit://audit`（最近 30 条审计含 denied 与决策理由）、`zerokit://watch`（监控注册表快照）、`zerokit://timers`（定时任务与下次触发，paused 标注）；resources/list 每个资源带一句人话 description；未知 URI 的报错列出全部可用资源（此前只说「不认识」）
+
 ## [1.43.0] - 2026-11-05
 
 ### Added
