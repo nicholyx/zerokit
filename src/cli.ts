@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { suggestLine, suggestLineMulti, diagnose, diagnoseExitCode, timeoutDiagnosis, missingSettingHint, foreignPath, findOrphanPlugins } from './core/suggest.ts';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 import { type Plugin, type RiskLevel, toolName } from './core/manifest.ts';
 import { HOME, LOG_DIR, PLUGINS_DIR } from './core/paths.ts';
@@ -1916,7 +1917,7 @@ async function cmdPlugin(args: string[]): Promise<number> {
     const last = hist[hist.length - 1];
     const entry = findPlugin(id);
     // 自带清单以仓库 plugins/ 目录为准——卸载干净（无目录无历史）的自带插件也认
-    const repoPluginsDir = new URL('../plugins/', import.meta.url).pathname;
+    const repoPluginsDir = fileURLToPath(new URL('../plugins/', import.meta.url));
     let isBundled = false;
     try { isBundled = fs.existsSync(path.join(repoPluginsDir, id, 'plugin.toml')); } catch { /* 忽略 */ }
     if (!entry && !last && !isBundled) { process.stderr.write(`✗ 没有找到插件 ${id}，也没有安装记录\n`); return 1; }
