@@ -52,10 +52,19 @@ const src = readFileSync(SH, 'utf8');
 // ⑥b C locale 回归（CI 的 macOS runner 是非 UTF-8 locale——bash 3.2 下 $VAR 紧邻
 // 多字节中文会把变量名读长成 unbound variable，本地 UTF-8 复现不了，必须显式测）
 {
-  const r = spawnSync('/bin/bash', [SH, 'release', '9.9.9', '999', '--dry-run'], { encoding: 'utf8', timeout: 30000, env: { ...process.env, LC_ALL: 'C', LANG: 'C' } });
-  check('⑥b C locale 干跑（CI 形态）', r.status === 0 && r.stdout.includes('release 模式'), `err=${(r.stderr||'').slice(0,120)}`);
-  const r2 = spawnSync('/bin/bash', [SH, 'release', '9.9.9', '999'], { encoding: 'utf8', timeout: 30000, env: { ...process.env, LC_ALL: 'C', LANG: 'C' } });
-  check('⑥b C locale 分支拒执行', r2.status === 1, `err=${(r2.stderr||'').slice(0,120)}`);
+  // /bin/bash 在 Windows 不存在（Git Bash 在别处）；找不到就退化为 'bash'（PATH 解析），
+  // 再不行（老 Windows runner）跳过——非 UTF-8 缺陷只在 bash 3.2 露面，Git Bash 的 4+ 不受影响
+  const fs = await import('node:fs');
+  const BASH = fs.existsSync('/bin/bash') ? '/bin/bash' : 'bash';
+  const r = spawnSync(BASH, [SH, 'release', '9.9.9', '999', '--dry-run'], { encoding: 'utf8', timeout: 30000, env: { ...process.env, LC_ALL: 'C', LANG: 'C' } });
+  if (r.error && process.platform === 'win32') {
+    check('⑥b C locale 干跑（Windows 无 bash，跳过）', true);
+    check('⑥b C locale 分支拒执行（Windows 无 bash，跳过）', true);
+  } else {
+    check('⑥b C locale 干跑（CI 形态）', r.status === 0 && r.stdout.includes('release 模式'), `err=${(r.stderr||'').slice(0,120)}`);
+    const r2 = spawnSync(BASH, [SH, 'release', '9.9.9', '999'], { encoding: 'utf8', timeout: 30000, env: { ...process.env, LC_ALL: 'C', LANG: 'C' } });
+    check('⑥b C locale 分支拒执行', r2.status === 1, `err=${(r2.stderr||'').slice(0,120)}`);
+  }
 }
 
 // ⑥ shellcheck（有则跑，CI 兜底）
