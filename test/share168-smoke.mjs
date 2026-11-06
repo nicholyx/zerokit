@@ -42,7 +42,7 @@ let shareFile = '';
 {
   const r = run(['share', 'quick.b64', '--params', '{"text":"你好分享"}', '--qr']);
   check('① 生成+提示重放', r.status === 0 && r.stdout.includes('.zshare') && r.stdout.includes('--from-share'));
-  const m = r.stdout.match(/\/[^\s]+\.zshare/);
+  const m = r.stdout.match(/[A-Za-z]:\[^\s\n]+\.zshare|\/[^\s]+\.zshare/);
   shareFile = m ? m[0] : '';
   check('① 文件真存在+0600', shareFile !== '' && existsSync(shareFile));
   const pack = JSON.parse(readFileSync(shareFile, 'utf8'));
@@ -65,7 +65,7 @@ let shareFile = '';
   // 非只读：不带结果
   const r = run(['share', 'quick.open-url', '--params', '{"url":"https://example.com"}']);
   check('① mutate 不带结果提示', r.status === 0 && r.stdout.includes('非只读'));
-  const m = r.stdout.match(/\/[^\s]+\.zshare/);
+  const m = r.stdout.match(/[A-Za-z]:\[^\s\n]+\.zshare|\/[^\s]+\.zshare/);
   if (m) {
     const pack = JSON.parse(readFileSync(m[0], 'utf8'));
     check('① mutate 包里无 result', pack.result === undefined);
