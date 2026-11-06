@@ -883,6 +883,10 @@ async function cmdRunChain(spec: string, rest: string[]): Promise<number> {
 }
 
 async function cmdRun(args: string[]): Promise<number> {
+  // 第一百六十八轮②：--from-share <file.zshare> 重放分享包
+  if (args[0] === '--from-share') {
+    return cmdReplayFromShare(args);
+  }
   // 第九十八轮④：--chain 顺序串跑（前者输出进后者 {prev} 占位符）
   // 形态：zkit run --chain "sysinfo.overview,quick.b64" [--参数 值]
   if (args[0] === '--chain') {
@@ -3071,6 +3075,104 @@ async function cmdBookmark(args: string[]): Promise<number> {
 }
 
 // 第一百六十七轮：zkit why——报错自查（与 Web ERROR_BOOK 同源：classifyError 纯函数）
+// ==================== 第一百六十八轮：share 分享包与重放 ====================
+async function cmdShare(args: string[]): Promise<number> {
+  const { buildSharePack, writeSharePack, shareFingerprint, fingerprintBlocks, SHARE_EXT } = await import('./core/share.ts');
+  const pkg = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(new URL('.', import.meta.url))), 'package.json'), 'utf8'));
+  const target = args.find((a) => !a.startsWith('--'));
+  const jsonOut = args.includes('--json');
+  const showFp = args.includes('--qr');
+  const noteIdx = args.indexOf('--note');
+  const note: string | undefined = noteIdx >= 0 ? args[noteIdx + 1] : undefined;
+  if (!target || target.includes('=')) {
+    process.stderr.write('用法：zkit share <插件.动作> [--params \'{"k":"v"}\'] [--note 备注] [--out 文件] [--qr] [--json]\n');
+    return 2;
+  }
+  const [pluginIdRaw, actIdRaw] = target.split('.');
+  const pluginId = pluginIdRaw ?? ''; const actId = actIdRaw ?? '';
+  const entry = findPlugin(pluginId);
+  const pl = entry?.plugin;
+  if (!pl) { process.stderr.write(`✗ 没有找到插件 ${pluginId}\n`); return 1; }
+  const act = pl.actions.find((a: { id: string }) => a.id === actId);
+  if (!act) { process.stderr.write(`✗ ${pluginId} 没有动作 ${actId}（zkit plugin info ${pluginId} 看看有哪些）\n`); return 1; }
+  // 参数：--params JSON 或交互式收集必填项
+  let params: Record<string, string> = {};
+  const pIdx = args.indexOf('--params');
+  if (pIdx >= 0 && args[pIdx + 1]) {
+    try { params = JSON.parse(args[pIdx + 1] as string); } catch { process.stderr.write('✗ --params 不是合法 JSON\n'); return 2; }
+  }
+  const outIdx = args.indexOf('--out');
+  // 执行拿结果（read 动作直接带结果；mutate/destructive 不带）
+  const argvPairs = ['zkit', 'run', target, ...Object.entries(params).flatMap(([k, v]) => [`--${k}`, String(v)])];
+  let result: unknown;
+  if (act.risk === 'read') {
+    const r = await runAction(pl, act, { caller: 'cli', values: params });
+    result = r.data;
+  }
+  const pack = buildSharePack({ action: target, risk: act.risk, argv: argvPairs, params, result, note, appVersion: pkg.version });
+  const file = writeSharePack(pack, outIdx >= 0 ? args[outIdx + 1] : undefined);
+  const fp = await shareFingerprint(pack);
+  if (jsonOut) { console.log(JSON.stringify({ file, action: target, risk: act.risk, fingerprint: fp })); return 0; }
+  process.stdout.write(`✓ 分享包已生成：${file}\n`);
+  process.stdout.write(`  动作：${target}（${act.risk}）${act.risk !== 'read' ? '——非只读动作不带执行结果，只带重放命令' : ''}\n`);
+  process.stdout.write(`  重放：zkit run --from-share ${file}\n`);
+  if (showFp) {
+    process.stdout.write(`  指纹：${fp}\n${fingerprintBlocks(fp)}\n`);
+    process.stdout.write(`  （两台机器各跑 zkit share 看指纹一致 = 同一份分享包）\n`);
+  }
+  return 0;
+}
+
+async function cmdReplayFromShare(args: string[]): Promise<number> {
+  const idx = args.indexOf('--from-share');
+  const file = args[idx + 1];
+  if (!file) { process.stderr.write('用法：zkit run --from-share <文件.zshare>\n'); return 2; }
+  const share = await import('./core/share.ts');
+  const r = share.readSharePack(file);
+  if (!r.ok) { process.stderr.write(`✗ ${r.error}\n`); return 1; }
+  const policy = share.replayPolicy(r.pack);
+  if (!policy.allowed) { process.stderr.write(`✗ ${policy.reason}\n`); return 1; }
+  // 展示将要执行的内容，然后真跑
+  process.stdout.write(`重放分享包（${r.pack.action}，${r.pack.createdAt.replace('T', ' ').slice(0, 19)} 制作）\n`);
+  process.stdout.write(`  命令：${r.pack.argv.join(' ')}\n`);
+  const [pluginIdRaw, actIdRaw] = r.pack.action.split('.');
+  const pluginId = pluginIdRaw ?? ''; const actId = actIdRaw ?? '';
+  const pl = findPlugin(pluginId)?.plugin;
+  if (!pl) { process.stderr.write(`✗ 插件 ${pluginId} 不在本机——分享包来自别人的机器，先装：zkit plugin install ${pluginId}\n`); return 1; }
+  const act = pl.actions.find((a: { id: string }) => a.id === actId);
+  if (!act) { process.stderr.write(`✗ 本机的 ${pluginId} 没有动作 ${actId}——版本可能不同\n`); return 1; }
+  if (act.risk !== 'read' && !args.includes('--yes')) {
+    process.stderr.write(`! 动作是 ${act.risk}——加 --yes 确认重放\n`);
+    return 2;
+  }
+  const rest2 = ['run', r.pack.action, ...Object.entries(r.pack.params ?? {}).flatMap(([k, v]) => [`--${k}`, String(v)])];
+  process.stdout.write(`  与当时结果对比：${r.pack.result !== undefined ? '分享包里有结果，执行完对比' : '分享包不带结果（非只读）'}\n`);
+  return cmdRun(rest2.slice(1));
+}
+
+async function cmdShareView(args: string[]): Promise<number> {
+  const file = args.find((a) => !a.startsWith('--'));
+  if (!file) { process.stderr.write('用法：zkit share --view <文件.zshare> [--markdown]\n'); return 2; }
+  const share = await import('./core/share.ts');
+  const r = share.readSharePack(file);
+  if (!r.ok) { process.stderr.write(`✗ ${r.error}\n`); return 1; }
+  const fp = await share.shareFingerprint(r.pack);
+  if (args.includes('--markdown')) {
+    const { createRequire } = await import('node:module');
+    const extras = createRequire(import.meta.url)('../web/extras.js') as { toShareMarkdown: (r: unknown, m: unknown, o?: { full?: boolean }) => string };
+    process.stdout.write(extras.toShareMarkdown(r.pack.result, { plugin: r.pack.action.split('.')[0], action: r.pack.action.split('.')[1], at: Date.parse(r.pack.createdAt), ok: true }, { full: false }));
+    return 0;
+  }
+  process.stdout.write(`分享包：${file}\n`);
+  process.stdout.write(`  动作：${r.pack.action}（${r.pack.risk}）\n`);
+  process.stdout.write(`  制作：${r.pack.createdAt.replace('T', ' ').slice(0, 19)} · ${r.pack.env.os} · Node ${r.pack.env.node} · zerokit ${r.pack.env.appVersion}\n`);
+  process.stdout.write(`  命令：${r.pack.argv.join(' ')}\n`);
+  process.stdout.write(`  指纹：${fp}\n`);
+  if (r.pack.note) process.stdout.write(`  备注：${r.pack.note}\n`);
+  process.stdout.write(r.pack.result !== undefined ? `  带执行结果（${Array.isArray(r.pack.result) ? `${r.pack.result.length} 行` : typeof r.pack.result}）——--markdown 看摘要\n` : `  不带结果（非只读动作）\n`);
+  return 0;
+}
+
 async function cmdWhy(args: string[]): Promise<number> {
   const json = args.includes('--json');
   // ⑦ 同源：CLI 直接 import web/extras.js 的 classifyError/ERROR_BOOK_TEXT（无构建步骤，路径 import 可行）
@@ -4902,6 +5004,12 @@ async function main(): Promise<number> {
     case 'env':
       return cmdEnv();
     // 第一百六十七轮：报错自查
+    case 'share':
+      // --view 或首个参数就是 .zshare 文件 → 查看；否则生成
+      if (rest.includes('--view') || (rest[0] !== undefined && rest[0].endsWith('.zshare'))) {
+        return cmdShareView(rest.filter((a) => a !== '--view'));
+      }
+      return cmdShare(rest);
     case 'why':
       return cmdWhy(rest);
     case 'last':
