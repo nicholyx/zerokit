@@ -1,6 +1,6 @@
 // lifecycle166-smoke：第一百六十六轮——插件生命周期闭环
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, chmodSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, chmodSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -65,13 +65,15 @@ run(['plugin', 'bundled']);
 {
   run(['plugin', 'reinstall', 'demosettings']);   // ③ 里可能已 purge 卸载，先保证装着
   const sf = path.join(home, 'settings', 'demosettings.json');
-  run(['config', 'demosettings', 'set', 'api_token', 'xyz']);
-  chmodSync(sf, 0o644);
+  const setR = run(['config', 'demosettings', 'set', 'api_token', 'xyz']);
+  const sfOk = existsSync(sf);
+  check('⑧ 前置：配置文件已生成', sfOk, (setR.stdout + setR.stderr).slice(0, 120));
+  if (sfOk) chmodSync(sf, 0o644);
   const r = run(['doctor']);
-  check('⑧ 644 被点名', (r.stdout + r.stderr).includes('权限 644'));
+  check('⑧ 644 被点名', sfOk && process.platform !== 'win32' ? (r.stdout + r.stderr).includes('权限 644') : true);
   chmodSync(sf, 0o600);
   const r2 = run(['doctor']);
-  check('⑧ 600 不报', !(r2.stdout + r2.stderr).includes('权限 644'));
+  check('⑧ 600 不报', !sfOk || !(r2.stdout + r2.stderr).includes('权限 644'));
 }
 // ⑥ 安装后摘要
 {
