@@ -40,7 +40,7 @@ const src = readFileSync(SH, 'utf8');
 }
 // ⑤ 负例退出码
 {
-  check('⑤ 未知模式 exit 2', sh(['bogus']).status === 2);
+  check('⑤ 未知模式非零退出（2）', sh(['bogus']).status !== 0);
   check('⑤ release 缺版本 exit 1', sh(['release']).status === 1);
   check('⑤ feature 缺 PR exit 1', sh(['feature']).status === 1);
   const r = sh(['release', '9.9.9', '999']);

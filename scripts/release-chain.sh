@@ -106,8 +106,10 @@ PLAN
   exit 0
 fi
 
-# 前置：当前分支应为 release 分支且已提交
-[[ "$(git branch --show-current)" = "$BR" ]] || { echo "FAIL  当前不在 $BR（先完成 release-prep 与空段重建）"; exit 1; }
+# 前置：当前分支应为 release 分支且已提交（放在一切远端操作之前——
+# detached/其它分支上跑 release 模式属于误用，必须在 push 前拦下）
+cur="$(git branch --show-current)"
+[[ "$cur" = "$BR" ]] || { echo "FAIL  当前分支是「${cur:-（detached）}」，不在 $BR（先完成 release-prep 与空段重建）"; exit 1; }
 [[ -z "$(git status --porcelain)" ]] || { echo "FAIL  工作区不干净（先提交）"; exit 1; }
 
 push_retry "$BR" || exit 1
