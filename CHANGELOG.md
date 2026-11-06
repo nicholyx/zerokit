@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+（下一版攒着）
+
+## [1.67.0] - 2026-11-07
+
 ### Added
 
 - OS 级深链 `zerokit://插件.动作?字段=值`：桌面壳注册协议（macOS Info.plist / Windows+Linux 运行时注册），点击唤起壳并直达动作详情页（参数预填、不自动执行）；`zkit deep-link` 链接生成器（目标校验 exit 1、secret 参数明文警告）；Web UI 二维码双形态（网页链接 / zerokit:// 链接）；未知深链目标回列表并提示；`doctor` 报协议注册状态
@@ -93,10 +97,4 @@
 - `plugin lint` 质量分：`--score` 出 A–D 等级与改进建议 top3；`--all` 批量体检全部已装插件（分数升序，先修最上面的）；`--rule L13` 按规则号过滤；`--json` 附 score/grade
 - `plugin doc` 头部带质量徽标（`质量：A（98/100）`），动作超过 6 个时自动生成目录（`--no-toc` 关闭）
 - `plugin new` 模板注释段新增体检指引（lint --score / doc 两条命令）；plugin-spec 新增「常见症状 → 规则号」反查表
-
-## [1.56.0] - 2026-11-06
-
-### Added
-
-- `plugin lint` 新增 L13–L20 八条规则：enum 参数缺 options（error）、chain 步骤 use 语法与被引动作的 output 声明（error）、chain 模板别名引用（error）、python 动作 encoding 提示（info）、timeout 合理区间（warn）、`{setting.x}` 引用未声明设置项（error）、`[[service]]` 缺 port/pidFile 检测手段（warn）、重复 action id（error）——把最近二十轮踩过的清单坑变成安装前的机器检查。
 
