@@ -71,7 +71,7 @@ run(['plugin', 'bundled']);
   if (sfOk) chmodSync(sf, 0o644);
   const r = run(['doctor']);
   check('⑧ 644 被点名', sfOk && process.platform !== 'win32' ? (r.stdout + r.stderr).includes('权限 644') : true);
-  chmodSync(sf, 0o600);
+  if (sfOk) chmodSync(sf, 0o600);
   const r2 = run(['doctor']);
   check('⑧ 600 不报', !sfOk || !(r2.stdout + r2.stderr).includes('权限 644'));
 }
