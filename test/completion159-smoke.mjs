@@ -41,8 +41,10 @@ const bash = (script) => spawnSync('/bin/bash', ['-c', script], { encoding: 'utf
   check('② 安装指引', out.includes('~/.zfunc/_zkit'));
   check('② 动作词表（构建时展开）', out.includes('sysinfo.overview'));
   check('② 无 python3 运行时依赖', !out.includes('python3'));
+  // CI 的 ubuntu runner 不装 zsh：没有 zsh 时跳过语法检查（结构断言仍覆盖）
   const syn = spawnSync('zsh', ['-n'], { input: out, encoding: 'utf8' });
-  check('② zsh -n 语法过', syn.status === 0, syn.stderr.slice(0, 80));
+  const hasZsh = !(syn.error && (syn.error.code === 'ENOENT'));
+  check('② zsh -n 语法过（无 zsh 环境跳过）', !hasZsh || syn.status === 0, String(syn.stderr || '').slice(0, 80));
 }
 // ③ fish 结构
 {
