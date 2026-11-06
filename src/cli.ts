@@ -566,6 +566,26 @@ async function cmdConfig(args: string[]): Promise<number> {
   const viewOf = () => resolveSettings(plugin);
   const listView = () => publicSettings(plugin);
 
+  // 第一百六十七轮③④：config env——生成环境变量引用引导（值仍掩码；bash/fish）
+  if (sub === 'env') {
+    const shell = args.includes('--shell') ? String(args[args.indexOf('--shell') + 1] ?? 'bash') : 'bash';
+    const view = viewOf();
+    const rows = view.states.map((st) => ({ name: st.setting.name, set: st.source !== 'unset', secret: st.setting.secret, description: st.setting.description }));
+    if (rows.length === 0) { process.stdout.write(`插件 ${plugin.id} 没有设置项。\n`); return 0; }
+    if (json) { process.stdout.write(JSON.stringify({ plugin: plugin.id, shell, settings: rows }, null, 2) + '\n'); return 0; }
+    process.stdout.write(`${c.bold(`在脚本里引用 ${plugin.id} 的设置项`)}（值不落终端历史）\n\n`);
+    const key = (n: string) => `ZEROKIT_SETTING_${plugin.id.toUpperCase().replace(/-/g, '_')}_${n.toUpperCase().replace(/-/g, '_')}`;
+    if (shell === 'fish') {
+      for (const r of rows) process.stdout.write(`set -x ${key(r.name)} '<值>'\n`);
+    } else {
+      process.stdout.write(`export ZEROKIT_SETTING_${plugin.id.toUpperCase().replace(/-/g, '_')}__DONE=1  # 前缀示意\n`);
+      for (const r of rows) process.stdout.write(`export ${key(r.name)}='<值>'\n`);
+    }
+    process.stdout.write(`\n${c.dim(`已设置 ${rows.filter((r) => r.set).length}/${rows.length} 项；值用 zkit config ${plugin.id} set <名> --stdin 写入（不落终端历史）。`)}\n`);
+    process.stdout.write(c.dim(`内核会注入这些变量给插件进程——清单里用 \{setting.名\} 占位符引用。\n`));
+    return 0;
+  }
+
   if (sub === 'list' || sub === 'ls') {
     const list = listView();
     if (json) {
@@ -3050,6 +3070,51 @@ async function cmdBookmark(args: string[]): Promise<number> {
   return 1;
 }
 
+// 第一百六十七轮：zkit why——报错自查（与 Web ERROR_BOOK 同源：classifyError 纯函数）
+async function cmdWhy(args: string[]): Promise<number> {
+  const json = args.includes('--json');
+  // ⑦ 同源：CLI 直接 import web/extras.js 的 classifyError/ERROR_BOOK_TEXT（无构建步骤，路径 import 可行）
+  // TS 侧不能直接 import .js（allowJs 关着）——同 src/core/share.ts 的转发模式
+  const { createRequire } = await import('node:module');
+  const req = createRequire(import.meta.url);
+  const extras = req('../web/extras.js') as { classifyError: (t: string) => { kind: string; title: string; steps: string[] } };
+  const argv = args.filter((a) => a !== '--json' && a !== '--last');
+  let text = '';
+  let source = 'arg';
+  if (args.includes('--last')) {
+    // ② 取最近一条失败记录的 error 字段
+    const cliX = await import('./core/cliX.ts');
+    const failed = cliX.readHistory().filter((e) => e.exitCode !== 0);
+    const last = failed[failed.length - 1];
+    if (!last) { process.stdout.write(c.green('最近没有失败记录——没有要解释的报错。\n')); return 0; }
+    text = `exit ${last.exitCode} ${last.argv.join(' ')}`.trim();
+    source = `history#${failed.length}`;
+  } else if (argv.length > 0) {
+    text = argv.join(' ');
+  } else {
+    // ⑤ 无参数：用法+三个真实例子
+    process.stdout.write(`${c.bold('zkit why')}——把报错原文翻译成「发生了什么 + 下一步敲什么」\n\n`);
+    process.stdout.write(`用法：\n  zkit why <报错原文>      例：zkit why "ENOENT: no such file, open 'x.py'"\n  zkit why --last           解释最近一条失败记录\n  zkit why ... --json       机读 {kind,title,steps}\n\n`);
+    process.stdout.write(`真实例子：\n  zkit why "Command failed with exit code 127"\n  zkit why "permission denied: plugins/foo/run.sh"\n  zkit why --last\n`);
+    return 0;
+  }
+  const r = extras.classifyError(text);
+  if (json) {
+    process.stdout.write(JSON.stringify({ kind: r.kind, cause: r.title, next: r.steps, source }) + '\n');
+    return 0;
+  }
+  if (r.kind === 'unknown') {
+    process.stdout.write(c.yellow(`没有认出这类报错——知识库七类都不匹配。\n`));
+    process.stdout.write(c.dim(`最接近的排查方向：zkit doctor 自检 · zkit logs --failed 看失败流水\n`));
+    process.stdout.write(c.dim(`原文：${text.slice(0, 200)}\n`));
+    return 1;
+  }
+  process.stdout.write(`${c.bold(`看起来是：${r.title}`)} ${c.dim(`(${r.kind})`)}\n`);
+  for (const st of r.steps) process.stdout.write(`  → ${st}\n`);
+  process.stdout.write(c.dim(`原文：${text.slice(0, 200)}\n`));
+  return 0;
+}
+
 async function cmdHistory(args: string[]): Promise<number> {
   const cliX = await import('./core/cliX.ts');
   // 第七十一轮④：--failed 只看失败记录，附诊断建议（复用 suggest.ts 的规则表）
@@ -3298,6 +3363,8 @@ async function cmdLogs(args: string[]): Promise<number> {
   // 第一百二十四轮⑧：--slow N 只看耗时超 N 毫秒的执行（慢动作猎枪）
   const slowIdx = args.indexOf('--slow');
   const slowMs = slowIdx >= 0 ? Math.max(0, Number(args[slowIdx + 1]) || 3000) : 0;
+  // 第一百六十七轮⑧：--errors 只看失败记录（decision !== allow 或带 error 字段）
+  const errorsOnly = args.includes('--errors') || args.includes('--failed');
   // 第一百五十轮⑥⑦：logs server——server 请求日志（纯文本行；--tail/--follow 同语义）
   if (args[0] === 'server') {
     const sfile = path.join(LOG_DIR, 'server.log');
@@ -3333,7 +3400,7 @@ async function cmdLogs(args: string[]): Promise<number> {
   const printLine = (line: string) => {
     try {
       const r = JSON.parse(line);
-      const mark = r.decision === 'allow' ? c.green('✓') : c.red('✗');
+      const mark = r.decision === 'allow' && !r.error ? c.green('✓') : c.red('✗');
       process.stdout.write(
         `${mark} ${c.dim(r.ts?.slice(11, 19) ?? '')} ${pad(r.plugin ?? '', 16)} ${pad(r.action ?? '', 16)} `
         + `${c.dim(r.caller ?? '')}${r.slow ? c.yellow(` ${r.ms}ms⏱`) : (r.ms ? c.dim(` ${r.ms}ms`) : '')} ${r.error ? c.red(r.error) : ''}\n`,
@@ -3345,10 +3412,11 @@ async function cmdLogs(args: string[]): Promise<number> {
   };
   const lines = fs.readFileSync(file, 'utf8').trimEnd().split('\n');
   // 过滤在 JSON 层做（printLine 解析同一条记录两遍不值当——这里只判能不能过）
-  const passes = (r: { plugin?: string; ts?: string; ms?: number }) => {
+  const passes = (r: { plugin?: string; ts?: string; ms?: number; decision?: string; error?: string }) => {
     if (plugFilter && r.plugin !== plugFilter) return false;
     if (sinceFloor > -Infinity && Date.parse(r.ts ?? '') < sinceFloor) return false;
     if (slowMs && (r.ms ?? 0) < slowMs) return false;
+    if (errorsOnly && r.decision === 'allow' && !r.error) return false;
     return true;
   };
   const filtered: string[] = [];
@@ -4506,7 +4574,7 @@ const COMMAND_DESC: Record<string, string> = {
   data: '数据目录管理', backup: '备份（含插件清单）', restore: '从备份恢复', ui: '启动器界面',
   bench: '性能测量', health: '一屏健康状态', env: '环境变量一览', path: '数据目录位置',
 };
-const KNOWN_COMMANDS = ['allow', 'bench', 'audit', 'data', 'completion', 'config', 'desktop', 'doctor', 'env', 'welcome', 'gc', 'health', 'history', 'help', 'kill', 'last', 'list', 'logs', 'ls', 'man', 'market', 'mcp', 'path', 'plugin', 'ps', 'timers', 'run', 'runs', 'show', 'stats', 'ui', 'web', 'which'];
+const KNOWN_COMMANDS = ['allow', 'why', 'bench', 'audit', 'data', 'completion', 'config', 'desktop', 'doctor', 'env', 'welcome', 'gc', 'health', 'history', 'help', 'kill', 'last', 'list', 'logs', 'ls', 'man', 'market', 'mcp', 'path', 'plugin', 'ps', 'timers', 'run', 'runs', 'show', 'stats', 'ui', 'web', 'which'];
 
 // 第四十六轮②：man——不引依赖的终端命令参考（stdout 全量文本，man zkit 可外部包一层）
 const MAN_PAGE = `zkit(1) -- zerokit 命令行参考
@@ -4833,6 +4901,9 @@ async function main(): Promise<number> {
       return await cmdWhich(rest);
     case 'env':
       return cmdEnv();
+    // 第一百六十七轮：报错自查
+    case 'why':
+      return cmdWhy(rest);
     case 'last':
       return cmdLast(rest);
     case 'history':
