@@ -1312,7 +1312,7 @@ async function cmdRun(args: string[]): Promise<number> {
       const child = spawn(prog155, argv155, { stdio: ['pipe', 'inherit', 'inherit'] });
       child.stdin?.write(line + '\n');
       child.stdin?.end();
-      const code = await new Promise<number>((r) => child.on('close', (cc) => r(cc ?? 0)));
+      const code = await new Promise<number>((r) => { child.on('error', () => r(-1)); child.on('close', (cc) => r(cc ?? 0)); });
       if (code !== 0) process.stderr.write(c.yellow(`（通知命令退出码 ${code}——告警本身仍以退出码 2 为准）\n`));
     }
     if (notifyFile) {

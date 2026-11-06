@@ -62,7 +62,8 @@ run(['plugin', 'bundled']);
 }
 // ② 通知失败不吞告警
 {
-  const failCmd = isWin ? 'exit /b 3' : 'exit 3';
+  // 不经 shell 的 spawn：exit 是 shell 内建不可用——node -e 真退 3（argv 切分保留引号段）
+  const failCmd = `"${process.execPath}" -e "process.exit(3)"`;
   const r = run(['run', 'quick', 'ts2date', '--ts', '1760000000', '--alert', '星期=五', '--notify', failCmd]);
   check('② 通知失败仍 exit 2', r.status === 2);
   check('② 失败提示可见', (r.stderr || '').includes('通知命令退出码 3'));
