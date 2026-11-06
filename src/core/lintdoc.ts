@@ -240,13 +240,22 @@ export function lintPlugin(p: Plugin): LintFinding[] {
 const RISK_ORDER: readonly LintSeverity[] = ['error', 'warn', 'info'];
 
 /** 从清单生成动作参考文档（Markdown）。插件作者可以直接拿去当 README 的核心段。 */
-export function docPlugin(p: Plugin): string {
+export function docPlugin(p: Plugin, opts?: { toc?: boolean }): string {
   const lines: string[] = [];
   lines.push(`# ${p.name}（${p.id}）`);
+  // 第一百五十三轮⑤：文档头部带质量徽标（作者一眼看到体检结果）
+  const findings = lintPlugin(p);
+  const sc = lintScore(findings);
+  lines.push('', `质量：${sc.grade}（${sc.score}/100${findings.length > 0 ? `，${findings.length} 项待改进——zkit plugin lint ${p.id} 看` : '，零发现'}）`);
   if (p.summary) lines.push('', p.summary);
   if (p.version) lines.push('', `版本：${p.version}`);
   if (p.keywords?.length) lines.push('', `关键词：${p.keywords.join('、')}`);
   lines.push('', '## 动作', '');
+  // 第一百五十三轮④：--toc 动作多时给目录（锚点=动作 id，GitHub 风格 slug）
+  if (opts?.toc !== false && p.actions.length > 6) {
+    const slug = (t: string): string => t.toLowerCase().replace(/[^\w\u4e00-\u9fa5]+/g, '-').replace(/^-+|-+$/g, '');
+    lines.push('目录：' + p.actions.map((a) => `[${a.title ?? a.id}](#${slug(`${a.title ?? a.id}（${p.id}.${a.id}）`)})`).join(' · '), '');
+  }
   for (const a of p.actions) {
     lines.push(`### ${a.title ?? a.id}（\`${p.id}.${a.id}\`）`, '');
     if (a.description) lines.push(a.description, '');
@@ -274,6 +283,27 @@ export function docPlugin(p: Plugin): string {
   }
   lines.push('---', '', '> 本文档由 `zkit plugin doc ' + p.id + '` 从 plugin.toml 生成。');
   return lines.join('\n');
+}
+
+/**
+ * 第一百五十三轮①②：质量分。error 每条 -15、warn -6、info -2，下限 0；
+ * 等级 A(≥90)/B(≥75)/C(≥60)/D；改进建议 topN 按扣分排序（error 优先）。
+ */
+export interface LintScore { score: number; grade: string; bySeverity: Record<string, number>; suggestions: { rule: string; message: string; fixHint?: string; severity: string }[]; }
+
+export function lintScore(findings: LintFinding[], topN = 3): LintScore {
+  const bySeverity: Record<string, number> = { error: 0, warn: 0, info: 0 };
+  for (const f of findings) bySeverity[f.severity] = (bySeverity[f.severity] ?? 0) + 1;
+  const w: Record<string, number> = { error: 15, warn: 6, info: 2 };
+  const raw = findings.reduce((sum, f) => sum + (w[f.severity] ?? 2), 0);
+  const score = Math.max(0, 100 - raw);
+  const grade = score >= 90 ? 'A' : score >= 75 ? 'B' : score >= 60 ? 'C' : 'D';
+  const rank: Record<string, number> = { error: 0, warn: 1, info: 2 };
+  const suggestions = [...findings]
+    .sort((x, y) => (rank[x.severity] ?? 9) - (rank[y.severity] ?? 9))
+    .slice(0, topN)
+    .map((f) => ({ rule: f.rule, message: f.message, fixHint: f.fixHint, severity: f.severity }));
+  return { score, grade, bySeverity, suggestions };
 }
 
 /** doc 的机读版：给启动器/AI 面用的扁平结构。 */

@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-11-06（第一百五十二轮，v1.56.0）
+> 最后更新：2026-11-06（第一百五十三轮，v1.57.0）
 
 ## 性能基线（第五十八轮建立，2026-10-28，Apple M4 / Node 22）
 
@@ -103,6 +103,7 @@ uTools 开始收费了。想找一个替代品，找了一圈发现真正的问�
 - [x] 第一百四十八轮（v1.52.0）：CLI 输出管道——`--where 列>值` 过滤、`--calc 新列=表达式`（四则+括号+列名）、`--rename 旧=新`、`--pipe 命令`（表格文本喂 shell 管道）；与 pick/sort/uniq/head/sum 固定序组合，错误都带「怎么改」提示（issue #502）
 - [x] 第一百五十一轮（v1.55.0）：首次运行引导——空目录三步引导页（完成步打勾折叠）、`zkit hello` 进度、`--skip-onboarding`、`doctor --first-run` 轻量体检；非 TTY 降级脚本清单。
 - [x] 第一百五十二轮（v1.56.0）：plugin lint 第二波——L13–L20 八条规则（enum options/chain use 语法与 output 声明/模板别名/encoding 提示/timeout 区间/setting 引用/service 检测手段/重复 id），二十轮踩过的清单坑变成安装前机器检查。
+- [x] 第一百五十三轮（v1.57.0）：插件作者体验——lint 质量分（A–D + 改进建议 top3）、--all 批量体检（分数升序）、--rule 按规则号过滤、plugin doc 质量徽标与目录（>6 动作）、脚手架体检指引注释、症状→规则号反查表。
 - [x] 第一百五十轮（v1.54.0）：哨兵与可观测——`run --diff` 结果对比（基线指纹）、`--alert` 断言哨兵（exit 0/2 给脚本当条件）、`--watch --diff` 静默无变化轮次、`ui --log` server 请求日志（脱敏 query）、`logs server --tail/--follow`。
 - [x] 第一百四十九轮（v1.53.0）：history 与重跑体验——`--grep 子串`/`--since Nd/Nh/today` 过滤、`zkit bookmark`（add/list/rm/run，0600 原子写）、`--rerun-last` 一键重跑、默认视图含 ✓/✗ 失败标记、非交互终端重跑提示（issue #505）
 - [x] 第一百四十六轮（v1.50.0）：质量护栏——CHANGELOG 格式/文档数字同步/绝对路径/版本行四断言进 lint.sh、verify-remote.sh push/tag 复核、FFFD 进 lint、提交信息空行分隔（issue #495）
@@ -250,7 +251,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 
 ### 质量
 
-- 103 个文件、**2500 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
+- 104 个文件、**2518 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
 - `tsc --noEmit` 干净——**而且 CI 真的在跑它**（`typecheck` job）。
   曾经这里写着"干净"但没有任何地方执行这条命令，于是两个只有类型检查才看得见的
   错误在核心里躺了很久（`proxy.ts` 的 Buffer 泛型不兼容、`scaffold.ts` 的类型混用）。
