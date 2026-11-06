@@ -10,6 +10,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSy
 import { dirname } from 'node:path';
 import { HOME, PLUGINS_DIR } from './paths.ts';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { fetchLatestRelease, readCurrentVersion } from './appupdate.ts';
 import { checkRequires, resolveTool } from './resolve.ts';
 import { findPlugin, listPlugins } from './registry.ts';
@@ -188,7 +189,7 @@ export function doctorSummaryLine(report: DoctorReport, passed: number): string 
 /** 第三十二轮⑩：找桌面壳可执行文件（仓库本地构建 / ~/.zerokit/bin）。 */
 function findDesktopShell(): { installed: boolean; path?: string } {
   const exeName = process.platform === 'win32' ? 'zerokit-desktop.exe' : 'zerokit-desktop';
-  const repoTarget = new URL('../..', import.meta.url).pathname
+  const repoTarget = fileURLToPath(new URL('../..', import.meta.url))
     + `apps/desktop/src-tauri/target/release/${exeName}`;
   const candidates = [
     repoTarget,
