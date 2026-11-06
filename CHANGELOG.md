@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `plugin lint` 新增 L13–L20 八条规则：enum 参数缺 options（error）、chain 步骤 use 语法与被引动作的 output 声明（error）、chain 模板别名引用（error）、python 动作 encoding 提示（info）、timeout 合理区间（warn）、`{setting.x}` 引用未声明设置项（error）、`[[service]]` 缺 port/pidFile 检测手段（warn）、重复 action id（error）——把最近二十轮踩过的清单坑变成安装前的机器检查。
+
 ## [1.55.0] - 2026-11-06
 
 ### Added
@@ -93,6 +99,9 @@
 ## [1.45.0] - 2026-11-05
 
 ### Added
+
+- `plugin lint` 新增 L13–L20 八条规则：enum 参数缺 options（error）、chain 步骤 use 语法与被引动作的 output 声明（error）、chain 模板别名引用（error）、python 动作 encoding 提示（info）、timeout 合理区间（warn）、`{setting.x}` 引用未声明设置项（error）、`[[service]]` 缺 port/pidFile 检测手段（warn）、重复 action id（error）——把最近二十轮踩过的清单坑变成安装前的机器检查。
+
 
 - 新增「最近活动」面板（#/activity）：审计数据驱动的执行健康时间线——成功率/平均耗时/最慢动作统计卡、逐条执行行（失败可展开错误摘要）、按插件过滤、慢执行（>1s/>3s）分档着色；命令面板与设置抽屉双入口
 

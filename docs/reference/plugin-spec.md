@@ -838,6 +838,16 @@ zkit plugin lint <id> --json  # 机读（errorCount > 0 时退出码非零，可
 | L08 | info | secret 参数无默认值且必填（装机时用户得现场提供，确认是故意的） |
 | L09 | info | 设置项 description 太短（它就是配置界面的说明文字） |
 | L10 | error | 插件没有任何动作 |
+| L11 | warn / info | 声明 ui 却无 web 动作；或 web 动作未显式声明 ui（info） |
+| L12 | warn | sandbox 动作的 env 里出现疑似敏感键（口令应走 `[[setting]]`） |
+| L13 | error / warn | enum 参数没给 options（error）；参数 description 太薄（warn） |
+| L14 | error | chain 步骤 use 语法不对；或被引用动作不存在 / 未声明 `output = "json"` |
+| L15 | error | 模板占位符 `{别名.data.字段}` 的别名不在 steps 里 |
+| L16 | info | python 动作未显式声明 encoding（GBK 输出会乱码） |
+| L17 | warn | timeout 超出 1–600 秒合理区间 |
+| L18 | error | `{setting.x}` 引用了未声明的设置项 |
+| L19 | warn | `[[service]]` 既无 port 也无 pidFile（内核无法检测运行状态） |
+| L20 | error | 同插件内 action id 重复（加载时静默覆盖） |
 
 配套：`zkit plugin doc <id|目录>` 从清单生成 Markdown 动作参考（可直接当 README 核心段），`--json` 出机读版。
 
