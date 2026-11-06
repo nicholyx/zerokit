@@ -12,6 +12,7 @@ let pass = 0, fail = 0;
 const check = (name, cond, extra = '') => { if (cond) { pass++; console.log(`  ✓ ${name}`); } else { fail++; console.error(`FAIL  ${name}  <- round155 ${extra}`); } };
 console.log('round155-smoke');
 
+const isWin = process.platform === 'win32';
 const E = await import('../src/core/cliX.ts');
 
 // ⑦ alertLine / parseAlertLine 稳定格式
@@ -49,13 +50,18 @@ run(['plugin', 'bundled']);
 // ① --notify 收到告警行
 {
   const nf = path.join(home, 'notify.txt');
-  const r = run(['run', 'quick', 'ts2date', '--ts', '1760000000', '--alert', '星期=五', '--notify', `cat > ${JSON.stringify(nf)}`]);
+  // Windows 用 node 把 stdin 落盘（cat 不存在；cmd 重定向在 spawn 数组参数下不可靠）
+  const notifyCmd = isWin
+    ? `"${process.execPath}" -e "const fs=require('fs');fs.writeFileSync(${JSON.stringify(JSON.stringify(nf))},fs.readFileSync(0,'utf8'))"`
+    : `cat > ${JSON.stringify(nf)}`;
+  const r = run(['run', 'quick', 'ts2date', '--ts', '1760000000', '--alert', '星期=五', '--notify', notifyCmd]);
   check('① exit 2', r.status === 2);
   check('① 告警行经 stdin 到命令', existsSync(nf) && readFileSync(nf, 'utf8').startsWith('[ALERT] '), r.stdout.slice(-200));
 }
 // ② 通知失败不吞告警
 {
-  const r = run(['run', 'quick', 'ts2date', '--ts', '1760000000', '--alert', '星期=五', '--notify', 'exit 3']);
+  const failCmd = isWin ? 'exit /b 3' : 'exit 3';
+  const r = run(['run', 'quick', 'ts2date', '--ts', '1760000000', '--alert', '星期=五', '--notify', failCmd]);
   check('② 通知失败仍 exit 2', r.status === 2);
   check('② 失败提示可见', (r.stderr || '').includes('通知命令退出码 3'));
 }

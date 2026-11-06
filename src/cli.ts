@@ -1302,7 +1302,9 @@ async function cmdRun(args: string[]): Promise<number> {
   const dispatchAlert = async (line: string): Promise<void> => {
     if (notifyCmd && notifyCmd !== '--notify-file') {
       const { spawn } = await import('node:child_process');
-      const child = spawn('/bin/sh', ['-c', notifyCmd], { stdio: ['pipe', 'inherit', 'inherit'] });
+      // Windows 无 /bin/sh——按平台分流（cmd /c 走 cmd 语法，重定向等直接可用）
+      const isWin = process.platform === 'win32';
+      const child = spawn(isWin ? 'cmd' : '/bin/sh', isWin ? ['/c', notifyCmd] : ['-c', notifyCmd], { stdio: ['pipe', 'inherit', 'inherit'] });
       child.stdin?.write(line + '\n');
       child.stdin?.end();
       const code = await new Promise<number>((r) => child.on('close', (cc) => r(cc ?? 0)));
