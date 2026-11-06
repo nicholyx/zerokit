@@ -24,6 +24,9 @@ node src/cli.ts plugin bundled
 
 **验证点**：输出列出 clipboard / convert / quick / sysinfo 等插件，无报错。
 
+> 点分简写：`run` 支持把「插件 动作」写成一段——`zkit run sysinfo.overview`
+> 等价于 `zkit run sysinfo overview`（下文两种写法混用）。
+
 ## 3. 环境自检（1 分钟）
 
 ```bash

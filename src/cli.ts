@@ -871,9 +871,21 @@ async function cmdRun(args: string[]): Promise<number> {
   if (args[0] === '--batch') {
     return cmdRunBatch(args[1] ?? '', args.slice(2));
   }
-  const [pluginId, actionId, ...rest] = args;
+  let [pluginId, actionId, ...rest] = args;
+  // 第一百五十六轮①：点分形式 zkit run 插件.动作 兼容（文档大量用 sysinfo.overview 写法；
+  // 只在两段恰好拼成已装插件.动作时展开——含 -- 的参数段不参与，避免吞旗标）
+  if (pluginId && pluginId.includes('.') && !pluginId.startsWith('-')
+      && (actionId === undefined || actionId.startsWith('--'))) {
+    const [pg, ac, ...extra] = pluginId.split('.');
+    // 只有「恰好一段点」的形态才当插件.动作（a.b.c 不猜）
+    if (pg && ac && extra.length === 0) {
+      // 展开后原 actionId（若是旗标）回到 rest 头部
+      if (actionId !== undefined) rest = [actionId, ...rest];
+      pluginId = pg; actionId = ac;
+    }
+  }
   if (!pluginId || !actionId) {
-    process.stderr.write('用法：zkit run <插件> <动作> [--参数 值]\n        zkit run --chain "插件.动作,插件.动作" [--参数 值]\n');
+    process.stderr.write('用法：zkit run <插件> <动作> [--参数 值]\n        zkit run 插件.动作 [--参数 值]（点分简写）\n        zkit run --chain "插件.动作,插件.动作" [--参数 值]\n');
     return 2;
   }
   let plugin: Plugin;

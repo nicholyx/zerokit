@@ -36,7 +36,7 @@ npm install
 
 node src/cli.ts market add .           # 把本仓库当集市加进去（仓库自带 market.json）
 node src/cli.ts market search          # 看看有什么
-node src/cli.ts plugin install sysinfo # 安装（会先把它的全部能力摊开给你看）
+node src/cli.ts plugin install sysinfo # 安装（先把全部能力摊开给你看，确认后才装；脚本里加 --yes 跳过确认）
 node src/cli.ts doctor                 # 环境自检（依赖、插件清单）
 node src/cli.ts run sysinfo overview   # 跑一个动作
 node src/cli.ts ui --open              # 打开启动器：顶部「集市」标签可直接浏览、预览、安装
