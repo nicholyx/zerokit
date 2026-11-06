@@ -137,3 +137,131 @@ export function dataStats(): {
     oldestRunTs,
   };
 }
+
+// ---- 第一百六十轮：数据健康与存储体检 ----
+
+export interface DirUsage {
+  /** 相对 HOME 的名字：plugins / logs / settings / data / snapshots / 其它 */
+  name: string;
+  bytes: number;
+  files: number;
+}
+
+function dirUsage(p: string): { bytes: number; files: number } {
+  let bytes = 0, files = 0;
+  let stack: string[] = [];
+  try { stack = fs.readdirSync(p).map((f) => path.join(p, f)); } catch { return { bytes: 0, files: 0 }; }
+  while (stack.length) {
+    const cur = stack.pop() as string;
+    let st: fs.Stats;
+    try { st = fs.lstatSync(cur); } catch { continue; }
+    if (st.isDirectory()) { try { stack.push(...fs.readdirSync(cur).map((f) => path.join(cur, f))); } catch { /* 权限 */ } }
+    else { bytes += st.size; files++; }
+  }
+  return { bytes, files };
+}
+
+/** 数据目录分项容量：plugins/logs/settings/data/snapshots 与顶层散文件（config.json 等） */
+export function usageByArea(): { areas: DirUsage[]; looseBytes: number; totalBytes: number } {
+  const h = HOME;
+  const known = ['plugins', 'logs', 'settings', 'data', 'snapshots'];
+  const areas: DirUsage[] = [];
+  let looseBytes = 0;
+  let seenDirs = new Set<string>();
+  try {
+    for (const name of fs.readdirSync(h)) {
+      const p = path.join(h, name);
+      let st: fs.Stats;
+      try { st = fs.lstatSync(p); } catch { continue; }
+      if (st.isDirectory()) {
+        if (!known.includes(name)) continue; // 非已知目录归「其它」不列（避免噪音）
+        seenDirs.add(name);
+        const u = dirUsage(p);
+        areas.push({ name, bytes: u.bytes, files: u.files });
+      } else {
+        looseBytes += st.size;
+      }
+    }
+  } catch { /* HOME 不存在 */ }
+  areas.sort((a, b) => b.bytes - a.bytes);
+  const totalBytes = areas.reduce((s, a) => s + a.bytes, 0) + looseBytes;
+  return { areas, looseBytes, totalBytes };
+}
+
+export interface JunkItem {
+  kind: 'tmp-dir' | 'bak-file' | 'orphan-plugin' | 'old-snapshot';
+  path: string;
+  /** 人话说明 */
+  what: string;
+  bytes: number;
+}
+
+/** 垃圾识别：.tmp-* 残留目录、.bak 备份文件、孤儿插件目录（无清单且非 _vendor）、超保留数快照 */
+export function findJunk(keepSnapshots = 10): JunkItem[] {
+  const h = HOME;
+  const out: JunkItem[] = [];
+  // 插件目录里的垃圾
+  const pluginsDir = path.join(h, 'plugins');
+  try {
+    for (const name of fs.readdirSync(pluginsDir)) {
+      const p = path.join(pluginsDir, name);
+      let st: fs.Stats;
+      try { st = fs.lstatSync(p); } catch { continue; }
+      if (name.startsWith('.tmp-') && st.isDirectory()) {
+        const u = dirUsage(p);
+        out.push({ kind: 'tmp-dir', path: p, what: '安装中断的临时目录', bytes: u.bytes });
+        continue;
+      }
+      if (name.startsWith('_')) continue; // 共享代码层
+      if (st.isDirectory()) {
+        const hasManifest = fs.existsSync(path.join(p, 'plugin.toml')) || fs.existsSync(path.join(p, 'plugin.json'));
+        // 失联目录（有来源记录无清单）不算孤儿垃圾——有自己的面（doctor-lost）
+        const hasSource = fs.existsSync(path.join(p, '.zerokit-source.json'));
+        if (!hasManifest && !hasSource) {
+          const u = dirUsage(p);
+          out.push({ kind: 'orphan-plugin', path: p, what: '无清单也无来源记录的孤儿目录', bytes: u.bytes });
+        }
+      }
+    }
+  } catch { /* 无 plugins 目录 */ }
+  // logs 下的 .bak（audit-<日期>.bak 是 --keep 的刻意备份——只在数量多时提示，不算自动删项）
+  const bakFiles: JunkItem[] = [];
+  const logDir = path.join(h, 'logs');
+  try {
+    for (const f of fs.readdirSync(logDir)) {
+      if (f.endsWith('.bak')) {
+        const p = path.join(logDir, f);
+        bakFiles.push({ kind: 'bak-file', path: p, what: '审计保留备份（logs --keep 产生）', bytes: fileBytes(p) });
+      }
+    } bakFiles.sort((a, b) => a.bytes - b.bytes);
+    out.push(...bakFiles);
+  } catch { /* 无 logs */ }
+  // 快照超保留数：最旧的算垃圾
+  const snapDir = path.join(h, 'snapshots');
+  try {
+    const snaps = fs.readdirSync(snapDir)
+      .map((f) => ({ f, p: path.join(snapDir, f as string), mtime: fs.statSync(path.join(snapDir, f as string)).mtimeMs }))
+      .sort((a, b) => a.mtime - b.mtime);
+    for (let i = 0; i < Math.max(0, snaps.length - keepSnapshots); i++) {
+      const sn = snaps[i];
+      if (!sn) continue;
+      out.push({ kind: 'old-snapshot', path: sn.p, what: `快照（保留最近 ${keepSnapshots} 份，这份最旧）`, bytes: fileBytes(sn.p) });
+    }
+  } catch { /* 无 snapshots */ }
+  return out;
+}
+
+/** 真删垃圾项；返回删掉的路径与释放字节数。bak-file 不自动删（用户刻意留的备份）——只列。 */
+export function cleanJunk(items: JunkItem[]): { removed: string[]; freedBytes: number } {
+  const removed: string[] = [];
+  let freedBytes = 0;
+  for (const it of items) {
+    if (it.kind === 'bak-file') continue; // 刻意保留的备份不自动删
+    try {
+      fs.rmSync(it.path, { recursive: true, force: true });
+      removed.push(it.path);
+      freedBytes += it.bytes;
+    } catch { /* 删不掉的跳过（占用中？），幂等 */ }
+  }
+  return { removed, freedBytes };
+}

@@ -2,7 +2,12 @@
 
 ## [Unreleased]
 
-（下一版攒着）
+### Added
+
+- CLI：`zkit data usage`（数据目录分项容量表，`--json` 机读）与审计规模/最老记录年龄一行
+- CLI：`zkit data junk`（垃圾识别：.tmp-* 安装残留、无清单孤儿目录、超保留数快照、.bak 审计备份只列不删）与 `zkit data clean`（默认干跑，`--yes` 真删，审计/历史/设置/.bak 不碰）
+- CLI：`zkit data snapshots`（快照清点+大小，超 10 份提示清理）
+- doctor：数据目录超 100 MB 时警告并指向 `zkit data usage / junk`
 
 ## [1.61.0] - 2026-11-06
 
