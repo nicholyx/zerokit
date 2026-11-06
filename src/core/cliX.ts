@@ -460,3 +460,45 @@ export function alertEval(expr: string, data: unknown, ms?: number): { ok: boole
   const ok = op === '>' ? a > b : op === '<' ? a < b : op === '>=' ? a >= b : a <= b;
   return { ok, actual: String(cell) };
 }
+
+// ===================== 第一百五十五轮：哨兵通知与审计保留 =====================
+
+/**
+ * ①⑦ 告警行（稳定格式，通知侧可解析）：
+ * `[ALERT] ISO时间 | 命令 | 规则 | 实际值`——竖线分隔四段，字段内不含竖线（命令与规则来自用户输入，
+ * 转义不诚实：宁可约定「含 | 的输入不保证解析」也不做双重转义）。
+ */
+export function alertLine(cmd: string, rule: string, actual: string | undefined, at: Date = new Date()): string {
+  return `[ALERT] ${at.toISOString()} | ${cmd} | ${rule} | ${actual ?? ''}`;
+}
+
+/** ⑦ 告警行解析（写回测试与通知侧对照用；认不出返回 null）。 */
+export function parseAlertLine(line: string): { at: string; cmd: string; rule: string; actual: string } | null {
+  const m = /^\[ALERT\] ([^|]+?) \| ([^|]+?) \| ([^|]+?) \| (.*)$/.exec(line.trim());
+  if (!m) return null;
+  return { at: m[1] ?? '', cmd: m[2] ?? '', rule: m[3] ?? '', actual: m[4] ?? '' };
+}
+
+/** ③④ 审计保留策略：按 ts 过滤行——keep 之前的行删除前先整体备份（备份由调用方落盘）。 */
+export function auditKeepSplit(lines: string[], keepMs: number, now: number = Date.now()): { keep: string[]; expire: string[] } {
+  const keep: string[] = [];
+  const expire: string[] = [];
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    let ts = 0;
+    try { ts = Date.parse((JSON.parse(line) as { ts?: string }).ts ?? ''); } catch { ts = NaN; }
+    // 坏行/无 ts 行保守保留（删了就找不回，且不是明确过期）
+    if (Number.isNaN(ts) || now - ts < keepMs) keep.push(line);
+    else expire.push(line);
+  }
+  return { keep, expire };
+}
+
+/** ③ --keep 参数解析（30d/12h/permanent；不认识返回 null=不动）。 */
+export function parseKeepArg(arg: string): number | null {
+  if (arg === 'permanent') return Infinity;
+  const m = /^(\d+)([dh])$/.exec(arg);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return n * (m[2] === 'd' ? 86400e3 : 3600e3);
+}

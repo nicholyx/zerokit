@@ -948,12 +948,12 @@ async function cmdRun(args: string[]): Promise<number> {
   const argv: string[] = [];
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i]!;
-    if (a === '--out' || a === '--watch' || a === '--share' || a === '--jq' || a === '--path' || a === '--env' || a === '--format' || a === '--retry' || a === '--avg' || a === '--alert'
+    if (a === '--out' || a === '--watch' || a === '--share' || a === '--jq' || a === '--path' || a === '--env' || a === '--format' || a === '--retry' || a === '--avg' || a === '--alert' || a === '--notify' || a === '--notify-file'
         || a === '--sort' || a === '--pick' || a === '--uniq' || a === '--sum' || a === '--head' || a === '--measure'
         || a === '--where' || a === '--calc' || a === '--rename' || a === '--pipe') { i++; continue; }
     if (a.startsWith('--out=') || a.startsWith('--watch=') || a.startsWith('--share=') || a.startsWith('--jq=') || a.startsWith('--env=') || a.startsWith('--format=') || a.startsWith('--retry=') || a.startsWith('--avg=')
         || a.startsWith('--sort=') || a.startsWith('--pick=') || a.startsWith('--uniq=') || a.startsWith('--sum=') || a.startsWith('--head=') || a.startsWith('--measure=')
-        || a.startsWith('--where=') || a.startsWith('--calc=') || a.startsWith('--rename=') || a.startsWith('--pipe=') || a.startsWith('--alert=')) continue;
+        || a.startsWith('--where=') || a.startsWith('--calc=') || a.startsWith('--rename=') || a.startsWith('--pipe=') || a.startsWith('--alert=') || a.startsWith('--notify=') || a.startsWith('--notify-file=')) continue;
     if (a === '--diff') continue; // 150①：与上次同命令对比（无值旗标）
     if (['--yes', '-y', '--json', '--copy', '--quiet', '--full', '--stdin-json', '--profile'].includes(a)) continue;
     // 第七十五轮：--sort -列 的降序值（-内存 不是短旗标，前一个是 --sort 就吞掉）
@@ -1293,13 +1293,45 @@ async function cmdRun(args: string[]): Promise<number> {
   }
   // 第一百五十轮②：--alert '表达式' 哨兵断言（满足 exit 0，不满足 exit 2）
   const alertIdx150 = rest.indexOf('--alert');
+  // 第一百五十五轮①⑥⑧：--notify <cmd>（告警行经 stdin 交给外部命令）与 --notify-file <path>（追加写）
+  const notifyIdx = rest.indexOf('--notify');
+  const notifyCmd = notifyIdx >= 0 ? String(rest[notifyIdx + 1] ?? '') : '';
+  const notifyFileIdx = rest.indexOf('--notify-file');
+  const notifyFile = notifyFileIdx >= 0 ? String(rest[notifyFileIdx + 1] ?? '') : '';
+  const hasNotify = ((notifyCmd && notifyCmd !== '--notify-file') || notifyFile) && alertIdx150 >= 0;
+  const dispatchAlert = async (line: string): Promise<void> => {
+    if (notifyCmd && notifyCmd !== '--notify-file') {
+      const { spawn } = await import('node:child_process');
+      // Windows 无 /bin/sh，cmd /c 又会撕裂引号——不用 shell：按空白切参数直接 spawn。
+      // 通知命令是「程序 + 参数」形态（如 `node sink.cjs out.txt`），重定向/管道
+      // 这类 shell 语法本来就不该出现在通知命令里（落盘变体请用 --notify-file）。
+      const isWin = process.platform === 'win32';
+      // Windows：cmd /s /c "整串" + windowsVerbatimArguments 保持原引号不撕裂
+      const child = isWin
+        ? spawn('cmd', ['/s', '/c', `"${notifyCmd}"`], { stdio: ['pipe', 'inherit', 'inherit'], windowsVerbatimArguments: true } as never)
+        : spawn('/bin/sh', ['-c', notifyCmd], { stdio: ['pipe', 'inherit', 'inherit'] });
+      child.stdin?.write(line + '\n');
+      child.stdin?.end();
+      const code = await new Promise<number>((r) => { child.on('error', (e) => { process.stderr.write(c.yellow(`（通知命令启动失败：${String(e instanceof Error ? e.message : e)}——告警本身仍以退出码 2 为准）\n`)); r(-1); }); child.on('close', (cc) => r(cc ?? 0)); });
+      if (code > 0) process.stderr.write(c.yellow(`（通知命令退出码 ${code}——告警本身仍以退出码 2 为准）\n`));
+    }
+    if (notifyFile) {
+      try { (await import('node:fs')).appendFileSync(notifyFile, line + '\n'); } catch (e) { process.stderr.write(c.yellow(`（通知文件写失败：${String(e)}）\n`)); }
+    }
+  };
   if (alertIdx150 >= 0 && rest[alertIdx150 + 1]) {
     if (!result.ok) { process.stderr.write(c.red('✗ 执行失败，--alert 无法评估\n')); return 1; }
-    const { alertEval } = cliX;
+    const { alertEval, alertLine } = cliX;
     const v = alertEval(rest[alertIdx150 + 1]!, result.data, result.ms);
     if (v.error) { process.stderr.write(c.red(`✗ ${v.error}\n`)); return 1; }
+    const cmdDesc = `zkit run ${typeof plugin === 'string' ? plugin : plugin.id} ${typeof action === 'string' ? action : action.id}`;
     if (v.ok) process.stdout.write(c.green(`✓ 哨兵通过：${rest[alertIdx150 + 1]}（实际 ${v.actual}）\n`));
-    else { process.stdout.write(c.red(`✗ 哨兵不满足：${rest[alertIdx150 + 1]}（实际 ${v.actual}）\n`)); return 2; }
+    else {
+      const line = alertLine(cmdDesc, rest[alertIdx150 + 1]!, v.actual);
+      process.stdout.write(c.red(`✗ 哨兵不满足：${rest[alertIdx150 + 1]}（实际 ${v.actual}）\n`));
+      if (hasNotify) { process.stdout.write(c.dim(`已外发：${line}\n`)); await dispatchAlert(line); }
+      return 2;
+    }
   }
   // 第四十五轮⑧：--watch N 进入轮询，只打印 diff，Ctrl-C 退出
   if (watchSec && result.ok) {
@@ -2416,6 +2448,17 @@ async function cmdDoctor(): Promise<number> {
     }, null, 2) + '\n');
     return report.summary.errors === 0 ? 0 : 1;
   }
+  // 第一百五十五轮⑤：审计规模与最老记录年龄（保留策略的决策依据）
+  {
+    const recs = auditView.records;
+    if (recs.length > 0) {
+      const oldest = recs.reduce((a, r) => Math.min(a, Date.parse(r.ts ?? '') || Infinity), Infinity);
+      const ageDays = Number.isFinite(oldest) ? Math.floor((Date.now() - oldest) / 86400e3) : null;
+      process.stdout.write(c.dim(`审计：${recs.length} 条记录` + (ageDays !== null ? `，最老 ${ageDays} 天前` : '') + c.dim('（zkit logs --keep 30d 可收口）') + '\n'));
+    } else {
+      process.stdout.write(c.dim('审计：暂无记录\n'));
+    }
+  }
   // 第三十五轮⑦⑧：--fix 自动修可修项 + 半安装插件检测
   const fix = process.argv.includes('--fix');
   const orphans = findOrphanPlugins(report.dirs.plugins);
@@ -2905,7 +2948,7 @@ function cmdPath(): number {
   return 0;
 }
 
-function cmdLogs(args: string[]): number {
+async function cmdLogs(args: string[]): Promise<number> {
   const tailIdx = args.indexOf('--tail');
   const tail = tailIdx >= 0 ? Number(args[tailIdx + 1] ?? 30) : 30;
   const follow = args.includes('--follow') || args.includes('-f');
@@ -2978,6 +3021,23 @@ function cmdLogs(args: string[]): number {
   const filtered: string[] = [];
   for (const line of lines) {
     try { if (passes(JSON.parse(line))) filtered.push(line); } catch { filtered.push(line); }
+  }
+  // 第一百五十五轮③④：--keep 30d/12h/permanent 保留策略——过期行删除前备份到 logs/audit-<date>.bak
+  const keepIdx155 = args.indexOf('--keep');
+  if (keepIdx155 >= 0) {
+    const keepArg = String(args[keepIdx155 + 1] ?? '');
+    const keepMs = (await import('./core/cliX.ts')).parseKeepArg(keepArg);
+    if (keepMs === null) { process.stderr.write(c.red(`✗ --keep 不认识 "${keepArg}"（写法：30d / 12h / permanent）\n`)); return 1; }
+    if (keepMs === Infinity) { process.stdout.write(c.dim('--keep permanent：全部保留，不删\n')); return 0; }
+    const { keep, expire } = (await import('./core/cliX.ts')).auditKeepSplit(lines, keepMs);
+    if (expire.length === 0) { process.stdout.write(c.dim(`审计保留检查：${lines.length} 条全部在保留期内，无需清理\n`)); return 0; }
+    const bak = path.join(LOG_DIR, `audit-${new Date().toISOString().slice(0, 10)}.bak`);
+    try {
+      fs.appendFileSync(bak, expire.join('\n') + '\n');
+      fs.writeFileSync(file, keep.join('\n') + (keep.length ? '\n' : ''));
+      process.stdout.write(c.green(`✓ 审计保留：删除 ${expire.length} 条过期记录（已备份 ${bak}），保留 ${keep.length} 条\n`));
+    } catch (e) { process.stderr.write(c.red(`✗ 保留策略执行失败：${String(e)}（原文件未动）\n`)); return 1; }
+    return 0;
   }
   if (plugFilter || sinceArg || slowMs) process.stdout.write(c.dim(`过滤：${plugFilter ? `插件=${plugFilter} ` : ''}${sinceArg ? `时间=${sinceArg} ` : ''}${slowMs ? `慢于=${slowMs}ms` : ''}，命中 ${filtered.length} / ${lines.length} 条\n`));
   for (const line of filtered.slice(-tail)) printLine(line);
