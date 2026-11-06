@@ -80,7 +80,8 @@ secret = true
 {
   const r = run(['doctor']);
   const all = r.stdout + r.stderr;
-  check('⑤ doctor 报深链状态', all.includes('zerokit://') && (all.includes('深链已注册') || all.includes('深链未注册')));
+  // CI 上没装壳：desktop 段是「未安装」，深链行不打印——两种形态都对，关键是装了壳才探测
+  check('⑤ doctor 报深链状态', !all.includes('桌面壳已安装') || (all.includes('深链已注册') || all.includes('深链未注册')));
   const j = run(['doctor', '--json']);
   const rep = JSON.parse(j.stdout);
   check('⑤ doctor --json deepLinkRegistered 字段', typeof rep.desktop?.deepLinkRegistered === 'boolean' || rep.desktop?.deepLinkRegistered === undefined);
