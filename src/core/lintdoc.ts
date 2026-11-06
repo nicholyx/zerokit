@@ -52,6 +52,14 @@ export const FIX_HINTS: Record<string, string> = {
   L10: '[plugin] 段写 license = "MIT" 等标识，集市与打包都认它',
   L11: '声明了 ui 就要至少有一个 render = "web" 的动作',
   L12: '涉密参数改走 [[setting]]（secret = true），不要明文进命令行',
+  L13: 'enum 参数补 options 数组；参数 description 写到 4 字以上',
+  L14: '组合步骤 use 写 self.<动作id>，被引用动作声明 output = "json"',
+  L15: '模板 {别名.data.字段} 的别名要与 steps 里的 as（或动作 id 推导名）一致',
+  L16: '脚本输出非 UTF-8（如 GBK）时在动作里声明 encoding = "gbk"',
+  L17: 'timeout 控制在 1–600 秒；长期进程用 background = true',
+  L18: '补 [[setting]] 声明，或修正 {setting.x} 的引用名',
+  L19: '[[service]] 声明 port 或 pidFile 至少一项，内核才能检测运行状态',
+  L20: '每个动作 id 唯一——重复 id 后面的会覆盖前面的',
 };
 
 export function lintPlugin(p: Plugin): LintFinding[] {
@@ -140,6 +148,92 @@ export function lintPlugin(p: Plugin): LintFinding[] {
       out.push({ rule: 'L12', severity: 'warn', target: `${p.id}.${a.id}`, message: `动作声明了 sandbox，但 env 里出现疑似敏感键 ${suspicious.join('、')}——口令应走 [[setting]] 声明（掩码存储），不该在清单里写明文` });
     }
   }
+
+  // ---- 第一百五十二轮：L13–L20，把最近二十轮踩过的清单坑变成安装前防线 ----
+
+  const idCount = new Map<string, number>();
+  for (const a of p.actions) idCount.set(a.id, (idCount.get(a.id) ?? 0) + 1);
+  const settingNames = new Set((p.settings ?? []).map((s) => s.name));
+
+  for (const a of p.actions) {
+    // L13 参数形态：enum 必须带非空 options（加载层已拦 type 合法性；
+    // options 空时启动器下拉框是空的）；参数 description 太薄也点破。
+    for (const pm of a.params) {
+      if (pm.type === 'enum' && (!pm.enum || pm.enum.length === 0)) {
+        out.push({ rule: 'L13', severity: 'error', target: `${p.id}.${a.id}`, message: `参数 "${pm.name}" 类型是 enum 但没有 options——启动器下拉框会是空的`, fixHint: 'params = [{ name = "x", type = "enum", options = ["a","b"] }]' });
+      }
+      if (!pm.description) {
+        out.push({ rule: 'L13', severity: 'warn', target: `${p.id}.${a.id}`, message: `参数 "${pm.name}" 缺 description——它是参数输入框的说明文字与 AI 的参数提示` });
+      }
+    }
+    // L14 chain 步骤 use 语法 + 被引用动作必须存在且声明 output="json"
+    if (a.type === 'chain' && a.steps) {
+      for (const st of a.steps) {
+        const m = /^(self|[\w.-]+)\.([\w-]+)$/.exec(st.use);
+        if (!m) {
+          out.push({ rule: 'L14', severity: 'error', target: `${p.id}.${a.id}`, message: `组合步骤 use = "${st.use}" 语法不对——必须是 self.<动作id> 或 <插件id>.<动作id>` });
+          continue;
+        }
+        const scope = m[1] as string;
+        const actId = m[2] as string;
+        if (scope === 'self') {
+          const target = p.actions.find((x) => x.id === actId);
+          if (!target) {
+            out.push({ rule: 'L14', severity: 'error', target: `${p.id}.${a.id}`, message: `组合步骤引用了本插件不存在的动作 "${actId}"` });
+          } else if (target.output !== 'json') {
+            out.push({ rule: 'L14', severity: 'error', target: `${p.id}.${a.id}`, message: `组合步骤引用的动作 "${actId}" 未声明 output = "json"——后续步骤取不到 {别名.data.字段}` });
+          }
+        }
+        // 跨插件引用（scope !== 'self'）在本插件 lint 里查不到目标，交给安装时依赖检查
+      }
+      // L15 模板占位符引用的步骤别名必须在 steps 里（as 或动作 id 推导名）
+      if (a.template) {
+        const aliases = new Set(a.steps.map((st) => st.as || st.use.replace(/^self\./, '').replace(/^[\w.-]+\./, '').replace(/-/g, '_')));
+        for (const m2 of a.template.matchAll(/\{([\w.-]+)\.data\./g)) {
+          if (!aliases.has(m2[1] as string)) {
+            out.push({ rule: 'L15', severity: 'error', target: `${p.id}.${a.id}`, message: `模板占位符引用的步骤别名 "${m2[1]}" 在 steps 里不存在` });
+          }
+        }
+      }
+    }
+    // L16 python 动作未声明 encoding（默认 utf8；老工具输出 GBK 要显式声明）
+    const isPython = a.run.length > 0 && /python/.test(a.run[0] ?? '');
+    if (isPython && a.encoding === 'utf8') {
+      out.push({ rule: 'L16', severity: 'info', target: `${p.id}.${a.id}`, message: 'python 动作未显式声明 encoding（默认 utf-8）——若脚本输出 GBK 请写 encoding = "gbk"' });
+    }
+    // L17 timeout 范围（>600s 大概率是把「后台动作」写成了前台等待）
+    if (a.timeout < 1 || a.timeout > 600) {
+      out.push({ rule: 'L17', severity: 'warn', target: `${p.id}.${a.id}`, message: `timeout = ${a.timeout} 秒——合理区间 1–600；长期运行的进程应声明 background = true 而不是拉长超时` });
+    }
+  }
+
+  // L18 {setting.x} 引用了未声明的设置项（加载层已拦；lint 报告里同步点破）
+  for (const a of p.actions) {
+    const refs = new Set<string>();
+    for (const seg of [...a.run, ...Object.values(a.env ?? {})]) {
+      for (const m3 of seg.matchAll(/\{setting\.([\w-]+)\}/g)) refs.add(m3[1] as string);
+    }
+    for (const r of refs) {
+      if (!settingNames.has(r)) {
+        out.push({ rule: 'L18', severity: 'error', target: `${p.id}.${a.id}`, message: `{setting.${r}} 引用了未声明的设置项——在清单里补 [[setting]] name = "${r}"` });
+      }
+    }
+  }
+
+  // L19 声明了 [[service]] 的插件：无 port 且无 pidFile 的服务检测不了
+  for (const s of p.services) {
+    if (s.port === undefined && !s.pidFile) {
+      out.push({ rule: 'L19', severity: 'warn', target: `${p.id}#${s.id}`, message: '服务既没声明 port 也没声明 pidFile——内核无法检测它是否在运行' });
+    }
+  }
+
+  // L20 同插件内 action id 重复（加载时静默覆盖后面盖前面；lint 点破）
+  for (const [dup, n] of idCount) {
+    if (n > 1) {
+      out.push({ rule: 'L20', severity: 'error', target: p.id, message: `动作 id "${dup}" 出现了 ${n} 次——加载时后面的会覆盖前面的` });
+    }
+  }
+
   return out.map((f) => ({ ...f, fixHint: f.fixHint ?? FIX_HINTS[f.rule] })).sort((x, y) => RISK_ORDER.indexOf(x.severity) - RISK_ORDER.indexOf(y.severity));
 }
 
