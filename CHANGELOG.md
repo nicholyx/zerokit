@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+（下一版攒着）
+
 ## [1.59.0] - 2026-11-06
 
 ### Added
