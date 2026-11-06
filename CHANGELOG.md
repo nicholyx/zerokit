@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+（下一版攒着）
+
+## [1.65.0] - 2026-11-07
+
 ### Added
 
 - 脚本化与自动化：`zkit exit-codes` 退出码契约速查（0 成功 / 1 值得重试 / 2 不要盲目重试）；`run --stdin <参数名>` 密钥走 stdin 不进 shell history；`--timeout <秒>` 覆盖清单超时；`--retries N --retry-delay S` 失败重试；`--format '{{ms}}ms {{rows}}行 {{key}}'` 轻模板输出
@@ -96,18 +100,4 @@
 - `zkit hello`：随时查看引导进度（完成态实时检测）
 - `zkit --skip-onboarding`：写 `~/.zerokit/.onboarded` 标记（0600 原子写），之后裸 `zkit` 回到紧凑帮助
 - `zkit doctor --first-run`：只查引导相关三件事（插件装没装 / 历史非空 / server 日志存在），与完整 doctor 区分；未完成 exit 1，可接脚本
-
-## [1.54.0] - 2026-11-06
-
-### Added
-
-- 首次运行引导：空数据目录下裸 `zkit`（TTY）显示三步引导页（装插件/跑动作/起界面，完成步打勾折叠，命令可直接复制）；非 TTY 输出三行脚本友好命令清单
-- `zkit hello`：随时查看三步进度（完成的打 ✓）
-- `zkit --skip-onboarding`：跳过引导并记住（`~/.zerokit/.onboarded`，0600）
-- `zkit doctor --first-run`：只查引导三件事的轻量体检（全完成 exit 0，否则 exit 1）
-- `run --diff`：与上次同命令执行的结果对比（基线按命令指纹存 `~/.zerokit/baselines/`；首行提示首次执行）
-- `run --alert '表达式'`：结果断言哨兵（`列>80`、`值=x`、`ms<500`；满足 exit 0，不满足 exit 2 带实际值——脚本/定时任务可直接当条件用）
-- `run --watch N --diff`：轮询中无变化的轮次不再刷屏（打点表示活着）
-- `zkit ui --log`：server 请求日志落 `~/.zerokit/logs/server.log`（启动行含端口与 pid；请求行 method path status ms，query 参数剥掉——脱敏）
-- `zkit logs server [--tail N] [--follow]`：查看/跟读 server 日志
 

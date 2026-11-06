@@ -2,6 +2,20 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [1.54.0] - 2026-11-06
+
+### Added
+
+- 首次运行引导：空数据目录下裸 `zkit`（TTY）显示三步引导页（装插件/跑动作/起界面，完成步打勾折叠，命令可直接复制）；非 TTY 输出三行脚本友好命令清单
+- `zkit hello`：随时查看三步进度（完成的打 ✓）
+- `zkit --skip-onboarding`：跳过引导并记住（`~/.zerokit/.onboarded`，0600）
+- `zkit doctor --first-run`：只查引导三件事的轻量体检（全完成 exit 0，否则 exit 1）
+- `run --diff`：与上次同命令执行的结果对比（基线按命令指纹存 `~/.zerokit/baselines/`；首行提示首次执行）
+- `run --alert '表达式'`：结果断言哨兵（`列>80`、`值=x`、`ms<500`；满足 exit 0，不满足 exit 2 带实际值——脚本/定时任务可直接当条件用）
+- `run --watch N --diff`：轮询中无变化的轮次不再刷屏（打点表示活着）
+- `zkit ui --log`：server 请求日志落 `~/.zerokit/logs/server.log`（启动行含端口与 pid；请求行 method path status ms，query 参数剥掉——脱敏）
+- `zkit logs server [--tail N] [--follow]`：查看/跟读 server 日志
+
 ## [1.53.0] - 2026-11-06
 
 ### Added
