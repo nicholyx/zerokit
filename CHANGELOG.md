@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+（下一版攒着）
+
+## [1.59.1] - 2026-11-06
+
 ### Added
 
 - **`zkit run 插件.动作` 点分简写**——文档里大量 `run sysinfo.overview` 写法此前实跑报用法错（只认两段形式），现在两种写法等价；报错也点名插件本体（`nothere` 而非 `nothere.x`）
@@ -98,15 +102,4 @@
 ### Added
 
 - deep 文档补全：新增《插件运行时》（进程模型/占位符参数级展开/常驻宿主原理与适用边界/超时与输出上限两层硬顶/审计流）与《安全边界》（风险三档威胁模型/MCP 授权链路/供应链快照能与非能/沙箱声明能与非能/密钥明文的诚实说明）两篇深读文档；index 导读页坑位替换为真链；quickstart 与 plugin-spec 补交叉链；已知差距表销账
-
-## [1.48.0] - 2026-11-05
-
-### Added
-
-- `plugin new --from <目录>`：从现有插件清单复制起步（自动换 id/name），适合「照着 quick 写一个」的场景
-- `plugin lint` 每条告警附「怎么改」修复指引（L01–L12 全覆盖）
-- `plugin doc --md <file>`：文档直接落盘，不用重定向
-- `plugin publish-ready` doctor 式逐项汇总（清单/版本/risk/描述/打包 5 项 ✓/!/✗）
-- `plugin pack` 出目录不存在自动创建；无 README 的插件打包时自动补一份生成的文档
-- 模板质量提升：新插件首跑 `plugin lint` 即零告警（补长 description、match 示例）；cookbook 新增「发布前自查清单」一节
 

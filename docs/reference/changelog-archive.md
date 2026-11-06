@@ -2,6 +2,17 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [1.48.0] - 2026-11-05
+
+### Added
+
+- `plugin new --from <目录>`：从现有插件清单复制起步（自动换 id/name），适合「照着 quick 写一个」的场景
+- `plugin lint` 每条告警附「怎么改」修复指引（L01–L12 全覆盖）
+- `plugin doc --md <file>`：文档直接落盘，不用重定向
+- `plugin publish-ready` doctor 式逐项汇总（清单/版本/risk/描述/打包 5 项 ✓/!/✗）
+- `plugin pack` 出目录不存在自动创建；无 README 的插件打包时自动补一份生成的文档
+- 模板质量提升：新插件首跑 `plugin lint` 即零告警（补长 description、match 示例）；cookbook 新增「发布前自查清单」一节
+
 ## [1.47.0] - 2026-11-05
 
 ### Added
