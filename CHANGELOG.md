@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [1.85.0] - 2026-11-08
+
+### Added
+
 - 详情页信息层级重排：动作名主标题 21px/650，插件归属行弱化、徽标行节奏统一，描述限宽 62ch。
 - 参数表单精修：聚焦 accent 双环、label 间距接 --sp 令牌；风险条双重编码（斜向刻度条纹+色，色弱可辨）；结果区等宽行高节奏；分区标题令牌（左缘 accent 记号）；动画曲线全面接 --ease/--ease-spring/--ease-out 令牌。
 - 修复：风险条内联 background 简写覆盖了 CSS 刻度条纹——改 background-color 后条纹生效。
@@ -107,13 +113,4 @@
 ### Added
 
 - `release-prep` 归档后自动补回规范空壳段（`[Unreleased]` + `### Added` 占位）——三次「条目落错段」事故的根因（归档正则把 Unreleased 头一并吃掉）就此消除；`verify-remote` tag 子模式修复（此前 `tag` 被当分支名报歧义）、`cat-file` 结果可见；`release-chain` 总览延迟判断收敛为函数；help/man 补 `bundle`/`bookmark`/`share` 用法段。
-
-## [1.73.0] - 2026-11-07
-
-### Added
-
-- 命令集 bundle 与 CHANGELOG 锚点根治：`zkit bundle create <名字> [--from|--all]` 把书签打包成 `.zbundle` 命令集（指纹与 .zshare 同口径）；`bundle list/diff/apply` 查看/与本机书签三桶对比/导入（重名自动加后缀不覆盖、重复导入无新增）；坏包拒绝文案与分享包同风格；typo 引导 bundl→bundle。**CHANGELOG 三次条目错段事故根治**：release-prep 空 [Unreleased] 段自带 `### Added` 占位（插条锚点不再漂移），guard146 新增「[Unreleased] 段缺分类头即 FAIL」断言（负例验证过）。
-
-
-### Added
 
