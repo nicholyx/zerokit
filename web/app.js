@@ -10605,6 +10605,11 @@ window.addEventListener('beforeunload', (e) => {
 load();
 setupVirtualScroll();
 el.q.focus();
+// 第一百八十二轮③：开屏编排——首次加载在 <html> 落 .booting，首帧渲染后摘除（之后 DOM 重建不回放）
+document.documentElement.classList.add('booting');
+requestAnimationFrame(() => requestAnimationFrame(() => {
+  document.documentElement.classList.remove('booting');
+}));
 /** 第五十二轮⑤：T 键标签小面板——当前项打/选标签，数字快捷选已有标签。 */
 function showTagPanel(i) {
   const entry = filtered[i];
