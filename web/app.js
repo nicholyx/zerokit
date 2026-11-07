@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint, configProgress, validateSettingInput, formCanSave, parseConfigHash } from './extras.js';
+import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint, configProgress, validateSettingInput, formCanSave, parseConfigHash, textLines, textStats, copyTextRaw, copyWithNumbers, copyWithTitle, extractUrls } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote, defaultChip, enumHint, actionHealthBadge, descNeedsFold, inQuietHours, notifyThrottle, pushNotifyLog, parseHm } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -4881,20 +4881,11 @@ function renderResult(res) {
     // 否则 tableFullLoad / resultQueryTerms / colvis 等按 tableId 记的状态每次重画全丢
     if (!isRepaint) resultSeq++;
     body += renderData(res.data, res.render, `r${resultSeq}`);
-  } else if (res.stdout) {
-    // 长输出折叠：超 60 行时收起后 40+ 行，一个按钮展开——翻 2000 行日志不废手
-    const lines = String(res.stdout).split('\n');
-    if (lines.length > 60) {
-      const shown = lines.slice(0, 60).join('\n');
-      const rest = lines.slice(60).join('\n');
-      const id = `fold${++resultSeq}`;
-      body += `${renderPreNumbered(masked(shown))}`
-        + `<span class="fold-hint">… 还有 ${lines.length - 60} 行</span>`
-        + `<button class="fold-btn" data-fold="${id}">展开全部</button>`
-        + `<span class="fold-rest hidden" id="${id}">${esc(masked(rest))}</span></pre>`;
-    } else {
-      body += renderPreNumbered(masked(res.stdout));
-    }
+  } else if (res.stdout || (res.data !== undefined && typeof res.data === 'string')) {
+    // 第一百七十五轮：文本工具视图（顶层 string data 与 stdout 同路）——
+    // 行号列可关 / >200 行默认折叠 / 换行开关持久化 / 选中行复制 / 统计条 / URL 可点 / 另存 .txt
+    const rawText = res.data !== undefined && typeof res.data === 'string' ? res.data : res.stdout;
+    body += renderTextView(rawText, { masked });
   }
   if (res.truncated && res.artifactPath) {
     body += `<div class="cmd-line">输出过长已截断，完整内容：${esc(res.artifactPath)}</div>`;
@@ -5064,7 +5055,8 @@ function renderResult(res) {
       <div class="rmeta sub" role="contentinfo">${res.ms !== undefined ? `耗时 ${formatMs(res.ms)}` : ''}${res.code !== undefined && res.code !== 0 ? ` · 退出码 ${res.code}` : ''}${res.at ? ` · ${new Date(res.at).toLocaleTimeString()}` : ''}</div>
     </div>`;
 
-  $('copyRes')?.addEventListener('click', async (ev) => {
+  bindTextView(res);   // 第一百七十五轮：文本视图交互
+    $('copyRes')?.addEventListener('click', async (ev) => {
     const btn = ev.currentTarget;
     // 第十七轮①②：清单 copy_template 优先；Shift+点=美化 JSON（默认紧凑）
     let text = copyText;
@@ -5809,10 +5801,112 @@ function renderData(data, render, tableId = '') {
   if (data === null || data === undefined) {
     return `<div class="ps-empty" role="status">${esc(emptyReason(data))}</div>`;
   }
+  // 第一百七十五轮：顶层 string 走文本工具视图（行号/折叠/行选/URL 可点）
+  if (typeof data === 'string') return renderTextView(data, { masked: maskSecretsOn });
   return `<pre class="out">${esc(String(data))}</pre>`;
 }
 
 /** 第三十九轮④：代码块行号——每行一个 span，CSS counter 计数（复制不带行号）。 */
+/* 第一百七十五轮：结果区文本工具视图。返回 HTML；交互（行选/开关/复制）在 renderResult 尾部 bindTextView 统一绑。 */
+function textViewWrapOn() { return localStorage.getItem('zerokit.textview.wrap') !== 'off'; }
+function linkifyText(text) {
+  // ⑦ URL 可点：先 esc 再把 URL 段替换为 <a>（esc 后的 &amp; 等在 href 里浏览器会解回）
+  const escd = esc(text);
+  return escd.replace(/https?:\/\/[^\s"'&lt;&gt;）】」』]+/g, (u) =>
+    `<a href="${u}" target="_blank" rel="noopener noreferrer" class="tv-url">${u}</a>`);
+}
+function renderTextView(rawText, { masked = (x) => x } = {}) {
+  const text = String(rawText ?? '');
+  const st = textStats(text);
+  const tv = textLines(text);      // ①② >200 行折叠到 50
+  const wrap = textViewWrapOn();
+  const tid = `tv${++resultSeq}`;
+  const rowsHtml = tv.rows.map((r) =>
+    `<div class="tv-row" data-no="${r.no}"><span class="tv-no">${r.no}</span><span class="tv-line">${linkifyText(masked(r.text)) || '&nbsp;'}</span></div>`).join('');
+  return `<div class="text-view" id="${tid}" data-tvraw="${esc(text).replace(/"/g, '&quot;').slice(0, 0) || ''}">
+    <div class="tv-bar">
+      <span class="tv-stat">${st.chars} 字符 · ${st.lines} 行 · 最长 ${st.longest}</span>
+      <button class="ghost mini" data-tv-act="numbers">行号</button>
+      <button class="ghost mini" data-tv-act="wrap">${wrap ? '换行：开' : '换行：关'}</button>
+      <button class="ghost mini" data-tv-act="copy-raw">复制原文</button>
+      <button class="ghost mini" data-tv-act="copy-num">带行号复制</button>
+      <button class="ghost mini" data-tv-act="copy-title">首行做标题</button>
+      <button class="ghost mini" data-tv-act="save-txt">另存 .txt</button>
+    </div>
+    <div class="tv-body${wrap ? '' : ' nowrap'}${tv.collapsed ? ' collapsed' : ''}">${rowsHtml}</div>
+    ${tv.collapsed ? `<button class="fold-btn" data-tv-act="expand">展开全部 ${tv.total} 行（还有 ${tv.hidden} 行收起）</button>` : ''}
+  </div>`;
+}
+/* 文本视图交互：行选/Shift 范围/Enter 复制/开关。在 renderResult 末尾调用。 */
+function bindTextView(res) {
+  const root = document.querySelector('.text-view');
+  if (!root) return;
+  let lastNo = null;
+  const rows = () => [...root.querySelectorAll('.tv-row')];
+  const selected = () => rows().filter((r) => r.classList.contains('sel')).sort((a, b) => +a.dataset.no - +b.dataset.no);
+  root.addEventListener('click', (ev) => {
+    const row = ev.target.closest('.tv-row');
+    const act = ev.target.closest('[data-tv-act]')?.dataset.tvAct;
+    if (act === 'numbers') { root.classList.toggle('no-hidden'); return; }
+    if (act === 'wrap') {
+      const on = !textViewWrapOn();
+      try { localStorage.setItem('zerokit.textview.wrap', on ? 'on' : 'off'); } catch { /* 隐私模式 */ }
+      root.querySelector('.tv-body')?.classList.toggle('nowrap', !on);
+      ev.target.textContent = on ? '换行：开' : '换行：关';
+      return;
+    }
+    if (act === 'copy-raw' || act === 'copy-num' || act === 'copy-title') {
+      const raw = String(res.data !== undefined && typeof res.data === 'string' ? res.data : (res.stdout ?? ''));
+      const text = act === 'copy-raw' ? copyTextRaw(raw) : act === 'copy-num' ? copyWithNumbers(raw) : copyWithTitle(raw, detail?.action?.title || '文本结果');
+      navigator.clipboard?.writeText(text).then(() => { el.count.textContent = `已复制（${act === 'copy-raw' ? '原文' : act === 'copy-num' ? '带行号' : '带标题'}）`; }).catch(() => {});
+      return;
+    }
+    if (act === 'save-txt') {
+      const raw = String(res.data !== undefined && typeof res.data === 'string' ? res.data : (res.stdout ?? ''));
+      const blob = new Blob([raw], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+      a.href = url;
+      a.download = `zerokit-${detail ? `${detail.plugin.id}-${detail.action.id}` : 'text'}-${stamp}.txt`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return;
+    }
+    if (act === 'expand') {
+      const raw = String(res.data !== undefined && typeof res.data === 'string' ? res.data : (res.stdout ?? ''));
+      const tv = textLines(raw, { maxLines: 0 });   // 0 = 不折叠
+      root.querySelector('.tv-body')?.remove();
+      root.querySelector('[data-tv-act="expand"]')?.remove();
+      const div = document.createElement('div');
+      div.className = `tv-body${textViewWrapOn() ? '' : ' nowrap'}`;
+      div.innerHTML = tv.rows.map((r) => `<div class="tv-row" data-no="${r.no}"><span class="tv-no">${r.no}</span><span class="tv-line">${linkifyText(maskSecretsOn(r.text)) || '&nbsp;'}</span></div>`).join('');
+      root.appendChild(div);
+      return;
+    }
+    if (!row) return;
+    // ④ 行选（Shift 范围）
+    if (ev.shiftKey && lastNo !== null) {
+      const [a, b] = [Math.min(lastNo, +row.dataset.no), Math.max(lastNo, +row.dataset.no)];
+      rows().forEach((r) => { const n = +r.dataset.no; if (n >= a && n <= b) r.classList.add('sel'); });
+    } else {
+      row.classList.toggle('sel');
+      lastNo = +row.dataset.no;
+    }
+  });
+  root.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') {
+      const sel = selected();
+      if (!sel.length) return;
+      const text = sel.map((r) => r.querySelector('.tv-line').textContent).join('\n');
+      navigator.clipboard?.writeText(text).then(() => { el.count.textContent = `已复制 ${sel.length} 行`; }).catch(() => {});
+      ev.preventDefault();
+    }
+  });
+  root.tabIndex = 0;
+}
+function maskSecretsOn(t) { return maskState() ? maskSecrets(String(t ?? '')) : String(t ?? ''); }
+
 function renderPreNumbered(text) {
   const lines = String(text).split('\n');
   return `<pre class="out numbered"><code>${lines.map((l) => `<span class="ln">${esc(l)}</span>`).join('')}</code></pre>`;

@@ -2283,3 +2283,20 @@ td.gsum-label { font-weight: 600; }
 .cfg-req { color: var(--bad); }
 .cfg-desc { font-size: 12px; color: var(--fg-dim); }
 .cfg-actions { display: flex; gap: 10px; align-items: center; margin-top: 6px; }
+
+/* ========================= 第一百七十五轮：结果区文本工具 ========================= */
+.text-view { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.tv-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 10px; background: var(--panel-2); border-bottom: 1px solid var(--line); }
+.tv-stat { font-size: 12px; color: var(--fg-dim); margin-right: auto; }
+.tv-body { font-family: var(--mono, ui-monospace, monospace); font-size: 12.5px; line-height: 1.55; max-height: 60vh; overflow: auto; }
+.tv-body.collapsed { max-height: none; overflow: visible; }
+.tv-body.nowrap .tv-line { white-space: pre; }
+.tv-row { display: flex; gap: 10px; padding: 0 10px; cursor: default; }
+.tv-row:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
+.tv-row.sel { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.tv-no { color: var(--fg-dim); min-width: 3.2em; text-align: right; user-select: none; flex-shrink: 0; }
+.text-view.no-hidden .tv-no { display: none; }
+.tv-line { white-space: pre-wrap; word-break: break-all; flex: 1; }
+.tv-body.nowrap .tv-line { overflow-x: visible; }
+.tv-url { color: var(--accent); text-decoration: underline; }
+.text-view:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
