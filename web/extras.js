@@ -4325,3 +4325,33 @@ export function batchColVis(cols, vis, mode, numericCols = []) {
   }
   return next;
 }
+
+// ===================== 第一百七十七轮：执行反馈与进度 =====================
+
+/** ⑦ 耗时人话：340ms / 1.2s / 12.5s（<1000 显 ms，否则一位小数 s）。 */
+export function fmtElapsed(ms) {
+  const n = Number(ms);
+  if (!Number.isFinite(n) || n < 0) return '—';
+  if (n < 1000) return `${Math.round(n)}ms`;
+  return `${(n / 1000).toFixed(1)}s`;
+}
+
+/** ⑦ 快慢判定：与同动作历史均值比（<80% 快 / >130% 慢 / 样本不足或失败 null）。 */
+export function paceVerdict(ms, histAvgMs, { samples = 0, ok = true } = {}) {
+  if (!ok) return null;                       // 失败不判快慢——异常路径不可比
+  const m = Number(ms), a = Number(histAvgMs);
+  if (!Number.isFinite(m) || !Number.isFinite(a) || a <= 0) return null;
+  if (samples < 2) return null;               // 一个样本没有基准
+  if (m < a * 0.8) return 'fast';
+  if (m > a * 1.3) return 'slow';
+  return 'normal';
+}
+
+/** ③ 长任务安抚文案阈值：>2s 提示重活，>8s 提示可能卡住。 */
+export function paceReassure(ms) {
+  const n = Number(ms);
+  if (!Number.isFinite(n)) return null;
+  if (n > 8000) return '执行已超过 8 秒——插件可能在等外部资源，考虑点「停止」后查 doctor';
+  if (n > 2000) return '仍在执行…（插件可能在做重活）';
+  return null;
+}

@@ -2313,3 +2313,10 @@ html[data-theme="dark"] .tbl-wrap table.grid td:first-child { background: var(--
 .tbl-wrap table.grid tr.row-hl > td { background: color-mix(in srgb, var(--accent, #3d7eff) 14%, transparent) !important; }
 /* ⑤ 列头统计 tooltip 已走原生 title；freeze 列头加左缘阴影提示可滚动 */
 .tbl-wrap table.grid th.freeze-col { box-shadow: inset -6px 0 8px -6px rgb(0 0 0 / 18%); }
+
+/* ===================== 第一百七十七轮：执行反馈与进度 ===================== */
+.run-elapsed { margin-left: 8px; font-variant-numeric: tabular-nums; color: var(--fg-dim, #666); }
+.pace-note { display: block; margin-top: 4px; }
+.ms-badge { margin-left: 8px; font-variant-numeric: tabular-nums; color: var(--fg-dim, #666); }
+.badge.pace-fast { margin-left: 6px; }
+.badge.pace-slow { margin-left: 6px; }
