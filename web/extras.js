@@ -4196,3 +4196,54 @@ export function keysGateOn(stored) { return stored !== 'off'; }
 export function keysDisabledHint() {
   return '快捷键已整体关闭——按 ? 查看手册，或在设置抽屉重新开启';
 }
+
+/* ========================= 第一百七十四轮：插件配置向导与校验前移 ========================= */
+
+/** ① 完成度：N/M 已设置 + 缺的必填名清单。输入是 publicSettings 的形态。 */
+export function configProgress(settings) {
+  const req = settings.filter((s) => s.required);
+  const missing = req.filter((s) => s.missing).map((s) => s.title || s.name);
+  const setCount = settings.filter((s) => s.set).length;
+  return {
+    total: settings.length,
+    set: setCount,
+    missingRequired: missing,
+    done: settings.length > 0 && missing.length === 0,
+    label: settings.length ? `${setCount} / ${settings.length} 已设置` : '无配置项',
+  };
+}
+
+/** ⑧ 输入时校验（与 CLI config 的 coerce 同规则，纯函数不重复实现——直接前移）：
+ *  输入 {setting, value}，返回 {ok, error?}。空串视为未填（必填留给缺口条判断）。 */
+export function validateSettingInput(setting, value) {
+  const s = setting ?? {};
+  const str = typeof value === 'string' ? value.trim() : value;
+  if (str === '' || str === undefined || str === null) {
+    return s.required ? { ok: false, error: `「${s.title || s.name}」是必填项` } : { ok: true };
+  }
+  if (Array.isArray(s.enum) && s.enum.length && !s.enum.includes(String(str))) {
+    return { ok: false, error: `「${s.title || s.name}」只能是：${s.enum.join(' / ')}` };
+  }
+  if (s.type === 'number' || s.type === 'integer') {
+    const n = typeof str === 'number' ? str : Number(str);
+    if (!Number.isFinite(n)) return { ok: false, error: `「${s.title || s.name}」要填数字` };
+    if (s.type === 'integer' && !Number.isInteger(n)) return { ok: false, error: `「${s.title || s.name}」要填整数` };
+    if (s.min !== undefined && n < s.min) return { ok: false, error: `不能小于 ${s.min}` };
+    if (s.max !== undefined && n > s.max) return { ok: false, error: `不能大于 ${s.max}` };
+  }
+  return { ok: true };
+}
+
+/** ③ 表单整体状态：全部必填满足且无校验错才亮保存。 */
+export function formCanSave(settings, values) {
+  const errs = settings
+    .map((s) => ({ s, r: validateSettingInput(s, values[s.name]) }))
+    .filter((x) => !x.r.ok);
+  return { canSave: errs.length === 0, errors: errs.map((x) => ({ name: x.s.name, error: x.r.error })) };
+}
+
+/** ⑥ 深链 hash：#/config/<插件id>。 */
+export function parseConfigHash(hash) {
+  const m = /^#\/config\/([\w.-]+)$/.exec(String(hash ?? ''));
+  return m ? m[1] : null;
+}
