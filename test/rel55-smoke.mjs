@@ -36,6 +36,8 @@ const sh = (cmd, args, opts = {}) => { try { return { code: 0, out: execFileSync
   const cl = fs.readFileSync(path.join(tmp, 'CHANGELOG.md'), 'utf8');
   ok(cl.includes('## [9.9.9] - '), '②新段标题存在');
   ok(/## \[Unreleased\]\n\n### Added\n\n（下一版攒着）/.test(cl), '②Unreleased 空壳（带 ### Added）');
+  // 第一百七十二轮②：搬段路径（版本段>12）也要保住空壳头——头部必须以规范空壳开头
+  ok(cl.startsWith('# Changelog\n\n## [Unreleased]\n\n### Added\n\n（下一版攒着）'), '②归档后文件头即规范空壳（搬段不丢头）');
   ok(fs.readFileSync(path.join(tmp, 'package.json'), 'utf8').includes('"version": "9.9.9"'), '③package.json');
   ok(fs.readFileSync(path.join(tmp, 'apps/desktop/src-tauri/tauri.conf.json'), 'utf8').includes('"version": "9.9.9"'), '③tauri.conf.json');
   const toml = fs.readFileSync(path.join(tmp, 'apps/desktop/src-tauri/Cargo.toml'), 'utf8');

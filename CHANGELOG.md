@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- `release-prep` 归档后自动补回规范空壳段（`[Unreleased]` + `### Added` 占位）——三次「条目落错段」事故的根因（归档正则把 Unreleased 头一并吃掉）就此消除；`verify-remote` tag 子模式修复（此前 `tag` 被当分支名报歧义）、`cat-file` 结果可见；`release-chain` 总览延迟判断收敛为函数；help/man 补 `bundle`/`bookmark`/`share` 用法段。
 
 ## [1.73.0] - 2026-11-07
 

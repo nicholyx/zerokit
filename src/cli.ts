@@ -129,6 +129,10 @@ ${c.bold('其他')}
   path                    打印数据目录
   last [--show]           重跑最近一条成功命令（--show 只看不跑）
   history [N]             最近 N 条命令；--rerun N 重跑第 N 条
+                          --grep 过滤 --since 2d/5h/today --failed 只看失败
+  bookmark add|list|rm|run  书签：常用命令组合起别名（zkit bookmark add 别名 run ...）
+  bundle create|list|diff|apply  命令集：书签打包成 .zbundle 流通（团队共享一组命令）
+  share <插件.动作> [--params JSON]  结果分享包 .zshare（run --from-share 重放）
   completion bash|zsh|fish  shell 补全脚本（eval "$(zkit completion bash)"）
   man                     完整命令参考（比本屏详细）
   --version / -V          版本号
@@ -4757,6 +4761,15 @@ const MAN_PAGE = `zkit(1) -- zerokit 命令行参考
                            [--watch N] [--interactive] [--yes]
   zkit last [--show]      重放最近一次执行（--show 只看不跑）
   zkit history [N]        历史倒序（--rerun N 重跑第 N 条）
+  zkit bookmark add|list|rm|run
+                          书签：常用命令组合起别名（第一百四十九轮）
+  zkit bundle create <名字> [--from a,b|--all]
+                          把书签打包成 .zbundle 命令集（指纹与 .zshare 同口径）
+  zkit bundle list|diff|apply <文件.zbundle>
+                          查看/与本机书签三桶对比/导入（重名自动加后缀不覆盖）
+  zkit share <插件.动作> [--params JSON] [--note] [--qr]
+                          生成 .zshare 结果分享包；run --from-share <文件> 重放；
+                          share --view 查看（--markdown 出可贴 issue 的摘要）
   zkit list [--json|--brief|--health]   插件清单 / 健康一屏
   zkit show <插件> [动作] 动作参数与风险说明
   zkit stats [--since 7d] 使用统计
