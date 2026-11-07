@@ -4247,3 +4247,45 @@ export function parseConfigHash(hash) {
   const m = /^#\/config\/([\w.-]+)$/.exec(String(hash ?? ''));
   return m ? m[1] : null;
 }
+
+/* ========================= 第一百七十五轮：结果区文本工具 ========================= */
+
+/** ① 行模型：切行 + 行号；②>maxLines 默认折叠（只显前 collapseTo 行）。 */
+export function textLines(text, { maxLines = 200, collapseTo = 50 } = {}) {
+  const all = String(text ?? '').split('\n');
+  const collapsed = all.length > maxLines;
+  const shown = collapsed ? all.slice(0, collapseTo) : all;
+  return {
+    total: all.length,
+    collapsed,
+    rows: shown.map((line, i) => ({ no: i + 1, text: line })),
+    hidden: collapsed ? all.length - collapseTo : 0,
+  };
+}
+
+/** ⑤ 统计：字符数/行数/最行长。 */
+export function textStats(text) {
+  const s = String(text ?? '');
+  const lines = s.split('\n');
+  return { chars: s.length, lines: lines.length, longest: lines.reduce((m, l) => Math.max(m, l.length), 0) };
+}
+
+/** ⑥ 复制三形态。 */
+export function copyTextRaw(text) { return String(text ?? ''); }
+export function copyWithNumbers(text) {
+  return String(text ?? '').split('\n').map((l, i) => `${String(i + 1).padStart(4, ' ')} | ${l}`).join('\n');
+}
+export function copyWithTitle(text, title) {
+  const head = String(title ?? '文本').slice(0, 60);
+  return `# ${head}\n\n${String(text ?? '')}`;
+}
+
+/** ⑦ URL 提取（用于自动可点——渲染侧再转 <a>，这里只给位置与原文）。 */
+export function extractUrls(text) {
+  const out = [];
+  const re = /https?:\/\/[^\s"'<>（）【】「」『』，。；！？、]+/g;
+  const s = String(text ?? '');
+  let m;
+  while ((m = re.exec(s)) !== null) out.push({ url: m[0], index: m.index });
+  return out;
+}

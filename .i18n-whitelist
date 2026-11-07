@@ -1382,11 +1382,22 @@ el\.allowView\.innerHTML = `<h2 class="ps-
 <a class="ghost" href="#/config">← 回配置列表
 el\.count\.textContent = `已保存 \$\{Object\.key
 el\.allowView\.insertAdjacentHTML\('afterbe
-label: settings\.length \? `\$\{setCount\} / 
-return s\.required \? \{ ok: false, error: 
+label: settings\.length \? `\$\{setCount\} /
+return s\.required \? \{ ok: false, error:
 return \{ ok: false, error: `「\$\{s\.title \|
 if \(!Number\.isFinite\(n\)\) return \{ ok: fa
 if \(s\.type === 'integer' && !Number\.isIn
 if \(s\.min !== undefined && n < s\.min\) re
 if \(s\.max !== undefined && n > s\.max\) re
 <button class="drawer-link" id="dlConfig
+<span class="tv-stat">\$\{st\.chars\} 字符 · \$
+<button class="ghost mini" data-tv-act="
+<button class="ghost mini" data-tv-act="
+<button class="ghost mini" data-tv-act="
+<button class="ghost mini" data-tv-act="
+<button class="ghost mini" data-tv-act="
+<button class="ghost mini" data-tv-act="
+\$\{tv\.collapsed \? `<button class="fold-bt
+ev\.target\.textContent = on \? '换行：开' : '换
+const text = act === 'copy-raw' \? copyTe
+const head = String\(title \?\? '文本'\)\.slice
