@@ -70,6 +70,12 @@ html, body {
 }
 .bar-right { display: flex; align-items: center; gap: 10px; }
 .hint-inline { color: var(--fg-dim); font-size: 12px; }
+/* 第一百八十四轮⑧：顶栏反馈统一——内容变化时轻渐入（JS 置 textContent 后加 .flash 类） */
+#count { transition: opacity var(--tr-fast) var(--ease); }
+#count.flash { animation: count-in 220ms var(--ease-out); }
+@keyframes count-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
+#count.err { color: var(--bad); }
+#count.ok { color: var(--ok); }
 
 button.ghost {
   background: transparent; color: var(--fg-dim);
@@ -265,6 +271,8 @@ table.grid tr:last-child td { border-bottom: 0; }
 /* ---------------- 确认弹层 ---------------- */
 .overlay {
   position: fixed; inset: 0; background: rgba(6,8,11,.72);
+  /* 第一百八十四轮②：遮罩微失焦——背后内容退为背景，弹层成为唯一焦点 */
+  backdrop-filter: blur(2.5px); -webkit-backdrop-filter: blur(2.5px);
   display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50;
 }
 .modal {
@@ -1743,13 +1751,20 @@ td.kv-clip { cursor: copy; }
 /* ③ 浮层出现：scale 0.96→1 + 淡入；关闭由 JS 移除时反向（退出态省略——移除即消失，
    出现动效已足够建立空间关系，避免过度动画）。 */
 @keyframes zk-pop-in {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
+  /* 第一百八十四轮①③：入场统一——scale 0.97 + 下移 8px 基准（弹层体系唯一起点） */
+  from { opacity: 0; transform: scale(0.97) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 .drawer-pop, #palette .palette-box, .more-pop:not(.hidden), .modal-box {
   animation: zk-pop-in 160ms var(--ease-spring);
   transform-origin: top center;
 }
+/* 第一百八十四轮⑦：出场态——JS 关闭前挂 zk-closing，150ms 渐隐下移后摘除 */
+@keyframes zk-pop-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(4px); }
+}
+.zk-closing { animation: zk-pop-out 150ms var(--ease) forwards !important; pointer-events: none; }
 
 /* ④ 列表项 stagger 渐入：renderList 给前 10 项挂 stagger 类，逐项 18ms 延迟。
    上限 10 项——长列表全量动画会拖慢首屏，且后段根本看不见。 */
@@ -2431,4 +2446,25 @@ select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible,
   font-size: 12.5px; font-weight: 600; color: var(--fg-dim);
   margin: 0 0 var(--sp-2); letter-spacing: .2px;
   padding-left: 9px; border-left: 3px solid color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+/* ---------------- 第一百八十四轮④：确认框危险档 ---------------- */
+.modal.destructive { border-color: color-mix(in srgb, var(--danger) 55%, var(--line)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 30%, transparent), var(--shadow-3); }
+.modal.destructive h3::before { content: '⚠ '; color: var(--danger); }
+.modal.mutate { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+
+/* ---------------- 第一百八十四轮⑤⑥：命令面板与更多菜单精修 ---------------- */
+/* 面板选中项 accent 左缘（键盘导航的落点更明确） */
+.modal.palette li.palette-item.on, .palette-box .pal-item.active {
+  border-left: 3px solid var(--accent);
+  padding-left: 9px;
+}
+/* 面板输入区与结果区分隔弱化（一条 12% 线足矣） */
+.modal.palette > input, #paletteQ {
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 40%, transparent);
+}
+/* ⑥ 更多菜单对齐弹层体系：圆角/阴影/动效全令牌 */
+.more-pop {
+  border-radius: var(--r-lg); box-shadow: var(--shadow-3);
+  border: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
 }

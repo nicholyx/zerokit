@@ -439,10 +439,10 @@ function openThemePop() {
       const badge = pop.querySelector(`[data-scope-count="${sc}"]`);
       const n = readJson(meta.key);
       const cnt = n == null ? 0 : Array.isArray(n) ? n.length : typeof n === 'object' ? Object.keys(n).length : 1;
-      if (cnt === 0) { el.count.textContent = t('scopeNoData')(meta.label); return; }
+      if (cnt === 0) { setCount(t('scopeNoData')(meta.label)); return; }
       if (!confirm(t('scopeWipeConfirm')(meta.label, cnt))) return;
       try { localStorage.removeItem(meta.key); } catch { /* 隐私模式 */ }
-      el.count.textContent = t('scopeWiped')(meta.label, cnt);
+      setCount(t('scopeWiped')(meta.label, cnt));
       openThemePop(); // 重建面板刷新计数
     });
   });
@@ -467,9 +467,9 @@ function openThemePop() {
     const raw = prompt(t('profileRenamePrompt'), curProfileName());
     if (raw == null) return;
     const v = validProfileName(raw);
-    if (!v.ok) { el.count.textContent = v.error; return; }
+    if (!v.ok) { setCount(v.error); return; }
     const r = renameProfile(loadProfiles(), curProfileName(), v.name);
-    if (r.error) { el.count.textContent = r.error; return; }
+    if (r.error) { setCount(r.error); return; }
     saveProfiles(r.profiles);
     localStorage.setItem('zerokit.profile.cur', r.current);
     pop.classList.add('hidden');
@@ -477,7 +477,7 @@ function openThemePop() {
   });
   pop.querySelector('[data-profile-del]')?.addEventListener('click', () => {
     const r = deleteProfile(loadProfiles(), curProfileName(), curProfileName());
-    if (r.error) { el.count.textContent = r.error; return; }
+    if (r.error) { setCount(r.error); return; }
     if (!confirm(t('profileDelConfirm')(curProfileName()))) return;
     saveProfiles(r.profiles);
     localStorage.setItem('zerokit.profile.cur', r.current);
@@ -533,7 +533,7 @@ function currentProfileKeys() {
 function createProfileFromCurrent(name) {
   const next = upsertProfile(loadProfiles(), name, currentProfileKeys());
   saveProfiles(next);
-  el.count.textContent = t('profileCreated')(name);
+  setCount(t('profileCreated')(name));
 }
 /** 切换：旧档存回 → 新档整批写回 → 模块级变量重载（不整页刷新，列表与主题就地生效） */
 function switchProfile(name) {
@@ -563,7 +563,7 @@ function switchProfile(name) {
   applyAccent();
   applyFontScale();
   renderList();
-  el.count.textContent = t('profileSwitched')(target);
+  setCount(t('profileSwitched')(target));
 }
 
 function cycleTheme() {
@@ -899,7 +899,7 @@ function applySplitLayout() {
       if (dragging && sp.dataset.pct) {
         localStorage.setItem('zerokit.layout.pct', sp.dataset.pct);
         localStorage.removeItem('zerokit.layout.preset'); // 手动拖拽覆盖预设
-        el.count.textContent = t('splitAt')(sp.dataset.pct);
+        setCount(t('splitAt')(sp.dataset.pct));
       }
       dragging = null;
     });
@@ -907,7 +907,7 @@ function applySplitLayout() {
       localStorage.removeItem('zerokit.layout.pct');
       localStorage.removeItem('zerokit.layout.preset');
       applySplitLayout();
-      el.count.textContent = t('splitReset');
+      setCount(t('splitReset'));
     });
     el.stage.insertBefore(sp, el.detailView);
   }
@@ -919,7 +919,7 @@ function setLayoutPreset(id) {
   localStorage.setItem('zerokit.layout.preset', id);
   localStorage.removeItem('zerokit.layout.pct'); // 预设覆盖手动拖拽
   applySplitLayout();
-  el.count.textContent = t('layoutLabel')(LAYOUT_PRESETS[id].label);
+  setCount(t('layoutLabel')(LAYOUT_PRESETS[id].label));
 }
 
 
@@ -931,7 +931,7 @@ document.addEventListener('wheel', (e) => {
   if (next === cur) return;
   localStorage.setItem('zerokit.font-scale', next);
   document.documentElement.dataset.fontScale = next;
-  el.count.textContent = t('fontScaleLabel')(t('fontNames')[next]);
+  setCount(t('fontScaleLabel')(t('fontNames')[next]));
   e.preventDefault();
 }, { passive: false });
 
@@ -1198,7 +1198,7 @@ function applyBatchImport(parsed) {
   }
   if (batchCurKey) batchMap.set(batchCurKey, batch);
   renderList();
-  el.count.textContent = `导入了 ${added} 项（${parsed.items.length - added} 个动作不存在）`;
+  setCount(`导入了 ${added} 项（${parsed.items.length - added} 个动作不存在）`);
 }
 
 function renderListInner() {
@@ -1207,7 +1207,7 @@ function renderListInner() {
     filtered = [aliasHit];
     filteredSmart = new Map();
     el.list.innerHTML = filtered.map((entry, i) => itemHtml(entry, i, true, '')).join('');
-    el.count.textContent = `别名「${el.q.value.trim()}」→ ${aliasHit.plugin.name} · ${aliasHit.action.title}`;
+    setCount(`别名「${el.q.value.trim()}」→ ${aliasHit.plugin.name} · ${aliasHit.action.title}`);
     el.empty.classList.add('hidden');
     renderQuickBar();
     return;
@@ -1267,7 +1267,7 @@ function renderListInner() {
       const { uniq } = batchDedup(batch.map((b) => ({ pluginId: b.plugin.id, actionId: b.action.id, values: paramStore[actionKey(b.plugin.id, b.action.id)] ?? {}, ref: b })));
       batch = uniq.map((u) => u.ref);
       renderList();
-      el.count.textContent = '已去掉重复项';
+      setCount('已去掉重复项');
     });
     // ⑦导出清单（第一百一十四轮⑥：下载 JSON 之外再复制行格式——可贴可分享可回导）
     bar.querySelector('#batchExport')?.addEventListener('click', () => {
@@ -1279,8 +1279,8 @@ function renderListInner() {
       a.click();
       URL.revokeObjectURL(a.href);
       navigator.clipboard?.writeText(batchToLines(list)).then(
-        () => { el.count.textContent = `已下载 JSON，并复制 ${list.length} 项行格式清单`; },
-        () => { el.count.textContent = '已下载 JSON（剪贴板不可用，行格式未复制）'; },
+        () => { setCount(`已下载 JSON，并复制 ${list.length} 项行格式清单`); },
+        () => { setCount('已下载 JSON（剪贴板不可用，行格式未复制）'); },
       );
     });
     // ⑦导入清单（第一百一十四轮⑤：先试剪贴板——粘过清单的人多点一下就进；没有再走文件）
@@ -1298,7 +1298,7 @@ function renderListInner() {
         const text = await inp.files?.[0]?.text();
         if (!text) return;
         const parsed = parseBatchList(text);
-        if (!parsed.ok) { el.count.textContent = `导入失败：${parsed.error}`; return; }
+        if (!parsed.ok) { setCount(`导入失败：${parsed.error}`); return; }
         applyBatchImport(parsed);
       });
       inp.click();
@@ -1356,7 +1356,7 @@ function renderListInner() {
     // 第五十一轮⑤：结果计数徽标——X 项 · 来自 Y 个插件（搜索态才显示，浏览态是全部）
     if (q.trim()) {
       const fromPlugins = new Set(filtered.map((e) => e.plugin.id)).size;
-      el.count.textContent = `${filtered.length} 项 · 来自 ${fromPlugins} 个插件`;
+      setCount(`${filtered.length} 项 · 来自 ${fromPlugins} 个插件`);
     }
   } else {
     // 空状态不是死胡同：给出「下一步做什么」的可点建议
@@ -1503,12 +1503,12 @@ function renderListInner() {
   perfStats.listItems = filtered.length;
   renderListTools(baseEntries, q);
   bindListItems(q);
-  el.count.textContent = q.trim()
+  setCount(q.trim()
     ? `${filtered.length} / ${entries.length} 个动作`
     : [favorites.length ? `收藏 ${favorites.length} 优先` : '',
       loadRecent().length > 0 ? '最近使用优先' : '']
       .filter(Boolean).concat([`${plugins.length} 个插件`, `${entries.length} 个动作`])
-      .join(' · ');
+      .join(' · '));
   syncListHash();
 }
 
@@ -1524,8 +1524,8 @@ el.list.addEventListener('dblclick', (e) => {
   const key = li.dataset.key;
   if (!key) return;
   const i = favorites.indexOf(key);
-  if (i >= 0) { favorites.splice(i, 1); el.count.textContent = '已取消收藏'; }
-  else { favorites.push(key); el.count.textContent = t('favDone'); }
+  if (i >= 0) { favorites.splice(i, 1); setCount('已取消收藏'); }
+  else { favorites.push(key); setCount(t('favDone')); }
   savePrefs();
   patchItemFav(key);
 });
@@ -1570,7 +1570,7 @@ function bindListItems(q) {
         if (!existed) { batch.push(entry); batchMap.set(batchCurKey, batch); }
         // 第二十五轮：篮子内容变了就要重渲染浮条
         renderList();
-        el.count.textContent = existed ? `已在篮子里：${entry.action.title}` : `已加入批量篮：${entry.action.title}（共 ${batch.length} 项）`;
+        setCount(existed ? `已在篮子里：${entry.action.title}` : `已加入批量篮：${entry.action.title}（共 ${batch.length} 项）`);
       }
       return;
     }
@@ -1655,7 +1655,7 @@ function renderVirtualList(q) {
   el.list.innerHTML = pad(w.padTop)
     + filtered.slice(w.start, w.end).map((entry, i) => itemHtml(entry, w.start + i, true, q)).join('')
     + pad(w.padBottom);
-  el.count.textContent = `${filtered.length} / ${entries.length} 个动作（虚拟滚动 ${w.start + 1}-${w.end}）`;
+  setCount(`${filtered.length} / ${entries.length} 个动作（虚拟滚动 ${w.start + 1}-${w.end}）`);
 }
 
 function setupVirtualScroll() {
@@ -2126,10 +2126,10 @@ function openDetail(plugin, action, prefill) {
     if (scBtn) { scBtn.disabled = true; scBtn.textContent = '🔍 自检中…'; }
     try {
       const r = await api('/api/plugin/selfcheck', { method: 'POST', body: { id: plugin.id } });
-      if (r.probe?.kind === 'skip') el.count.textContent = `自检跳过：${r.probe.reason}`;
-      else if (r.ok) el.count.textContent = `装机自检 ✓ 能跑（${r.ms ?? '?'}ms · 探针 ${r.probe.actionId}）`;
-      else el.count.textContent = `装机自检 ✗ ${r.error || '退出码非零'}`;
-    } catch (e) { el.count.textContent = `自检失败：${e.message}`; }
+      if (r.probe?.kind === 'skip') setCount(`自检跳过：${r.probe.reason}`);
+      else if (r.ok) setCount(`装机自检 ✓ 能跑（${r.ms ?? '?'}ms · 探针 ${r.probe.actionId}）`);
+      else setCount(`装机自检 ✗ ${r.error || '退出码非零'}`);
+    } catch (e) { setCount(`自检失败：${e.message}`); }
     if (scBtn) { scBtn.disabled = false; scBtn.textContent = '🔍 装机自检'; }
   });
   // 历史参数重选：最近 3 次成功组合
@@ -2246,7 +2246,7 @@ function openDetail(plugin, action, prefill) {
   // 不做后台守护：守护需要常驻进程与错过补跑策略，那是一个服务，不是一个启动器功能。
   $('timerBtn')?.addEventListener('click', () => {
     if (action.risk !== 'read') {
-      el.count.textContent = t('fbTimerReadOnly');
+      setCount(t('fbTimerReadOnly'));
       return;
     }
     // 第三十八轮①②③④：定时任务升级——档位选择 + 执行窗口 + 暂停 + 历史。
@@ -2258,7 +2258,7 @@ function openDetail(plugin, action, prefill) {
   // 与「定时」的区别：定时只是重复跑；监控记录采样、diff 高亮、趋势线、可设停止条件。
   $('watchBtn')?.addEventListener('click', () => {
     if (action.risk !== 'read') {
-      el.count.textContent = t('fbWatchReadOnly');
+      setCount(t('fbWatchReadOnly'));
       return;
     }
     const reg = watchRegistry();
@@ -2305,7 +2305,7 @@ function openDetail(plugin, action, prefill) {
   $('shareCardBtn')?.addEventListener('click', async () => {
     const last = (runStore[actionKey(plugin.id, action.id)] ?? [])[0];  // 第七十轮修：unshift 语义首位最新
     if (!last) {
-      el.count.textContent = t('fbShareNoResult');
+      setCount(t('fbShareNoResult'));
       return;
     }
     const card = [
@@ -2316,10 +2316,10 @@ function openDetail(plugin, action, prefill) {
     ].filter(Boolean).join('\n');
     try {
       await navigator.clipboard.writeText(card);
-      el.count.textContent = t('fbShareCardDone');
+      setCount(t('fbShareCardDone'));
     } catch {
       window.__shareCardFallback = card;
-      el.count.textContent = t('fbShareCardFallback') + '__shareCardFallback)';
+      setCount(t('fbShareCardFallback'));
     }
   });
 
@@ -2433,15 +2433,15 @@ function openDetail(plugin, action, prefill) {
       if (!confirm(t('unpinConfirm'))) return;
       const r = await api(`/api/bookmarks?name=${encodeURIComponent(pinName)}`, { method: 'DELETE' }).catch(() => null);
       window.__zkBookmarks = r?.bookmarks ?? window.__zkBookmarks;
-      el.count.textContent = t('unpinned');
+      setCount(t('unpinned'));
     } else {
       const form = Object.fromEntries(Array.from(document.querySelectorAll('#paramForm input, #paramForm select, #paramForm textarea')).map((i) => [i.name, i.value]));
       const argv = ['run', plugin.id, action.id];
       for (const [k, v] of Object.entries(form)) if (v) argv.push(`--${k}`, v);
       const r = await api('/api/bookmarks', { method: 'POST', body: { name: pinName, argv, note: `${plugin.name} · ${action.title}` } }).catch((e) => ({ error: e.message }));
-      if (r?.error) { el.count.textContent = r.error; return; }
+      if (r?.error) { setCount(r.error); return; }
       window.__zkBookmarks = r?.bookmarks ?? [];
-      el.count.textContent = t('pinned');
+      setCount(t('pinned'));
     }
     const on2 = (window.__zkBookmarks ?? []).some((b) => b.name === pinName);
     btn.textContent = on2 ? '◉' : '○';
@@ -2629,7 +2629,7 @@ function backToList() {
         const plugin = entries.find((p) => p.plugin?.id === lastRun.plugin);
         const action = plugin?.plugin?.actions?.find((a) => a.id === lastRun.action) ?? plugin?.actions?.find((a) => a.id === lastRun.action);
         if (plugin && action) { openDetail(typeof plugin === 'object' && plugin.plugin ? plugin.plugin : plugin, action); submit(); }
-        else el.count.textContent = t('replayPluginGone');
+        else setCount(t('replayPluginGone'));
       }
     }
   }
@@ -2914,7 +2914,7 @@ async function showConfigWiz(pluginId) {
       }
       const r = await api('/api/plugin/config', { method: 'POST', body: { plugin: pluginId, patch } }).catch((e2) => ({ ok: false, error: String(e2) }));
       if (r?.ok) {
-        el.count.textContent = `已保存 ${Object.keys(patch).length} 项`;
+        setCount(`已保存 ${Object.keys(patch).length} 项`);
         showConfigWiz();   // 回列表看完成度刷新
         location.hash = '#/config';
       } else {
@@ -3115,7 +3115,7 @@ function openWatchDialog(plugin, action, key) {
     scheduleWatch(key, sec);
     updateWatchTitle();
     renderWatchBar();
-    el.count.textContent = t('watchStarted')(intervalLabel(sec));
+    setCount(t('watchStarted')(intervalLabel(sec)));
     // 立即采第一次样（不等第一个间隔），结果同样入序列——diff 要有基线
     submit(false).then(() => {
       const w2 = watchRegistry()[key];
@@ -3173,7 +3173,7 @@ function scheduleWatch(key, sec) {
       writeJson('zerokit.watch-stops', stops);
       void persistWatch();
       if (watchStopLog.length > 5) watchStopLog.shift();
-      el.count.textContent = w.stopReason;
+      setCount(w.stopReason);
       if (mode === 'watch') showWatchPanel();   // 正看着面板就刷新摘要
       return;
     }
@@ -3219,7 +3219,7 @@ function notifyWatchChange(w, prev, next) {
     if (quietNow || suppressed) return;
     if (!('Notification' in window) || Notification.permission !== 'granted') {
       // ① 降级：无权限时面板 toast（el.count 复用——通知中心不可用不该静默）
-      el.count.textContent = `⇄ ${w.title} ${kind === 'alert' ? '连续失败' : '结果有变化'}（第 ${w.changes} 次）`;
+      setCount(`⇄ ${w.title} ${kind === 'alert' ? '连续失败' : '结果有变化'}（第 ${w.changes} 次）`);
       return;
     }
     // ② 通知点击跳监控面板
@@ -3264,7 +3264,7 @@ function renderWatchBar() {
   bar.querySelector('#watchStopBtn')?.addEventListener('click', () => {
     stopWatch(key);
     renderWatchBar();
-    el.count.textContent = t('watchStopped');
+    setCount(t('watchStopped'));
   });
   // 倒计时每秒刷一次环（只重画 bar，不重跑动作）
   clearTimeout(renderWatchBar._tick);
@@ -3422,15 +3422,15 @@ function showWatchPanel() {
     const on = el.allowView.querySelector('#quietOn')?.checked ?? false;
     const st = String(el.allowView.querySelector('#quietStart')?.value ?? '22:00').trim();
     const en = String(el.allowView.querySelector('#quietEnd')?.value ?? '07:00').trim();
-    if (parseHm(st) === null || parseHm(en) === null) { el.count.textContent = '静默时段要 HH:mm 格式（如 22:00）'; return; }
+    if (parseHm(st) === null || parseHm(en) === null) { setCount('静默时段要 HH:mm 格式（如 22:00）'); return; }
     writeJson('zerokit.quiet', { on, start: st, end: en });
-    el.count.textContent = on ? `静默时段已开启（${st}–${en}）` : '静默时段已关闭';
+    setCount(on ? `静默时段已开启（${st}–${en}）` : '静默时段已关闭');
   });
   el.allowView.querySelectorAll('[data-wnotify]').forEach((b) => b.addEventListener('click', () => {
     const reg2 = watchRegistry(); const w3 = reg2[b.dataset.wnotify];
     if (!w3) return;
     w3.notify = w3.notify === false; // undefined/true → false；false → true
-    el.count.textContent = w3.notify === false ? `已关通知：${w3.title}` : `已开通知：${w3.title}`;
+    setCount(w3.notify === false ? `已关通知：${w3.title}` : `已开通知：${w3.title}`);
     void persistWatch();
     showWatchPanel(); // 重画按钮态
   }));
@@ -3440,7 +3440,7 @@ function showWatchPanel() {
   }));
   el.allowView.querySelectorAll('[data-wcsv]').forEach((b) => b.addEventListener('click', () => {
     const w = watchRegistry()[b.dataset.wcsv];
-    if (!w || !w.samples.length) { el.count.textContent = '还没有采样，导出啥呀'; return; }
+    if (!w || !w.samples.length) { setCount('还没有采样，导出啥呀'); return; }
     const csv = watchCsv(w.samples);
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
@@ -3448,16 +3448,16 @@ function showWatchPanel() {
     a.download = `watch-${w.pluginId}-${w.actionId}-${Date.now()}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
-    el.count.textContent = t('watchCsvDone')(w.samples.length);
+    setCount(t('watchCsvDone')(w.samples.length));
   }));
   // 第三十七轮⑥：采样 → Markdown 趋势表（数值列环比用 cellDiff 文本）
   el.allowView.querySelectorAll('[data-wmd]').forEach((b) => b.addEventListener('click', () => {
     const w = watchRegistry()[b.dataset.wmd];
-    if (!w || !w.samples.length) { el.count.textContent = '还没有采样，导出啥呀'; return; }
+    if (!w || !w.samples.length) { setCount('还没有采样，导出啥呀'); return; }
     const firstNum = w.samples.map((smp) => smp?.data).find((d) => d && typeof d === 'object' && !Array.isArray(d));
     const key = firstNum ? Object.keys(firstNum).find((k2) => typeof firstNum[k2] === 'number') : undefined;
     const md = watchTrendMarkdown(w.samples, (smp) => (key !== undefined ? smp?.data?.[key] : JSON.stringify(smp?.data)?.slice(0, 40)));
-    navigator.clipboard.writeText(md).then(() => { el.count.textContent = `已复制 ${w.samples.length} 次采样趋势表（列 ${key ?? '摘要'}）`; }, () => { el.count.textContent = '复制失败（剪贴板被拒）'; });
+    navigator.clipboard.writeText(md).then(() => { setCount(`已复制 ${w.samples.length} 次采样趋势表（列 ${key ?? '摘要'}）`); }, () => { setCount('复制失败（剪贴板被拒）'); });
   }));
 }
 
@@ -3619,8 +3619,8 @@ function openTimerDialog(plugin, action) {
     const sec = Number(overlay.querySelector('#tSec').value);
     const win = overlay.querySelector('#tWin').value.trim();
     const useVals = overlay.querySelector('#tVals').checked;
-    if (!Number.isFinite(sec) || sec < 10) { el.count.textContent = t('timerMinSec'); return; }
-    if (!validWindow(win)) { el.count.textContent = t('timerWinBad'); return; }
+    if (!Number.isFinite(sec) || sec < 10) { setCount(t('timerMinSec')); return; }
+    if (!validWindow(win)) { setCount(t('timerWinBad')); return; }
     if (reg[key]) { clearInterval(reg[key].id); delete reg[key]; }
     reg[key] = {
       id: null, interval: sec, win,
@@ -3631,7 +3631,7 @@ function openTimerDialog(plugin, action) {
     };
     startTimerTick(key);
     overlay.remove();
-    el.count.textContent = `已开启定时执行：每 ${sec} 秒一次${win ? `（窗口 ${win}）` : ''}（#/timers 可管理）`;
+    setCount(`已开启定时执行：每 ${sec} 秒一次${win ? `（窗口 ${win}）` : ''}（#/timers 可管理）`);
     // 第六十三轮①：落盘（CLI 与下次加载都能看到）
     api('/api/timers', { method: 'POST', body: { op: 'upsert', timer: {
       key, title: reg[key].title, interval: sec, win, createdAt: reg[key].createdAt,
@@ -3711,7 +3711,7 @@ function keysGateBlocks(e) {
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return false;
   if (Date.now() - keysHintShownAt > 8000) {
     keysHintShownAt = Date.now();
-    try { el.count.textContent = keysDisabledHint(); } catch { /* el 尚未就绪 */ }
+    try { setCount(keysDisabledHint()); } catch { /* el 尚未就绪 */ }
   }
   return true;
 }
@@ -3768,8 +3768,8 @@ function showClipPanel() {
   }));
   panel.querySelectorAll('[data-write]').forEach((b) => b.addEventListener('click', async () => {
     const c = clipHist[Number(b.dataset.write)];
-    try { await navigator.clipboard.writeText(c.text); el.count.textContent = '已写回剪贴板'; }
-    catch { el.count.textContent = '写剪贴板被浏览器拒绝'; }
+    try { await navigator.clipboard.writeText(c.text); setCount('已写回剪贴板'); }
+    catch { setCount('写剪贴板被浏览器拒绝'); }
   }));
 }
 
@@ -3813,7 +3813,7 @@ function showTimers() {
     const f = fileBtn.files?.[0];
     if (!f) return;
     const r = parseTimersPack(await f.text());
-    if (!r.ok) { el.count.textContent = `导入失败：${r.error}`; return; }
+    if (!r.ok) { setCount(`导入失败：${r.error}`); return; }
     const reg2 = timerRegistry();
     let added = 0;
     for (const [k, cfg] of Object.entries(r.pack.timers)) {
@@ -3823,7 +3823,7 @@ function showTimers() {
       if (!cfg.paused) startTimerTick(k);
       added++;
     }
-    el.count.textContent = `导入完成：新增 ${added} 个定时任务`;
+    setCount(`导入完成：新增 ${added} 个定时任务`);
     renderTimersRows();
   });
 }
@@ -4084,7 +4084,7 @@ function askConfirm(plugin, action, res) {
       ? '这个动作会改动或删除数据，且不可自动撤销。请确认命令行内容与你的预期一致。'
       : '这个动作会改动系统或插件状态（写文件、发请求、起进程等）。';
     overlay.innerHTML = `
-      <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal modal-box ${action.risk === 'destructive' ? 'destructive' : action.risk === 'mutate' ? 'mutate' : ''}" role="dialog" aria-modal="true">
         <h3>确认执行</h3>
         <div class="risk-note">
           ${esc(plugin.name)} · ${esc(action.title)} ·
@@ -4173,7 +4173,7 @@ function purgeSensitive() {
   paramStore = {};
   savePrefs();
   renderRunHistory(detail?.plugin, detail?.action);
-  el.count.textContent = '已清除：当前结果 + 运行历史数据 + 参数记忆';
+  setCount('已清除：当前结果 + 运行历史数据 + 参数记忆');
 }
 
 // ---------------------------------------------------------------- 第二十轮：数据备份与迁移
@@ -4216,8 +4216,8 @@ async function exportBackup() {
   a.download = fname;
   a.click();
   URL.revokeObjectURL(url);
-  el.count.textContent = t('backupExported')(backup.meta.keyCount, backup.meta.bytes, fname)
-    + (backup.plugins?.length ? `（含 ${backup.plugins.length} 个插件清单${backup.meta.skippedSecrets ? ` · ${backup.meta.skippedSecrets} 项 secret 不落盘` : ''}）` : '');
+  setCount(t('backupExported')(backup.meta.keyCount, backup.meta.bytes, fname)
+    + (backup.plugins?.length ? `（含 ${backup.plugins.length} 个插件清单${backup.meta.skippedSecrets ? ` · ${backup.meta.skippedSecrets} 项 secret 不落盘` : ''}）` : ''));
 }
 
 /** 导入三步：选文件 → parseBackup 校验 → 分组预览+勾选 → mergeBackup 合并写回并重载 */
@@ -4231,7 +4231,7 @@ function openImportDialog() {
     const text = await file.text();
     const parsed = parseBackup(text);
     if (!parsed.ok) {
-      el.count.textContent = `导入失败：${parsed.error}`;
+      setCount(`导入失败：${parsed.error}`);
       return;
     }
     const backup = parsed.backup;
@@ -4312,7 +4312,7 @@ function openImportDialog() {
         const rep = [`恢复完成：导入 ${applied} 键 / 跳过 ${skipped} 键`];
         if (cfgEntries.length) rep.push(`配置 ${restoredCfg} 恢复 / ${skippedCfg} 跳过（secret 或无效）`);
         if ((backup.plugins ?? []).length) rep.push(`插件 ${installed} 装回 / ${bundledCount} 自带 / ${failed} 需手动（集市）`);
-        el.count.textContent = rep.join(' · ');
+        setCount(rep.join(' · '));
         setTimeout(() => location.reload(), 1200);
       })();
     });
@@ -4347,7 +4347,7 @@ function renderRunHistory(plugin, action) {
   box.querySelectorAll('[data-curl]').forEach((b) => b.addEventListener('click', () => {
     const r = list[Number(b.dataset.curl)];
     const cmd = toCurl({ plugin: plugin.id, action: action.id, values: r?.values ?? {}, port: Number(location.port) || 28970 });
-    navigator.clipboard.writeText(cmd).then(() => { b.textContent = '已复制'; setTimeout(() => { b.textContent = 'curl'; }, 1500); }, () => { el.count.textContent = '复制失败（剪贴板被拒）'; });
+    navigator.clipboard.writeText(cmd).then(() => { b.textContent = '已复制'; setTimeout(() => { b.textContent = 'curl'; }, 1500); }, () => { setCount('复制失败（剪贴板被拒）'); });
   }));
   // 第二十五轮⑨：一键回填历史参数再跑
   box.querySelectorAll('[data-rerunp]').forEach((b) => b.addEventListener('click', () => {
@@ -4355,7 +4355,7 @@ function renderRunHistory(plugin, action) {
     if (r?.values) {
       paramStore[actionKey(plugin.id, action.id)] = { ...r.values };
       openDetail(plugin, action);
-      el.count.textContent = '已回填该次参数';
+      setCount('已回填该次参数');
       submit(false);
     }
   }));
@@ -4391,17 +4391,17 @@ function renderRunHistory(plugin, action) {
   // 第十六轮⑤：合并视图——勾两条记录按共同键列拼成一张表（左连接，同名列加 _2 后缀）
   $('mergeHist')?.addEventListener('click', () => {
     const rows0 = list.filter((r) => Array.isArray(r.data) && r.data.length && typeof r.data[0] === 'object');
-    if (rows0.length < 2) { el.count.textContent = '至少要有两次「表格结果」才能合并（先各跑一次）'; return; }
+    if (rows0.length < 2) { setCount('至少要有两次「表格结果」才能合并（先各跑一次）'); return; }
     const colsOf = (rs) => { const cs = []; for (const row of rs[0].data) for (const k of Object.keys(row ?? {})) if (!cs.includes(k)) cs.push(k); return cs; };
     const c1 = colsOf([rows0[0]]), c2 = colsOf([rows0[1]]);
     const common = c1.filter((c) => c2.includes(c));
     const key = common[0] ?? c1[0];
     const merged = mergeTables(rows0[0].data, rows0[1].data, key, common[0] ? key : c2[0]);
-    if (!merged) { el.count.textContent = '合并失败：数据形状不对'; return; }
+    if (!merged) { setCount('合并失败：数据形状不对'); return; }
     // 合并结果作为一张普通表格渲染进结果卡，可继续排序/筛选/导出
     renderResult({ ok: true, ms: 0, data: merged, render: undefined,
       note: `合并视图：第 1、2 条记录按「${key}」列拼接（左连接）` });
-    el.count.textContent = `已合并 ${merged.length} 行（按「${key}」列；同名列加了 _2 后缀）`;
+    setCount(`已合并 ${merged.length} 行（按「${key}」列；同名列加了 _2 后缀）`);
   });
 }
 
@@ -4519,13 +4519,13 @@ function renderChainNext(plugin, action, res) {
     next.remove();
     const bar2 = document.getElementById('chainStepsBar');
     bar2?.remove();
-    el.count.textContent = '链已结束';
+    setCount('链已结束');
   });
   next.querySelector('#chainRunNext')?.addEventListener('click', () => {
     if (!picked) return;
     next.remove();
     openDetail(picked.plugin, picked.action);
-    el.count.textContent = `链第 ${chainSteps.length + 1} 步：参数里可用 {result.data.字段} 引用上一步`;
+    setCount(`链第 ${chainSteps.length + 1} 步：参数里可用 {result.data.字段} 引用上一步`);
   });
 }
 
@@ -4581,7 +4581,7 @@ function pushResultTab(res) {
   }
   let next = resultTabs.slice();
   if (next.length >= 8) next = tabEvict(next, 7);   // 给新页签腾位
-  if (next.length >= 8 && next.every((t) => t.pinned)) { el.count.textContent = '页签满了：先关或取消固定一个'; return; }
+  if (next.length >= 8 && next.every((t) => t.pinned)) { setCount('页签满了：先关或取消固定一个'); return; }
   next.push(entry);
   resultTabs.length = 0; resultTabs.push(...next);
   activeTab = entry.id;
@@ -4652,7 +4652,7 @@ function renderTabBar() {
       if (v === null) return;
       t.note = String(v).slice(0, 60);
       renderTabBar();
-      el.count.textContent = t.note ? '备注已保存' : '备注已清空';
+      setCount(t.note ? '备注已保存' : '备注已清空');
     });
     // ④固定：右键切换 pinned——固定页签不会被新结果挤出
     // 第一百一十八轮②：右键顺带复制备注（有备注时）
@@ -4664,10 +4664,10 @@ function renderTabBar() {
       renderTabBar();
       if (t.note) {
         void navigator.clipboard?.writeText(`// ${t.note}\n${JSON.stringify(t.res?.data ?? t.res ?? '', null, 2)}`).catch(() => {});
-        el.count.textContent = t.pinned ? t('pinnedNoteCopied') : t('unpinnedNoteCopied');
+        setCount(t.pinned ? t('pinnedNoteCopied') : t('unpinnedNoteCopied'));
         return;
       }
-      el.count.textContent = t.pinned ? '已固定（不会被挤出）' : '已取消固定';
+      setCount(t.pinned ? '已固定（不会被挤出）' : '已取消固定');
     });
   });
   bar.querySelectorAll('[data-rx]').forEach((x) => x.addEventListener('click', (e) => {
@@ -4686,7 +4686,7 @@ function renderTabBar() {
   bar.querySelector('[data-rcmp]')?.addEventListener('click', () => {
     const cur = tabById(activeTab);
     const other = resultTabs.filter((t) => t.id !== activeTab).at(-1);
-    if (!cur || !other) { el.count.textContent = '对比需要两个页签'; return; }
+    if (!cur || !other) { setCount('对比需要两个页签'); return; }
     showCompareView(cur, other);
   });
 }
@@ -4805,7 +4805,7 @@ document.addEventListener('click', (e) => {
     e.preventDefault();
     const runs = runStore[actionKey(detail?.plugin?.id ?? '', detail?.action?.id ?? '')] ?? [];
     const cur = runs.at(-1), prev = runs.at(-2);
-    if (!cur || !prev) { el.count.textContent = '没有两次可对比的结果'; return; }
+    if (!cur || !prev) { setCount('没有两次可对比的结果'); return; }
     showCompareView({ res: cur }, { res: prev });
     return;
   }
@@ -5186,7 +5186,7 @@ function renderResult(res) {
     a.download = `zerokit-${detail ? `${detail.plugin.id}-${detail.action.id}` : 'result'}-${snap.savedAt.slice(0, 10)}.zkresult.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    el.count.textContent = t('fbSnapshotDone');
+    setCount(t('fbSnapshotDone'));
   });
   $('mdRes')?.addEventListener('click', () => {
     const title = detail ? `${detail.plugin.name} · ${detail.action.title}` : 'zerokit 结果';
@@ -5293,10 +5293,10 @@ function renderResult(res) {
     btn.textContent = t('fbOpening');
     try {
       const r = await api('/api/edit', { method: 'POST', body: { text: copyText, name: lastExport?.name ?? (detail ? `${detail.plugin.id}-${detail.action.id}.txt` : 'result.txt') } });
-      el.count.textContent = t('fbOpenedAt') + (r.file ?? '');
+      setCount(t('fbOpenedAt') + (r.file ?? ''));
       btn.textContent = t('fbOpened');
     } catch (e) {
-      el.count.textContent = t('fbOpenFail') + String(e.message || e).slice(0, 120);
+      setCount(t('fbOpenFail') + String(e.message || e).slice(0, 120));
       btn.textContent = t('fbFailed');
     }
     setTimeout(() => { const b = $('editRes'); if (b) b.textContent = '编辑器打开'; }, 1600);
@@ -5305,10 +5305,10 @@ function renderResult(res) {
     const btn = ev.currentTarget;
     try {
       const r = await api('/api/open', { method: 'POST', body: (lastExport?.dir || window.__zkExportsDir) ? { target: lastExport?.dir ?? window.__zkExportsDir } : { dir: 'exports' } });
-      el.count.textContent = `已在文件管理器打开：${r.opened ?? ''}`;
+      setCount(`已在文件管理器打开：${r.opened ?? ''}`);
       btn.textContent = t('fbOpened');
     } catch (e) {
-      el.count.textContent = `目录打不开：${String(e.message || e).slice(0, 120)}`;
+      setCount(`目录打不开：${String(e.message || e).slice(0, 120)}`);
       btn.textContent = t('fbFailed');
     }
     setTimeout(() => { const b = $('openDirRes'); if (b) b.textContent = '打开目录'; }, 1600);
@@ -5447,8 +5447,8 @@ function renderResult(res) {
     if (btn) btn.addEventListener('click', async () => {
       try {
         await navigator.clipboard.writeText(toShareMarkdown(res.data, shareMeta, { full: false }));
-        el.count.textContent = '分享文本已复制（Markdown，含执行信息头）';
-      } catch { el.count.textContent = t('copyDenied'); }
+        setCount('分享文本已复制（Markdown，含执行信息头）');
+      } catch { setCount(t('copyDenied')); }
     });
   }
   if (res.data !== undefined) {
@@ -5765,7 +5765,7 @@ window.addEventListener('message', (ev) => {
   } else if (msg.type === 'error') {
     // 页面自己报错：打进来给用户看见，而不是静默白屏
     console.warn('[zk-bridge] 页面报错：', msg.error);
-    el.count.textContent = `插件页面报错：${String(msg.error ?? '').slice(0, 80)}`;
+    setCount(`插件页面报错：${String(msg.error ?? '').slice(0, 80)}`);
   }
   // 未知 type 一律忽略（协议收紧：多出来的消息不解释不转发）
 });
@@ -5933,7 +5933,7 @@ function bindTextView(res) {
     if (act === 'copy-raw' || act === 'copy-num' || act === 'copy-title') {
       const raw = String(res.data !== undefined && typeof res.data === 'string' ? res.data : (res.stdout ?? ''));
       const text = act === 'copy-raw' ? copyTextRaw(raw) : act === 'copy-num' ? copyWithNumbers(raw) : copyWithTitle(raw, detail?.action?.title || '文本结果');
-      navigator.clipboard?.writeText(text).then(() => { el.count.textContent = `已复制（${act === 'copy-raw' ? '原文' : act === 'copy-num' ? '带行号' : '带标题'}）`; }).catch(() => {});
+      navigator.clipboard?.writeText(text).then(() => { setCount(`已复制（${act === 'copy-raw' ? '原文' : act === 'copy-num' ? '带行号' : '带标题'}）`); }).catch(() => {});
       return;
     }
     if (act === 'save-txt') {
@@ -5974,7 +5974,7 @@ function bindTextView(res) {
       const sel = selected();
       if (!sel.length) return;
       const text = sel.map((r) => r.querySelector('.tv-line').textContent).join('\n');
-      navigator.clipboard?.writeText(text).then(() => { el.count.textContent = `已复制 ${sel.length} 行`; }).catch(() => {});
+      navigator.clipboard?.writeText(text).then(() => { setCount(`已复制 ${sel.length} 行`); }).catch(() => {});
       ev.preventDefault();
     }
   });
@@ -6180,8 +6180,8 @@ function bindTableSorts(scope) {
         menu.appendChild(b);
       };
       const copy = (text, what) => navigator.clipboard?.writeText(text)
-        .then(() => { el.count.textContent = t('copiedWhat')(what); })
-        .catch(() => { el.count.textContent = '复制被浏览器拒绝'; });
+        .then(() => { setCount(t('copiedWhat')(what)); })
+        .catch(() => { setCount('复制被浏览器拒绝'); });
       mk(t('ctxCopyCell'), () => copy(td.textContent.trim(), t('cellUnit')));
       // 第九十七轮⑤：只看这个值——列值等值过滤，一键缩小到当前行同类
       // （小计行不是数据行，不给只看——它的值是聚合出来的）
@@ -6327,7 +6327,7 @@ function bindTableSorts(scope) {
       if (!Array.isArray(rows0)) return;
       const vals = columnValues(rows0, col, { dedupe: ev.altKey });
       navigator.clipboard?.writeText(vals.join('\n')).then(() => {
-        el.count.textContent = t('copiedCol')(col, ev.altKey, vals.length);
+        setCount(t('copiedCol')(col, ev.altKey, vals.length));
       }).catch(() => {});
     }));
   });
@@ -6596,7 +6596,7 @@ async function showActivity() {
     <div id="actCards" class="stat-row"></div>
     <div id="actChips" class="hist-chips"></div>
     <div id="actList" class="act-list" role="feed" aria-label="执行时间线"></div>`;
-  el.count.textContent = '';
+  setCount('');
   try {
     const r = await fetch('/api/logs?limit=200');
     const j = await r.json();
@@ -6739,7 +6739,7 @@ async function renderLogs() {
       // 第一百一十三轮⑥：导出与所见一致——时间范围也带上
       if (logsRange) d2.entries = filterAudit(d2.entries ?? [], { range: logsRange });
       const es = d2.entries ?? [];
-      if (!es.length) { el.count.textContent = '没有可导出的行'; return; }
+      if (!es.length) { setCount('没有可导出的行'); return; }
       const head = 'time,plugin,action,decision,ms,exitCode';
       const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
       const csv = [head, ...es.map((e) => [
@@ -6750,8 +6750,8 @@ async function renderLogs() {
       a.href = URL.createObjectURL(blob);
       a.download = `zerokit-logs-${logsFile}-${new Date().toISOString().slice(0, 10)}.csv`;
       a.click(); URL.revokeObjectURL(a.href);
-      el.count.textContent = `已导出 ${es.length} 条日志`;
-    } catch (err) { el.count.textContent = `导出失败：${err.message}`; }
+      setCount(`已导出 ${es.length} 条日志`);
+    } catch (err) { setCount(`导出失败：${err.message}`); }
   });
   // 第一百一十三轮⑦：JSON 导出——与 CSV 同筛选（时间范围/决策/插件/关键词全带上）
   $('logJson').addEventListener('click', async () => {
@@ -6763,14 +6763,14 @@ async function renderLogs() {
       const d2 = await api(`/api/logs?${params}`);
       if (logsRange) d2.entries = filterAudit(d2.entries ?? [], { range: logsRange });
       const es = d2.entries ?? [];
-      if (!es.length) { el.count.textContent = '没有可导出的行'; return; }
+      if (!es.length) { setCount('没有可导出的行'); return; }
       const blob = new Blob([JSON.stringify(es, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = `zerokit-logs-${logsFile}-${new Date().toISOString().slice(0, 10)}.json`;
       a.click(); URL.revokeObjectURL(a.href);
-      el.count.textContent = `已导出 ${es.length} 条日志（JSON）`;
-    } catch (err) { el.count.textContent = `导出失败：${err.message}`; }
+      setCount(`已导出 ${es.length} 条日志（JSON）`);
+    } catch (err) { setCount(`导出失败：${err.message}`); }
   });
   $('logFile').addEventListener('click', () => {
     logsFile = logsFile === 'audit' ? 'denied' : 'audit';
@@ -7391,8 +7391,8 @@ async function showPluginHome(id) {
   $('homeCopyDoc')?.addEventListener('click', () => {
     const md = buildCapabilitiesMd(p);
     navigator.clipboard?.writeText(md).then(
-      () => { el.count.textContent = `已复制 ${p.name} 的能力清单（Markdown）`; },
-      () => { el.count.textContent = '复制失败——剪贴板不可用'; },
+      () => { setCount(`已复制 ${p.name} 的能力清单（Markdown）`); },
+      () => { setCount('复制失败——剪贴板不可用'); },
     );
   });
   $('homeExport')?.addEventListener('click', () => {
@@ -7421,13 +7421,13 @@ async function showPluginHome(id) {
   // 第二十六轮⑥：复制安装命令
   $('homeCopyInstall')?.addEventListener('click', async () => {
     const cmd = installCommand(p);
-    try { await navigator.clipboard.writeText(cmd); el.count.textContent = `已复制：${cmd}`; }
-    catch { el.count.textContent = cmd; }
+    try { await navigator.clipboard.writeText(cmd); setCount(`已复制：${cmd}`); }
+    catch { setCount(cmd); }
   });
   // 第二十六轮①：与另一个插件对比（模态选择 + 对比表）
   $('homeCompare')?.addEventListener('click', () => {
     const others = plugins.filter((x) => x.id !== p.id);
-    if (!others.length) { el.count.textContent = '没有其它插件可对比'; return; }
+    if (!others.length) { setCount('没有其它插件可对比'); return; }
     const ov = document.createElement('div');
     ov.className = 'overlay';
     ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true">
@@ -7441,7 +7441,7 @@ async function showPluginHome(id) {
     ov.querySelectorAll('[data-cmp]').forEach((b) => b.addEventListener('click', () => {
       const o = others[Number(b.dataset.cmp)];
       const cmp = plugCompare(p, o);
-      if (!cmp) { el.count.textContent = '对比失败：插件数据不完整'; ov.remove(); return; }
+      if (!cmp) { setCount('对比失败：插件数据不完整'); ov.remove(); return; }
       ov.querySelector('.modal').innerHTML = `
         <h3>对比：${esc(cmp.a.name)} vs ${esc(cmp.b.name)}</h3>
         <table class="cmp-table"><caption class="sr-only">插件对比</caption><thead><tr><th>维度</th><th>${esc(cmp.a.name)}</th><th>${esc(cmp.b.name)}</th></tr></thead>
@@ -7468,8 +7468,8 @@ function exportInstalledList() {
     a.download = `zerokit-plugins-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
-    el.count.textContent = `已导出 ${data.plugins.length} 个插件的清单`;
-  }).catch((e) => { el.count.textContent = `导出失败：${e.message}`; });
+    setCount(`已导出 ${data.plugins.length} 个插件的清单`);
+  }).catch((e) => { setCount(`导出失败：${e.message}`); });
 }
 
 async function renderPlugins() {
@@ -8235,7 +8235,7 @@ function showWorkbench(question) {
   if (question) {
     $('wbQ').value = question;
   }
-  el.count.textContent = `${entries.length} 个动作可作为工具`;
+  setCount(`${entries.length} 个动作可作为工具`);
   setTimeout(() => $('wbQ')?.focus(), 0);
 }
 
@@ -8875,7 +8875,7 @@ async function showSaved() {
         selA.v = null; b.textContent = '选比'; b.classList.remove('on');
       } else {
         const a = savedList[selA.v], c = savedList[Number(b.dataset.sel)];
-        if (a.key !== c.key) { el.count.textContent = '只能对比同一个动作的两条结果'; return; }
+        if (a.key !== c.key) { setCount('只能对比同一个动作的两条结果'); return; }
         const rows = resultCompare(a.data, c.data);
         const html = rows.map((r2) => `<tr class="${r2.diff ? 'cmp-diff' : ''}"><td>${r2.diff ? '<span class="cmp-mark" aria-label="' + t('cmpDiffMark') + '">▲</span> ' : ''}${esc(r2.key)}</td><td>${esc(r2.a)}</td><td>${esc(r2.b)}</td></tr>`).join('');
         const box = document.createElement('div');
@@ -8885,7 +8885,7 @@ async function showSaved() {
           <table class="cmp-table"><caption class="sr-only">历史对比</caption><thead><tr><th>键</th><th>较早</th><th>较晚</th></tr></thead><tbody>${html}</tbody></table>`;
         view.prepend(box);
         box.querySelector('#cmpClose').addEventListener('click', () => box.remove());
-        el.count.textContent = rows.length ? t('cmpDiffCount')(rows.filter((r2) => r2.diff).length) : t('cmpNoKeys');
+        setCount(rows.length ? t('cmpDiffCount')(rows.filter((r2) => r2.diff).length) : t('cmpNoKeys'));
       }
     }));
     view.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => {
@@ -9066,7 +9066,7 @@ async function renderDevPanel() {
     try {
       const p = await api('/api/dev/poll');
       if (lastStamp !== null && p.stamp > lastStamp) {
-        el.count.textContent = '检测到 dev 插件清单变更——重跑动作即可加载新版本';
+        setCount('检测到 dev 插件清单变更——重跑动作即可加载新版本');
       }
       lastStamp = p.stamp;
     } catch { /* 网络闪断忽略 */ }
@@ -9160,7 +9160,7 @@ function showPalette() {
     { icon: '🀄', label: '语言：中文', hint: '界面切换到中文', key: '', group: 'op', act: () => { exitPalette(); try { localStorage.setItem('zerokit.lang', 'zh'); } catch { /* 忽略 */ } langPref = 'zh'; lang = pickLang('zh', navigator.language); applyLang(true); } },
     { icon: '🅐', label: '语言：English', hint: 'switch UI to English', key: '', group: 'op', act: () => { exitPalette(); try { localStorage.setItem('zerokit.lang', 'en'); } catch { /* 忽略 */ } langPref = 'en'; lang = pickLang('en', navigator.language); applyLang(true); } },
     { icon: '📤', label: '导出备份', hint: '下载全部个性化数据（JSON）', key: '', group: 'op', act: () => { exitPalette(); exportBackup(); } },
-    { icon: '🗑', label: '清空搜索历史', hint: '删除全部搜索历史记录', key: '', group: 'op', act: () => { exitPalette(); try { localStorage.removeItem('zerokit.searches'); el.count.textContent = '已清空搜索历史'; } catch { /* 忽略 */ } } },
+    { icon: '🗑', label: '清空搜索历史', hint: '删除全部搜索历史记录', key: '', group: 'op', act: () => { exitPalette(); try { localStorage.removeItem('zerokit.searches'); setCount('已清空搜索历史'); } catch { /* 忽略 */ } } },
   ];
   overlay.innerHTML = `
     <div class="modal palette">
@@ -9230,7 +9230,7 @@ function showPalette() {
       items = [{
         icon: '⚡', label: `执行 ${quick.plugin}.${quick.action}`,
         hint: entry ? entry.action.title : '（未找到该动作）',
-        act: () => { if (entry) { exitPalette(); openDetail(entry.plugin, entry.action); } else { el.count.textContent = '没有这个动作'; } },
+        act: () => { if (entry) { exitPalette(); openDetail(entry.plugin, entry.action); } else { setCount('没有这个动作'); } },
       }];
       sel = 0; paint(); return;
     }
@@ -9256,7 +9256,7 @@ function showPalette() {
           const params = {};
           for (let k = 3; k + 1 < argv.length; k += 2) { const key = String(argv[k]).replace(/^--/, ''); params[key] = argv[k + 1]; }
           const r = await api('/api/run', { method: 'POST', body: { plugin: pl, action: ac, values: params } }).catch((e) => ({ error: e.message }));
-          el.count.textContent = r?.ok ? `⭐ ${b.name} · ${t('done')}` : (r?.error ?? t('runFailed'));
+          setCount(r?.ok ? `⭐ ${b.name} · ${t('done')}` : (r?.error ?? t('runFailed')));
           if (r?.ok && r.data !== undefined) { window.__zkLastBookmarkResult = r; location.hash = '#/bookmark-result'; }
         },
       }));
@@ -9317,18 +9317,18 @@ function showPalette() {
     try { localStorage.setItem('zerokit.cmdhist', JSON.stringify(pushHistory(readJson('zerokit.cmdhist') ?? [], c.id))); } catch { /* 存不进就算了 */ }
     exitPalette();
     if (c.go.startsWith('#')) location.hash = c.go;
-    else if (c.go === 'batch') { if (detail) backToList(); el.count.textContent = batch.length ? t('batchHas')(batch.length) : t('batchEmpty'); }
+    else if (c.go === 'batch') { if (detail) backToList(); setCount(batch.length ? t('batchHas')(batch.length) : t('batchEmpty')); }
     else if (c.go === 'theme') openDrawer();
     else if (c.go === 'drawer') openDrawer();
     else if (c.go === 'workbench') showWorkbench('');
     // 第三十七轮⑤：两个 AI 命令直接进剪贴板（不弹面板——复制类动作要一步到位）
     else if (c.go === 'copy-mcp') {
       const cfg = toMcpConfig('node', '/path/to/zerokit/src/mcp.ts');
-      navigator.clipboard.writeText(cfg).then(() => { el.count.textContent = '已复制 MCP 配置（mcpServers JSON）'; }, () => { el.count.textContent = '复制失败（剪贴板被拒）'; });
+      navigator.clipboard.writeText(cfg).then(() => { setCount('已复制 MCP 配置（mcpServers JSON）'); }, () => { setCount('复制失败（剪贴板被拒）'); });
     } else if (c.go === 'copy-ctx') {
       const runs = Object.values(runStore).flat().sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 3);
       const ctx = packContext({ runs, plugins: plugins.map((pl) => ({ id: pl.id, name: pl.name, actions: (pl.actions || []).map((a) => ({ id: a.id, title: a.title })) })) });
-      navigator.clipboard.writeText(ctx).then(() => { el.count.textContent = '已复制 AI 上下文（最近执行+插件清单）'; }, () => { el.count.textContent = '复制失败（剪贴板被拒）'; });
+      navigator.clipboard.writeText(ctx).then(() => { setCount('已复制 AI 上下文（最近执行+插件清单）'); }, () => { setCount('复制失败（剪贴板被拒）'); });
     }
   };
   const exitPalette = () => { paletteMode = false; overlay.remove(); };
@@ -9416,7 +9416,7 @@ document.addEventListener('keydown', (e) => {
       listFilter = 'all';
       applyHash();
       renderList();
-      el.count.textContent = '已清空搜索';
+      setCount('已清空搜索');
     }
   });
   document.addEventListener('keyup', (e) => { if (e.key === 'Escape') escDownAt = 0; });
@@ -9528,8 +9528,8 @@ document.addEventListener('keydown', (e) => {
         ? (trJson ?? JSON.stringify([...tr.querySelectorAll('td')].map((td) => td.textContent.trim())))
         : (kvVal ? kvVal.textContent.trim() : [...tr.querySelectorAll('td')].map((td) => td.textContent.trim()).join('\t'));
       navigator.clipboard?.writeText(text).then(() => {
-        el.count.textContent = e.shiftKey ? t('copiedJsonRow') : (kvVal ? t('copiedVal') : t('copiedWhat')(t('rowUnit')));
-      }).catch(() => { el.count.textContent = '复制被浏览器拒绝'; });
+        setCount(e.shiftKey ? t('copiedJsonRow') : (kvVal ? t('copiedVal') : t('copiedWhat')(t('rowUnit'))));
+      }).catch(() => { setCount('复制被浏览器拒绝'); });
       return;
     }
   }
@@ -9646,7 +9646,7 @@ document.addEventListener('keydown', (e) => {
     favorites = toggleFavorite(favorites, key);
     writeJson(PREF.favorites, favorites);
     patchItemFav(key);
-    el.count.textContent = favorites.includes(key) ? t('favOn')(filtered[active].action.title) : t('favOff')(filtered[active].action.title);
+    setCount(favorites.includes(key) ? t('favOn')(filtered[active].action.title) : t('favOff')(filtered[active].action.title));
   } else if ((e.key === 't' || e.key === 'T') && filtered.length && document.activeElement === el.q && !e.ctrlKey && !e.metaKey && !e.altKey) {
     // 第五十二轮⑤：T 键给当前项打标签（弹小面板，数字选）
     e.preventDefault();
@@ -9675,7 +9675,7 @@ document.addEventListener('keydown', (e) => {
       e.preventDefault();
       active = pick;
       paintActive();
-      el.count.textContent = `第 ${pick + 1} 项：${filtered[pick].action.title}（回车打开）`;
+      setCount(`第 ${pick + 1} 项：${filtered[pick].action.title}（回车打开）`);
     }
   }
 });
@@ -9684,7 +9684,7 @@ el.clipBtn.addEventListener('click', async () => {
   try {
     const text = await navigator.clipboard.readText();
     if (!text.trim()) {
-      el.count.textContent = '剪贴板是空的';
+      setCount('剪贴板是空的');
       return;
     }
     // 第六十四轮①②：留痕 + 识别建议
@@ -9702,12 +9702,12 @@ el.clipBtn.addEventListener('click', async () => {
       if (idx >= 0) {
         active = idx;
         paintActive();
-        el.count.textContent = `剪贴板识别为「${label}」——回车直接用`;
+        setCount(`剪贴板识别为「${label}」——回车直接用`);
       }
     }
   } catch {
     // 浏览器要求授权才能读剪贴板；直接说清楚，别静默失败
-    el.count.textContent = '读剪贴板被浏览器拒绝了，请允许剪贴板权限';
+    setCount('读剪贴板被浏览器拒绝了，请允许剪贴板权限');
   }
 });
 
@@ -9908,7 +9908,7 @@ async function load(notify) {
     // 第二十二轮①：首访引导——三步卡片（搜索→执行→看结果），可跳过、不再打扰
     if (!firstRunSeen((k) => localStorage.getItem(k))) showFirstRunGuide();
   } catch (e) {
-    el.count.textContent = `加载失败：${e.message}`;
+    setCount(`加载失败：${e.message}`);
   }
 }
 
@@ -10099,7 +10099,7 @@ function applyHash() {
     // 动作不存在（被卸载？）：退回列表并说明
     el.q.value = '';
     renderList();
-    el.count.textContent = `历史里的 ${hh} 已不存在（插件可能被卸载）`;
+    setCount(`历史里的 ${hh} 已不存在（插件可能被卸载）`);
     return;
   }
 
@@ -10112,7 +10112,7 @@ function applyHash() {
     // 分享链接进来的人可能想常驻这个搜索：给一条可点的提示
     const term = decodeURIComponent(qHash[1]);
     if (term.trim()) {
-      el.count.textContent = `来自分享链接的搜索「${term}」`;
+      setCount(`来自分享链接的搜索「${term}」`);
       searchHistory = pushSearch(searchHistory, term);   // 记进最近搜索，下次一点即回
       writeJson(PREF.searches, searchHistory);
     }
@@ -10147,9 +10147,9 @@ function applyHash() {
   hidePanels();
   renderList();
   const msg = t('deepLinkGone')(m[1] + (m[2] ? '.' + m[2] : ''));
-  el.count.textContent = msg;
+  setCount(msg);
   // 渲染管线里还有异步重画（骨架屏→数据、面板切换）会覆盖 #count——下一帧再压一次
-  requestAnimationFrame(() => { el.count.textContent = msg; });
+  requestAnimationFrame(() => { setCount(msg); });
 }
 
 window.addEventListener('hashchange', () => {
@@ -10277,7 +10277,7 @@ async function showShareImport(file) {
   try { raw = JSON.parse(await file.text()); }
   catch { $('count').textContent = '分享包不是合法 JSON——文件可能损坏或传错了个普通文件'; return; }
   const v = webValidateSharePack(raw);
-  if (!v.ok) { el.count.textContent = v.error; return; }
+  if (!v.ok) { setCount(v.error); return; }
   const pack = v.pack;
   const fp = await webFingerprint(pack);
   const replay = replayPolicyWeb(pack);
@@ -10493,7 +10493,7 @@ document.querySelectorAll('#keysMasterRow [data-keys-master]').forEach((b) => {
   b.addEventListener('click', () => {
     try { localStorage.setItem('zerokit.keys.master', b.dataset.keysMaster); } catch { /* 隐私模式 */ }
     paintKeysMaster();
-    el.count.textContent = b.dataset.keysMaster === 'off' ? '快捷键已整体关闭（? 与 Esc 保留）' : '快捷键已开启';
+    setCount(b.dataset.keysMaster === 'off' ? '快捷键已整体关闭（? 与 Esc 保留）' : '快捷键已开启');
   });
 });
 function closeDrawer() {
@@ -10531,13 +10531,13 @@ $('dlImportSnap')?.addEventListener('click', () => {
     if (!f) return;
     const text = await f.text();
     const r = parseZkresult(text);
-    if (!r.ok) { el.count.textContent = `导入失败：${r.error}`; alert(`导入失败：${r.error}`); return; }
+    if (!r.ok) { setCount(`导入失败：${r.error}`); alert(`导入失败：${r.error}`); return; }
     const snap = r.snapshot;
     // 外来快照：挂到结果区直接回放；isForeign 标记让「重跑」按钮提示语义
     try {
       renderResult({ data: snap.result?.data ?? snap.result, ok: snap.result?.ok ?? true, ms: snap.result?.ms, note: `外来快照 · ${snap.action?.title || `${snap.action?.plugin}.${snap.action?.action}`} · ${snap.savedAt.slice(0, 19).replace('T', ' ')}（重跑将在本机执行）` });
-      el.count.textContent = `已导入快照（${snap.action?.plugin}.${snap.action?.action}，v${snap.version}）`;
-    } catch (err) { el.count.textContent = `快照渲染失败：${err?.message ?? err}`; }
+      setCount(`已导入快照（${snap.action?.plugin}.${snap.action?.action}，v${snap.version}）`);
+    } catch (err) { setCount(`快照渲染失败：${err?.message ?? err}`); }
   };
   inp.click();
 });
@@ -10605,6 +10605,17 @@ window.addEventListener('beforeunload', (e) => {
 load();
 setupVirtualScroll();
 el.q.focus();
+// 第一百八十四轮⑧：顶栏反馈统一出口——赋值同时触发轻渐入，错误文案自动标红
+function setCount(text, tone) {
+  if (!el.count) return;
+  el.count.textContent = text;
+  el.count.classList.remove('flash', 'err', 'ok');
+  void el.count.offsetWidth; // 重启动画
+  if (/^✗|失败|错误|不可用|拒绝/.test(text)) el.count.classList.add('err');
+  else if (/^✓|完成|已/.test(text)) el.count.classList.add('ok');
+  el.count.classList.add('flash');
+}
+
 // 第一百八十二轮③：开屏编排——首次加载在 <html> 落 .booting，首帧渲染后摘除（之后 DOM 重建不回放）
 document.documentElement.classList.add('booting');
 requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -10647,7 +10658,7 @@ function showTagPanel(i) {
       }
       writeJson(PREF.tags, actionTags);
       renderList(); close();
-      el.count.textContent = `已打标签：${(actionTags[key] ?? []).map((t) => '#' + t).join(' ')}`;
+      setCount(`已打标签：${(actionTags[key] ?? []).map((t) => '#' + t).join(' ')}`);
     } else if (ev.key === 'Escape') close();
     else if (/^[1-9]$/.test(ev.key)) {
       const b = panel.querySelectorAll('[data-tg]')[Number(ev.key) - 1];
