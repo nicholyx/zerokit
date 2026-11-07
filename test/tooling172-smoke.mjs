@@ -67,9 +67,9 @@ console.log('tooling172-smoke');
 function bashOk(src, name) {
   // /dev/stdin 在 CI 的 Linux/Windows runner 上不存在——写临时文件再 bash -n
   const tmp = path.join(tmpdir(), `t172-${Date.now()}-${Math.random().toString(36).slice(2)}.sh`);
-  fs.writeFileSync(tmp, src);
+  writeFileSync(tmp, src);
   const r = spawnSync('bash', ['-n', tmp], { encoding: 'utf8' });
-  fs.rmSync(tmp, { force: true });
+  rmSync(tmp, { force: true });
   check(name, r.status === 0, r.stderr.slice(0, 100));
 }
 
