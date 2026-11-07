@@ -4,10 +4,15 @@
 
 （下一版攒着）
 
+## [1.71.0] - 2026-11-07
+
+### Added
+
+- Web 端 .zshare 分享闭环：结果区新增「分享包」下载（与 CLI buildSharePack 同构，read 带结果）；设置抽屉「导入分享包」（选文件→校验→展示：动作/时间/来源环境/指纹/结果预览，「来自分享包」徽标视觉区分）；导入包可本机重放（read 直接跑、mutate 弹确认、destructive 显示拒绝原因不可点）；Web 端指纹走 WebCrypto SHA-256（与 CLI 同结果）；新增 `/api/share/import` 端点（校验+审计 share-import）；坏包拒绝文案与 CLI 同源。
+
 ## [1.70.0] - 2026-11-07
 
 ### Added
-- Web 端 .zshare 分享闭环：结果区新增「分享包」下载（与 CLI buildSharePack 同构，read 带结果）；设置抽屉「导入分享包」（选文件→校验→展示：动作/时间/来源环境/指纹/结果预览，「来自分享包」徽标视觉区分）；导入包可本机重放（read 直接跑、mutate 弹确认、destructive 显示拒绝原因不可点）；Web 端指纹走 WebCrypto SHA-256（与 CLI 同结果）；新增 `/api/share/import` 端点（校验+审计 share-import）；坏包拒绝文案与 CLI 同源。
 
 - 结果分享与团队协作：`zkit share <插件.动作> [--params JSON] [--note] [--qr]` 生成 `.zshare` 分享包（结果+重放命令+环境指纹，read 动作带结果、mutate/destructive 只带命令）；`zkit run --from-share <file>` 一键重放（destructive 直接拒绝、mutate 要 --yes、插件不在本机给装法）；`zkit share --view <file>`（指纹+环境+命令，--markdown 出可贴 issue 的摘要）；`--qr` 出块状指纹（两台机器比对是否同一份分享包）；伪造/缺字段/版本不符的包都拒绝并说人话。
 
@@ -91,11 +96,4 @@
 - 启动器：`?` 速查浮层全局化——任何页面（含动作详情/日志/集市）可唤起，并新增「当前状态」区（上下文/列表密度/排序/主题，看速查即知当前态）；键盘流段收口第五十二/六十九/七十轮全部键位（F/T/Y/E/X/M/d/r/Ctrl+./Ctrl+R 等）
 - 启动器：列表→详情→返回的滚动位置记忆（虚拟列表多帧渲染后恢复，离开前的位置不再丢失）
 - 启动器：命令面板占位文案升级——提示可搜动作、插件、页面与命令，`?` 键直达速查表
-
-## [1.59.1] - 2026-11-06
-
-### Added
-
-- **`zkit run 插件.动作` 点分简写**——文档里大量 `run sysinfo.overview` 写法此前实跑报用法错（只认两段形式），现在两种写法等价；报错也点名插件本体（`nothere` 而非 `nothere.x`）
-- **文档旅程一致性审计**——quickstart/README/START-HERE/man/cookbook 的命令逐条真跑校准：README 安装命令补 `--yes` 说明（交互确认是设计但文档没提）、quickstart 补点分简写说明、man 十二个核心命令与实现全对齐
 
