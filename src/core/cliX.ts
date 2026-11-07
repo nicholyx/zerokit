@@ -502,3 +502,84 @@ export function parseKeepArg(arg: string): number | null {
   const n = Number(m[1]);
   return n * (m[2] === 'd' ? 86400e3 : 3600e3);
 }
+// cliX 追加：第一百七十八轮——CLI 提示与发现（纯函数层）
+
+/** 命令类别表（commands 索引 + 相关命令联想共用）。 */
+export const CMD_CATALOG: { cmd: string; cat: string; brief: string; flags?: string }[] = [
+  { cmd: 'list', cat: '基本', brief: '列出插件与动作', flags: '--json --health' },
+  { cmd: 'show', cat: '基本', brief: '查看插件/动作详情' },
+  { cmd: 'run', cat: '基本', brief: '执行一个动作', flags: '--out --jq --watch' },
+  { cmd: 'doctor', cat: '基本', brief: '环境与清单自检', flags: '--json' },
+  { cmd: 'config', cat: '配置', brief: '插件设置项读写', flags: 'set/get/unset' },
+  { cmd: 'alias', cat: '配置', brief: '短命令别名', flags: 'add/rm/list' },
+  { cmd: 'plugin', cat: '插件', brief: '安装/卸载/打包', flags: 'install/dev/lint' },
+  { cmd: 'market', cat: '插件', brief: '集市搜索与安装' },
+  { cmd: 'history', cat: '执行与历史', brief: '最近命令与重跑', flags: '--grep --rerun' },
+  { cmd: 'bookmark', cat: '执行与历史', brief: '常用命令存书签', flags: 'add/list/run' },
+  { cmd: 'watch', cat: '观测', brief: '动作监控看板', flags: 'list/add' },
+  { cmd: 'logs', cat: '观测', brief: '审计日志', flags: '--tail --failed' },
+  { cmd: 'stats', cat: '观测', brief: '使用统计' },
+  { cmd: 'mcp', cat: 'MCP 与 AI', brief: 'MCP server 与授权', flags: 'serve/allow/dry-run' },
+  { cmd: 'ui', cat: '界面', brief: '启动器界面', flags: '--port --open' },
+  { cmd: 'backup', cat: '运维', brief: '数据备份导出/导入' },
+  { cmd: 'completion', cat: '运维', brief: 'shell 补全脚本', flags: 'bash/zsh/fish' },
+  { cmd: 'man', cat: '运维', brief: '离线命令手册' },
+];
+
+/** ② relatedCommands：按类别给联想（同类别最多 3 个，去掉自己）。 */
+export function relatedCommands(cmd: string): string[] {
+  const hit = CMD_CATALOG.find((c) => c.cmd === cmd || (cmd.startsWith(c.cmd + ' ') && c.cmd !== 'plugin'));
+  if (!hit) return [];
+  return CMD_CATALOG.filter((c) => c.cat === hit.cat && c.cmd !== hit.cmd).slice(0, 3).map((c) => c.cmd);
+}
+
+/** ① commandsIndex：一行式索引文本。 */
+export function commandsIndex(): string {
+  const cats = [...new Set(CMD_CATALOG.map((c) => c.cat))];
+  const out: string[] = [];
+  for (const cat of cats) {
+    out.push(`【${cat}】`);
+    for (const c of CMD_CATALOG.filter((x) => x.cat === cat)) {
+      out.push(`  ${c.cmd.padEnd(12)}${c.brief}${c.flags ? `   (${c.flags})` : ''}`);
+    }
+  }
+  return out.join('\n');
+}
+
+/** ③ aliasValidate：别名合法性（不与内置命令冲突、纯 ASCII 词）。 */
+export function aliasValidate(name: string, builtinCommands: string[]): string | null {
+  if (!name || !/^[a-z][a-z0-9_-]{0,31}$/.test(name)) return '别名只能是 小写字母开头的字母/数字/-/_（≤32 字符）';
+  if (builtinCommands.includes(name)) return `「${name}」是内置命令，不能覆盖`;
+  return null; // 合法
+}
+
+export interface AliasEntry { name: string; argv: string[]; createdAt: number }
+
+export function aliasesFile(dataHome: string): string {
+  return path.join(dataHome, 'aliases.json');
+}
+
+export function loadAliases(dataHome: string): AliasEntry[] {
+  try {
+    const raw = JSON.parse(fs.readFileSync(aliasesFile(dataHome), 'utf8'));
+    return Array.isArray(raw) ? raw : [];
+  } catch { return []; }
+}
+
+export function saveAliases(dataHome: string, list: AliasEntry[]): void {
+  fs.mkdirSync(dataHome, { recursive: true });
+  const f = aliasesFile(dataHome);
+  fs.writeFileSync(f, JSON.stringify(list, null, 2) + '\n', { mode: 0o600 });
+  try { fs.chmodSync(f, 0o600); } catch { /* Windows */ }
+}
+
+/** ④ aliasResolve：alias 展开一层；目标又是 alias 名则拒绝（防嵌套环）。 */
+export function aliasResolve(name: string, aliases: AliasEntry[], builtinCommands: string[]): { argv: string[] } | { error: string } {
+  const hit = aliases.find((a) => a.name === name);
+  if (!hit) return { error: `没有别名「${name}」（zkit alias list 查看）` };
+  if (hit.argv.length === 0) return { error: `别名「${name}」是空的` };
+  const head = hit.argv[0] ?? '';
+  if (aliases.some((a) => a.name === head)) return { error: `别名「${name}」指向另一个别名「${head}」——不允许嵌套（把目标写全）` };
+  if (!builtinCommands.includes(head)) return { error: `别名「${name}」的目标「${head}」不是内置命令` };
+  return { argv: hit.argv };
+}

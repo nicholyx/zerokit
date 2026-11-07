@@ -158,6 +158,8 @@ ${c.bold('示例')}
 
 数据目录 ${c.dim(HOME)}（复制这个目录 = 搬走整套配置和插件）
 ${c.dim('退出码：0 成功 / 1 执行失败 / 2 用法错误（脚本里可据此分流）')}
+
+${c.dim('更多：zkit commands 一行式索引 · zkit man 完整手册 · zkit alias add <名> <命令...> 短命令')}
 `;
 
 // ---------------------------------------------------------------- 输出小工具
@@ -916,7 +918,9 @@ async function cmdRun(args: string[]): Promise<number> {
     }
   }
   if (!pluginId || !actionId) {
-    process.stderr.write('用法：zkit run <插件> <动作> [--参数 值]\n        zkit run 插件.动作 [--参数 值]（点分简写）\n        zkit run --chain "插件.动作,插件.动作" [--参数 值]\n');
+    const { relatedCommands } = await import('./core/cliX.ts');
+    const rel = relatedCommands('run');
+    process.stderr.write('用法：zkit run <插件> <动作> [--参数 值]\n        zkit run 插件.动作 [--参数 值]（点分简写）\n        zkit run --chain "插件.动作,插件.动作" [--参数 值]\n' + (rel.length ? c.dim(`相关命令：${rel.join(' · ')}\n`) : ''));
     return 2;
   }
   let plugin: Plugin;
@@ -4957,14 +4961,73 @@ function cmdEnv(): number {
   return 0;
 }
 
+/** ①zkit commands：一行式命令索引。 */
+async function cmdCommands(): Promise<number> {
+  const cliX = await import('./core/cliX.ts');
+  process.stdout.write(cliX.commandsIndex() + '\n');
+  return 0;
+}
+
+/** ③④zkit alias add/rm/list + 主路由展开。 */
+async function cmdAlias(args: string[]): Promise<number> {
+  const cliX = await import('./core/cliX.ts');
+  const sub = args[0];
+  const list = cliX.loadAliases(HOME);
+  if (sub === 'list') {
+    if (!list.length) { process.stdout.write('还没有别名。zkit alias add <名> <命令...>\n'); return 0; }
+    for (const a of list) process.stdout.write(`${a.name.padEnd(14)}zkit ${a.argv.join(' ')}\n`);
+    return 0;
+  }
+  if (sub === 'add') {
+    const name = args[1];
+    const argv = args.slice(2);
+    if (!name || argv.length === 0) { process.stderr.write('用法：zkit alias add <名> <命令...>（如 zkit alias add top run sysinfo top --head 5）\n'); return 2; }
+    const bad = cliX.aliasValidate(name, KNOWN_COMMANDS);
+    if (bad) { process.stderr.write(bad + '\n'); return 2; }
+    if (list.some((a) => a.name === name)) { process.stderr.write(`别名「${name}」已存在（先 alias rm ${name}）\n`); return 2; }
+    const head = argv[0];
+    if (!KNOWN_COMMANDS.includes(head ?? '')) { process.stderr.write(`「${head}」不是内置命令（zkit commands 看全部）\n`); return 2; }
+    list.push({ name, argv, createdAt: Date.now() });
+    cliX.saveAliases(HOME, list);
+    process.stdout.write(`已添加：zkit ${name} → zkit ${argv.join(' ')}\n`);
+    return 0;
+  }
+  if (sub === 'rm') {
+    const name = args[1];
+    const hit = list.find((a) => a.name === name);
+    if (!hit) { process.stderr.write(`没有别名「${name}」\n`); return 2; }
+    cliX.saveAliases(HOME, list.filter((a) => a.name !== name));
+    process.stdout.write(`已删除：${name}\n`);
+    return 0;
+  }
+  process.stderr.write('用法：zkit alias add <名> <命令...> | alias rm <名> | alias list\n');
+  return 2;
+}
+
 async function main(): Promise<number> {
-  const [, , cmd, ...rest] = process.argv;
+  let [, , cmd, ...rest] = process.argv;
+  // ④ alias 展开（一层；别名指向别名在 aliasResolve 里拒绝）
+  if (cmd && !KNOWN_COMMANDS.includes(cmd)) {
+    const { loadAliases, aliasResolve } = await import('./core/cliX.ts');
+    const aliases = loadAliases(HOME);
+    if (aliases.some((a) => a.name === cmd)) {
+      const r = aliasResolve(cmd, aliases, KNOWN_COMMANDS);
+      if ('error' in r) { process.stderr.write(r.error + '\n'); return 2; }
+      process.stderr.write(c.dim(`→ zkit ${r.argv.join(' ')}\n`));
+      cmd = r.argv[0]; rest = r.argv.slice(1).concat(rest);
+    }
+  }
   switch (cmd) {
     case '--version':
     case '-V':
-      // 第四十六轮③：--version 短旗标（读 package.json 单一事实源）
+    case 'version':
+      // 第四十六轮③：--version 短旗标；第一百七十八轮⑤：zkit version 同义（附 git sha）
       process.stdout.write(JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '..', 'package.json'), 'utf8')).version + '\n');
       return 0;
+    case 'commands':
+      return cmdCommands();
+    case 'alias':
+      return cmdAlias(rest);
     case 'completion':
       return cmdCompletion(rest);
     case 'man':
