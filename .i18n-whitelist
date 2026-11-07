@@ -1401,3 +1401,6 @@ if \(s\.max !== undefined && n > s\.max\) re
 ev\.target\.textContent = on \? '换行：开' : '换
 const text = act === 'copy-raw' \? copyTe
 const head = String\(title \?\? '文本'\)\.slice
+return `\$\{st\.count\} 项 · x̄ \$\{f\(st\.avg\)\} 
+return `\$\{st\.count\} 条非空`;
+return `\$\{r\} 行 × \$\{c\} 列`;
