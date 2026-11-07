@@ -106,14 +106,3 @@
 ### Added
 
 - 结果分享与团队协作：`zkit share <插件.动作> [--params JSON] [--note] [--qr]` 生成 `.zshare` 分享包（结果+重放命令+环境指纹，read 动作带结果、mutate/destructive 只带命令）；`zkit run --from-share <file>` 一键重放（destructive 直接拒绝、mutate 要 --yes、插件不在本机给装法）；`zkit share --view <file>`（指纹+环境+命令，--markdown 出可贴 issue 的摘要）；`--qr` 出块状指纹（两台机器比对是否同一份分享包）；伪造/缺字段/版本不符的包都拒绝并说人话。
-
-## [1.69.0] - 2026-11-07
-
-
-### Added
-
-- `zkit why <报错原文>`——把报错翻译成「发生了什么 + 下一步敲什么」，与 Web 错误知识库同源（同一份 ERROR_BOOK，CLI 侧 createRequire 转发 import）；`--last` 直接解释最近一条失败记录；认不出诚实说 exit 1 并给排查方向；`--json` 机读 {kind,cause,next}。
-- `zkit config <插件> env`——生成脚本里引用设置项的环境变量引导（bash `export` / `--shell fish` `set -x`），值恒掩码只给键名；`--json` 机读。
-- `zkit logs --errors`（同义 `--failed`）——审计日志只列失败记录。
-- 修复：审计日志里 `decision=allow` 但带 `error` 字段的记录此前显示绿色 ✓，现按失败红 ✗。
-

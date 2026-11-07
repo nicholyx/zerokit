@@ -1912,3 +1912,13 @@
   版本升至 1.1.0；`clipboard` 升至 1.1.0。
 - 示例插件 `jlc-proxy` 更名为 `proxy`，插件目录自包含
   （不再指向外部安装路径）。
+
+## [1.69.0] - 2026-11-07
+
+
+### Added
+
+- `zkit why <报错原文>`——把报错翻译成「发生了什么 + 下一步敲什么」，与 Web 错误知识库同源（同一份 ERROR_BOOK，CLI 侧 createRequire 转发 import）；`--last` 直接解释最近一条失败记录；认不出诚实说 exit 1 并给排查方向；`--json` 机读 {kind,cause,next}。
+- `zkit config <插件> env`——生成脚本里引用设置项的环境变量引导（bash `export` / `--shell fish` `set -x`），值恒掩码只给键名；`--json` 机读。
+- `zkit logs --errors`（同义 `--failed`）——审计日志只列失败记录。
+- 修复：审计日志里 `decision=allow` 但带 `error` 字段的记录此前显示绿色 ✓，现按失败红 ✗。
