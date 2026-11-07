@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [1.75.0] - 2026-11-07
+
+### Added
+
 - 键盘手册：`?` 打开的全量快捷键手册，单一数据源（KEYMAP 35 条）渲染，支持搜索过滤与按域 tab（全局/跳转/列表/详情/结果/批量/面板），同域同键冲突红标（第一百七十三轮）。
 - 快捷键总闸：设置抽屉新增「键盘快捷键」开关，整体关闭后除 `?` 与 Esc 外全部失效；关闭态按被禁键在状态行给出一次性指引；状态落盘 `zerokit.keys.master` 并进备份/恢复的「外观与设置」组（第一百七十三轮）。
 
@@ -82,14 +88,4 @@
 ### Added
 
 - 项目门面：仓库 topics（15 个真实关键词）与 description 校准（五个面 + 桌面壳 + 迭代/测试规模）；README 快速开始改用点分简写、补 Release 版本徽章、「下载安装包」节（三平台资产表 + 免构建 npm 路径并列）、「参与贡献」节（十条军规引用）；overview「一句话现状」重写对齐一百六十一轮
-
-## [1.63.0] - 2026-11-06
-
-### Added
-
-- 维护者工具：`scripts/release-chain.sh` 发布链一条龙——CI 轮询（12 checks / 11+MERGEABLE 捷径）、merge 复核、tag 双确认与幂等保护、https→SSH remote 网络降级、release 资产等待；`feature <PR>` / `release <版本> <PR>` 两模式，`--dry-run` 干跑。CI-FAIL 即停（固化 v1.59.1 事故判据）
-
-### Fixed
-
-- 修复 `release-chain.sh` 在非 UTF-8 locale（CI 的 macOS runner）下 `$VER` 紧邻全角字符被 bash 3.2 读成更长变量名而报 unbound variable 的问题——变量与中文之间一律加大括号，并加 C-locale 回归测试；同时把 release 模式的分支守卫移到一切远端操作之前（detached HEAD 上误跑不再可能真推分支）
 
