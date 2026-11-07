@@ -636,6 +636,10 @@ helpSearchTitle: '搜索', helpSearchBody: '支持中文关键词、拼音全拼
     jsonlTip: '导出 JSONL（每行一个 JSON，jq / ndjson 友好）', exportJsonl: '导出 JSONL',
     llmTip: '导出 LLM 批处理 JSONL（每行 {input,expected}，补上期望值就是评测集）', llmJsonl: 'LLM JSONL',
     mdTableTip: '复制为 Markdown 表格（数字列右对齐）', copyMdTable: '复制 MD 表',
+    texportTip: '导出表格（CSV / Markdown，当前可见列与筛选结果）', texportTitle: '导出表格', texportHint: '导出当前可见列与筛选结果',
+    texportCopy: '复制 CSV', texportShare: '分享链接', texpClose: '关闭', shareFallbackName: '动作',
+    shareGoneTitle: '分享不存在或已过期（24 小时）', shareGoneHint: '分享链接只在生成它的浏览器里有效——请让分享者重新导出 CSV/Markdown。',
+    shareRerun: '▶ 自己跑一次', shareFrom: '分享自', shareValid: '24 小时内有效', shareCols: '列', shareRows: '行',
     tsvTip: '复制为 TSV（Excel/Numbers 直接粘贴）', copyTsv: '复制 TSV',
     htmlTip: '复制为 HTML 表格（贴进邮件/文档带格式）', copyHtmlTable: '复制 HTML 表',
     aiTip: '复制为 LLM 友好的 Markdown（表格/属性行+动作名+时间）——直接粘进 AI 对话', forAi: '给 AI',
@@ -970,6 +974,10 @@ helpSearchTitle: 'Search', helpSearchBody: 'Chinese keywords, full pinyin, or pi
     jsonlTip: 'Export JSONL (one JSON per line; jq / ndjson friendly)', exportJsonl: 'Export JSONL',
     llmTip: 'Export LLM batch JSONL ({input,expected} per line; add expected to make an eval set)', llmJsonl: 'LLM JSONL',
     mdTableTip: 'Copy as a Markdown table (numeric columns right-aligned)', copyMdTable: 'Copy MD table',
+    texportTip: 'Export table (CSV / Markdown; visible columns, filtered rows)', texportTitle: 'Export table', texportHint: 'Exports visible columns and current filter result',
+    texportCopy: 'Copy CSV', texportShare: 'Share link', texpClose: 'Close', shareFallbackName: 'Action',
+    shareGoneTitle: 'Share not found or expired (24h)', shareGoneHint: 'Share links only work in the browser that created them — ask for a CSV/Markdown export instead.',
+    shareRerun: '▶ Run it yourself', shareFrom: 'Shared from', shareValid: 'valid for 24h', shareCols: 'cols', shareRows: 'rows',
     tsvTip: 'Copy as TSV (paste straight into Excel/Numbers)', copyTsv: 'Copy TSV',
     htmlTip: 'Copy as an HTML table (formatted in email/docs)', copyHtmlTable: 'Copy HTML table',
     aiTip: 'Copy LLM-friendly Markdown (table/attrs + action + time) — paste into AI chat', forAi: 'For AI',
@@ -4354,4 +4362,45 @@ export function paceReassure(ms) {
   if (n > 8000) return '执行已超过 8 秒——插件可能在等外部资源，考虑点「停止」后查 doctor';
   if (n > 2000) return '仍在执行…（插件可能在做重活）';
   return null;
+}
+
+// ==================== 第一百七十九轮：表格导出与分享 ====================
+
+/** ⑦ csvEscape：RFC 4180——含逗号/引号/换行的值整体加引号，内部引号翻倍。 */
+export function csvEscape(v) {
+  const s = v === null || v === undefined ? '' : String(v);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/** ⑦ exportCsv(rows, visCols)：可见列 CSV 文本（不含 BOM——BOM 是下载器的事）。 */
+export function exportCsv(rows, visCols) {
+  const head = visCols.map(csvEscape).join(',');
+  const body = rows.map((r) => visCols.map((c) => csvEscape(r[c])).join(',')).join('\n');
+  return body ? `${head}\n${body}` : head;
+}
+
+/** ⑦ mdTableVis(rows, visCols, numericCols)：可见列 Markdown 表（管道符转义 + 数值列 ---: 右对齐）。 */
+export function mdTableVis(rows, visCols, numericCols = []) {
+  const esc = (v) => String(v ?? '').replace(/\|/g, '\\|').replace(/\n/g, ' ');
+  const head = `| ${visCols.map(esc).join(' | ')} |`;
+  const sep = `| ${visCols.map((c) => numericCols.includes(c) ? '---:' : '---').join(' | ')} |`;
+  const body = rows.map((r) => `| ${visCols.map((c) => esc(r[c])).join(' | ')} |`).join('\n');
+  return body ? `${head}\n${sep}\n${body}` : `${head}\n${sep}`;
+}
+
+/** ③ exportMeta(actionName, rowCount)：元信息头（注释行，md/csv 都无害）。 */
+export function exportMeta(actionName, rowCount) {
+  const ts = new Date().toLocaleString('sv-SE').replace('T', ' ');
+  return `<!-- zerokit export · ${actionName} · ${ts} · ${rowCount} 行 -->`;
+}
+
+/** ⑤⑥ shareEnvelope(payload, {ttlMs})：分享信封（localStorage 存 24h 过期自清）。 */
+export function shareEnvelope(actionName, visCols, rows, ttlMs = 24 * 3600 * 1000) {
+  const id = `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  return { id, v: 1, action: actionName, cols: visCols, rows, at: Date.now(), ttl: ttlMs };
+}
+
+/** ⑤ shareAlive(env, now)：过期判定。 */
+export function shareAlive(env, now = Date.now()) {
+  return !!env && typeof env.at === 'number' && now - env.at < (env.ttl || 0) && Array.isArray(env.rows);
 }
