@@ -4289,3 +4289,39 @@ export function extractUrls(text) {
   while ((m = re.exec(s)) !== null) out.push({ url: m[0], index: m.index });
   return out;
 }
+
+// ===================== 第一百七十六轮：表格视图进阶 =====================
+
+/** ⑧ 列统计 tooltip 文案：数值列给 N/均值/最小~最大/Σ，文本列给非空计数。 */
+export function colTooltipStats(rows, col) {
+  const st = colStats(Array.isArray(rows) ? rows : [], col);
+  if (st.kind === 'num') {
+    const f = (n) => Number.isFinite(n) ? String(Math.round(n * 100) / 100) : '—';
+    return `${st.count} 项 · x̄ ${f(st.avg)} · ${f(st.min)}~${f(st.max)} · Σ ${f(st.sum)}`;
+  }
+  return `${st.count} 条非空`;
+}
+
+/** ⑧ 冻结首列判定：可见列 ≥4 才值得 sticky（两三列冻结反而碍事）。 */
+export function shouldFreeze(cols, visCols) {
+  return (visCols ?? cols ?? []).length >= 4;
+}
+
+/** ⑦ 行×列徽标文案。 */
+export function tableSizeBadge(rows, visCols) {
+  const r = Array.isArray(rows) ? rows.length : 0;
+  const c = (visCols ?? []).length;
+  return `${r} 行 × ${c} 列`;
+}
+
+/** ③ 列显隐批量动作：all/none/numeric 三种目标态。 */
+export function batchColVis(cols, vis, mode, numericCols = []) {
+  const next = { ...vis };
+  const numSet = new Set(numericCols);
+  for (const c of cols) {
+    if (mode === 'all') next[c] = true;
+    else if (mode === 'none') next[c] = c === cols[0];  // 全隐会连主键都没了——保第一列
+    else if (mode === 'numeric') next[c] = numSet.has(c) || c === cols[0];
+  }
+  return next;
+}

@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint, configProgress, validateSettingInput, formCanSave, parseConfigHash, textLines, textStats, copyTextRaw, copyWithNumbers, copyWithTitle, extractUrls } from './extras.js';
+import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint, configProgress, validateSettingInput, formCanSave, parseConfigHash, textLines, textStats, copyTextRaw, copyWithNumbers, copyWithTitle, extractUrls, colTooltipStats, shouldFreeze, tableSizeBadge, batchColVis } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote, defaultChip, enumHint, actionHealthBadge, descNeedsFold, inQuietHours, notifyThrottle, pushNotifyLog, parseHm } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -5955,6 +5955,8 @@ function renderTable(rows0, tableId = '') {
   // 列显示/隐藏（按 tableId 记忆）：默认全显
   const colVis = readJson(`zerokit.colvis.${tableId || 't'}`, null) ?? Object.fromEntries(cols.map((c) => [c, true]));
   const visCols = cols.filter((c) => colVis[c] !== false);
+  // 第一百七十六轮⑧：冻结首列（可见列 ≥4 才值得 sticky）——须在 head 生成前声明
+  const freeze = shouldFreeze(cols, visCols);
   // 第三十九轮⑤：时间戳列优先于数字判定——10/13 位纯数字列其实是时间，不该千分位
   const tsCols = new Set(cols.filter((c) => {
     const vals = rows.map((r) => r[c]).filter((v) => v !== null && v !== undefined && v !== '');
@@ -5971,8 +5973,8 @@ function renderTable(rows0, tableId = '') {
   const view = state.col ? sortRows(qrows, state.col, state.dir) : qrows;
   const arrow = (c) => state.col === c ? (state.dir === 1 ? ' ▲' : ' ▼') : '';
   // 第三十九轮⑤：时间戳列头标 ⏱（提示已人性化显示）
-  const head = visCols.map((c) =>
-    `<th class="sortable${numeric[c] ? ' num' : ''}" data-col="${esc(c)}"${state.col === c ? ` aria-sort="${state.dir === 1 ? 'ascending' : 'descending'}"` : ''}>${esc(c)}${tsCols.has(c) ? ' <span class="ts-mark" title="时间戳已转本地时间">⏱</span>' : ''}${arrow(c)}</th>`).join('');
+  const head = visCols.map((c, ci) =>
+    `<th class="sortable${numeric[c] ? ' num' : ''}${freeze && ci === 0 ? ' freeze-col' : ''}" data-col="${esc(c)}" title="${esc(colTooltipStats(view, c))}"${state.col === c ? ` aria-sort="${state.dir === 1 ? 'ascending' : 'descending'}"` : ''}>${esc(c)}${tsCols.has(c) ? ' <span class="ts-mark" title="时间戳已转本地时间">⏱</span>' : ''}${arrow(c)}</th>`).join('');
   // 第二十九轮⑦：大表只画首屏 200 行 + 「加载全部」按钮——
   // >500 行全画 DOM 会冻 UI 数秒；200 行覆盖绝大多数真实结果，其余按需展开
   const bigTable = view.length > OVERFLOW_ROWS && !tableFullLoad.has(tableId || 't');
@@ -6041,6 +6043,9 @@ function renderTable(rows0, tableId = '') {
   // 第十六轮③：筛选输入行（thead 第二行）
   const fRow = `<tr class="tfilter" aria-label="按列筛选">${visCols.map((c) => `<td><input data-tf="${esc(c)}" placeholder="筛…" value="${esc((fterms[0] && tableFilterTerms[tableId]?.join(' ')) || '')}" autocomplete="off" spellcheck="false"></th>`).join('')}</tr>`;
   const gear = `<span class="colvis-btn" data-colvis="${esc(tableId || 't')}" title="显示/隐藏列" role="button" tabindex="0">⚙</span>`;
+  // 第一百七十六轮⑦：行×列徽标
+  const sizeBadge = `<span class="tbl-size sub">${esc(tableSizeBadge(view, visCols))}</span>`;
+  // 第一百七十六轮⑤：列头统计 tooltip（悬停即看，不用拉到表底 tfoot）——直接内联进 th title
   // 第五十三轮③：表格密度三档（记忆进 zerokit.tdensity）
   const dpref = localStorage.getItem('zerokit.tdensity') || 'normal';
   const dens = tableDensity(dpref);
@@ -6050,7 +6055,7 @@ function renderTable(rows0, tableId = '') {
   const overFields = cols.length > 30 ? `<span class="sub warn-note">列已超 30（${cols.length}），可在 ⚙ 隐藏不看的</span>` : '';
   // 第二十三轮⑤⑥：查询框（与第十六轮筛选行不同：这是整表查询，支持 > < = 数字比较）
   const qbar = `<div class="rquery"><input data-rq="${esc(tableId || 't')}" placeholder="查询：词 或 size>100 …" value="${esc(resultQueryTerms[tableId] ?? '')}" autocomplete="off" spellcheck="false"><span class="sub" data-rqc="${esc(tableId || 't')}">${rq ? `${qrows.length} / ${frows.length} 行` : ''}</span></div>`;
-  return `${unitBtns ? `<div class="unit-bar">${unitBtns}</div>` : ''}${gear}${densBtns}${overFields}${qbar}<div class="tbl-wrap density-${dpref}"><table class="grid" data-table="${esc(tableId)}" style="--tbl-row-h:${dens.row};--tbl-pad:${dens.pad};--tbl-fs:${dens.fs}"><thead><tr>${head}</tr>${fRow}</tr></thead><tbody>${body}</tbody><tfoot><tr>${foot}</tr></tfoot></table></div>
+  return `${unitBtns ? `<div class="unit-bar">${unitBtns}</div>` : ''}${gear}${sizeBadge}${densBtns}${overFields}${qbar}<div class="tbl-wrap density-${dpref}"><table class="grid" data-table="${esc(tableId)}" style="--tbl-row-h:${dens.row};--tbl-pad:${dens.pad};--tbl-fs:${dens.fs}"><thead><tr>${head}</tr>${fRow}</tr></thead><tbody>${body}</tbody><tfoot><tr>${foot}</tr></tfoot></table></div>
   ${bigTable ? `<div class="tcount"><span class="sub">${t('rowsWindowed')(viewRows.length, view.length, PAGE_ROWS)}</span> <button class="ghost mini" data-loadall="${esc(tableId || 't')}">${t('loadAllRows')(view.length)}</button></div>` : `<div class="tcount sub">${view.length === rows.length ? t('rowsTotal')(rows.length) : t('rowsFiltered')(view.length, rows.length)}</div>`}`;
 }
 
@@ -6066,6 +6071,8 @@ const tableUnitConv = {};
 const resultQueryTerms = {};
 // 第二十九轮⑦：点了「加载全部」的表（tableId 集合），会话内不再截断
 const tableFullLoad = new Set();
+// 第一百七十六轮⑥：行高亮指纹（tableId+行 JSON），会话内翻页/排序保留
+const tableRowHighlights = new Set();
 /** 第七十轮⑥：右键菜单的收口（点击别处/Esc 都关）。 */
 function closeCtxMenu() {
   document.querySelectorAll('.ctx-menu').forEach((m) => m.remove());
@@ -6189,6 +6196,17 @@ function bindTableSorts(scope) {
         document.addEventListener('touchend', up);
       }, { passive: false });
     });
+    // 第一百七十六轮⑥：行点击高亮（按 JSON 指纹记，翻页/排序/重画保留；再点取消）
+    tbl.querySelectorAll('tbody > tr[data-rowjson]').forEach((tr) => tr.addEventListener('click', (ev) => {
+      if (ev.target.closest('td.cell-clip') || ev.shiftKey || ev.altKey) return;  // 不抢全文弹层/范围选
+      const key = JSON.stringify([id, tr.dataset.rowjson]);
+      if (tr.classList.toggle('row-hl')) tableRowHighlights.add(key);
+      else tableRowHighlights.delete(key);
+    }));
+    // 恢复本轮会话里已高亮的行
+    tbl.querySelectorAll('tbody > tr[data-rowjson]').forEach((tr) => {
+      if (tableRowHighlights.has(JSON.stringify([id, tr.dataset.rowjson]))) tr.classList.add('row-hl');
+    });
     // 长单元格点击展开：省略的完整内容弹层显示（点外面关）
     tbl.querySelectorAll('td.cell-clip').forEach((td) => td.addEventListener('click', () => {
       document.getElementById('cellFullPop')?.remove();
@@ -6255,9 +6273,10 @@ function bindTableSorts(scope) {
       const pop = document.createElement('div');
       pop.id = 'colvisPop';
       pop.className = 'colvis-pop';
+      const numericCols = cols.filter((c) => isNumericColumn((Array.isArray(rows0) ? rows0 : []).map((r) => r?.[c])));
       pop.innerHTML = `<div class="pop-title">显示哪些列？</div>${cols.map((c) =>
         `<label class="pop-row"><input type="checkbox" data-cv="${esc(c)}" ${vis[c] !== false ? 'checked' : ''}>${esc(c)}</label>`).join('')}
-        <div class="actions"><button class="ghost mini" id="cvAll">全选</button><button class="ghost mini" id="cvClose">关闭</button></div>`;
+        <div class="actions"><button class="ghost mini" data-cvb="all">全选</button><button class="ghost mini" data-cvb="numeric">只看数值</button><button class="ghost mini" data-cvb="none">仅主键</button><button class="ghost mini" id="cvClose">关闭</button></div>`;
       document.body.appendChild(pop);
       const r = gear.getBoundingClientRect();
       pop.style.left = `${Math.max(8, r.right - pop.offsetWidth)}px`;
@@ -6268,12 +6287,13 @@ function bindTableSorts(scope) {
         writeJson(`zerokit.colvis.${tid}`, vis);
         refreshResult();
       });
-      pop.querySelector('#cvAll')?.addEventListener('click', () => {
-        Object.keys(vis).forEach((k) => { vis[k] = true; });
-        writeJson(`zerokit.colvis.${tid}`, vis);
+      // 第一百七十六轮③：批量显隐——全选/只看数值（保主键）/仅主键
+      pop.querySelectorAll('[data-cvb]').forEach((b) => b.addEventListener('click', () => {
+        const next = batchColVis(cols, vis, b.dataset.cvb, numericCols);
+        writeJson(`zerokit.colvis.${tid}`, next);
         refreshResult();
         pop.remove();
-      });
+      }));
       pop.querySelector('#cvClose')?.addEventListener('click', () => pop.remove());
       setTimeout(() => {
         const off = (e2) => { if (!pop.contains(e2.target) && e2.target !== gear) { pop.remove(); document.removeEventListener('mousedown', off); } };
