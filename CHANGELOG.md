@@ -4,10 +4,15 @@
 
 ### Added
 
+（下一版攒着）
+
+## [1.82.0] - 2026-11-07
+
+### Added
+
 - 书签与快速到达：动作详情页 ◉ 一键钉住（含当前参数快照，别名 pin-插件.动作），命令面板 `>` 前缀直达书签分组，顶栏 ⭐ 徽标常驻计数。
 - 书签管理页 `#/bookmarks`：表格列出名称/命令/创建时间，支持一键重跑（走 /api/run，结果页内联展示）与删除（带确认守卫）。
 - 书签与 CLI 双向同步：UI 钉住即写入 bookmarks.json（与 `zkit bookmark` 同一存储），新增 /api/bookmarks GET/POST/DELETE 三个端点并入 OpenAPI。
-
 
 ## [1.81.0] - 2026-11-07
 
@@ -104,8 +109,3 @@
 
 - Web 端 .zshare 分享闭环：结果区新增「分享包」下载（与 CLI buildSharePack 同构，read 带结果）；设置抽屉「导入分享包」（选文件→校验→展示：动作/时间/来源环境/指纹/结果预览，「来自分享包」徽标视觉区分）；导入包可本机重放（read 直接跑、mutate 弹确认、destructive 显示拒绝原因不可点）；Web 端指纹走 WebCrypto SHA-256（与 CLI 同结果）；新增 `/api/share/import` 端点（校验+审计 share-import）；坏包拒绝文案与 CLI 同源。
 
-## [1.70.0] - 2026-11-07
-
-### Added
-
-- 结果分享与团队协作：`zkit share <插件.动作> [--params JSON] [--note] [--qr]` 生成 `.zshare` 分享包（结果+重放命令+环境指纹，read 动作带结果、mutate/destructive 只带命令）；`zkit run --from-share <file>` 一键重放（destructive 直接拒绝、mutate 要 --yes、插件不在本机给装法）；`zkit share --view <file>`（指纹+环境+命令，--markdown 出可贴 issue 的摘要）；`--qr` 出块状指纹（两台机器比对是否同一份分享包）；伪造/缺字段/版本不符的包都拒绝并说人话。
