@@ -117,13 +117,13 @@ const entries = unrelBody.replace(/^## \[Unreleased\]\n+/, '').replace(/\n+$/, '
 const today = new Date();
 const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 const oldBlock = unrelBody.replace(/\n+$/, '');
-const newBlock = `## [Unreleased]\n\n（下一版攒着）\n\n## [${ver}] - ${date}\n\n${entries}`;
+const newBlock = `## [Unreleased]\n\n### Added\n\n（下一版攒着）\n\n## [${ver}] - ${date}\n\n${entries}`;
 let cl2 = cl.replace(oldBlock, newBlock);
 // 教训（v0.60.0 首用即踩）：条目正则 (?:- [^\n]*\n)+ 之后紧跟的空行+占位行会被 newBlock 意外带上——
 // 归档后把新段内的「（下一版攒着）」清掉
 const segStart = cl2.indexOf(`## [${ver}] - ${date}`);
 const segEnd = cl2.indexOf('\n## [', segStart);
-cl2 = cl2.slice(0, segStart) + cl2.slice(segStart, segEnd === -1 ? cl2.length : segEnd).replace(/\n（下一版攒着）\n/, '\n') + (segEnd === -1 ? '' : cl2.slice(segEnd));
+cl2 = cl2.slice(0, segStart) + cl2.slice(segStart, segEnd === -1 ? cl2.length : segEnd).replace(/\n（下一版攒着）\n/, '\n\n### Added\n') + (segEnd === -1 ? '' : cl2.slice(segEnd));
 
 // ② 自检一：新段标题存在且在 [Unreleased] 之后
 const idxUnrel = cl2.indexOf('## [Unreleased]');
@@ -134,7 +134,7 @@ const seg = cl2.slice(idxVer, cl2.indexOf('\n## [', idxVer) === -1 ? cl2.length 
 const segCount = (seg.match(/^- /gm) || []).length;
 if (segCount !== entryCount) die(`自检失败：新段条目数 ${segCount} ≠ 归档前 ${entryCount}`);
 // 自检三：[Unreleased] 只剩空壳
-if (!/## \[Unreleased\]\n\n（下一版攒着）/.test(cl2)) die('自检失败：[Unreleased] 未重置为空壳');
+if (!/## \[Unreleased\]\n\n### Added\n\n（下一版攒着）/.test(cl2)) die('自检失败：[Unreleased] 未重置为带 ### Added 的空壳');
 // ④ 前置：Cargo.lock 的 zerokit-desktop 段结构化定位（同时在这里预检，避免写一半才发现）
 const lock = read('apps/desktop/src-tauri/Cargo.lock');
 const lockRe = /(\[\[package\]\]\nname = "zerokit-desktop"\nversion = )"\d+\.\d+\.\d+"/;

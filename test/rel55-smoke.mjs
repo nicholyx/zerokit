@@ -35,7 +35,7 @@ const sh = (cmd, args, opts = {}) => { try { return { code: 0, out: execFileSync
   ok(r3.code === 0, '③--write 成功', r3.out.slice(0, 300));
   const cl = fs.readFileSync(path.join(tmp, 'CHANGELOG.md'), 'utf8');
   ok(cl.includes('## [9.9.9] - '), '②新段标题存在');
-  ok(/## \[Unreleased\]\n\n（下一版攒着）/.test(cl), '②Unreleased 空壳');
+  ok(/## \[Unreleased\]\n\n### Added\n\n（下一版攒着）/.test(cl), '②Unreleased 空壳（带 ### Added）');
   ok(fs.readFileSync(path.join(tmp, 'package.json'), 'utf8').includes('"version": "9.9.9"'), '③package.json');
   ok(fs.readFileSync(path.join(tmp, 'apps/desktop/src-tauri/tauri.conf.json'), 'utf8').includes('"version": "9.9.9"'), '③tauri.conf.json');
   const toml = fs.readFileSync(path.join(tmp, 'apps/desktop/src-tauri/Cargo.toml'), 'utf8');
@@ -46,7 +46,7 @@ const sh = (cmd, args, opts = {}) => { try { return { code: 0, out: execFileSync
   // 真仓库空壳态检验改在临时树上做（真仓库的 [Unreleased] 在开发期可能有条目，
   // 不能断言它恒为空——第五十六轮文档重组后就往里写了条目导致这里挂）
   // 第一百五十九轮修：Unreleased 可能是 Changed+Added 多段（如依赖养护轮），整段替换为空壳
-  fs.writeFileSync(path.join(tmp, 'CHANGELOG.md'), fs.readFileSync(path.join(REPO, 'CHANGELOG.md'), 'utf8').replace(/## \[Unreleased\]\n[\s\S]*?(?=\n## \[)/, '## [Unreleased]\n\n（下一版攒着）\n'));
+  fs.writeFileSync(path.join(tmp, 'CHANGELOG.md'), fs.readFileSync(path.join(REPO, 'CHANGELOG.md'), 'utf8').replace(/## \[Unreleased\]\n[\s\S]*?(?=\n## \[)/, '## [Unreleased]\n\n### Added\n\n（下一版攒着）\n'));
   const r4 = sh('node', [path.join(tmp, 'scripts/release-prep.mjs'), '9.9.8'], { cwd: tmp });
   ok(r4.code !== 0 && r4.out.includes('拒绝'), '①空壳 Unreleased 再次执行拒绝（幂等安全）');
   // ---- 第五十七轮⑥：CHANGELOG 边界（坏锚点/重复版本/归档丢段标题防护） ----

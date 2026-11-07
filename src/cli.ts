@@ -3076,6 +3076,72 @@ async function cmdBookmark(args: string[]): Promise<number> {
 
 // 第一百六十七轮：zkit why——报错自查（与 Web ERROR_BOOK 同源：classifyError 纯函数）
 // ==================== 第一百六十八轮：share 分享包与重放 ====================
+
+// ==================== 第一百七十轮：命令集 bundle ====================
+async function cmdBundle(rest: string[]): Promise<number> {
+  const sub = rest[0] ?? '';
+  const arg = rest[1];
+  const flag = (name: string): string | undefined => {
+    const i = rest.indexOf(name);
+    return i >= 0 && rest[i + 1] ? rest[i + 1] : undefined;
+  };
+  const bd = await import('./core/bundle.ts');
+  const bm = await import('./core/bookmarks.ts');
+  if (sub === 'create') {
+    const name = arg;
+    if (!name) { console.error('用法：zkit bundle create <名字> [--from 书签1,书签2] [--all]'); return 2; }
+    const marks = bm.readBookmarks();
+    if (!marks.length) { console.error('还没有书签——先 zkit bookmark add 攒几条再打包'); return 1; }
+    const from = flag('--from');
+    const picked = rest.includes('--all') || !from ? marks : marks.filter((b) => (from ?? '').split(',').map((x) => x.trim()).includes(b.name));
+    if (!picked.length) { console.error('按 --from 没挑到任何书签（zkit bookmark list 看看有哪些名字）'); return 1; }
+    const ver = (JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;
+    const pack = bd.buildBundlePack(name, picked, ver);
+    const file = bd.writeBundlePack(pack);
+    console.log(`✓ 命令集已生成：${file}`);
+    console.log(`  名字：${pack.name} · ${pack.items.length} 条 · 指纹 ${bd.bundleFingerprint(pack)}`);
+    console.log(`  导入到别的机器：zkit bundle apply <这个文件>`);
+    return 0;
+  }
+  if (sub === 'list' || sub === 'diff' || sub === 'apply') {
+    if (!arg || !arg.endsWith(bd.BUNDLE_EXT)) { console.error(`用法：zkit bundle ${sub} <文件.zbundle>`); return 2; }
+    let raw: unknown;
+    try { raw = JSON.parse(fs.readFileSync(arg, 'utf8')); }
+    catch { console.error(`这不是合法 JSON——文件可能损坏或传错了个普通文件（${arg}）`); return 1; }
+    const v = bd.validateBundlePack(raw);
+    if (!v.ok) { console.error(`✗ ${v.error}`); return 1; }
+    const pack = v.pack;
+    if (sub === 'list') {
+      console.log(`命令集：${pack.name} · ${pack.items.length} 条`);
+      console.log(`  制作：${pack.createdAt.replace('T', ' ').slice(0, 19)} · ${pack.env.os} · zerokit ${pack.env.appVersion}`);
+      console.log(`  指纹：${bd.bundleFingerprint(pack)}`);
+      for (const it of pack.items) console.log(`  · ${it.name} —— ${it.argv.join(' ')}${it.note ? `（${it.note}）` : ''}`);
+      return 0;
+    }
+    const local = bm.readBookmarks();
+    if (sub === 'diff') {
+      const d = bd.bundleDiff(pack, local);
+      console.log(`对比「${pack.name}」（${pack.items.length} 条）与本机书签（${local.length} 条）：`);
+      console.log(`  新增（包里有本机没有）：${d.adds.length} 条`);
+      for (const b of d.adds) console.log(`    + ${b.name} —— ${b.argv.join(' ')}`);
+      console.log(`  相同（名字与命令一致）：${d.same.length} 条`);
+      console.log(`  本机独有：${d.localOnly.length} 条`);
+      return 0;
+    }
+    // apply
+    const d = bd.bundleDiff(pack, local);
+    if (!d.adds.length) { console.log('本机已全部拥有这些命令（无新增）'); return 0; }
+    const resolved = bd.resolveApplyNames({ ...pack, items: d.adds }, local);
+    for (const b of resolved) bm.addBookmark(b.name, b.argv, b.note);
+    console.log(`✓ 已导入 ${resolved.length} 条书签（来自命令集「${pack.name}」）：`);
+    for (const b of resolved) console.log(`  + ${b.name} —— ${b.argv.join(' ')}`);
+    if (d.same.length) console.log(`（另有 ${d.same.length} 条本机已有一致版本，跳过）`);
+    return 0;
+  }
+  console.error('用法：zkit bundle create|list|diff|apply ...');
+  return 2;
+}
+
 async function cmdShare(args: string[]): Promise<number> {
   const { buildSharePack, writeSharePack, shareFingerprint, fingerprintBlocks, SHARE_EXT } = await import('./core/share.ts');
   const pkg = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(new URL('.', import.meta.url))), 'package.json'), 'utf8'));
@@ -4676,7 +4742,8 @@ const COMMAND_DESC: Record<string, string> = {
   data: '数据目录管理', backup: '备份（含插件清单）', restore: '从备份恢复', ui: '启动器界面',
   bench: '性能测量', health: '一屏健康状态', env: '环境变量一览', path: '数据目录位置',
 };
-const KNOWN_COMMANDS = ['allow', 'why', 'bench', 'audit', 'data', 'completion', 'config', 'desktop', 'doctor', 'env', 'welcome', 'gc', 'health', 'history', 'help', 'kill', 'last', 'list', 'logs', 'ls', 'man', 'market', 'mcp', 'path', 'plugin', 'ps', 'timers', 'run', 'runs', 'show', 'stats', 'ui', 'web', 'which'];
+const KNOWN_COMMANDS = ['allow', 'why', 'bench', 'audit', 'data', 'completion', 'config', 'desktop', 'doctor', 'env', 'welcome', 'gc', 'health', 'history', 'help', 'kill', 'last', 'list', 'logs', 'ls', 'man', 'market', 'mcp', 'path', 'plugin', 'ps', 'timers', 'run', 'runs', 'show', 'stats', 'ui', 'web', 'which',
+  'bundle', 'bookmark', 'share'];
 
 // 第四十六轮②：man——不引依赖的终端命令参考（stdout 全量文本，man zkit 可外部包一层）
 const MAN_PAGE = `zkit(1) -- zerokit 命令行参考
@@ -5022,6 +5089,9 @@ async function main(): Promise<number> {
     // 第一百六十三轮：cron——脚本化定时任务登记与补打
     case 'cron':
       return await cmdCron(rest);
+    // 第一百七十轮：命令集——书签打包流通
+    case 'bundle':
+      return await cmdBundle(rest);
     // 第一百六十五轮：zerokit:// 深链生成器
     case 'deep-link':
       return await cmdDeepLink(rest);
