@@ -7,6 +7,7 @@
 ## [1.71.0] - 2026-11-07
 
 ### Added
+- 主题对比度系统化审计：新增 `scripts/contrast-audit.mjs`（44 组合：两档主题 × 六强调色 × fg/fg-dim/ok/warn/bad/line/accent 文字与焦点环，正文 ≥4.5、非文本 ≥3.0）并进 `lint.sh` 拦截回归；修复暗色分隔线（#262c36→#5b6575）与亮色分隔线（#dbe2ec→#7c8899）不可辨、亮色 ok 绿（#0b8a4b→#07703c）差 0.08 不达标；亮色档六强调色全部启用深色变体（如 amber #f0b43c→#7d5400）——白底文字对比从 1.6~2.7 提到 ≥4.5，暗色档保持原亮值不动。
 
 - Web 端 .zshare 分享闭环：结果区新增「分享包」下载（与 CLI buildSharePack 同构，read 带结果）；设置抽屉「导入分享包」（选文件→校验→展示：动作/时间/来源环境/指纹/结果预览，「来自分享包」徽标视觉区分）；导入包可本机重放（read 直接跑、mutate 弹确认、destructive 显示拒绝原因不可点）；Web 端指纹走 WebCrypto SHA-256（与 CLI 同结果）；新增 `/api/share/import` 端点（校验+审计 share-import）；坏包拒绝文案与 CLI 同源。
 

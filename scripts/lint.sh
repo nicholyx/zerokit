@@ -96,6 +96,8 @@ fi
 # 第一百四十六轮：质量护栏——CHANGELOG 格式/文档数字同步/绝对路径/版本行，
 # 四条人肉纪律的机器化（三次 CHANGELOG 空行事故的根治）
 if node scripts/guard146.mjs; then
+echo "── 对比度审计（第一百七十轮）──"
+node scripts/contrast-audit.mjs || FAILS=$((FAILS+1))
   echo "OK    质量护栏（guard146）"
 else
   echo "FAIL  质量护栏（guard146）—— node scripts/guard146.mjs 看详情"
