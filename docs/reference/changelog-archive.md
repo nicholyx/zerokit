@@ -2,6 +2,14 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [1.65.0] - 2026-11-07
+
+### Added
+
+- 脚本化与自动化：`zkit exit-codes` 退出码契约速查（0 成功 / 1 值得重试 / 2 不要盲目重试）；`run --stdin <参数名>` 密钥走 stdin 不进 shell history；`--timeout <秒>` 覆盖清单超时；`--retries N --retry-delay S` 失败重试；`--format '{{ms}}ms {{rows}}行 {{key}}'` 轻模板输出
+- 并发锁：同插件同动作互斥（`~/.zerokit/locks/`），等待约 20 秒、陈锁（>1 小时）可抢、`--no-lock` 逃生
+- `zkit cron add/list/rm/run`：定时任务登记（0600 原子写）与补打；接线交给系统调度器（crontab / 任务计划程序），zkit 不自带守护进程；`docs/guide/scripting.md` 脚本化指南
+
 ## [1.64.0] - 2026-11-06
 
 ### Added

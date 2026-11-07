@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [1.77.0] - 2026-11-07
+
+### Added
+
 - 结果区文本工具：顶层文本结果（string data 与 stdout）自动进文本视图——等宽不转义、行号列可关、>200 行默认折叠、换行开关持久化、点击/Shift 范围选行 + Enter 复制原始行、字符/行数/最行长统计条、URL 自动可点、复制三形态（原文/带行号/首行做标题）、另存 .txt（第一百七十五轮）。
 
 ## [1.76.0] - 2026-11-07
@@ -81,12 +87,4 @@
 ### Added
 
 - HTTP API 面系统化：`/api/version` 独立端点（协议版本 api:1）；`/api/health` 扩展体检（插件计数/运行中任务/数据目录大小）；`/api/openapi.json` 机读描述（OpenAPI 3.1 子集）；全端点 method 校验（405 + Allow 头，方法表 33 端点与代码分支双向对齐）；错误响应统一 `{ok:false,error,hint}` 信封（46 处收敛）；`docs/reference/http-api.md` 全端点文档
-
-## [1.65.0] - 2026-11-07
-
-### Added
-
-- 脚本化与自动化：`zkit exit-codes` 退出码契约速查（0 成功 / 1 值得重试 / 2 不要盲目重试）；`run --stdin <参数名>` 密钥走 stdin 不进 shell history；`--timeout <秒>` 覆盖清单超时；`--retries N --retry-delay S` 失败重试；`--format '{{ms}}ms {{rows}}行 {{key}}'` 轻模板输出
-- 并发锁：同插件同动作互斥（`~/.zerokit/locks/`），等待约 20 秒、陈锁（>1 小时）可抢、`--no-lock` 逃生
-- `zkit cron add/list/rm/run`：定时任务登记（0600 原子写）与补打；接线交给系统调度器（crontab / 任务计划程序），zkit 不自带守护进程；`docs/guide/scripting.md` 脚本化指南
 
