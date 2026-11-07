@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [1.74.0] - 2026-11-07
+
+### Added
+
 - `release-prep` 归档后自动补回规范空壳段（`[Unreleased]` + `### Added` 占位）——三次「条目落错段」事故的根因（归档正则把 Unreleased 头一并吃掉）就此消除；`verify-remote` tag 子模式修复（此前 `tag` 被当分支名报歧义）、`cat-file` 结果可见；`release-chain` 总览延迟判断收敛为函数；help/man 补 `bundle`/`bookmark`/`share` 用法段。
 
 ## [1.73.0] - 2026-11-07
@@ -85,13 +91,4 @@
 ### Fixed
 
 - 修复 `release-chain.sh` 在非 UTF-8 locale（CI 的 macOS runner）下 `$VER` 紧邻全角字符被 bash 3.2 读成更长变量名而报 unbound variable 的问题——变量与中文之间一律加大括号，并加 C-locale 回归测试；同时把 release 模式的分支守卫移到一切远端操作之前（detached HEAD 上误跑不再可能真推分支）
-
-## [1.62.0] - 2026-11-06
-
-### Added
-
-- CLI：`zkit data usage`（数据目录分项容量表，`--json` 机读）与审计规模/最老记录年龄一行
-- CLI：`zkit data junk`（垃圾识别：.tmp-* 安装残留、无清单孤儿目录、超保留数快照、.bak 审计备份只列不删）与 `zkit data clean`（默认干跑，`--yes` 真删，审计/历史/设置/.bak 不碰）
-- CLI：`zkit data snapshots`（快照清点+大小，超 10 份提示清理）
-- doctor：数据目录超 100 MB 时警告并指向 `zkit data usage / junk`
 
