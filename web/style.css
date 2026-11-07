@@ -2256,3 +2256,13 @@ td.gsum-label { font-weight: 600; }
 .badge.from-share { background: color-mix(in oklab, var(--accent) 18%, transparent); color: var(--accent); font-size: 12px; padding: 2px 8px; border-radius: 10px; }
 .share-meta { font-size: 13px; color: var(--fg-dim); margin: 8px 0 12px; line-height: 1.7; }
 .share-meta code { background: color-mix(in oklab, var(--fg) 8%, transparent); padding: 1px 6px; border-radius: 4px; }
+
+/* ========================= 第一百七十三轮：键盘手册与快捷键总闸 ========================= */
+.cheat-sheet .km-q { width: 100%; margin: 6px 0 8px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--fg); font-size: 13px; }
+.km-scopes { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.km-scopes .km-scope { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--fg-dim); cursor: pointer; font-size: 12px; }
+.km-scopes .km-scope.on { color: var(--accent, var(--fg)); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.cheat-sheet li.km-conflict .km-conf-flag { color: var(--bad, #c0392b); font-size: 11px; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; margin-left: 4px; }
+.km-empty { color: var(--fg-dim); padding: 18px 4px; text-align: center; grid-column: 1 / -1; }
+.drawer-section.keys-master { padding: 8px 0 2px; }
+.drawer-section.keys-master .row-label { display: block; font-size: 12px; color: var(--fg-dim); margin-bottom: 6px; }

@@ -1951,6 +1951,8 @@ const PREFIX_GROUPS = [
   { prefix: 'zerokit.profile.', label: '配置档' },
   // 第九十六轮⑧：布局键也进备份（外观与设置组）
   { prefix: 'zerokit.layout.', label: '外观与设置' },
+  // 第一百七十三轮④：快捷键总闸状态键归「外观与设置」组
+  { prefix: 'zerokit.keys.', label: '外观与设置' },
 ];
 const OTHER_LABEL = '其它';
 
@@ -4112,4 +4114,85 @@ export function jsonGetByParts(value, parts) {
     cur = cur[p];
   }
   return { hit: true, value: cur };
+}
+
+/* ========================= 第一百七十三轮：键盘手册与快捷键总闸 ========================= */
+
+/** 键位单一数据源：{ keys, desc, scope }。keys 是显示串（含修饰键）；
+ *  scope ∈ global|nav|list|detail|result|batch|panel。速查浮层与帮助页都从这里渲染。 */
+export const KEYMAP = [
+  { keys: 'Ctrl/⌘+P', desc: '命令面板', scope: 'global' },
+  { keys: '?', desc: '键盘手册（本浮层）', scope: 'global' },
+  { keys: 'Esc', desc: '关最上层浮层/回列表', scope: 'global' },
+  { keys: '长按 Esc ≥600ms', desc: '清空搜索与筛选回列表态', scope: 'global' },
+  { keys: 'Ctrl+.', desc: '停止正在执行的动作', scope: 'global' },
+  { keys: 'Ctrl/⌘+Shift+V', desc: '剪贴板识别建议', scope: 'global' },
+  { keys: 'Ctrl/⌘+= / -', desc: '界面字号三档', scope: 'global' },
+  { keys: 'Ctrl/⌘+Shift+D', desc: '主题明暗切换', scope: 'global' },
+  { keys: 'F1–F12', desc: '绑定的动作直达', scope: 'global' },
+  { keys: 'g l', desc: '跳转：动作列表', scope: 'nav' },
+  { keys: 'g h', desc: '跳转：帮助', scope: 'nav' },
+  { keys: 'g s', desc: '跳转：统计', scope: 'nav' },
+  { keys: 'g m', desc: '跳转：监控面板', scope: 'nav' },
+  { keys: '↑↓', desc: '列表移动选中', scope: 'list' },
+  { keys: '1–9', desc: '列表快选第 N 项', scope: 'list' },
+  { keys: 'Alt+1–9', desc: '直开第 N 项详情', scope: 'list' },
+  { keys: 'PgUp/PgDn', desc: '列表翻页', scope: 'list' },
+  { keys: 'Home/End', desc: '列表首尾', scope: 'list' },
+  { keys: 'F', desc: '收藏/取消收藏', scope: 'list' },
+  { keys: 'T', desc: '打开标签面板（数字选标签）', scope: 'list' },
+  { keys: 'd', desc: '列表密度循环', scope: 'list' },
+  { keys: 'r / m', desc: '插件序/最近序切换', scope: 'list' },
+  { keys: 'Ctrl/⌘+Enter', desc: '执行当前动作', scope: 'detail' },
+  { keys: 'j / k', desc: '结果表格行选中移动', scope: 'result' },
+  { keys: 'Enter', desc: '复制选中行（TSV）', scope: 'result' },
+  { keys: 'Y / E', desc: '结果复制/导出', scope: 'result' },
+  { keys: 'X / M', desc: '结果导出 CSV/Markdown', scope: 'result' },
+  { keys: '[ / ]', desc: '切换结果页签', scope: 'result' },
+  { keys: 'Ctrl+1..8', desc: '直达结果页签', scope: 'result' },
+  { keys: 'Ctrl+R', desc: '重放最近一次执行', scope: 'result' },
+  { keys: 'Alt+点击', desc: '动作进批量篮', scope: 'batch' },
+  { keys: 'Alt+↑↓', desc: '批量篮内移位', scope: 'batch' },
+  { keys: '>', desc: '搜索框前缀进命令模式', scope: 'panel' },
+  { keys: ';', desc: '插件.动作 快速执行', scope: 'panel' },
+  { keys: '↑↓（面板内）', desc: '翻最近命令/查询', scope: 'panel' },
+];
+
+export const KEYMAP_SCOPES = [
+  { id: 'all', label: '全部' },
+  { id: 'global', label: '全局' },
+  { id: 'nav', label: '跳转' },
+  { id: 'list', label: '列表' },
+  { id: 'detail', label: '详情' },
+  { id: 'result', label: '结果' },
+  { id: 'batch', label: '批量' },
+  { id: 'panel', label: '面板' },
+];
+
+/** ⑥ 手册搜索过滤：词对 keys/desc/scope label 子串匹配（AND）。 */
+export function filterKeymap(q, scope = 'all') {
+  const terms = String(q ?? '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return KEYMAP.filter((k) => {
+    if (scope !== 'all' && k.scope !== scope) return false;
+    if (!terms.length) return true;
+    const hay = `${k.keys} ${k.desc} ${k.scope}`.toLowerCase();
+    return terms.every((t) => hay.includes(t));
+  });
+}
+
+/** ⑦ 冲突检测：同 scope 内完全相同的 keys 返回那些 keys 串（数组去重）。 */
+export function keymapConflicts() {
+  const seen = new Map();
+  for (const k of KEYMAP) {
+    const id = `${k.scope}|${k.keys}`;
+    seen.set(id, (seen.get(id) ?? 0) + 1);
+  }
+  return [...seen.entries()].filter(([, n]) => n > 1).map(([id]) => id.split('|')[1]);
+}
+
+/** ③ 快捷键总闸：off 时除逃生键（?/Esc）外全部失效。 */
+export function keysGateOn(stored) { return stored !== 'off'; }
+/** ⑤ 关闭态下按被禁键的提示文案（一次性 toast 用）。 */
+export function keysDisabledHint() {
+  return '快捷键已整体关闭——按 ? 查看手册，或在设置抽屉重新开启';
 }

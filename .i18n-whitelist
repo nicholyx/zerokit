@@ -1315,4 +1315,58 @@ else el\.count\.textContent = `✗ 重放失败：\$\{j\.
 catch \{ \$\('count'\)\.textContent = '分享包不是合
 if \(j && j\.error === undefined\) \{ \$\('cou
 else \$\('count'\)\.textContent = `✗ 重放失败：\$\{
-\} catch \(e2\) \{ \$\('count'\)\.textContent = 
+\} catch \(e2\) \{ \$\('count'\)\.textContent =
+<kbd>\$\{k\.keys\}</kbd> \$\{k\.desc\}\$\{conflict
+<h3>键盘手册</h3>
+<input id="kmQ" class="km-q" placeholder
+<div class="palette-foot">Esc 关闭\$\{gateOf
+grid\.innerHTML = renderGroups\(rows\) \|\| '
+toast\(b\.dataset\.keysMaster === 'off' \? '
+\{ prefix: 'zerokit\.keys\.', label: '外观与设置
+\{ keys: 'Ctrl/⌘\+P', desc: '命令面板', scope:
+\{ keys: '\?', desc: '键盘手册（本浮层）', scope: '
+\{ keys: 'Esc', desc: '关最上层浮层/回列表', scope
+\{ keys: '长按 Esc ≥600ms', desc: '清空搜索与筛选回
+\{ keys: 'Ctrl\+\.', desc: '停止正在执行的动作', sco
+\{ keys: 'Ctrl/⌘\+Shift\+V', desc: '剪贴板识别建议
+\{ keys: 'Ctrl/⌘\+= / -', desc: '界面字号三档',
+\{ keys: 'Ctrl/⌘\+Shift\+D', desc: '主题明暗切换'
+\{ keys: 'F1–F12', desc: '绑定的动作直达', scope
+\{ keys: 'g l', desc: '跳转：动作列表', scope: '
+\{ keys: 'g h', desc: '跳转：帮助', scope: 'na
+\{ keys: 'g s', desc: '跳转：统计', scope: 'na
+\{ keys: 'g m', desc: '跳转：监控面板', scope: '
+\{ keys: '↑↓', desc: '列表移动选中', scope: 'li
+\{ keys: '1–9', desc: '列表快选第 N 项', scope:
+\{ keys: 'Alt\+1–9', desc: '直开第 N 项详情', sc
+\{ keys: 'PgUp/PgDn', desc: '列表翻页', scope
+\{ keys: 'Home/End', desc: '列表首尾', scope:
+\{ keys: 'F', desc: '收藏/取消收藏', scope: 'li
+\{ keys: 'T', desc: '打开标签面板（数字选标签）', scop
+\{ keys: 'd', desc: '列表密度循环', scope: 'lis
+\{ keys: 'r / m', desc: '插件序/最近序切换', scop
+\{ keys: 'Ctrl/⌘\+Enter', desc: '执行当前动作',
+\{ keys: 'j / k', desc: '结果表格行选中移动', scop
+\{ keys: 'Enter', desc: '复制选中行（TSV）', sco
+\{ keys: 'Y / E', desc: '结果复制/导出', scope:
+\{ keys: 'X / M', desc: '结果导出 CSV/Markdow
+\{ keys: '\[ / \]', desc: '切换结果页签', scope:
+\{ keys: 'Ctrl\+1\.\.8', desc: '直达结果页签', sco
+\{ keys: 'Ctrl\+R', desc: '重放最近一次执行', scop
+\{ keys: 'Alt\+点击', desc: '动作进批量篮', scope:
+\{ keys: 'Alt\+↑↓', desc: '批量篮内移位', scope:
+\{ keys: '>', desc: '搜索框前缀进命令模式', scope:
+\{ keys: ';', desc: '插件\.动作 快速执行', scope:
+\{ keys: '↑↓（面板内）', desc: '翻最近命令/查询', sco
+\{ id: 'global', label: '全局' \},
+\{ id: 'nav', label: '跳转' \},
+\{ id: 'list', label: '列表' \},
+\{ id: 'detail', label: '详情' \},
+\{ id: 'result', label: '结果' \},
+\{ id: 'batch', label: '批量' \},
+\{ id: 'panel', label: '面板' \},
+return '快捷键已整体关闭——按 \? 查看手册，或在设置抽屉重新开启';
+<label class="row-label">键盘快捷键</label>
+<button class="chip" data-keys-master="o
+<button class="chip" data-keys-master="o
+el\.count\.textContent = b\.dataset\.keysMas

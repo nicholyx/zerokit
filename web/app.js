@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType } from './extras.js';
+import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote, defaultChip, enumHint, actionHealthBadge, descNeedsFold, inQuietHours, notifyThrottle, pushNotifyLog, parseHm } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -937,6 +937,7 @@ document.addEventListener('wheel', (e) => {
 
 // 第九十六轮③：Ctrl+= / Ctrl+- 同一套字号调节
 document.addEventListener('keydown', (e) => {
+  if (keysGateBlocks(e)) return;
   if (!(e.ctrlKey || e.metaKey)) return;
   if (e.key === '=' || e.key === '+') {
     const cur = localStorage.getItem('zerokit.font-scale') || 'm';
@@ -3564,7 +3565,24 @@ function showClipSuggest(text) {
 }
 
 /** Ctrl+Shift+V：读剪贴板并弹建议卡（不写搜索框——和 clipBtn 的搜索行为互补）。 */
+/* 第一百七十三轮③⑤：快捷键总闸——off 时除 ?/Esc 外全部短路（一次性 toast 提示） */
+let keysHintShownAt = 0;
+function keysGateBlocks(e) {
+  if (keysGateOn(localStorage.getItem('zerokit.keys.master'))) return false;
+  // 逃生键不拦：? 开手册、Esc 关浮层
+  if (e.key === '?' || e.key === 'Escape') return false;
+  // 纯文本输入场景不拦（用户在输入框里打字撞上 j/k 等）
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return false;
+  if (Date.now() - keysHintShownAt > 8000) {
+    keysHintShownAt = Date.now();
+    try { el.count.textContent = keysDisabledHint(); } catch { /* el 尚未就绪 */ }
+  }
+  return true;
+}
+
 document.addEventListener('keydown', (e) => {
+  if (keysGateBlocks(e)) return;
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'V' || e.key === 'v')) {
     e.preventDefault();
     el.clipBtn.click();
@@ -8637,66 +8655,48 @@ let paletteMode = false;
 const watchStopLog = [];   // 第四十八轮⑧：最近 5 条自动停止原因
 let gotoArmedAt = 0;   // 第二十四轮⑤：g 键按下时间（600ms 内按 l/h/s/m 生效）
 
-/** 第二十四轮⑧：键盘速查浮层——分组列出全部快捷键，Esc/点遮罩关闭 */
+/** 第二十四轮⑧→第一百七十三轮：键盘手册浮层——KEYMAP 单一数据源渲染（搜索/域 tab/冲突标/Esc/点遮罩关闭） */
 function showHotkeyCheat() {
   document.getElementById('hotkeyCheat')?.remove();
   const ov = document.createElement('div');
   ov.className = 'overlay'; ov.id = 'hotkeyCheat';
+  const gateOff = !keysGateOn(localStorage.getItem('zerokit.keys.master'));
+  const conflicts = new Set(keymapConflicts());
+  const scopeBtns = KEYMAP_SCOPES.map((s) =>
+    `<button class="chip km-scope${s.id === 'all' ? ' on' : ''}" data-kms="${s.id}">${s.label}</button>`).join('');
+  const renderRows = (rows) => rows.map((k) => `
+    <li${conflicts.has(k.keys) ? ' class="km-conflict"' : ''}>
+      <kbd>${k.keys}</kbd> ${k.desc}${conflicts.has(k.keys) ? ' <span class="km-conf-flag" title="同域同键重复">冲突</span>' : ''}
+    </li>`).join('');
+  const renderGroups = (rows) => KEYMAP_SCOPES.filter((s) => s.id !== 'all')
+    .map((s) => {
+      const sub = rows.filter((k) => k.scope === s.id);
+      return sub.length ? `<div><h4>${s.label}</h4><ul>${renderRows(sub)}</ul></div>` : '';
+    }).join('');
   ov.innerHTML = `
     <div class="modal cheat-sheet">
-      <h3>键盘速查</h3>
-      <div class="cheat-grid">
-        <div><h4>全局</h4><ul>
-          <li><kbd>Ctrl/⌘+P</kbd> 命令面板</li>
-          <li><kbd>?</kbd> 本速查</li>
-          <li><kbd>F1–F12</kbd> 绑定的动作直达</li>
-          <li><kbd>Esc</kbd> 关最上层浮层/回列表</li>
-        </ul></div>
-        <div><h4>跳转（g 后接键）</h4><ul>
-          <li><kbd>g l</kbd> 动作列表</li>
-          <li><kbd>g h</kbd> 帮助</li>
-          <li><kbd>g s</kbd> 统计</li>
-          <li><kbd>g m</kbd> 监控面板</li>
-        </ul></div>
-        <div><h4>命令面板</h4><ul>
-          <li><kbd>&gt;</kbd> 前缀进入命令模式</li>
-          <li><kbd>;</kbd>插件.动作 快速执行</li>
-          <li><kbd>↑↓</kbd> 翻最近命令/查询</li>
-        </ul></div>
-        <div><h4>列表 / 结果</h4><ul>
-          <li><kbd>↑↓</kbd> 移动 · <kbd>1–9</kbd> 快选 · <kbd>Alt+1–9</kbd> 直开</li>
-          <li><kbd>PgUp/PgDn</kbd> 翻页 · <kbd>Home/End</kbd> 首尾</li>
-          <li><kbd>j / k</kbd> 表格行选中</li>
-          <li><kbd>[ / ]</kbd> 切换结果页签</li>
-          <li><kbd>Ctrl/⌘+Enter</kbd> 执行当前动作</li>
-        </ul></div>
-        <div><h4>键盘流（第五十二轮+）</h4><ul>
-          <li><kbd>F</kbd> 收藏/取消 · <kbd>T</kbd> 打标签（数字选）</li>
-          <li><kbd>Y / E</kbd> 结果复制/导出 · <kbd>X / M</kbd> 结果 CSV/Markdown</li>
-          <li><kbd>Alt+点击</kbd> 进批量篮 · <kbd>Alt+↑↓</kbd> 篮内移位</li>
-          <li><kbd>d</kbd> 列表密度循环 · <kbd>r / m</kbd> 插件序/最近序</li>
-          <li><kbd>Ctrl+.</kbd> 停止执行 · <kbd>Ctrl+R</kbd> 重放最近</li>
-          <li><kbd>Ctrl+Shift+V</kbd> 剪贴板识别建议</li>
-        </ul></div>
-        <div><h4>当前状态</h4><ul id="cheat-now"></ul></div>
-      </div>
-      <div class="palette-foot">Esc 关闭</div>
+      <h3>键盘手册</h3>
+      <input id="kmQ" class="km-q" placeholder="过滤按键 / 说明…" autocomplete="off" />
+      <div class="km-scopes">${scopeBtns}</div>
+      <div class="cheat-grid" id="kmGrid"></div>
+      <div class="palette-foot">Esc 关闭${gateOff ? ' · 快捷键当前<b>整体关闭</b>（本手册与 Esc 除外）' : ''}</div>
     </div>`;
   ov.addEventListener('click', (ev) => { if (ev.target === ov) ov.remove(); });
   document.body.appendChild(ov);
-  // 第一百五十七轮③：当前状态区——上下文（详情/列表）+ 密度 + 排序 + 主题，看速查即知当前态
-  const now = ov.querySelector('#cheat-now');
-  if (now) {
-    const dens = { compact: '紧凑', normal: '舒适', loose: '宽松' }[localStorage.getItem('zerokit.ldensity') || 'normal'] ?? '舒适';
-    const theme = resolveTheme(localStorage.getItem(PREF.theme) ?? 'auto') === 'dark' ? '深色' : '浅色';
-    const items157 = [
-      `上下文：${detail ? '动作详情（Esc 返回列表）' : '动作列表'}`,
-      `列表密度：${dens}（d 键循环）`,
-      `排序：${sortMode === 'recent' ? '最近使用（m 键）' : '插件序（r 键）'}`,
-      `主题：${theme}（Ctrl+Shift+D 切换）`,
-    ];
-    now.innerHTML = items157.map((x) => `<li>${x}</li>`).join('');
-  }
+  const grid = ov.querySelector('#kmGrid');
+  const qEl = ov.querySelector('#kmQ');
+  let curScope = 'all';
+  const repaint = () => {
+    const rows = filterKeymap(qEl.value, curScope);
+    grid.innerHTML = renderGroups(rows) || '<div class="km-empty">没有匹配的快捷键</div>';
+  };
+  ov.querySelectorAll('.km-scope').forEach((b) => b.addEventListener('click', () => {
+    ov.querySelectorAll('.km-scope').forEach((x) => x.classList.remove('on'));
+    b.classList.add('on'); curScope = b.dataset.kms; repaint();
+  }));
+  qEl.addEventListener('input', repaint);
+  repaint();
+  qEl.focus();
 }
 
 /** 命令面板：一个输入框直达任何动作 / 页面。数据全是本地，不新增接口。 */
@@ -8949,6 +8949,7 @@ function showPalette() {
 // ---------------------------------------------------------------- 键盘
 
 document.addEventListener('keydown', (e) => {
+  if (keysGateBlocks(e)) return;
   // Esc 栈：优先关「最上层」的临时浮层（长单元格弹层 > 带 overlay 的面板 > 页面层）。
   // 键盘用户按 Esc 预期关掉眼前那个弹层，而不是让底下的页面先退出。
   if (e.key === 'Escape' && document.getElementById('cellFullPop')) {
@@ -9978,9 +9979,24 @@ function openDrawer() {
   $('drawer')?.classList.remove('hidden');
   $('drawerMask')?.classList.remove('hidden');
   openThemePop();   // 主题区常驻抽屉
+  paintKeysMaster();   // 第一百七十三轮③：快捷键总闸状态同步
   drawerTrap?.release(false);
   drawerTrap = trapFocus($('drawer'), { onClose: closeDrawer });   // 第六十六轮②
 }
+/* 第一百七十三轮③④：快捷键总闸——设置抽屉开关，落盘 zerokit.keys.master（进备份组） */
+function paintKeysMaster() {
+  const cur = keysGateOn(localStorage.getItem('zerokit.keys.master')) ? 'on' : 'off';
+  document.querySelectorAll('#keysMasterRow [data-keys-master]').forEach((b) => {
+    b.classList.toggle('on', b.dataset.keysMaster === cur);
+  });
+}
+document.querySelectorAll('#keysMasterRow [data-keys-master]').forEach((b) => {
+  b.addEventListener('click', () => {
+    try { localStorage.setItem('zerokit.keys.master', b.dataset.keysMaster); } catch { /* 隐私模式 */ }
+    paintKeysMaster();
+    el.count.textContent = b.dataset.keysMaster === 'off' ? '快捷键已整体关闭（? 与 Esc 保留）' : '快捷键已开启';
+  });
+});
 function closeDrawer() {
   $('drawer')?.classList.add('hidden');
   $('drawerMask')?.classList.add('hidden');
