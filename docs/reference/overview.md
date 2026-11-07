@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-11-07（第一百七十三轮，v1.75.0）
+> 最后更新：2026-11-07（第一百七十四轮，v1.76.0）
 
 ## 性能基线（第五十八轮建立，2026-10-28，Apple M4 / Node 22）
 
@@ -112,6 +112,7 @@ uTools 开始收费了。想找一个替代品，找了一圈发现真正的问�
 - 第一百七十一轮 v1.73.0（命令集 bundle + CHANGELOG 锚点根治）：bundle create/list/diff/apply 书签打包流通/重名后缀导入；release-prep 空壳自带 ### Added+guard 断言（三次错段事故根治）；bundle170-smoke 19 项。
 - 第一百七十二轮 v1.74.0（发布工具链收尾）：release-prep 归档自动补回空壳（三事故根因消除）/verify-remote tag 子模式修复/release-chain 轮询收敛/help+man 补三命令；tooling172-smoke 14 项。
 - 第一百七十三轮 v1.75.0（键盘手册与快捷键总闸）：KEYMAP 单一数据源 35 条/手册搜索+域 tab+冲突标/总闸（? 与 Esc 保留）/zerokit.keys.master 进备份组；keys173-smoke 18 项。
+- 第一百七十四轮 v1.76.0（插件配置向导与校验前移）：#/config 完成度列表+表单（secret 掩码/enum 下拉/输入时就校验）/CLI 与 doctor 附深链；configwiz174-smoke 27 项。
 - [x] 第一百六十七轮（v1.69.0）：zkit why 报错自查与 config env——七类归因/why --last/fish 支持/logs --errors（Issue #557）
 - [x] 第一百六十六轮（v1.68.0）：插件生命周期闭环——plugin info/doctor 单插件/remove --dry-run/reinstall/0600 审计（Issue #554）
 - [x] 第一百六十五轮（v1.67.0）：OS 级深链 zerokit://——壳注册协议/生成器/二维码双形态/未知目标提示（Issue #551）
@@ -271,7 +272,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 
 ### 质量
 
-- 123 个文件、**2845 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
+- 124 个文件、**2872 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
 - `tsc --noEmit` 干净——**而且 CI 真的在跑它**（`typecheck` job）。
   曾经这里写着"干净"但没有任何地方执行这条命令，于是两个只有类型检查才看得见的
   错误在核心里躺了很久（`proxy.ts` 的 Buffer 泛型不兼容、`scaffold.ts` 的类型混用）。

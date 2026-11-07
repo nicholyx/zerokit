@@ -596,6 +596,8 @@ async function cmdConfig(args: string[]): Promise<number> {
       process.stdout.write(JSON.stringify({ plugin: plugin.id, settings: list }, null, 2) + '\n');
       return 0;
     }
+    // 第一百七十四轮⑤：CLI↔UI 互指引——表单化填写在启动器里更顺手
+    process.stdout.write(c.dim(`在启动器里打开表单：#/config/${plugin.id}（设置抽屉 → 插件配置）\n\n`));
     process.stdout.write(`${c.bold(plugin.name)} ${c.dim(plugin.id)} 的设置项\n`);
     for (const s of list) {
       const flags = [s.required ? c.yellow('必填') : '', s.secret ? c.red('密钥') : '']

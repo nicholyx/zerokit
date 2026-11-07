@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint } from './extras.js';
+import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint, configProgress, validateSettingInput, formCanSave, parseConfigHash } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote, defaultChip, enumHint, actionHealthBadge, descNeedsFold, inQuietHours, notifyThrottle, pushNotifyLog, parseHm } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -2790,6 +2790,106 @@ function showTimeline() {
 // 第一百一十九轮①：面板一句话说明条（空数据时由调用方换引导文案）
 function panelDescBar(key, extra = '') {
   return `<div class="panel-desc" data-panel-desc="${key}">${t('panelDesc' + key.charAt(0).toUpperCase() + key.slice(1))}${extra}</div>`;
+}
+
+/* 第一百七十四轮：插件配置向导。#/config 列表（完成度），#/config/<id> 表单（校验前移）。 */
+async function showConfigWiz(pluginId) {
+  hidePanels();
+  mode = 'config';
+  el.modeLabel.textContent = '插件配置';
+  el.listView.classList.add('hidden');
+  el.detailView.classList.add('hidden');
+  if (!location.hash.startsWith('#/config')) history.replaceState(null, '', '#/config');
+
+  // 拉全部插件的配置面（publicSettings 形态），按「有配置项」过滤
+  const withSettings = [];
+  for (const e of entries) {
+    if (!e.plugin.settings?.length) continue;
+    const r = await api(`/api/plugin/config?plugin=${encodeURIComponent(e.plugin.id)}`).catch(() => null);
+    if (r?.settings?.length) withSettings.push({ entry: e, settings: r.settings });
+  }
+
+  if (!pluginId) {
+    // ① 列表形态：完成度
+    el.allowView.innerHTML = `
+      <h2 class="ps-title">插件配置</h2>
+      ${withSettings.length ? withSettings.map(({ entry, settings }) => {
+        const pr = configProgress(settings);
+        return `<button class="cfg-row${pr.missingRequired.length ? ' cfg-gap' : ''}" data-cfgpl="${esc(entry.plugin.id)}">
+          <span class="cfg-name">${esc(entry.plugin.name)}</span>
+          <span class="cfg-prog">${pr.missingRequired.length ? `⚠ 缺必填：${pr.missingRequired.map(esc).join('、')}` : '✓ 已配齐'}</span>
+          <span class="cfg-count">${pr.label}</span>
+        </button>`;
+      }).join('') : '<div class="cfg-empty">没有带配置项的插件</div>'}
+    `;
+    el.allowView.querySelectorAll('[data-cfgpl]').forEach((b) => b.addEventListener('click', () => {
+      location.hash = `#/config/${b.dataset.cfgpl}`;
+    }));
+    showPanelAnimated(el.allowView);
+    return;
+  }
+
+  // ②⑥ 表单形态
+  const target = withSettings.find((x) => x.entry.plugin.id === pluginId);
+  if (!target) {
+    el.allowView.innerHTML = `<h2 class="ps-title">插件配置</h2><div class="cfg-empty">没有找到插件 ${esc(pluginId)}，或它没有配置项。<a href="#/config">← 回配置列表</a></div>`;
+    showPanelAnimated(el.allowView);
+    return;
+  }
+  const { entry, settings } = target;
+  const initial = {};
+  for (const st of settings) initial[st.name] = st.source === 'unset' ? '' : String(st.masked ? '' : (st.value ?? ''));
+
+  const renderForm = (values, lockSave) => {
+    const fs = formCanSave(settings, values);
+    el.allowView.innerHTML = `
+      <h2 class="ps-title">${esc(entry.plugin.name)} · 配置</h2>
+      ${fs.errors.length ? `<div class="cfg-warn">⚠ ${fs.errors.map((e) => esc(e.error)).join('；')}</div>` : ''}
+      <div class="cfg-form">
+        ${settings.map((st) => `
+          <label class="cfg-field">
+            <span class="cfg-l">${esc(st.title || st.name)}${st.required ? ' <b class="cfg-req">*</b>' : ''}</span>
+            ${Array.isArray(st.enum) && st.enum.length
+              ? `<select data-cfgf="${esc(st.name)}">${['<option value="">（未选）</option>', ...st.enum.map((o) => `<option value="${esc(o)}"${values[st.name] === o ? ' selected' : ''}>${esc(o)}</option>`)].join('')}</select>`
+              : `<input data-cfgf="${esc(st.name)}" type="${st.secret ? 'password' : 'text'}" value="${esc(values[st.name] ?? '')}" placeholder="${esc(st.description || '')}" autocomplete="off" />`}
+            <span class="cfg-desc">${esc(st.description || '')}${st.secret ? ' · 密钥（保存后打码）' : ''}</span>
+          </label>`).join('')}
+      </div>
+      <div class="cfg-actions">
+        <button class="btn primary" id="cfgSave"${(!fs.canSave || lockSave) ? ' disabled' : ''}>保存</button>
+        <a class="ghost" href="#/config">← 回配置列表</a>
+      </div>
+    `;
+    el.allowView.querySelectorAll('[data-cfgf]').forEach((inp) => {
+      inp.addEventListener('input', () => {
+        values[inp.dataset.cfgf] = inp.value;
+        // ⑧ 就地校验：只重渲染提示条与保存态，不动正在输入的控件（避免焦点丢失）
+        const fs2 = formCanSave(settings, values);
+        const warn = el.allowView.querySelector('.cfg-warn');
+        const warnTxt = fs2.errors.length ? `⚠ ${fs2.errors.map((e) => esc(e.error)).join('；')}` : '';
+        if (warn) warn.innerHTML = warnTxt; else if (warnTxt) el.allowView.insertAdjacentHTML('afterbegin', `<div class="cfg-warn">${warnTxt}</div>`);
+        el.allowView.querySelector('#cfgSave')?.toggleAttribute('disabled', !fs2.canSave || lockSave);
+      });
+    });
+    el.allowView.querySelector('#cfgSave')?.addEventListener('click', async () => {
+      const patch = {};
+      for (const st of settings) {
+        const v = (values[st.name] ?? '').trim?.() ?? values[st.name];
+        if (v !== '') patch[st.name] = st.type === 'number' || st.type === 'integer' ? Number(v) : v;
+      }
+      const r = await api('/api/plugin/config', { method: 'POST', body: { plugin: pluginId, patch } }).catch((e2) => ({ ok: false, error: String(e2) }));
+      if (r?.ok) {
+        el.count.textContent = `已保存 ${Object.keys(patch).length} 项`;
+        showConfigWiz();   // 回列表看完成度刷新
+        location.hash = '#/config';
+      } else {
+        el.allowView.querySelector('.cfg-warn')?.remove();
+        el.allowView.insertAdjacentHTML('afterbegin', `<div class="cfg-warn">⚠ 保存失败：${esc(r?.error || '未知原因')}</div>`);
+      }
+    });
+    showPanelAnimated(el.allowView);
+  };
+  renderForm(initial, false);
 }
 
 function showBrief() {
@@ -9524,6 +9624,13 @@ function applyHash() {
     return;
   }
 
+  // 第一百七十四轮⑥：#/config/<插件id> 配置向导直达
+  const ch174 = parseConfigHash(location.hash);
+  if (ch174) {
+    showConfigWiz(ch174);
+    return;
+  }
+
   // #/plugins/<插件id>  插件主页
   const ph = /^#\/plugins\/([\w.-]+)$/.exec(location.hash || '');
   if (ph) {
@@ -9657,6 +9764,9 @@ function applyHash() {
 }
 
 window.addEventListener('hashchange', () => {
+  // 第一百七十四轮⑥：#/config/<id> 配置向导（applyHash 有同样分支，hashchange 也要）
+  const cfgH = parseConfigHash(location.hash);
+  if (cfgH || (location.hash || '') === '#/config') { showConfigWiz(cfgH); return; }
   // 第三十八轮：#/timers 面板路由（applyHash 有同样分支，hashchange 也要）
   if ((location.hash || '') === '#/timers') { showTimers(); return; }
   // 第六十四轮：#/clip 剪贴板历史面板
@@ -10047,6 +10157,7 @@ $('dlBrief')?.addEventListener('click', () => { closeDrawer(); $('briefBtn')?.cl
 $('dlHelp')?.addEventListener('click', () => { closeDrawer(); $('guideBtn')?.click(); });
   // 第一百六十九轮②：导入分享包入口（抽屉 → 文件选择 → 导入视图）
   $('dlShareImport')?.addEventListener('click', () => { closeDrawer(); $('shareImportFile')?.click(); });
+$('dlConfig')?.addEventListener('click', () => { closeDrawer(); location.hash = '#/config'; });
   $('shareImportFile')?.addEventListener('change', async (ev) => {
     const f = (ev.target)?.files?.[0];
     if (f) await showShareImport(f);

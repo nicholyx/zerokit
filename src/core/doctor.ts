@@ -299,10 +299,11 @@ function checkPlugin(entry: ReturnType<typeof listPlugins>[number]): DoctorPlugi
     problems.push({ level: 'error', text: `设置项 ${bad.name} 的值不合法：${bad.error}`, hint: 'zkit config <插件> <名> <新值> 覆写，或 zkit config --stdin 批量改' });
   }
   if (view.missing.length > 0) {
+    // 第一百七十四轮⑦：与启动器配置向导互指引
     problems.push({
       level: 'warning',
       text: `缺少必填设置项：${view.missing.join(' / ')}`,
-      hint: settingsHints(p, view).join('\n'),
+      hint: `在启动器里打开表单：#/config/${p.id}（设置抽屉 → 插件配置），或 ${settingsHints(p, view).join('\n')}`,
     });
   }
 
