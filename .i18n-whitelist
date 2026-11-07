@@ -1329,7 +1329,7 @@ toast\(b\.dataset\.keysMaster === 'off' \? '
 \{ keys: '长按 Esc ≥600ms', desc: '清空搜索与筛选回
 \{ keys: 'Ctrl\+\.', desc: '停止正在执行的动作', sco
 \{ keys: 'Ctrl/⌘\+Shift\+V', desc: '剪贴板识别建议
-\{ keys: 'Ctrl/⌘\+= / -', desc: '界面字号三档', 
+\{ keys: 'Ctrl/⌘\+= / -', desc: '界面字号三档',
 \{ keys: 'Ctrl/⌘\+Shift\+D', desc: '主题明暗切换'
 \{ keys: 'F1–F12', desc: '绑定的动作直达', scope
 \{ keys: 'g l', desc: '跳转：动作列表', scope: '
@@ -1345,18 +1345,18 @@ toast\(b\.dataset\.keysMaster === 'off' \? '
 \{ keys: 'T', desc: '打开标签面板（数字选标签）', scop
 \{ keys: 'd', desc: '列表密度循环', scope: 'lis
 \{ keys: 'r / m', desc: '插件序/最近序切换', scop
-\{ keys: 'Ctrl/⌘\+Enter', desc: '执行当前动作', 
+\{ keys: 'Ctrl/⌘\+Enter', desc: '执行当前动作',
 \{ keys: 'j / k', desc: '结果表格行选中移动', scop
 \{ keys: 'Enter', desc: '复制选中行（TSV）', sco
 \{ keys: 'Y / E', desc: '结果复制/导出', scope:
 \{ keys: 'X / M', desc: '结果导出 CSV/Markdow
-\{ keys: '\[ / \]', desc: '切换结果页签', scope: 
+\{ keys: '\[ / \]', desc: '切换结果页签', scope:
 \{ keys: 'Ctrl\+1\.\.8', desc: '直达结果页签', sco
 \{ keys: 'Ctrl\+R', desc: '重放最近一次执行', scop
 \{ keys: 'Alt\+点击', desc: '动作进批量篮', scope:
 \{ keys: 'Alt\+↑↓', desc: '批量篮内移位', scope:
-\{ keys: '>', desc: '搜索框前缀进命令模式', scope: 
-\{ keys: ';', desc: '插件\.动作 快速执行', scope: 
+\{ keys: '>', desc: '搜索框前缀进命令模式', scope:
+\{ keys: ';', desc: '插件\.动作 快速执行', scope:
 \{ keys: '↑↓（面板内）', desc: '翻最近命令/查询', sco
 \{ id: 'global', label: '全局' \},
 \{ id: 'nav', label: '跳转' \},
@@ -1369,3 +1369,4 @@ return '快捷键已整体关闭——按 \? 查看手册，或在设置抽屉�
 <label class="row-label">键盘快捷键</label>
 <button class="chip" data-keys-master="o
 <button class="chip" data-keys-master="o
+el\.count\.textContent = b\.dataset\.keysMas
