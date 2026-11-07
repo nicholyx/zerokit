@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint, configProgress, validateSettingInput, formCanSave, parseConfigHash, textLines, textStats, copyTextRaw, copyWithNumbers, copyWithTitle, extractUrls, colTooltipStats, shouldFreeze, tableSizeBadge, batchColVis } from './extras.js';
+import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint, configProgress, validateSettingInput, formCanSave, parseConfigHash, textLines, textStats, fmtElapsed, paceVerdict, paceReassure, copyTextRaw, copyWithNumbers, copyWithTitle, extractUrls, colTooltipStats, shouldFreeze, tableSizeBadge, batchColVis } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote, defaultChip, enumHint, actionHealthBadge, descNeedsFold, inQuietHours, notifyThrottle, pushNotifyLog, parseHm } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -1068,16 +1068,22 @@ async function runBatch(retryItems) {
           <span class="bp-ic">${batchStateIcon(states[i])}</span>
           <span class="bp-name">${esc(e.action.title)}</span>
           <span class="bp-src">${esc(e.plugin.name)}</span>
-          <span class="bp-ms">${states[i] === 'ok' || states[i] === 'fail' ? formatMs(results[i]?.ms || 0) : ''}</span>
+          <span class="bp-ms">${states[i] === 'ok' || states[i] === 'fail' ? formatMs(results[i]?.ms || 0) : (states[i] === 'running' && oneT0.has(i) ? fmtElapsed(Date.now() - oneT0.get(i)) : '')}</span>
         </div>`).join('')}</div>`;
   };
   paint();
+  // 第一百七十七轮⑤：单项进行中计时（增量反馈——不等整批，跑一项亮一项耗时）
+  const oneT0 = new Map();
   const runOne = async (entry, i) => {
     const key = actionKey(entry.plugin.id, entry.action.id);
     const values = paramStore[key] ?? {};
     const payload = { plugin: entry.plugin.id, action: entry.action.id, values };
-    states[i] = 'running'; paint();
+    states[i] = 'running'; oneT0.set(i, Date.now()); paint();
+    const tick = setInterval(() => {
+      if (states[i] === 'running') paint();
+    }, 500);
     try {
+      return await (async () => {
       const r = await fetch('/api/run', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-zerokit-token': TOKEN },
@@ -1085,8 +1091,11 @@ async function runBatch(retryItems) {
       });
       const j = await r.json().catch(() => ({ ok: false, error: '响应不是 JSON' }));
       return { entry, ok: j.ok !== false && r.ok, ms: j.ms ?? 0, error: j.error };
+      })();
     } catch (err) {
       return { entry, ok: false, ms: 0, error: String(err) };
+    } finally {
+      clearInterval(tick); oneT0.delete(i);
     }
   };
   // 第二十五轮⑧：并发窗口——窗口内并行、窗口间串行（1=纯串行，默认 3）
@@ -3363,7 +3372,7 @@ function showWatchPanel() {
       <span class="badge ${lastOk ? 'read' : 'bad'}">⏱</span>
       <span class="run-when">${esc(w.title)}（每 ${esc(intervalLabel(w.interval))}）</span>
       <span class="sub">${w.runs} 次采样 · ${w.changes} 次变更${w.changes > 0 && w.samples.length ? ' · 上次变化 ' + relTime(w.samples.at(-1)?.ts ?? Date.now()) : ''}</span>
-      <span class="watch-spark">${(w.samples ?? []).slice(-10).map((sm) => `<i class="${sm.ok ? 'ok' : 'bad'}"></i>`).join('')}</span>
+      <span class="watch-spark">${(w.samples ?? []).slice(-10).map((sm) => `<i class="${sm.ok ? 'ok' : 'bad'}"${Number.isFinite(sm.ms) ? ` title="${esc(relTime(sm.ts))} · 耗时 ${fmtElapsed(sm.ms)}"` : ''}></i>`).join('')}</span>
       <span class="watch-summary">${esc(summary)}</span>
       ${w.stopReason ? `<span class="bad">${esc(w.stopReason)}</span>` : ''}
       <button class="ghost mini" data-wnotify="${esc(k)}" title="变化时是否弹通知">${w.notify === false ? '通知关' : '通知开'}</button>
@@ -3921,6 +3930,27 @@ async function submitInner(remember) {
   }
   actionInFlight.add(actionKey(plugin.id, action.id));
   const btn = $('runBtn');
+  // 第一百七十七轮①③：执行中实时计时 + 长任务安抚（>2s「重活」>8s「可能卡住」）
+  const t0 = Date.now();
+  let paceTimer = null; let paceNote = null;
+  const tickPace = () => {
+    const el = document.getElementById('runElapsed');
+    const ms = Date.now() - t0;
+    if (el) el.textContent = fmtElapsed(ms);
+    const msg = paceReassure(ms);
+    if (msg && !paceNote && btn && btn.parentElement) {
+      paceNote = document.createElement('span');
+      paceNote.id = 'paceNote'; paceNote.className = 'sub pace-note';
+      paceNote.textContent = msg;
+      btn.parentElement.appendChild(paceNote);
+    } else if (msg && paceNote) {
+      paceNote.textContent = msg;
+    }
+  };
+  paceTimer = setInterval(tickPace, 200);
+  const badge = document.createElement('span');
+  badge.id = 'runElapsed'; badge.className = 'run-elapsed sub'; badge.textContent = '0ms';
+  btn?.parentElement?.appendChild(badge);
   // 第六十七轮①⑤：执行中按钮变「停止」——点了调 /api/stop 中断在途执行
   let stopArmed = false;
   if (btn) {
@@ -4002,6 +4032,11 @@ async function submitInner(remember) {
   } catch (e) {
     renderResult({ ok: false, error: e.message, render: 'text' });
   } finally {
+    if (paceTimer) clearInterval(paceTimer);
+    paceNote?.remove();
+    const fixed = document.getElementById('runElapsed');
+    if (fixed && fixed.isConnected) fixed.textContent = fmtElapsed(Date.now() - t0);
+    setTimeout(() => document.getElementById('runElapsed')?.remove(), 4000);   // 定格 4s 后退场
     actionInFlight.delete(actionKey(plugin.id, action.id));
     const b = $('runBtn');
     if (b) {
@@ -4811,6 +4846,20 @@ function renderResult(res) {
       ? `<span class="badge slow" title="慢于该动作历史 P95（${formatMs(p95)}）">🐢 慢于平常</span>`
       : '';
   })();
+  // 第一百七十七轮②④：耗时徽标（成功失败都有——失败耗时是诊断线索）+ 均值快慢
+  const paceBadge = (() => {
+    if (res.ms === undefined || !detail) return '';
+    const hist = (runStore[actionKey(detail.plugin.id, detail.action.id)] ?? [])
+      .slice(0, -1).map((r) => r?.ms).filter((n) => Number.isFinite(n));
+    if (!hist.length) return '';
+    const avg = hist.reduce((a, b) => a + b, 0) / hist.length;
+    const v = paceVerdict(res.ms, avg, { samples: hist.length, ok: res.ok === true });
+    const tip = `与最近 ${hist.length} 次均值 ${fmtElapsed(avg)} 相比`;
+    if (v === 'fast') return `<span class="badge pace-fast" title="${tip}">⚡ 快于平常</span>`;
+    if (v === 'slow') return `<span class="badge pace-slow" title="${tip}">🐢 慢于均值</span>`;
+    return '';
+  })();
+  const msBadge = ms ? `<span class="ms-badge" title="本次耗时">⏱ ${esc(ms)}</span>` : '';
 
   let body = '';
   // 第十九轮④：文本输出默认脱敏（token/Bearer/长 hex 打码；开关在 actions 区 🕶）
@@ -5012,7 +5061,7 @@ function renderResult(res) {
   const copyText = res.data !== undefined ? JSON.stringify(res.data, null, 2) : (res.stdout ?? '');
   box.innerHTML = `
     <div class="card">
-      <div class="card-head" id="cardHead" title="${t('foldToggle')}">${head}${slowBadge}
+      <div class="card-head" id="cardHead" title="${t('foldToggle')}">${head}${msBadge}${slowBadge}${paceBadge}
         <span style="margin-left:auto" class="aid">${esc(res.command || '')}</span>
         <button class="ghost" id="cardFold" title="${t('foldToggle')}">${t('foldUp')}</button>
       </div>

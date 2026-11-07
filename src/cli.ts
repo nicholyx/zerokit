@@ -1275,6 +1275,10 @@ async function cmdRun(args: string[]): Promise<number> {
       printRunResult(action, result, asJson, profile);
     }
   }
+  // 第一百七十七轮⑧：总耗时尾行统一出口（所有非 --json 分支都补；成功失败都给——失败耗时是诊断线索）
+  if (!asJson && !quiet && !pipeCmd && !fmtTpl && typeof result.ms === 'number' && Number.isFinite(result.ms)) {
+    process.stderr.write(c.dim(`⏱ ${result.ms < 1000 ? `${Math.round(result.ms)}ms` : `${(result.ms / 1000).toFixed(1)}s`}`) + '\n');
+  }
   // 第一百四十八轮⑥：--pipe <cmd>——表格文本经 stdin 接 shell 命令（如 --pipe "grep -i mac"）。
   // 在所有格式化之后接管 stdout：上面已打印的内容会被管道命令一起吞掉吗——不会，这里改为拦截式：
   // --pipe 存在时上面的输出都写进缓冲，最终只把表格文本喂给管道命令、命令输出才是用户看到的。
