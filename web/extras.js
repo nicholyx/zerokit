@@ -149,18 +149,20 @@ export const PROMPTS = [
 // 同样只放纯函数：解析/排序/拼文本这类容易写错、又完全不需要 DOM 的逻辑，
 // 放这里让 Node 直接单测。
 
-/** 强调色：只改一个 CSS 变量，深浅主题都跟着走 */
+/** 强调色：只改一个 CSS 变量，深浅主题都跟着走
+ * 第一百八十一轮：默认档换成「钛青」——精密仪器感，避开 SaaS 默认蓝紫；
+ * 六档全部换名换值，浅色档加深变体见 style.css 第一百七十轮段。 */
 export const ACCENTS = [
   { id: 'ocean', label: '海水蓝', color: '#5aa9ff' },
+  { id: 'cyan', label: '钛青', color: '#3fc4c4' },
   { id: 'violet', label: '暮光紫', color: '#a78bfa' },
   { id: 'emerald', label: '翡翠绿', color: '#34d399' },
   { id: 'amber', label: '琥珀金', color: '#f0b43c' },
   { id: 'rose', label: '玫瑰红', color: '#f472b6' },
-  { id: 'slate', label: '石板灰', color: '#94a3b8' },
 ];
 
 export function normalizeAccent(id) {
-  return ACCENTS.some((a) => a.id === id) ? id : 'ocean';
+  return ACCENTS.some((a) => a.id === id) ? id : 'cyan';
 }
 
 export function accentColor(id) {

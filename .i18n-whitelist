@@ -1411,3 +1411,4 @@ if \(v === 'slow'\) return `<span class="b
 const msBadge = ms \? `<span class="ms-ba
 if \(n > 8000\) return '执行已超过 8 秒——插件可能在等外
 if \(n > 2000\) return '仍在执行…（插件可能在做重活）';
+\{ id: 'cyan', label: '钛青'
