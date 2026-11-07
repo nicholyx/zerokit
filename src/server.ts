@@ -36,6 +36,7 @@ import { applyDefaults, coerceParam, toFormFields, toJsonSchema } from './core/s
 import { type PublicSetting, publicSettings, SECRET_MASK, writeSettings } from './core/pluginConfig.ts';
 import { dependents, depStates, installDeps, missingDeps } from './core/deps.ts';
 import { buildArgv, chainDisplay, confirmPolicy, displayCommand, runAction , audit } from './core/runner.ts';
+import { validateSharePack, replayPolicy } from './core/share.ts';
 import { buildDoctorReport, toHistoryEntry, appendDoctorHistory, readDoctorHistory, diffDoctorHistory, doctorSummaryLine, doctorTrend, trendVerdict } from './core/doctor.ts';
 import { evalAppUpdate, fetchLatestRelease, readCurrentVersion } from './core/appupdate.ts';
 import {
@@ -1516,6 +1517,16 @@ export function createServer(): http.Server {
         return;
       }
 
+      // 第一百六十九轮⑥：导入分享包（body 直接是包 JSON）
+      if (url.pathname === '/api/share/import' && req.method === 'POST') {
+        const body = await readBody(req);
+        const v = validateSharePack(body);
+        if (!v.ok) { fail(res, 400, v.error); return; }
+        const policy = replayPolicy(v.pack);
+        audit({ ts: new Date().toISOString(), caller: 'api', plugin: v.pack.action.split('.')[0] ?? '', action: 'share-import', tool: v.pack.action, risk: v.pack.risk, decision: 'allow', reason: 'import' });
+        json(res, 200, { pack: v.pack, replay: policy, note: 'CLI 侧 zkit share --view 可比对指纹' });
+        return;
+      }
       if (url.pathname === '/api/run' && req.method === 'POST') {
         const body = await readBody(req);
         const pluginId = String(body['plugin'] ?? '');

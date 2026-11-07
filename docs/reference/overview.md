@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-11-07（第一百六十八轮，v1.70.0）
+> 最后更新：2026-11-07（第一百六十九轮，v1.71.0）
 
 ## 性能基线（第五十八轮建立，2026-10-28，Apple M4 / Node 22）
 
@@ -107,6 +107,7 @@ uTools 开始收费了。想找一个替代品，找了一圈发现真正的问�
 - [x] 第一百五十四轮（v1.58.0）：JSON 面板——大结果结构浏览（折叠树/类型四色/路径复制）、大数组（>100 项）与深嵌套（>8 层）默认折叠、KV↔JSON 树切换（按动作记忆）、CLI --path 别名（issue #521）。
 - [x] 第一百五十五轮（v1.59.0）：哨兵通知与审计保留——run --notify 告警外发（stdin 交外部命令）、--notify-file、logs --keep 保留策略带备份幂等、doctor 报审计规模（Issue #524）
 - [x] 第一百六十八轮（v1.70.0）：结果分享与团队协作——.zshare 分享包/run --from-share 重放（destructive 拒绝）/share --view 指纹/--markdown 摘要（Issue #560）
+- 第一百六十九轮 v1.71.0（Web 端 .zshare 分享闭环）：结果区分享包下载/抽屉导入/导入可重放（mutate 确认、destructive 拒绝）/来自分享包徽标/WebCrypto 指纹（与 CLI 同结果）//api/share/import 端点+审计。
 - [x] 第一百六十七轮（v1.69.0）：zkit why 报错自查与 config env——七类归因/why --last/fish 支持/logs --errors（Issue #557）
 - [x] 第一百六十六轮（v1.68.0）：插件生命周期闭环——plugin info/doctor 单插件/remove --dry-run/reinstall/0600 审计（Issue #554）
 - [x] 第一百六十五轮（v1.67.0）：OS 级深链 zerokit://——壳注册协议/生成器/二维码双形态/未知目标提示（Issue #551）
@@ -266,7 +267,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 
 ### 质量
 
-- 118 个文件、**2769 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
+- 119 个文件、**2782 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
 - `tsc --noEmit` 干净——**而且 CI 真的在跑它**（`typecheck` job）。
   曾经这里写着"干净"但没有任何地方执行这条命令，于是两个只有类型检查才看得见的
   错误在核心里躺了很久（`proxy.ts` 的 Buffer 泛型不兼容、`scaffold.ts` 的类型混用）。
