@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint, configProgress, validateSettingInput, formCanSave, parseConfigHash, textLines, textStats, fmtElapsed, paceVerdict, paceReassure, copyTextRaw, copyWithNumbers, copyWithTitle, extractUrls, colTooltipStats, shouldFreeze, tableSizeBadge, batchColVis } from './extras.js';
+import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint, configProgress, validateSettingInput, formCanSave, parseConfigHash, textLines, textStats, fmtElapsed, paceVerdict, paceReassure, copyTextRaw, copyWithNumbers, copyWithTitle, extractUrls, colTooltipStats, shouldFreeze, tableSizeBadge, batchColVis, csvEscape, exportCsv, mdTableVis, exportMeta, shareEnvelope, shareAlive } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote, defaultChip, enumHint, actionHealthBadge, descNeedsFold, inQuietHours, notifyThrottle, pushNotifyLog, parseHm } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -6092,6 +6092,8 @@ function renderTable(rows0, tableId = '') {
   // 第十六轮③：筛选输入行（thead 第二行）
   const fRow = `<tr class="tfilter" aria-label="按列筛选">${visCols.map((c) => `<td><input data-tf="${esc(c)}" placeholder="筛…" value="${esc((fterms[0] && tableFilterTerms[tableId]?.join(' ')) || '')}" autocomplete="off" spellcheck="false"></th>`).join('')}</tr>`;
   const gear = `<span class="colvis-btn" data-colvis="${esc(tableId || 't')}" title="显示/隐藏列" role="button" tabindex="0">⚙</span>`;
+  // 第一百七十九轮⑧：导出按钮（CSV/MD 可见列 + 元信息头，遵循当前筛选态）
+  const exportBtn = `<span class="colvis-btn" data-texport="${esc(tableId || 't')}" title="${t('texportTip')}" role="button" tabindex="0">⬇</span>`;
   // 第一百七十六轮⑦：行×列徽标
   const sizeBadge = `<span class="tbl-size sub">${esc(tableSizeBadge(view, visCols))}</span>`;
   // 第一百七十六轮⑤：列头统计 tooltip（悬停即看，不用拉到表底 tfoot）——直接内联进 th title
@@ -6104,7 +6106,7 @@ function renderTable(rows0, tableId = '') {
   const overFields = cols.length > 30 ? `<span class="sub warn-note">列已超 30（${cols.length}），可在 ⚙ 隐藏不看的</span>` : '';
   // 第二十三轮⑤⑥：查询框（与第十六轮筛选行不同：这是整表查询，支持 > < = 数字比较）
   const qbar = `<div class="rquery"><input data-rq="${esc(tableId || 't')}" placeholder="查询：词 或 size>100 …" value="${esc(resultQueryTerms[tableId] ?? '')}" autocomplete="off" spellcheck="false"><span class="sub" data-rqc="${esc(tableId || 't')}">${rq ? `${qrows.length} / ${frows.length} 行` : ''}</span></div>`;
-  return `${unitBtns ? `<div class="unit-bar">${unitBtns}</div>` : ''}${gear}${sizeBadge}${densBtns}${overFields}${qbar}<div class="tbl-wrap density-${dpref}"><table class="grid" data-table="${esc(tableId)}" style="--tbl-row-h:${dens.row};--tbl-pad:${dens.pad};--tbl-fs:${dens.fs}"><thead><tr>${head}</tr>${fRow}</tr></thead><tbody>${body}</tbody><tfoot><tr>${foot}</tr></tfoot></table></div>
+  return `${unitBtns ? `<div class="unit-bar">${unitBtns}</div>` : ''}${gear}${exportBtn}${sizeBadge}${densBtns}${overFields}${qbar}<div class="tbl-wrap density-${dpref}"><table class="grid" data-table="${esc(tableId)}" style="--tbl-row-h:${dens.row};--tbl-pad:${dens.pad};--tbl-fs:${dens.fs}"><thead><tr>${head}</tr>${fRow}</tr></thead><tbody>${body}</tbody><tfoot><tr>${foot}</tr></tfoot></table></div>
   ${bigTable ? `<div class="tcount"><span class="sub">${t('rowsWindowed')(viewRows.length, view.length, PAGE_ROWS)}</span> <button class="ghost mini" data-loadall="${esc(tableId || 't')}">${t('loadAllRows')(view.length)}</button></div>` : `<div class="tcount sub">${view.length === rows.length ? t('rowsTotal')(rows.length) : t('rowsFiltered')(view.length, rows.length)}</div>`}`;
 }
 
@@ -6283,7 +6285,7 @@ function bindTableSorts(scope) {
       refreshResult();
     }));
     // 第二十三轮⑤⑥：结果查询框（整表查询，支持数字比较）
-    tbl.parentNode?.querySelectorAll('input[data-rq]').forEach((inp) => {
+    (tbl.closest('.result-card, #result, body') ?? document).querySelectorAll('input[data-rq]').forEach((inp) => {
       inp.addEventListener('input', () => {
         resultQueryTerms[inp.dataset.rq] = inp.value;
         refreshResult();
@@ -6336,6 +6338,7 @@ function bindTableSorts(scope) {
         writeJson(`zerokit.colvis.${tid}`, vis);
         refreshResult();
       });
+
       // 第一百七十六轮③：批量显隐——全选/只看数值（保主键）/仅主键
       pop.querySelectorAll('[data-cvb]').forEach((b) => b.addEventListener('click', () => {
         const next = batchColVis(cols, vis, b.dataset.cvb, numericCols);
@@ -6348,6 +6351,88 @@ function bindTableSorts(scope) {
         const off = (e2) => { if (!pop.contains(e2.target) && e2.target !== gear) { pop.remove(); document.removeEventListener('mousedown', off); } };
         document.addEventListener('mousedown', off);
       });
+
+    });
+  });
+  // 第一百七十九轮⑧：导出弹窗（⬇）——CSV / Markdown / 复制 / 分享深链
+  scope.querySelectorAll('[data-texport]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tid = btn.dataset.texport;
+      document.getElementById('texportPop')?.remove();
+      const rows0 = Array.isArray(currentResult?.data) ? currentResult.data : [];
+      const cols = [];
+      for (const row of rows0) for (const k of Object.keys(row ?? {})) if (!cols.includes(k)) cols.push(k);
+      const vis = readJson(`zerokit.colvis.${tid}`, null) ?? Object.fromEntries(cols.map((c) => [c, true]));
+      const visCols = cols.filter((c) => vis[c] !== false);
+      const actionName = currentResult?.name || detail?.action?.title || t('shareFallbackName');
+      const pop = document.createElement('div');
+      pop.id = 'texportPop';
+      pop.className = 'colvis-pop';
+      pop.innerHTML = `<div class="pop-title">${t('texportTitle')}（${esc(actionName)}）</div>
+        <div class="pop-row sub">${t('texportHint')}</div>
+        <div class="actions">
+          <button class="ghost mini" data-texp="csv">CSV</button>
+          <button class="ghost mini" data-texp="md">Markdown</button>
+          <button class="ghost mini" data-texp="copy">${t('texportCopy')}</button>
+          <button class="ghost mini" data-texp="share">${t('texportShare')}</button>
+          <button class="ghost mini" id="texpClose">${t('texpClose')}</button>
+        </div>`;
+      document.body.appendChild(pop);
+      const r = btn.getBoundingClientRect();
+      pop.style.left = `${Math.max(8, r.right - pop.offsetWidth)}px`;
+      pop.style.top = `${r.bottom + 4}px`;
+      const closePop = () => pop.remove();
+      pop.querySelector('#texpClose').addEventListener('click', closePop);
+      pop.addEventListener('click', (ev2) => {
+        const mode = ev2.target.dataset?.texp;
+        if (!mode) return;
+        // ④ 遵循当前筛选态：走与 renderTable 同层的过滤/查询/排序链
+        const fterms = tableFilterTerms[tid] ?? [];
+        const frows = filterRows(rows0, fterms);
+        const rq = resultQueryTerms[tid] ?? '';
+        const qrows = rq ? resultQuery(frows, rq) : frows;
+        const st = tableState[tid] ?? { col: null, dir: 1 };
+        const view = st.col ? sortRows(qrows, st.col, st.dir) : qrows;
+        if (mode === 'csv' || mode === 'copy') {
+          const text = `${exportMeta(actionName, view.length)}\n${exportCsv(view, visCols)}`;
+          if (mode === 'copy') { navigator.clipboard?.writeText(text); closePop(); return; }
+          const blob = new Blob([`\ufeff${text}`], { type: 'text/csv;charset=utf-8' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = `${(actionName || 'table').replace(/[^\w.-]+/g, '_')}.csv`;
+          a.click();
+          URL.revokeObjectURL(a.href);
+          closePop();
+        } else if (mode === 'md') {
+          const numericCols = visCols.filter((c) => isNumericColumn(view.map((r2) => r2?.[c])));
+          const text = `${exportMeta(actionName, view.length)}\n\n${mdTableVis(view, visCols, numericCols)}\n`;
+          const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = `${(actionName || 'table').replace(/[^\w.-]+/g, '_')}.md`;
+          a.click();
+          URL.revokeObjectURL(a.href);
+          closePop();
+        } else if (mode === 'share') {
+          // ⑤ 分享深链：envelope 进 localStorage（24h 过期自清），hash 直达
+          const env = shareEnvelope(actionName, visCols, view.slice(0, 200));
+          writeJson(`zerokit.share.${env.id}`, env);
+          // 顺手清过期分享
+          for (const k of Object.keys(localStorage)) {
+            if (!k.startsWith('zerokit.share.')) continue;
+            const e2 = readJson(k, null);
+            if (e2 && !shareAlive(e2)) localStorage.removeItem(k);
+          }
+          const url = `${location.origin}${location.pathname}#/share/${env.id}`;
+          navigator.clipboard?.writeText(url);
+          history.pushState(null, '', `#/share/${env.id}`);
+          applyHash();
+          closePop();
+        }
+      });
+      setTimeout(() => document.addEventListener('click', function onOut(ev3) {
+        if (!pop.contains(ev3.target)) { pop.remove(); document.removeEventListener('click', onOut); }
+      }), 0);
     });
   });
   // JSON 折叠树：点分支行折叠/展开其直接子树
@@ -9767,7 +9852,37 @@ function showFirstRunGuide() {
 }
 
 /** 支持 #/插件/动作 深链直达 */
+
+/** 第一百七十九轮⑥：分享打开态——只读渲染 + 来源信息条 + 「自己跑一次」。 */
+function showShareView(shareId) {
+  const env = readJson(`zerokit.share.${shareId}`, null);
+  const view = document.getElementById('view') ?? document.body;
+  hidePanels();
+  if (!env || !shareAlive(env)) {
+    view.innerHTML = `<div class="panel"><div class="empty-art"></div><div class="e-title">${t('shareGoneTitle')}</div><div class="e-hint">${t('shareGoneHint')}</div></div>`;
+    return;
+  }
+  const rows = env.rows ?? [];
+  const cols = env.cols ?? [];
+  const numericCols = cols.filter((c) => isNumericColumn(rows.map((r) => r?.[c])));
+  const tableHtml = rows.length ? mdTableVis(rows, cols, numericCols) : '';
+  view.innerHTML = `<div class="panel share-view">
+    <div class="share-meta sub">${t('shareFrom')}「${esc(env.action)}」 · ${new Date(env.at).toLocaleString()} · ${rows.length} ${t('shareRows')} × ${cols.length} ${t('shareCols')} · ${t('shareValid')}</div>
+    <div class="share-actions"><button class="primary mini" id="shareRerun">${t('shareRerun')}</button></div>
+    <pre class="share-table">${esc(tableHtml)}</pre>
+  </div>`;
+  document.getElementById('shareRerun')?.addEventListener('click', () => {
+    location.hash = '#/';
+    setTimeout(() => { const q = document.getElementById('q'); if (q) { q.value = (env.action || '').split('.')[0]; q.dispatchEvent(new Event('input', { bubbles: true })); } }, 100);
+  });
+}
+
 function applyHash() {
+  // 第一百七十九轮⑤⑥：#/share/<id> 只读分享打开态
+  {
+    const m = /^#\/share\/([a-z0-9]+)$/.exec(location.hash || '');
+    if (m) { showShareView(m[1]); return; }
+  }
   // #/timers 定时任务面板
   if ((location.hash || '') === '#/timers') { showTimers(); return; }
   // 第六十四轮：#/clip 剪贴板历史面板

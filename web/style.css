@@ -2320,3 +2320,9 @@ html[data-theme="dark"] .tbl-wrap table.grid td:first-child { background: var(--
 .ms-badge { margin-left: 8px; font-variant-numeric: tabular-nums; color: var(--fg-dim, #666); }
 .badge.pace-fast { margin-left: 6px; }
 .badge.pace-slow { margin-left: 6px; }
+
+/* ==================== 第一百七十九轮：表格导出与分享 ==================== */
+.share-view .share-meta { padding: 8px 0 4px; }
+.share-view .share-actions { padding: 4px 0 10px; }
+.share-table { background: var(--bg2, rgba(127,127,127,.08)); border-radius: 8px; padding: 12px; overflow: auto; max-height: 60vh; font-size: 12px; line-height: 1.7; white-space: pre; }
+[data-texport] { margin-left: 2px; }
