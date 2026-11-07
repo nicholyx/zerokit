@@ -52,10 +52,17 @@ ci_poll_merge() { # ci_poll_merge <PR> —— 轮询 CI + merge + 复核
       echo "CI-FAIL（PR #${pr}）："; echo "$out" | grep fail | head -3
       return 1                      # CI-FAIL 绝不继续（v1.59.1 事故：fail 后 merge 循环空转、tag 打错提交）
     fi
-    [[ "$n" = "12" ]] && green=1 && break
-    if [[ "$n" -ge "11" && "$p" = "0" ]]; then
-      m="$(gh pr view "$pr" --json mergeable --jq .mergeable 2>/dev/null || true)"
-      [[ "$m" = "MERGEABLE" ]] && green=1 && echo "  （11/12 + MERGEABLE 捷径：第 12 项是总览 job 延迟）" && break
+    # 第一百七十二轮④：两条路径都判「绿」——12/12 全绿，或 11/12+MERGEABLE
+    # （第 12 项常是「CI 总览」聚合 job，比子 job 晚几分钟——不等它，MERGEABLE 即合并）
+    overview_late_ok() { # <pr> <pass> <pending>
+      [[ "$2" -ge "11" && "$3" = "0" ]] || return 1
+      local m; m="$(gh pr view "$1" --json mergeable --jq .mergeable 2>/dev/null || true)"
+      [[ "$m" = "MERGEABLE" ]]
+    }
+    if [[ "$n" = "12" ]] || overview_late_ok "$pr" "$n" "$p"; then
+      green=1
+      [[ "$n" != "12" ]] && echo "  （11/12 + MERGEABLE 捷径：第 12 项是总览 job 延迟）"
+      break
     fi
     sleep 45
   done

@@ -7,8 +7,9 @@
  *   node scripts/release-prep.mjs 0.60.0 --write   # 真正落盘
  *
  * 干的事：
- *   1. CHANGELOG：[Unreleased] 段归档为 [X.Y.Z] - 今日；[Unreleased] 重置为空壳
- *      自检：新段标题存在、新段条目数 === 归档前条目数、[Unreleased] 只剩空壳
+ *   1. CHANGELOG：[Unreleased] 段归档为 [X.Y.Z] - 今日；[Unreleased] 重置为带 ### Added 的空壳（第一百七十二轮起）
+ *      自检：新段标题存在、新段条目数 === 归档前条目数、[Unreleased] 只剩带分类头的空壳
+ *      版本段 >12 时最旧的搬进 docs/reference/changelog-archive.md（搬段保留空壳头）
  *   2. 版本号四处：package.json / apps/desktop/src-tauri/tauri.conf.json /
  *      apps/desktop/src-tauri/Cargo.toml / Cargo.lock（结构化定位 zerokit-desktop 段）
  *      自检：跑 scripts/check-docs.mjs 的版本号四处断言
@@ -50,7 +51,9 @@ function archiveOldVersions() {
     return (x[0] - y[0]) || (x[1] - y[1]) || (x[2] - y[2]);
   });
   const moveOut = new Set(sorted.slice(0, sorted.length - 12).map((h) => h.v)); // 最旧的搬走
-  const firstHead = main.search(/^## \[/m);
+  // 第一百七十二轮①：/\[Unreleased\] 也是 ## [ 开头——必须排除它，否则空壳段整个被丢掉
+  //（三次「归档后没补回空壳」手工修复的真正根因就在这一行）
+  const firstHead = (main.match(/^## \[(?!Unreleased)[\d.]+\] - /m) ?? { index: main.length }).index ?? main.length;
   const unreleased = main.slice(0, firstHead);
   const ends = heads.map((m) => m.index ?? 0 + m[0].length);
   const segMap = new Map();
@@ -120,10 +123,15 @@ const oldBlock = unrelBody.replace(/\n+$/, '');
 const newBlock = `## [Unreleased]\n\n### Added\n\n（下一版攒着）\n\n## [${ver}] - ${date}\n\n${entries}`;
 let cl2 = cl.replace(oldBlock, newBlock);
 // 教训（v0.60.0 首用即踩）：条目正则 (?:- [^\n]*\n)+ 之后紧跟的空行+占位行会被 newBlock 意外带上——
-// 归档后把新段内的「（下一版攒着）」清掉
-const segStart = cl2.indexOf(`## [${ver}] - ${date}`);
-const segEnd = cl2.indexOf('\n## [', segStart);
-cl2 = cl2.slice(0, segStart) + cl2.slice(segStart, segEnd === -1 ? cl2.length : segEnd).replace(/\n（下一版攒着）\n/, '\n\n### Added\n') + (segEnd === -1 ? '' : cl2.slice(segEnd));
+// 第一百七十二轮①：归档后显式重写头部——保证 [Unreleased] 带分类头的空壳存在。
+// （旧实现的「清掉新段内占位」replace 在空壳形态升级后会把头部空壳误清——三次手工补回的根因）
+const SHELL = '## [Unreleased]\n\n### Added\n\n（下一版攒着）\n\n';
+{
+  const firstRel = cl2.search(/\n## \[\d/);
+  const headEnd = firstRel === -1 ? cl2.length : firstRel + 1; // 含换行
+  const rest = firstRel === -1 ? '' : cl2.slice(firstRel + 1);
+  cl2 = '# Changelog\n\n' + SHELL + rest;
+}
 
 // ② 自检一：新段标题存在且在 [Unreleased] 之后
 const idxUnrel = cl2.indexOf('## [Unreleased]');
