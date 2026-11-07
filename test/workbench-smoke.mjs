@@ -169,7 +169,7 @@ try {
     approveTypes.indexOf('tool_start') > approveTypes.indexOf('tool_pending'),
     approveTypes.join(','));
   check('确认框里给的是解析后的完整命令',
-    typeof pendingSeen?.command === 'string' && /node/.test(pendingSeen.command), pendingSeen?.command);
+    typeof pendingSeen?.command === 'string' && / -e /.test(pendingSeen.command), pendingSeen?.command);
   check('确认框标出了风险等级与动作身份',
     pendingSeen?.risk === 'mutate' && pendingSeen?.actionId === 'touch', JSON.stringify(pendingSeen));
   const approveResult = approveRun.events.find((e) => e.type === 'tool_result')?.result;
@@ -206,7 +206,7 @@ try {
   const spun = procs.find((p) => p.actionId === 'spin');
   check('托管的进程出现在「运行中」里', Boolean(spun), JSON.stringify(ps1).slice(0, 300));
   check('「运行中」里有它的 PID 和真实命令',
-    spun?.pid > 0 && /node/.test(spun?.command ?? ''), JSON.stringify(spun));
+    spun?.pid > 0 && (spun?.command ?? '').includes('-e'), JSON.stringify(spun));
 
   // 它确实在持续输出（说明进程真的活着）
   await new Promise((r) => setTimeout(r, 1200));

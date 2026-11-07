@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-11-07（第一百八十一轮，v1.83.0）
+> 最后更新：2026-11-08（第一百八十二轮，v1.84.0）
 
 ## 性能基线（第五十八轮建立，2026-10-28，Apple M4 / Node 22）
 
@@ -120,7 +120,7 @@ uTools 开始收费了。想找一个替代品，找了一圈发现真正的问�
 - 第一百七十九轮 v1.81.0（表格导出与分享）：可见列 CSV/MD 导出（元信息头+筛选态所见即所得）/#/share 只读分享深链 24h/修复查询框绑定丢失；table179-smoke 25 项。
 - 第一百八十轮 v1.82.0（书签与快速到达）：详情页 ◉ 钉住（参数快照）/palette `>` 直达/⭐ 徽标/#/bookmarks 管理页（重跑+删除确认）/CLI bookmarks.json 双向同步//api/bookmarks 三端点；bookmark180-smoke 19 项。
 - 第一百八十一轮 v1.83.0（视觉语言重铸一）：默认强调色换钛青/形制令牌（四档圆角+三层阴影暗亮两套）/焦点环统一双环/行高与字距微调。
-- [x] 第一百六十七轮（v1.69.0）：zkit why 报错自查与 config env——七类归因/why --last/fish 支持/logs --errors（Issue #557）
+- 第一百八十二轮 v1.84.0（首屏英雄化）：搜索框呼吸光晕+聚焦收拢/kbd 胶囊/开屏编排（booting 一次性）/hover 统一/结果卡头部层级。\n- [x] 第一百六十七轮（v1.69.0）：zkit why 报错自查与 config env——七类归因/why --last/fish 支持/logs --errors（Issue #557）
 - [x] 第一百六十六轮（v1.68.0）：插件生命周期闭环——plugin info/doctor 单插件/remove --dry-run/reinstall/0600 审计（Issue #554）
 - [x] 第一百六十五轮（v1.67.0）：OS 级深链 zerokit://——壳注册协议/生成器/二维码双形态/未知目标提示（Issue #551）
 - [x] 第一百六十四轮（v1.66.0）：HTTP API 面系统化——version/health 扩展/openapi.json/405 方法校验/错误信封/http-api.md（Issue #548）
@@ -279,7 +279,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 
 ### 质量
 
-- 130 个文件、**3010 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
+- 130 个文件、**3014 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
 - `tsc --noEmit` 干净——**而且 CI 真的在跑它**（`typecheck` job）。
   曾经这里写着"干净"但没有任何地方执行这条命令，于是两个只有类型检查才看得见的
   错误在核心里躺了很久（`proxy.ts` 的 Buffer 泛型不兼容、`scaffold.ts` 的类型混用）。

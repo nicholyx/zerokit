@@ -21,7 +21,7 @@ run(['bookmark', 'add', 'daily', 'run', 'sysinfo', 'overview']);
 // zkit 包装成 PATH 可执行（书签候选走 $(zkit ...) 运行时替换，需要真命令）
 const bin = path.join(home, 'bin'); mkdirSync(bin, { recursive: true });
 const zkitSh = path.join(bin, 'zkit');
-writeFileSync(zkitSh, `#!/bin/bash\nZEROKIT_HOME=${home} exec ${process.execPath} ${CLI} "$@"\n`);
+writeFileSync(zkitSh, `#!/bin/bash\nZEROKIT_HOME=${home} exec "${process.execPath}" "${CLI}" "$@"\n`);
 chmodSync(zkitSh, 0o755);
 const bashEnv = { ...env, PATH: `${bin}:${process.env.PATH}` };
 const bash = (script) => spawnSync('/bin/bash', ['-c', script], { encoding: 'utf8', timeout: 30000, env: bashEnv });

@@ -26,6 +26,9 @@
   --shadow-2: 0 8px 24px rgba(8, 10, 14, .32);
   --shadow-3: 0 18px 44px rgba(8, 10, 14, .42);
   --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+  --ease: cubic-bezier(.22, .61, .36, 1);        /* 出场——先快后缓 */
+  --ease-spring: cubic-bezier(.34, 1.3, .64, 1); /* 弹层——轻微过冲 */
+  --ease-out: cubic-bezier(.16, 1, .3, 1);       /* 开屏——长尾缓出 */
 }
 
 * { box-sizing: border-box; }
@@ -79,16 +82,31 @@ button.ghost:hover { color: var(--fg); border-color: #364050; }
 .search-row { position: relative; }
 #q {
   width: 100%;
-  padding: 15px 52px 15px 18px;
-  font-size: 16px;
+  padding: 17px 56px 17px 20px;
+  font-size: 17px;
+  font-weight: 450;
   color: var(--fg);
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   outline: none;
+  transition: border-color var(--tr-fast) var(--ease), box-shadow var(--tr-slow) var(--ease), background var(--tr-fast) var(--ease);
+  /* 第一百八十二轮①：静息呼吸光晕——极弱 accent 存在感，聚焦时收拢为清晰双环 */
+  animation: q-breathe 5.2s var(--ease) infinite;
 }
-#q:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(90,169,255,.13); }
-#q::placeholder { color: #5c6472; }
+#q:focus {
+  border-color: var(--accent);
+  animation: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent), var(--shadow-1);
+}
+#q:focus::placeholder { color: transparent; }
+#q::placeholder { color: #5c6472; transition: color var(--tr-fast) var(--ease); }
+@keyframes q-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent), var(--shadow-1); }
+  50% { box-shadow: 0 0 14px 0 color-mix(in srgb, var(--accent) 13%, transparent), var(--shadow-1); }
+}
+/* 焦点环兜底（181 轮双环令牌）在 #q 上以光晕形式呈现，避免双环+光晕叠加过重 */
+#q:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent), var(--shadow-1); }
 .esc-hint {
   position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
   color: #55606e; font-size: 11px;
@@ -113,7 +131,7 @@ main { flex: 1; overflow-y: auto; margin-top: 14px; }
   border-radius: var(--r-md);
   cursor: pointer;
 }
-.item:hover { background: var(--panel); }
+.item:hover { border-color: color-mix(in srgb, var(--accent) 34%, var(--line)); background: color-mix(in srgb, var(--fg) 3%, var(--panel)); }
 .item.active { background: var(--panel-2); border-color: #33455c; }
 .item .plugin {
   font-size: 11px; color: var(--fg-dim);
@@ -200,7 +218,9 @@ button.primary:disabled { opacity: .5; cursor: default; }
 }
 .card-head {
   display: flex; align-items: center; gap: 8px;
-  padding: 8px 12px; border-bottom: 1px solid var(--line);
+  padding: 10px 14px; border-bottom: 1px solid var(--line);
+  /* 第一百八十二轮⑧：结果卡头部精修——内边距加深、字级层级拉开 */
+  font-weight: 550; letter-spacing: .1px;
   font-size: 12px; color: var(--fg-dim);
 }
 .card-head .ok { color: var(--ok); }
@@ -413,8 +433,10 @@ table.grid tr:last-child td { border-bottom: 0; }
 }
 kbd {
   font-family: var(--mono); font-size: 10.5px;
-  border: 1px solid var(--line); border-radius: var(--r-sm);
-  padding: 0 4px; margin-right: 2px; color: #808b9a;
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+  border: 1px solid var(--line); border-bottom-color: color-mix(in srgb, var(--line) 70%, #000 12%);
+  border-radius: var(--r-sm); padding: 1px 6px; margin-right: 2px; color: #808b9a;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--fg) 7%, transparent);
 }
 .hidden { display: none !important; }
 /* ---- 集市面板 ---- */
@@ -879,7 +901,7 @@ mark.find-hit { background: var(--accent); color: var(--bg); border-radius: var(
 .wb-msg.tool { color: var(--fg-dim); font-size: 12px; }
 
 /* 第六轮：空态插画 */
-.empty-art { font-size: 42px; line-height: 1; margin-bottom: 6px; }
+.empty-art { font-size: 42px; line-height: 1; margin-bottom: 6px; , box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 10%, transparent), var(--shadow-1); }
 .empty-why { color: var(--fg-dim, #9aa4b2); font-size: 12px; margin: 4px 0 10px; }
 
 /* 第六轮：小时热力 / 日报 */
@@ -2351,3 +2373,24 @@ html[data-theme="dark"] .tbl-wrap table.grid td:first-child { background: var(--
 button:focus-visible, a:focus-visible, input:focus-visible,
 select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible,
 .rtab:focus-visible, .bmk-a:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* ---------------- 第一百八十二轮③：开屏编排 ----------------
+   一次性入场序列：顶栏淡入 → 搜索框上浮 → 列表行 stagger（既有 zk-stagger 接力）。
+   .booting 落在 <html>，首帧渲染完成后摘除——之后任何 DOM 重建不再回放。 */
+.booting .bar { animation: boot-bar .34s var(--ease-out) both; }
+.booting .search-row { animation: boot-q .44s var(--ease-out) .08s both; }
+.booting .foot { animation: boot-bar .34s var(--ease-out) .12s both; }
+@keyframes boot-bar { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@keyframes boot-q { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .booting .bar, .booting .search-row, .booting .foot { animation: none; }
+}
+
+/* ---------------- 第一百八十二轮⑥：顶栏精修 ---------------- */
+.bar { border-bottom: none; background:
+  linear-gradient(to bottom, transparent calc(100% - 1px), color-mix(in srgb, var(--line) 26%, transparent) calc(100% - 1px)); }
+.status-pill {
+  border-color: color-mix(in srgb, var(--line) 45%, transparent);
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+  backdrop-filter: blur(6px);
+}

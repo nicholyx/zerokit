@@ -665,6 +665,17 @@ const failed = results.filter(([, ok]) => !ok);
   check('123⑦ 折叠样式', css.includes('.json-fold > summary') && css.includes('.cmp-mark'));
 }
 
+
+// 第一百八十二轮：首屏英雄化静态断言
+{
+  const css2 = fs.readFileSync(path.join(PKG_ROOT, 'web', 'style.css'), 'utf8');
+  const app2 = fs.readFileSync(path.join(PKG_ROOT, 'web', 'app.js'), 'utf8');
+  check('182① 搜索框呼吸光晕（q-breathe keyframes）', css2.includes('@keyframes q-breathe') && css2.includes('animation: q-breathe'));
+  check('182② kbd 胶囊（内测亮线 inset shadow）', css2.includes('inset 0 1px 0'));
+  check('182③ 开屏编排（.booting 落上/摘除 + reduced-motion 尊重）', app2.includes("classList.add('booting')") && css2.includes('.booting .search-row') && css2.includes('.booting .bar, .booting .search-row, .booting .foot'));
+  check('182⑦ 缓动令牌（--ease-spring / --ease-out）', css2.includes('--ease-spring') && css2.includes('--ease-out'));
+}
+
 console.log(`\n${'='.repeat(60)}\n通过 ${results.length - failed.length} / ${results.length}`);
 if (failed.length > 0) {
   console.log('失败项：');
