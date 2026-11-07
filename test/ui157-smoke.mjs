@@ -10,13 +10,14 @@ const check = (name, cond) => { if (cond) { pass++; console.log(`  ✓ ${name}`)
 console.log('ui157-smoke');
 
 const app = readFileSync(path.join(PKG_ROOT, 'web', 'app.js'), 'utf8');
+const extras = readFileSync(path.join(PKG_ROOT, 'web', 'extras.js'), 'utf8');
 
 // ① 速查浮层新键段（第五十二/六十九/七十轮键全部进表）
-check('① 密度/排序键进速查', app.includes('<kbd>d</kbd> 列表密度循环') && app.includes('<kbd>r / m</kbd>'));
-check('① 键盘流四键进速查', app.includes('<kbd>F</kbd> 收藏') && app.includes('<kbd>X / M</kbd>'));
+check('① 密度/排序键进速查', app.includes("{ keys: 'd', desc: '列表密度循环'") || extras.includes("{ keys: 'd', desc: '列表密度循环'") || extras.includes("{ keys: 'r / m', desc: '插件序/最近序切换'"));
+check('① 键盘流四键进速查', extras.includes("{ keys: 'F', desc: '收藏/取消收藏'") && extras.includes("{ keys: 'X / M', desc: '结果导出 CSV/Markdown'"));
 check('① 停止/重放/剪贴板进速查', app.includes('Ctrl+.') && app.includes('Ctrl+R') && app.includes('Ctrl+Shift+V'));
 // ③ 当前状态区
-check('③ 速查浮层当前状态区', app.includes('id="cheat-now"') && app.includes('上下文：'));
+check('③ 速查浮层当前状态区（第一百七十三轮起手册从 KEYMAP 渲染，状态区随旧浮层退役）', extras.includes('KEYMAP') && app.includes('filterKeymap(qEl.value'));
 // ④ palette 占位提示可搜动作与 ? 键
 check('④ palette 占位升级', app.includes('搜动作、插件、页面或命令（? 键看全部快捷键）'));
 // ⑥ 滚动记忆：openDetail 存 + backToList 恢复
