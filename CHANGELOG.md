@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [1.76.0] - 2026-11-07
+
+### Added
+
 - 插件配置向导：设置抽屉新增「插件配置」入口与 `#/config` 面板——按插件列出配置完成度（N/M 已设置、缺哪些必填）；`#/config/<插件>` 表单化填写（secret 走掩码输入、enum 下拉），必填缺口与类型/枚举/数值范围校验在输入时就报，全过才亮「保存」（走既有 `/api/plugin/config`，不新开写侧）（第一百七十四轮）。
 - CLI↔UI 互指引：`zkit config <插件> list` 与 doctor 的「缺少必填设置项」提示都附 `#/config/<插件>` 深链（第一百七十四轮）。
 
@@ -83,10 +89,4 @@
 - 脚本化与自动化：`zkit exit-codes` 退出码契约速查（0 成功 / 1 值得重试 / 2 不要盲目重试）；`run --stdin <参数名>` 密钥走 stdin 不进 shell history；`--timeout <秒>` 覆盖清单超时；`--retries N --retry-delay S` 失败重试；`--format '{{ms}}ms {{rows}}行 {{key}}'` 轻模板输出
 - 并发锁：同插件同动作互斥（`~/.zerokit/locks/`），等待约 20 秒、陈锁（>1 小时）可抢、`--no-lock` 逃生
 - `zkit cron add/list/rm/run`：定时任务登记（0600 原子写）与补打；接线交给系统调度器（crontab / 任务计划程序），zkit 不自带守护进程；`docs/guide/scripting.md` 脚本化指南
-
-## [1.64.0] - 2026-11-06
-
-### Added
-
-- 项目门面：仓库 topics（15 个真实关键词）与 description 校准（五个面 + 桌面壳 + 迭代/测试规模）；README 快速开始改用点分简写、补 Release 版本徽章、「下载安装包」节（三平台资产表 + 免构建 npm 路径并列）、「参与贡献」节（十条军规引用）；overview「一句话现状」重写对齐一百六十一轮
 
