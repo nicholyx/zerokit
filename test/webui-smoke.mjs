@@ -685,6 +685,9 @@ const failed = results.filter(([, ok]) => !ok);
     const m = app2.match(/function setCount\(text, tone\) \{([\s\S]*?)\n\}/);
     const body = m ? m[1] : '';
     check('184⑧ setCount 真正赋值且不自调用（防递归）', body.includes('el.count.textContent = text') && !/setCount\(/.test(body));
+  check('185① 卡片令牌（--card-pad/--card-hover-* + 五类卡接 --card-border）', css2.includes('--card-hover-border') && css2.split('--card-border').length >= 4);
+  check('185③ 徽标语义（currentColor 底色 tint + tabular-nums）', css2.includes('background: color-mix(in srgb, currentColor 10%, transparent)') && css2.includes('font-variant-numeric: tabular-nums'));
+  check('185⑥ 健康四态语义变量（无硬编码色）', css2.includes('.badge.hb-✓ { color: var(--ok)') && css2.includes('.badge.hb-新') && !css2.includes('#3fbf6f'));
   }
 }
 
