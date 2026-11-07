@@ -4,13 +4,18 @@
 
 ### Added
 
+（下一版攒着）
+
+## [1.79.0] - 2026-11-07
+
+### Added
+
 - 执行反馈与进度：执行中实时计时（200ms 刷新，完成定格 4 秒）+ 长任务安抚提示（>2s「重活」/>8s「可能卡住」）
 - 结果卡耗时徽标「⏱ 340ms」：成功失败都显示——失败耗时是诊断线索
 - 快慢徽标：与同动作历史均值比（<80% ⚡ 快于平常 / >130% 🐢 慢于均值；不足 2 次样本不判）
 - 批量执行单项进行中计时（增量反馈，不等整批完成）
 - 监控点阵每点悬停显示该次采样耗时
 - CLI：run 结束 stderr 尾行「⏱ 22ms」（--quiet/--json/--pipe/--format 模式不打）
-
 
 ## [1.78.0] - 2026-11-07
 
@@ -95,11 +100,4 @@
 ### Fixed
 
 - Windows 上 `plugin reinstall` 把自带插件误判为非自带源（`URL.pathname` 在盘符路径上产出 `/D:/…`，`existsSync` 恒 false）——改走 `fileURLToPath`；`doctor` 的桌面壳探测同款问题一并修复。`plugin info` 的风险构成从「read 3」改为机读友好的 `read:3`。
-
-## [1.67.0] - 2026-11-07
-
-### Added
-- 插件生命周期闭环：`zkit plugin info <id>`（版本/动作/风险构成/配置痕迹/最近流水，--json 机读）、`plugin remove --dry-run`（预览将删目录/失去动作/--purge 清单/依赖方警示）、`plugin doctor <id>`（单插件体检：清单问题+依赖+配置权限+失败率）、`plugin reinstall <id>`（自带源一键重装）、`plugin bundled` 装完输出上手摘要（每插件动作数/风险/试跑命令）；全局 doctor 新增 settings/*.json 权限审计（0600 合规，按插件归属点名，Windows 跳过）。
-
-- OS 级深链 `zerokit://插件.动作?字段=值`：桌面壳注册协议（macOS Info.plist / Windows+Linux 运行时注册），点击唤起壳并直达动作详情页（参数预填、不自动执行）；`zkit deep-link` 链接生成器（目标校验 exit 1、secret 参数明文警告）；Web UI 二维码双形态（网页链接 / zerokit:// 链接）；未知深链目标回列表并提示；`doctor` 报协议注册状态
 

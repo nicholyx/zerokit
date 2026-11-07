@@ -2,6 +2,13 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [1.67.0] - 2026-11-07
+
+### Added
+- 插件生命周期闭环：`zkit plugin info <id>`（版本/动作/风险构成/配置痕迹/最近流水，--json 机读）、`plugin remove --dry-run`（预览将删目录/失去动作/--purge 清单/依赖方警示）、`plugin doctor <id>`（单插件体检：清单问题+依赖+配置权限+失败率）、`plugin reinstall <id>`（自带源一键重装）、`plugin bundled` 装完输出上手摘要（每插件动作数/风险/试跑命令）；全局 doctor 新增 settings/*.json 权限审计（0600 合规，按插件归属点名，Windows 跳过）。
+
+- OS 级深链 `zerokit://插件.动作?字段=值`：桌面壳注册协议（macOS Info.plist / Windows+Linux 运行时注册），点击唤起壳并直达动作详情页（参数预填、不自动执行）；`zkit deep-link` 链接生成器（目标校验 exit 1、secret 参数明文警告）；Web UI 二维码双形态（网页链接 / zerokit:// 链接）；未知深链目标回列表并提示；`doctor` 报协议注册状态
+
 ## [1.66.0] - 2026-11-07
 
 ### Added
