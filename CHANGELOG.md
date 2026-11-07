@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- 表单输入细节打磨：输入框 hover 先于 focus 渐显（可预期性）；必填项双重标注（label * + 左缘细条）；占位符焦点隐去推广到全部输入框；select 自绘箭头（appearance:none + SVG，双主题）；checkbox/radio accent-color 统一；输入令牌 --input-pad；textarea 等宽排版。
 
 ## [1.87.0] - 2026-11-08
 
