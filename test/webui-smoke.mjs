@@ -688,6 +688,9 @@ const failed = results.filter(([, ok]) => !ok);
   check('185① 卡片令牌（--card-pad/--card-hover-* + 五类卡接 --card-border）', css2.includes('--card-hover-border') && css2.split('--card-border').length >= 4);
   check('185③ 徽标语义（currentColor 底色 tint + tabular-nums）', css2.includes('background: color-mix(in srgb, currentColor 10%, transparent)') && css2.includes('font-variant-numeric: tabular-nums'));
   check('185⑥ 健康四态语义变量（无硬编码色）', css2.includes('.badge.hb-✓ { color: var(--ok)') && css2.includes('.badge.hb-新') && !css2.includes('#3fbf6f'));
+  check('186①④ 输入 hover 渐显 + select 自绘箭头（appearance none）', css2.includes('.field input:hover, .field select:hover, .field textarea:hover') && css2.includes('appearance: none'));
+  check('186② 必填双重标注（req-field 左缘条模板接线）', css2.includes('.field.req-field > input') && app2.includes("f.required ? ' req-field'"));
+  check('186⑦⑧ 输入令牌 --input-pad + textarea 等宽', css2.includes('--input-pad') && css2.includes('.field textarea { font-family: var(--mono)'));
   }
 }
 

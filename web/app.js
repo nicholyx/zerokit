@@ -1915,7 +1915,7 @@ function openDetail(plugin, action, prefill) {
     }
     if (f.type === 'select') {
       const sel = effectiveInitial[f.name] !== undefined ? effectiveInitial[f.name] : f.default;
-      return `<div class="field" data-field="${esc(f.name)}"><label>${esc(f.name)}${req}${dchip}</label>
+      return `<div class="field${f.required ? ' req-field' : ''}" data-field="${esc(f.name)}"><label>${esc(f.name)}${req}${dchip}</label>
         <select id="f_${esc(f.name)}">
           ${(f.options || []).map((o) => `<option${o === sel ? ' selected' : ''}>${esc(o)}</option>`).join('')}
         </select>${help}${ehint}</div>`;
@@ -1928,7 +1928,7 @@ function openDetail(plugin, action, prefill) {
       ? `${f.min !== undefined ? ` min="${esc(f.min)}"` : ''}${f.max !== undefined ? ` max="${esc(f.max)}"` : ''}${f.step !== undefined ? ` step="${esc(f.step)}"` : ''}`
       : '';
     if (f.multiline) {
-      return `<div class="field" data-field="${esc(f.name)}"><label>${esc(f.name)}${req}${dchip}</label>
+      return `<div class="field${f.required ? ' req-field' : ''}" data-field="${esc(f.name)}"><label>${esc(f.name)}${req}${dchip}</label>
         <textarea id="f_${esc(f.name)}" rows="3" class="auto-grow" placeholder="${esc(ph)}" data-initial="${esc(given0 ?? '')}">${esc(given ?? '')}</textarea>${help}${ehint}${histChips}
         <div class="field-err hidden" id="${errId}"></div></div>`;
     }
@@ -1940,7 +1940,7 @@ function openDetail(plugin, action, prefill) {
         </div>${help}${ehint}
         <div class="field-err hidden" id="${errId}"></div></div>`;
     }
-    return `<div class="field" data-field="${esc(f.name)}"><label>${esc(f.name)}${req}${dchip}</label>
+    return `<div class="field${f.required ? ' req-field' : ''}" data-field="${esc(f.name)}"><label>${esc(f.name)}${req}${dchip}</label>
       <input id="f_${esc(f.name)}" type="${type}"${numAttrs}${def} placeholder="${esc(ph)}" autocomplete="off" data-initial="${esc(given0 ?? '')}">${help}${ehint}${histChips}
       <div class="field-err hidden" id="${errId}"></div></div>`;
   }).join('');

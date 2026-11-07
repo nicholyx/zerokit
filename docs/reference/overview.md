@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-11-08（第一百八十五轮，v1.87.0）
+> 最后更新：2026-11-08（第一百八十六轮，v1.88.0）
 
 ## 性能基线（第五十八轮建立，2026-10-28，Apple M4 / Node 22）
 
@@ -124,7 +124,7 @@ uTools 开始收费了。想找一个替代品，找了一圈发现真正的问�
 - 第一百八十三轮 v1.85.0（详情页信息层级）：标题区重排 21px/650、表单聚焦双环、风险条双重编码（斜刻度）、分区标题令牌、动画曲线令牌化、修风险条内联覆盖条纹。\n- [x] 第一百六十六轮（v1.68.0）：插件生命周期闭环——plugin info/doctor 单插件/remove --dry-run/reinstall/0600 审计（Issue #554）
 - 第一百八十四轮 v1.86.0（弹层体系与触达一致性）：pop-in 统一入场+zk-closing 出场、遮罩微失焦、确认框风险强化、面板选中左缘、setCount 统一反馈出口（修自调用递归）。\n- [x] 第一百六十五轮（v1.67.0）：OS 级深链 zerokit://——壳注册协议/生成器/二维码双形态/未知目标提示（Issue #551）
 - 第一百八十五轮 v1.87.0（卡片体系与徽标语义）：五类卡 --card-border 对齐、可点卡悬停统一（无位移）、徽标语义表（tint 底+语义变量+tabular-nums）、统计卡 19px/650。\n- [x] 第一百六十四轮（v1.66.0）：HTTP API 面系统化——version/health 扩展/openapi.json/405 方法校验/错误信封/http-api.md（Issue #548）
-- [x] 第一百六十三轮（v1.65.0）：CLI 脚本化与自动化——exit-codes/--stdin/--timeout/--retries/--format/并发锁/cron（Issue #545）
+- 第一百八十六轮 v1.88.0（表单输入细节）：hover 先于 focus、必填双重标注、占位符焦点隐去、select 自绘箭头、accent-color、--input-pad、textarea 等宽。\n- [x] 第一百六十三轮（v1.65.0）：CLI 脚本化与自动化——exit-codes/--stdin/--timeout/--retries/--format/并发锁/cron（Issue #545）
 - [x] 第一百六十二轮（v1.64.0）：项目门面与元数据收官——topics/description/README 点分与安装包节/一句话现状（Issue #542）
 - [x] 第一百六十一轮（v1.63.0）：发布链工具化——release-chain.sh 固化 CI 轮询/merge 复核/tag 双确认/网络降级/资产等待（Issue #539）
 - [x] 第一百六十轮（v1.62.0）：数据健康与存储体检——usage 分项容量/junk 垃圾识别/clean 安全清理/snapshots 清点 + doctor 超 100MB 警告（Issue #536）
@@ -279,7 +279,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 
 ### 质量
 
-- 130 个文件、**3025 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
+- 130 个文件、**3028 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
 - `tsc --noEmit` 干净——**而且 CI 真的在跑它**（`typecheck` job）。
   曾经这里写着"干净"但没有任何地方执行这条命令，于是两个只有类型检查才看得见的
   错误在核心里躺了很久（`proxy.ts` 的 Buffer 泛型不兼容、`scaffold.ts` 的类型混用）。
