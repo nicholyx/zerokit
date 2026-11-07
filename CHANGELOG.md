@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Added
+- 新增 `zkit commands` 一行式命令索引（分类节 + 常用旗标），比 `--help` 全文扫读快
+- 新增 `zkit alias add/rm/list` 用户级短命令（`zkit top` → `zkit run sysinfo top --head 3`），0600 存 `aliases.json`；重名、内置命令名、指向别名均拒绝
+- `zkit run` 用法错误时附「相关命令」联想段（同类别命令，如 run → list · show · doctor）
+- `zkit version` 与 `--version` 同义（此前只有旗标形态）
 
 （下一版攒着）
 
