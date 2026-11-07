@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [1.80.0] - 2026-11-07
+
+### Added
+
 - 新增 `zkit commands` 一行式命令索引（分类节 + 常用旗标），比 `--help` 全文扫读快
 - 新增 `zkit alias add/rm/list` 用户级短命令（`zkit top` → `zkit run sysinfo top --head 3`），0600 存 `aliases.json`；重名、内置命令名、指向别名均拒绝
 - `zkit run` 用法错误时附「相关命令」联想段（同类别命令，如 run → list · show · doctor）
@@ -99,10 +105,4 @@
 - `zkit config <插件> env`——生成脚本里引用设置项的环境变量引导（bash `export` / `--shell fish` `set -x`），值恒掩码只给键名；`--json` 机读。
 - `zkit logs --errors`（同义 `--failed`）——审计日志只列失败记录。
 - 修复：审计日志里 `decision=allow` 但带 `error` 字段的记录此前显示绿色 ✓，现按失败红 ✗。
-
-## [1.68.0] - 2026-11-07
-
-### Fixed
-
-- Windows 上 `plugin reinstall` 把自带插件误判为非自带源（`URL.pathname` 在盘符路径上产出 `/D:/…`，`existsSync` 恒 false）——改走 `fileURLToPath`；`doctor` 的桌面壳探测同款问题一并修复。`plugin info` 的风险构成从「read 3」改为机读友好的 `read:3`。
 
