@@ -29,6 +29,10 @@
   --ease: cubic-bezier(.22, .61, .36, 1);        /* 出场——先快后缓 */
   --ease-spring: cubic-bezier(.34, 1.3, .64, 1); /* 弹层——轻微过冲 */
   --ease-out: cubic-bezier(.16, 1, .3, 1);       /* 开屏——长尾缓出 */
+  --card-pad: 10px 14px;         /* 卡内区（head/body 通用内边距） */
+  --card-border: color-mix(in srgb, var(--line) 88%, transparent);
+  --card-hover-border: color-mix(in srgb, var(--accent) 38%, var(--line));
+  --card-hover-bg: color-mix(in srgb, var(--fg) 3%, var(--panel));
 }
 
 * { box-sizing: border-box; }
@@ -156,13 +160,16 @@ main { flex: 1; overflow-y: auto; margin-top: 14px; }
 .item .aid { font-family: var(--mono); font-size: 12px; color: #7f8b9c; }
 
 .badge {
-  font-size: 11px; padding: 1px 7px; border-radius: 999px;
+  /* 第一百八十五轮③④：徽标语义表——色走语义变量 + 底色 12% 同色 tint，排印统一 */
+  font-size: 11px; font-weight: 500; padding: 1px 8px; border-radius: 999px;
   border: 1px solid var(--line); color: var(--fg-dim); flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  background: color-mix(in srgb, currentColor 10%, transparent);
 }
-.badge.read { color: var(--ok); border-color: #23543d; }
-.badge.mutate { color: var(--warn); border-color: #5a4520; }
-.badge.destructive { color: var(--bad); border-color: #5c2a27; }
-.badge.warn { color: var(--warn); border-color: #5a4520; }
+.badge.read { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 42%, transparent); }
+.badge.mutate { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 42%, transparent); }
+.badge.destructive { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 46%, transparent); }
+.badge.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 42%, transparent); }
 
 /* ---------------- 分组（浏览态按插件聚合） ---------------- */
 .group-head {
@@ -227,7 +234,7 @@ button.primary:disabled { opacity: .5; cursor: default; }
 /* ---------------- 结果 ---------------- */
 .card {
   margin-top: 16px; background: var(--panel);
-  border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden;
+  border: 1px solid var(--card-border); border-radius: var(--r-md); overflow: hidden;
 }
 .card-head {
   display: flex; align-items: center; gap: 8px;
@@ -310,7 +317,7 @@ table.grid tr:last-child td { border-bottom: 0; }
 .plug-install input:focus { outline: none; border-color: #33455c; }
 
 .plug-card {
-  background: var(--panel); border: 1px solid var(--line);
+  background: var(--panel); border: 1px solid var(--card-border);
   border-radius: var(--r-md); margin-bottom: 10px; overflow: hidden;
 }
 .plug-card.installing { border-color: #33455c; }
@@ -518,11 +525,11 @@ mark { background: rgba(90,169,255,.28); color: inherit; border-radius: var(--r-
   gap: 8px; margin: 0 0 10px;
 }
 .stat-card {
-  border: 1px solid var(--line); border-radius: var(--r-md); background: var(--panel);
+  border: 1px solid var(--card-border); border-radius: var(--r-md); background: var(--panel);
   padding: 8px 10px; display: flex; flex-direction: column; gap: 1px;
 }
-.stat-card b { font-size: 17px; font-weight: 600; }
-.stat-card span { font-size: 11px; color: var(--fg-dim); }
+.stat-card b { font-size: 19px; font-weight: 650; letter-spacing: .2px; font-variant-numeric: tabular-nums; }
+.stat-card span { font-size: 11px; color: var(--fg-dim); letter-spacing: .1px; }
 .stat-card i { font-size: 10.5px; color: var(--warn); font-style: normal; }
 .stat-card.warn { border-color: #5a4520; }
 .stat-card.warn b { color: var(--warn); }
@@ -2226,9 +2233,9 @@ td.gsum-label { font-weight: 600; }
 .def-chip { display:inline-block; margin-left:6px; padding:0 6px; border-radius: var(--r-md); font-size:11px; background:color-mix(in srgb, var(--accent, #5aa9ff) 14%, transparent); color:var(--fg); vertical-align:1px; }
 .enum-hint { margin-top:3px; font-size:11px; color:var(--fg-dim); }
 .plug-info-line { margin-top:4px; font-size:12px; color:var(--fg-dim); }
-.badge.hb-✓ { background:color-mix(in srgb, #3fbf6f 18%, transparent); }
-.badge.hb-⚠ { background:color-mix(in srgb, #e0a832 18%, transparent); }
-.badge.hb-✗ { background:color-mix(in srgb, #e05a4f 18%, transparent); }
+.badge.hb-✓ { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 42%, transparent); background: color-mix(in srgb, var(--ok) 12%, transparent); }
+.badge.hb-⚠ { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 42%, transparent); background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.badge.hb-✗ { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 46%, transparent); background: color-mix(in srgb, var(--bad) 12%, transparent); }
 .desc-fold { display:-webkit-box; -webkit-line-clamp:6; -webkit-box-orient:vertical; overflow:hidden; }
 .desc-more { margin-top:4px; font-size:12px; }
 
@@ -2468,3 +2475,15 @@ select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible,
   border-radius: var(--r-lg); box-shadow: var(--shadow-3);
   border: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
 }
+
+/* ---------------- 第一百八十五轮②：卡片悬停态（仅可点卡片） ---------------- */
+.plug-card { cursor: pointer; transition: border-color var(--tr-fast) var(--ease), background var(--tr-fast) var(--ease); }
+.plug-card:hover { border-color: var(--card-hover-border); background: var(--card-hover-bg); }
+.market-entry { transition: border-color var(--tr-fast) var(--ease), background var(--tr-fast) var(--ease); }
+.market-entry:hover { border-color: var(--card-hover-border); background: var(--card-hover-bg); }
+/* dash-tile 悬停改用体系令牌（原 translateY 位移取消——与全站 hover 无位移原则一致） */
+.dash-tile { transition: border-color var(--tr-fast) var(--ease), background var(--tr-fast) var(--ease); }
+.dash-tile:hover { border-color: var(--card-hover-border); background: var(--card-hover-bg); }
+
+/* 第一百八十五轮⑥：健康徽标「新」档（无运行记录）——accent 语义 */
+.badge.hb-新 { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 42%, transparent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
