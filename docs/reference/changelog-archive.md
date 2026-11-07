@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [1.66.0] - 2026-11-07
+
+### Added
+
+- HTTP API 面系统化：`/api/version` 独立端点（协议版本 api:1）；`/api/health` 扩展体检（插件计数/运行中任务/数据目录大小）；`/api/openapi.json` 机读描述（OpenAPI 3.1 子集）；全端点 method 校验（405 + Allow 头，方法表 33 端点与代码分支双向对齐）；错误响应统一 `{ok:false,error,hint}` 信封（46 处收敛）；`docs/reference/http-api.md` 全端点文档
+
 ## [1.65.0] - 2026-11-07
 
 ### Added
