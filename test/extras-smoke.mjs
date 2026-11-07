@@ -118,7 +118,7 @@ check('健康概览：全齐时 healthy 为真',
 
 check('强调色：六档且 id 唯一', ACCENTS.length === 6
   && new Set(ACCENTS.map((a) => a.id)).size === 6, JSON.stringify(ACCENTS.map((a) => a.id)));
-check('强调色：坏值收敛成 ocean', normalizeAccent('nope') === 'ocean' && normalizeAccent('violet') === 'violet');
+check('强调色：坏值收敛成 cyan（第一百八十一轮默认档）', normalizeAccent('nope') === 'cyan' && normalizeAccent('violet') === 'violet');
 
 const filterPool = [
   { plugin: { id: 'p' }, action: { id: 'a', risk: 'read' } },
