@@ -4,9 +4,16 @@
 
 ### Added
 
+（下一版攒着）
+
+## [1.73.0] - 2026-11-07
+
+### Added
+
 - 命令集 bundle 与 CHANGELOG 锚点根治：`zkit bundle create <名字> [--from|--all]` 把书签打包成 `.zbundle` 命令集（指纹与 .zshare 同口径）；`bundle list/diff/apply` 查看/与本机书签三桶对比/导入（重名自动加后缀不覆盖、重复导入无新增）；坏包拒绝文案与分享包同风格；typo 引导 bundl→bundle。**CHANGELOG 三次条目错段事故根治**：release-prep 空 [Unreleased] 段自带 `### Added` 占位（插条锚点不再漂移），guard146 新增「[Unreleased] 段缺分类头即 FAIL」断言（负例验证过）。
 
-（下一版攒着）
+
+### Added
 
 ## [1.72.0] - 2026-11-07
 
@@ -87,15 +94,4 @@
 - CLI：`zkit data junk`（垃圾识别：.tmp-* 安装残留、无清单孤儿目录、超保留数快照、.bak 审计备份只列不删）与 `zkit data clean`（默认干跑，`--yes` 真删，审计/历史/设置/.bak 不碰）
 - CLI：`zkit data snapshots`（快照清点+大小，超 10 份提示清理）
 - doctor：数据目录超 100 MB 时警告并指向 `zkit data usage / junk`
-
-## [1.61.0] - 2026-11-06
-
-### Changed
-
-- 依赖养护：npm 三包（@modelcontextprotocol/sdk 1.32.2 / smol-toml 1.9.1 / pinyin-pro 3.29.5）、cargo minor-patch 组、GitHub Actions 依赖组与 setup-node 4→7 全部升到位（三平台 CI 全绿验证）
-
-### Added
-
-- CLI：`zkit completion bash|zsh|fish` 三 shell 补全——40+ 子命令、`run` 的点分动作候选（含 sysinfo.overview 全量）、`bookmark run/rm` 书签动态候选（新增 `zkit bookmark names` 机读端点）、`--keep` 枚举与常用旗标候选；zsh 版去除 python3 运行时依赖
-- 修复：bash 补全的 `run` 候选此前因模板插值错误静默为空（写的是 `$(subsRunPlugins)` 字面量而非 `${…}` 插值），本轮修为构建时展开
 
