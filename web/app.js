@@ -4143,7 +4143,7 @@ function renderRiskCard(plugin, action) {
   const pct = Math.round(card.failRate * 100);
   const barColor = card.level === 'destruct' ? 'var(--bad, #e5484d)' : (card.level === 'risky' || card.level === 'mutate') ? 'var(--warn, #e8b13a)' : 'var(--ok, #30a46c)';
   box.innerHTML = `
-    <div class="risk-bar"><span class="risk-fill" style="width:${action.risk === 'destructive' ? 100 : action.risk === 'mutate' ? 55 : 12}%;background:${barColor}"></span></div>
+    <div class="risk-bar"><span class="risk-fill" style="width:${action.risk === 'destructive' ? 100 : action.risk === 'mutate' ? 55 : 12}%;background-color:${barColor}"></span></div>
     <div class="risk-line">
       <span class="badge ${esc(action.risk)}">${esc(riskText(action.risk))}</span>
       <span class="sub">${esc(why)}</span>

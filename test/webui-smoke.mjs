@@ -674,6 +674,11 @@ const failed = results.filter(([, ok]) => !ok);
   check('182② kbd 胶囊（内测亮线 inset shadow）', css2.includes('inset 0 1px 0'));
   check('182③ 开屏编排（.booting 落上/摘除 + reduced-motion 尊重）', app2.includes("classList.add('booting')") && css2.includes('.booting .search-row') && css2.includes('.booting .bar, .booting .search-row, .booting .foot'));
   check('182⑦ 缓动令牌（--ease-spring / --ease-out）', css2.includes('--ease-spring') && css2.includes('--ease-out'));
+  check('183① 详情标题层级（21px/650/行高1.3）', css2.includes('.detail-head h2 { margin: 0 0 6px; font-size: 21px; font-weight: 650;'));
+  check('183② 表单聚焦 accent 双环', css2.includes('box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent)'));
+  check('183③ 风险条双重编码（斜向刻度）', css2.includes('repeating-linear-gradient(135deg, rgba(255,255,255,.28)'));
+  check('183⑥⑧ 分区标题令牌+transition 全接 --ease', css2.includes('.detail-view h3, .sec-title') && css2.includes('.run-history .hist-label') && !/transition:[^;]*[^-)\w]ease[,;]/.test(css2));
+  check('183③ 风险条内联只写 background-color（不覆盖条纹）', app2.includes('background-color:${barColor}') && !app2.includes('background:${barColor}'));
 }
 
 console.log(`\n${'='.repeat(60)}\n通过 ${results.length - failed.length} / ${results.length}`);
