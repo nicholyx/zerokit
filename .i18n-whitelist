@@ -9,7 +9,7 @@ searches: \{ key: 'zerokit\.searches', lab
 saved: \{ key: 'zerokit\.saved-results', l
 timers: \{ key: 'zerokit\.timers', label:
 if \(badge\) badge\.textContent = cnt > 0 \?
-if \(cnt === 0\) \{ el\.count\.textContent =
+if \(cnt === 0\) \{ (?:setCount\(|el\.count\.textContent = )
 return localStorage\.getItem\('zerokit\.pro
 const data = await res\.json\(\)\.catch\(\(\) =
 if \(explain && mi >= 0\) explain\.push\(\[pa
@@ -32,7 +32,7 @@ if \(btn\) \{ btn\.disabled = false; btn\.tex
 <li data-fail="\$\{i\}" title="\$\{esc\(classi
 <button class="ghost mini" id="batchRetr
 <button class="ghost mini" id="batchSumC
-el\.count\.textContent = `别名「\$\{el\.q\.value\.
+setCount(`别名「\$\{el\.q\.value\.
 <button class="ghost mini" id="batchRun"
 <button class="ghost mini" id="batchDedu
 <button class="ghost mini" id="batchExpo
@@ -41,10 +41,10 @@ el\.count\.textContent = `别名「\$\{el\.q\.value\.
 <button class="ghost mini" data-bup="\$\{i
 <button class="ghost mini" data-bdown="\$
 <button class="ghost mini" data-bdel="\$\{
-el\.count\.textContent = '已去掉重复项';
-if \(!parsed\.ok\) \{ el\.count\.textContent =
-el\.count\.textContent = `导入了 \$\{added\} 项（\$
-el\.count\.textContent = `\$\{filtered\.lengt
+setCount('已去掉重复项';
+if \(!parsed\.ok\) \{ (?:setCount\(|el\.count\.textContent = )
+setCount(`导入了 \$\{added\} 项（\$
+setCount(`\$\{filtered\.lengt
 suggestions\.push\(`<button class="link" d
 suggestions\.push\(`<button class="link" d
 suggestions\.push\(`<button class="link" d
@@ -62,9 +62,9 @@ const dep = p\.requiresOk \? '' : `<span c
 loadRecent\(\)\.length > 0 \? '最近使用优先' : ''\]
 \.filter\(Boolean\)\.concat\(\[`\$\{plugins\.leng
 if \(i >= 0\) \{ favorites\.splice\(i, 1\); el
-else \{ favorites\.push\(key\); el\.count\.tex
-el\.count\.textContent = existed \? `已在篮子里：
-el\.count\.textContent = `\$\{filtered\.lengt
+else \{ favorites\.push\(key\); (?:setCount\(|el\.count\.)tex
+setCount(existed \? `已在篮子里：
+setCount(`\$\{filtered\.lengt
 ✗ 缺少依赖：\$\{esc\(plugin\.missingDeps\.join\(',
 <div class="chain-dry"><button class="gh
 \? '动作参数 \+ 内置占位符'
@@ -193,14 +193,14 @@ el\.modeLabel\.textContent = '性能';
 <div class="help">界面开着才会跑；翻到别的动作自动停。在只读动
 \$\{rows \|\| '<div class="ps-empty" role="s
 \$\{stopLog\.length \? `<div class="watch-st
-if \(!w \|\| !w\.samples\.length\) \{ el\.count\.
-if \(!w \|\| !w\.samples\.length\) \{ el\.count\.
+if \(!w \|\| !w\.samples\.length\) \{ (?:setCount\(|el\.count\.)
+if \(!w \|\| !w\.samples\.length\) \{ (?:setCount\(|el\.count\.)
 navigator\.clipboard\.writeText\(md\)\.then\(\(
 <button class="ghost mini" data-try="\$\{e
 t\.history = trimHistory\(\[\.\.\.\(t\.history \?
 if \(!e\) throw new Error\('动作不在了（插件被卸载？）'\)
 if \(!Number\.isFinite\(sec\) \|\| sec < 10\) \{
-if \(!validWindow\(win\)\) \{ el\.count\.textCo
+if \(!validWindow\(win\)\) \{ (?:setCount\(|el\.count\.)textCo
 <div class="cs-head">📋 剪贴板识别：\$\{kind\.toU
 <div class="cs-text">\$\{shown\}\$\{text\.leng
 : '<span class="cs-none">没有专门动作——去列表搜</s
@@ -216,13 +216,13 @@ el\.modeLabel\.textContent = '📋 剪贴板';
 <button class="ghost" id="clipClear">清空历
 <button class="ghost" id="clipBack">返回</
 try \{ await navigator\.clipboard\.writeTex
-catch \{ el\.count\.textContent = '写剪贴板被浏览器
+catch \{ setCount('写剪贴板被浏览器
 <div class="help">界面开着才会跑（关掉页面即停）。在只读动作详
 <button class="ghost mini" id="timersExp
 <button class="ghost mini" id="timersImp
 setTimeout\(\(\) => \{ ev\.currentTarget\.text
-if \(!r\.ok\) \{ el\.count\.textContent = `导入失
-el\.count\.textContent = `导入完成：新增 \$\{added\}
+if \(!r\.ok\) \{ setCount(`导入失
+setCount(`导入完成：新增 \$\{added\}
 const lastTxt = !last \? '还没跑过'
 : last\.ok === null \? `跳过（\$\{esc\(last\.why
 <span class="run-when">\$\{esc\(tm\.title\)\}（
@@ -260,8 +260,8 @@ const why = WHY\[action\.risk\] \?\? '未知风险等级。
 \$\{card\.runs \? `<div class="risk-stats">历
 if \(btn\) btn\.textContent = maskState\(\) \?
 if \(!confirm\('清除当前结果与本地运行历史（含参数记忆）？\\n\\n不
-el\.count\.textContent = '已清除：当前结果 \+ 运行历史数
-el\.count\.textContent = `导入失败：\$\{parsed\.er
+setCount('已清除：当前结果 \+ 运行历史数
+setCount(`导入失败：\$\{parsed\.er
 const g = classifyKey\(k\) \?\? '\(跳过\)';
 <h3>导入备份</h3>
 <div class="risk-note">来自 \$\{esc\(backup\.e
@@ -278,14 +278,14 @@ box\.innerHTML = `<div class="run-head">最
 <button class="ghost mini" data-pick="\$\{
 <button class="ghost mini" data-curl="\$\{
 navigator\.clipboard\.writeText\(cmd\)\.then\(
-el\.count\.textContent = '已回填该次参数';
+setCount('已回填该次参数';
 \? `已选第 \$\{picks\[0\] \+ 1\}、\$\{picks\[1\] \+ 1\} 条
 else alert\('这两次记录没存结果数据（可能是老记录），重跑一次后再对比
 alert\('这两次记录没存结果数据（可能是老记录），重跑一次后再对比。'\);
-if \(rows0\.length < 2\) \{ el\.count\.textCon
-if \(!merged\) \{ el\.count\.textContent = '合
+if \(rows0\.length < 2\) \{ (?:setCount\(|el\.count\.)textCon
+if \(!merged\) \{ setCount('合
 note: `合并视图：第 1、2 条记录按「\$\{key\}」列拼接（左连接）`
-el\.count\.textContent = `已合并 \$\{merged\.len
+setCount(`已合并 \$\{merged\.len
 <h3>绑定到 \$\{esc\(title\)\}</h3>
 \$\{hk\}\$\{owner && owner !== actionKeyStr \?
 <div class="actions"><button class="ghos
@@ -301,8 +301,8 @@ if \(hint\) hint\.textContent = '未绑定（F1–F12
 <button class="ghost mini" id="chainEnd"
 <button class="ghost mini" id="chainRunN
 if \(runBtn2\) \{ runBtn2\.disabled = false;
-el\.count\.textContent = '链已结束';
-el\.count\.textContent = `链第 \$\{chainSteps\.
+setCount('链已结束';
+setCount(`链第 \$\{chainSteps\.
 bar\.innerHTML = `链：\$\{chainSteps\.map\(\(s,
 <button class="ghost mini chain-step" da
 if \(next\.length >= 8 && next\.every\(\(t\) =
@@ -313,14 +313,14 @@ title="\$\{esc\(t\.note \? `备注：\$\{t\.note\}` : '
 <span class="rtab-x" data-rx="\$\{esc\(t\.id
 \+ \(resultTabs\.length >= 2 \? '<button cla
 const v = prompt\('给这个结果写句备注（页签悬停可见，复制可附带
-el\.count\.textContent = t\.note \? '备注已保存'
-el\.count\.textContent = t\.pinned \? '已固定（不
-if \(!cur \|\| !other\) \{ el\.count\.textConte
+setCount(t\.note \? '备注已保存'
+setCount(t\.pinned \? '已固定（不
+if \(!cur \|\| !other\) \{ (?:setCount\(|el\.count\.)textConte
 <h4>⇄ 对比：\$\{esc\(ta\.name\)\} vs \$\{esc\(tb\.nam
 <table class="kv-table cmp-table"><capti
 <tbody>\$\{tr \|\| '<tr><td colspan="3">无可比数
 <div class="help">黄色行 = 值不同。点任意页签回到结果。</
-if \(!cur \|\| !prev\) \{ el\.count\.textConten
+if \(!cur \|\| !prev\) \{ (?:setCount\(|el\.count\.)textConten
 const title = card\?\.querySelector\('\.fail
 navigator\.clipboard\?\.writeText\(text\)\.the
 \? foldBtn\.textContent\.replace\('收起', '展开'
@@ -375,8 +375,8 @@ setTimeout\(\(\) => \{ btn\.textContent = '复制
 const title = detail \? `\$\{detail\.plugin\.
 \$\('findCount'\)\.textContent = hits \? `\$\{h
 setTimeout\(\(\) => \{ const b = \$\('editRes'
-el\.count\.textContent = `已在文件管理器打开：\$\{r\.op
-el\.count\.textContent = `目录打不开：\$\{String\(e
+setCount(`已在文件管理器打开：\$\{r\.op
+setCount(`目录打不开：\$\{String\(e
 setTimeout\(\(\) => \{ const b = \$\('openDirR
 try \{ await navigator\.clipboard\.writeTex
 setTimeout\(\(\) => \{ btn\.textContent = '复制
@@ -389,7 +389,7 @@ setTimeout\(\(\) => \{ btn\.textContent = '复制
 const v = window\.prompt\('给这次结果写个注释（≤60 字
 pathRow\.textContent = `已导出：\$\{a\.download\}
 if \(btn\) \{ const t = btn\.textContent; bt
-el\.count\.textContent = '分享文本已复制（Markdown
+setCount('分享文本已复制（Markdown
 const html = toHtmlTable\(res\.data, detai
 \} catch \{ ev\.currentTarget\.textContent =
 setTimeout\(\(\) => \{ const b = \$\('htmlRes'
@@ -413,7 +413,7 @@ error: j\.error \|\| `存储操作失败（\$\{r\.status\}）` \}\)
 reply\(\{ ok: false, error: '没有要复制的内容' \}\); return
 if \(!res\) \{ reply\(\{ ok: false, error: '用
 console\.warn\('\[zk-bridge\] 页面报错：', msg\.er
-el\.count\.textContent = `插件页面报错：\$\{String\(
+setCount(`插件页面报错：\$\{String\(
 <h3>打开外部链接</h3>
 <div class="risk-note">插件页面请求在系统浏览器打开：</
 <button class="ghost" id="navCancel">取消<
@@ -434,8 +434,8 @@ const gear = `<span class="colvis-btn" d
 const overFields = cols\.length > 30 \? `<
 const qbar = `<div class="rquery"><input
 \$\{bigTable \? `<div class="tcount"><span
-\.then\(\(\) => \{ el\.count\.textContent = `已复
-\.catch\(\(\) => \{ el\.count\.textContent = '复
+\.then\(\(\) => \{ setCount(`已复
+\.catch\(\(\) => \{ setCount('复
 pop\.innerHTML = `<div class="pop-title">
 <div class="actions"><button class="ghos
 <pre>\$\{esc\(mtext\(e\['command'\] \?\? '（无动作）'
@@ -445,9 +445,9 @@ const quickChips = `<button class="chip\$
 <button class="ghost" id="logCsv" title=
 <button class="ghost" id="logFile">\$\{log
 <div id="logList" class="log-list"><div
-if \(!es\.length\) \{ el\.count\.textContent =
-el\.count\.textContent = `已导出 \$\{es\.length\}
-\} catch \(err\) \{ el\.count\.textContent = `
+if \(!es\.length\) \{ (?:setCount\(|el\.count\.textContent = )
+setCount(`已导出 \$\{es\.length\}
+\} catch \(err\) \{ setCount(`
 \$\('logList'\)\.innerHTML = `<div class="ps
 <div class="pager" role="navigation" ari
 <button class="ghost mini" data-pg="\$\{Ma
@@ -547,19 +547,19 @@ p\.settings\?\.length \? '## 设置项\\n' \+ p\.sett
 <button class="ghost" id="homeBackList">
 <button class="primary" id="homeBack">返回
 try \{ await navigator\.clipboard\.writeTex
-if \(!others\.length\) \{ el\.count\.textConte
+if \(!others\.length\) \{ (?:setCount\(|el\.count\.)textConte
 <h3>与哪个插件对比？</h3>
 <div class="chain-cands">\$\{others\.map\(\(o
 <div class="actions"><button class="ghos
-if \(!cmp\) \{ el\.count\.textContent = '对比失败
+if \(!cmp\) \{ setCount('对比失败
 <h3>对比：\$\{esc\(cmp\.a\.name\)\} vs \$\{esc\(cmp\.b
 <table class="cmp-table"><caption class=
 <tr><td>动作数</td><td>\$\{cmp\.a\.actions\}</td
 \$\{cmp\.risks\.map\(\(r\) => `<tr class="\$\{r\.a
 <tr><td>插件依赖</td><td>\$\{cmp\.deps\.a\.length
 <div class="actions"><button class="prim
-el\.count\.textContent = `已导出 \$\{data\.plugi
-\}\)\.catch\(\(e\) => \{ el\.count\.textContent =
+setCount(`已导出 \$\{data\.plugi
+\}\)\.catch\(\(e\) => \{ (?:setCount\(|el\.count\.textContent = )
 el\.plugView\.innerHTML = `<div class="ps-
 <div class="actions"><button class="prim
 <h2>插件（\$\{plugins\.length\}）</h2>
@@ -682,7 +682,7 @@ note\.textContent = '（已恢复上次会话——重新加载页面后对话�
 <button class="ghost" id="wbReset">新会话</
 <input id="wbQ" placeholder="要它做什么？例如：看看
 <button class="primary" id="wbSend">发送</
-el\.count\.textContent = `\$\{entries\.length
+setCount(`\$\{entries\.length
 \$\('wbTools'\)\.textContent = `\$\{info\.tools
 `模型还没配置好：\$\{info\.reason\}\\n\$\{info\.hint \|\|
 \+ '（想先试界面可以在 config\.toml 里写 provider = "
@@ -753,7 +753,7 @@ tip\.innerHTML = `<span>有一阵子没用了——要不要跑一次「\$
 <div class="actions"><button class="prim
 <button class="ghost" id="savedClear">清空
 selA\.v = null; b\.textContent = '选比'; b\.c
-if \(a\.key !== c\.key\) \{ el\.count\.textCont
+if \(a\.key !== c\.key\) \{ (?:setCount\(|el\.count\.)textCont
 box\.innerHTML = `<div class="ps-head"><h
 <button class="ghost mini" id="cmpClose"
 <table class="cmp-table"><caption class=
@@ -774,7 +774,7 @@ el\.devView\.innerHTML = `<div class="ps-h
 <details class="dev-files"><summary>文件树（
 <div class="dev-console-h">沙箱控制台（最近 30 条
 `<div class="dev-log \$\{esc\(l\.level\)\}">\$\{
-el\.count\.textContent = '检测到 dev 插件清单变更——
+setCount('检测到 dev 插件清单变更——
 <h3>键盘速查</h3>
 <div><h4>全局</h4><ul>
 <li><kbd>Ctrl/⌘\+P</kbd> 命令面板</li>
@@ -835,14 +835,14 @@ act: \(\) => \{ if \(entry\) \{ exitPalette\(\);
 else if \(c\.go === 'batch'\) \{ if \(detail\)
 navigator\.clipboard\.writeText\(cfg\)\.then\(
 navigator\.clipboard\.writeText\(ctx\)\.then\(
-el\.count\.textContent = '已清空搜索';
-el\.count\.textContent = '已复制选中行';
-\}\)\.catch\(\(\) => \{ el\.count\.textContent =
-el\.count\.textContent = favorites\.include
-el\.count\.textContent = `第 \$\{pick \+ 1\} 项：
-el\.count\.textContent = '剪贴板是空的';
-el\.count\.textContent = `剪贴板识别为「\$\{label\}」
-el\.count\.textContent = '读剪贴板被浏览器拒绝了，请允许剪
+setCount('已清空搜索';
+setCount('已复制选中行';
+\}\)\.catch\(\(\) => \{ (?:setCount\(|el\.count\.textContent = )
+setCount(favorites\.include
+setCount(`第 \$\{pick \+ 1\} 项：
+setCount('剪贴板是空的';
+setCount(`剪贴板识别为「\$\{label\}」
+setCount('读剪贴板被浏览器拒绝了，请允许剪
 <h3>快捷键</h3>
 return `<h3>功能键（按一下直达）</h3>
 <h3>直达页面（深链接，收藏或发给同事都行）</h3>
@@ -855,7 +855,7 @@ return `<h3>功能键（按一下直达）</h3>
 \['#/workbench', 'AI 工作台', '自然语言指挥插件'\],
 \['#/q=关键词', '带词搜索', '打开就搜「关键词」'\],
 <button class="primary" id="helpClose">知
-el\.count\.textContent = `加载失败：\$\{e\.message
+setCount(`加载失败：\$\{e\.message
 \{ icon: '🔍', t: '搜一下', d: '顶部搜索框支持中文、拼音
 \{ icon: '▶', t: '执行', d: '选一个动作回车进入详情。只读
 \{ icon: '📊', t: '看结果', d: '结果可复制/下载/重跑，
@@ -863,17 +863,17 @@ el\.count\.textContent = `加载失败：\$\{e\.message
 <h3>欢迎使用 zerokit 启动器</h3>\\n      <p clas
 <button class="primary" id="frDone">开始使用
 <button class="ghost" id="frHelp">先看使用指南
-el\.count\.textContent = `历史里的 \$\{hh\} 已不存在（
-el\.count\.textContent = `来自分享链接的搜索「\$\{term
-if \(!r\.ok\) \{ el\.count\.textContent = `导入失
+setCount(`历史里的 \$\{hh\} 已不存在（
+setCount(`来自分享链接的搜索「\$\{term
+if \(!r\.ok\) \{ setCount(`导入失
 renderResult\(\{ data: snap\.result\?\.data \?
-el\.count\.textContent = `已导入快照（\$\{snap\.act
-\} catch \(err\) \{ el\.count\.textContent = `
+setCount(`已导入快照（\$\{snap\.act
+\} catch \(err\) \{ setCount(`
 panel\.innerHTML = `<div class="ps-head">
 <input id="tagInput" placeholder="新标签，回车
 \$\{existing\.length \? `<div class="empty-s
 <div class="sub">当前：\$\{cur\.length \? cur\.m
-el\.count\.textContent = `已打标签：\$\{\(actionTa
+setCount(`已打标签：\$\{\(actionTa
 panel\.innerHTML = `<div class="ps-head">
 \{ label: '看看我的电脑配置', prompt: '总结一下这台机器的配
 \{ label: '查公网 IP', prompt: '查一下我的公网 IP，并
@@ -1226,10 +1226,10 @@ const\ notRestorable\ =\ \['watch（监控）',\ 'timer（定时）',\ '运行�
 \+\ \(backup\.plugins\?\.length\ \?\ `（含\ \$\{backup\.plugins\.length\}\ 个插件清单\$\{backup\.meta\.skippedSecrets
 <button\ class="ghost\ more\-item"\ id="selfcheckBtn"\ role="menuitem"\ title="装机自检：挑只读动作真跑一次，确认这个插件在这台机器上能跑">🔍\ 装机自检</button>
 if\ \(scBtn\)\ \{\ scBtn\.disabled\ =\ true;\ scBtn\.textContent\ =\ '🔍\ 自检中…';\ \}
-if\ \(r\.probe\?\.kind\ ===\ 'skip'\)\ el\.count\.textContent\ =\ `自检跳过：\$\{r\.probe\.reason\}`;
-else\ if\ \(r\.ok\)\ el\.count\.textContent\ =\ `装机自检\ ✓\ 能跑（\$\{r\.ms\ \?\?\ '\?'\}ms\ ·\ 探针\ \$\{r\.probe\.actionId\}）`;
-else\ el\.count\.textContent\ =\ `装机自检\ ✗\ \$\{r\.error\ \|\|\ '退出码非零'\}`;
-\}\ catch\ \(e\)\ \{\ el\.count\.textContent\ =\ `自检失败：\$\{e\.message\}`;\ \}
+if\ \(r\.probe\?\.kind\ ===\ 'skip'\)\ (?:setCount\(|el\.count\.textContent = )\ =\ `自检跳过：\$\{r\.probe\.reason\}`;
+else\ if\ \(r\.ok\)\ (?:setCount\(|el\.count\.textContent = )\ =\ `装机自检\ ✓\ 能跑（\$\{r\.ms\ \?\?\ '\?'\}ms\ ·\ 探针\ \$\{r\.probe\.actionId\}）`;
+else\ (?:setCount\(|el\.count\.textContent = )\ =\ `装机自检\ ✗\ \$\{r\.error\ \|\|\ '退出码非零'\}`;
+\}\ catch\ \(e\)\ \{\ (?:setCount\(|el\.count\.textContent = )\ =\ `自检失败：\$\{e\.message\}`;\ \}
 if\ \(scBtn\)\ \{\ scBtn\.disabled\ =\ false;\ scBtn\.textContent\ =\ '🔍\ 装机自检';\ \}
 if\ \(btn\)\ btn\.textContent\ =\ '②\ 落盘安装…';
 if\ \(sc\.ok\)\ marketMsg\(`已安装「\$\{nm\}」·\ 自检\ ✓\ 能跑（\$\{sc\.ms\ \?\?\ '\?'\}ms）`,\ 'ok',\ p\.id\ \|\|\ p\.entry\?\.id\);
@@ -1246,8 +1246,8 @@ return '- \*\*' \+ a\.title \+ '\*\*（`' \+ a\.id
 \+ \(a\.ui \? '，带界面' : ''\)
 \+ '，参数 ' \+ psr\.text \+ \(psr\.secretMark \?
 '> 由 zerokit 于 ' \+ new Date\(\)\.toLocaleSt
-\(\) => \{ el\.count\.textContent = `已复制 \$\{p\.
-\(\) => \{ el\.count\.textContent = '复制失败——剪贴
+\(\) => \{ setCount(`已复制 \$\{p\.
+\(\) => \{ setCount('复制失败——剪贴
 \$\{qc\.keywords\.length \? `<div class="pqc-
 \$\{a\.ui \? '<span class="badge" title="带交互
 <span class="pa-params" title="参数：\$\{esc\(
@@ -1296,7 +1296,7 @@ if \(raw\.app !== 'zerokit'\) return \{ ok:
 if \(raw\.shareVersion !== 1\) return \{ ok:
 if \(!\(k in raw\)\) return \{ ok: false, err
 if \(!Array\.isArray\(raw\.argv\) \|\| !raw\.arg
-catch \{ el\.count\.textContent = '分享包不是合法
+catch \{ setCount('分享包不是合法
 \$\{pack\.result\.length > 8 \? `<div class="
 : \(pack\.result !== undefined \? `<pre cla
 <span class="badge from-share">📨 来自分享包<
@@ -1308,9 +1308,9 @@ catch \{ el\.count\.textContent = '分享包不是合法
 return \{ allowed: false, reason: `分享包的动作
 if \(pack\.risk === 'mutate' && !confirm\(`
 命令：\$\{pack\.argv\.join\(' '\)\}`\)\) return;
-if \(j\.ok\) \{ el\.count\.textContent = `✓ 重放
-else el\.count\.textContent = `✗ 重放失败：\$\{j\.
-\} catch \(e2\) \{ el\.count\.textContent = `✗
+if \(j\.ok\) \{ setCount(`✓ 重放
+else setCount(`✗ 重放失败：\$\{j\.
+\} catch \(e2\) \{ setCount(`✗
 <button class="drawer-link" id="dlShareI
 catch \{ \$\('count'\)\.textContent = '分享包不是合
 if \(j && j\.error === undefined\) \{ \$\('cou
@@ -1369,7 +1369,7 @@ return '快捷键已整体关闭——按 \? 查看手册，或在设置抽屉�
 <label class="row-label">键盘快捷键</label>
 <button class="chip" data-keys-master="o
 <button class="chip" data-keys-master="o
-el\.count\.textContent = b\.dataset\.keysMas
+setCount(b\.dataset\.keysMas
 el\.modeLabel\.textContent = '插件配置';
 <h2 class="ps-title">插件配置</h2>
 <span class="cfg-prog">\$\{pr\.missingRequi
@@ -1380,7 +1380,7 @@ el\.allowView\.innerHTML = `<h2 class="ps-
 <span class="cfg-desc">\$\{esc\(st\.descript
 <button class="btn primary" id="cfgSave"
 <a class="ghost" href="#/config">← 回配置列表
-el\.count\.textContent = `已保存 \$\{Object\.key
+setCount(`已保存 \$\{Object\.key
 el\.allowView\.insertAdjacentHTML\('afterbe
 label: settings\.length \? `\$\{setCount\} /
 return s\.required \? \{ ok: false, error:
@@ -1412,3 +1412,93 @@ const msBadge = ms \? `<span class="ms-ba
 if \(n > 8000\) return '执行已超过 8 秒——插件可能在等外
 if \(n > 2000\) return '仍在执行…（插件可能在做重活）';
 \{ id: 'cyan', label: '钛青'
+\ \ \ \ setCount\(`别名「\$\{el\.q\.value\.trim\(\)\}」→\ 
+\ \ \ \ \ \ setCount\('已去掉重复项'\);
+\ \ \ \ \ \ setCount\(`\$\{filtered\.length\}\ 项\ ·\ 来
+\ \ if\ \(i\ >=\ 0\)\ \{\ favorites\.splice\(i,\ 1\);\ 
+\ \ \ \ \ \ \ \ setCount\(existed\ \?\ `已在篮子里：\$\{entr
+\ \ \ \ \ \ if\ \(r\.probe\?\.kind\ ===\ 'skip'\)\ setC
+\ \ \ \ \ \ else\ if\ \(r\.ok\)\ setCount\(`装机自检\ ✓\ 能跑
+\ \ \ \ \ \ else\ setCount\(`装机自检\ ✗\ \$\{r\.error\ \|\|
+\ \ \ \ \}\ catch\ \(e\)\ \{\ setCount\(`自检失败：\$\{e\.mes
+\ \ \ \ \ \ \ \ setCount\(`已保存\ \$\{Object\.keys\(patc
+\ \ \ \ if\ \(parseHm\(st\)\ ===\ null\ \|\|\ parseHm\(
+\ \ \ \ catch\ \{\ setCount\('写剪贴板被浏览器拒绝'\);\ \}
+\ \ \ \ if\ \(!r\.ok\)\ \{\ setCount\(`导入失败：\$\{r\.erro
+\ \ \ \ setCount\(`导入完成：新增\ \$\{added\}\ 个定时任务`\);
+\ \ setCount\('已清除：当前结果\ \+\ 运行历史数据\ \+\ 参数记忆'\);
+\ \ \ \ \ \ setCount\(`导入失败：\$\{parsed\.error\}`\);
+\ \ \ \ \ \ setCount\('已回填该次参数'\);
+\ \ \ \ if\ \(rows0\.length\ <\ 2\)\ \{\ setCount\('至少
+\ \ \ \ if\ \(!merged\)\ \{\ setCount\('合并失败：数据形状不对
+\ \ \ \ setCount\(`已合并\ \$\{merged\.length\}\ 行（按「\$
+\ \ \ \ setCount\(`别名「\$\{el\.q\.value\.trim\(\)\}」→\ 
+\ \ \ \ \ \ setCount\('已去掉重复项'\);
+\ \ \ \ \ \ setCount\(`\$\{filtered\.length\}\ 项\ ·\ 来
+\ \ if\ \(i\ >=\ 0\)\ \{\ favorites\.splice\(i,\ 1\);\ 
+\ \ \ \ \ \ \ \ setCount\(existed\ \?\ `已在篮子里：\$\{entr
+\ \ \ \ \ \ if\ \(r\.probe\?\.kind\ ===\ 'skip'\)\ setC
+\ \ \ \ \ \ else\ if\ \(r\.ok\)\ setCount\(`装机自检\ ✓\ 能跑
+\ \ \ \ \ \ else\ setCount\(`装机自检\ ✗\ \$\{r\.error\ \|\|
+\ \ \ \ \}\ catch\ \(e\)\ \{\ setCount\(`自检失败：\$\{e\.mes
+\ \ \ \ \ \ \ \ setCount\(`已保存\ \$\{Object\.keys\(patc
+\ \ \ \ if\ \(parseHm\(st\)\ ===\ null\ \|\|\ parseHm\(
+\ \ \ \ catch\ \{\ setCount\('写剪贴板被浏览器拒绝'\);\ \}
+\ \ \ \ if\ \(!r\.ok\)\ \{\ setCount\(`导入失败：\$\{r\.erro
+\ \ \ \ setCount\(`导入完成：新增\ \$\{added\}\ 个定时任务`\);
+\ \ setCount\('已清除：当前结果\ \+\ 运行历史数据\ \+\ 参数记忆'\);
+\ \ \ \ \ \ setCount\(`导入失败：\$\{parsed\.error\}`\);
+\ \ \ \ \ \ setCount\('已回填该次参数'\);
+\ \ \ \ if\ \(rows0\.length\ <\ 2\)\ \{\ setCount\('至少
+\ \ \ \ if\ \(!merged\)\ \{\ setCount\('合并失败：数据形状不对
+\ \ \ \ setCount\(`已合并\ \$\{merged\.length\}\ 行（按「\$
+\ \ \ \ setCount\(`别名「\$\{el\.q\.value\.trim\(\)\}」→\ 
+\ \ if\ \(i\ >=\ 0\)\ \{\ favorites\.splice\(i,\ 1\);\ 
+\ \ \ \ setCount\('链已结束'\);
+\ \ \ \ setCount\(`链第\ \$\{chainSteps\.length\ \+\ 1
+\ \ \ \ \ \ setCount\(t\.note\ \?\ '备注已保存'\ :\ '备注已清空
+\ \ \ \ \ \ setCount\(t\.pinned\ \?\ '已固定（不会被挤出）'\ :
+\ \ \ \ if\ \(!cur\ \|\|\ !other\)\ \{\ setCount\('对比需要
+\ \ \ \ if\ \(!cur\ \|\|\ !prev\)\ \{\ setCount\('没有两次可
+\ \ \ \ \ \ setCount\(`已在文件管理器打开：\$\{r\.opened\ \?\?\ 
+\ \ \ \ \ \ setCount\(`目录打不开：\$\{String\(e\.message
+\ \ \ \ setCount\(`插件页面报错：\$\{String\(msg\.error\ 
+\ \ \ \ \ \ \ \ \.catch\(\(\)\ =>\ \{\ setCount\('复制被浏览器拒
+\ \ \ \ \ \ setCount\(`已导出\ \$\{es\.length\}\ 条日志`\);
+\ \ \ \ \}\ catch\ \(err\)\ \{\ setCount\(`导出失败：\$\{err
+\ \ \ \ \ \ setCount\(`已导出\ \$\{es\.length\}\ 条日志（JSO
+\ \ \ \ \ \ \(\)\ =>\ \{\ setCount\(`已复制\ \$\{p\.name\}\ 的能
+\ \ \ \ \ \ \(\)\ =>\ \{\ setCount\('复制失败——剪贴板不可用'\);\ 
+\ \ \ \ if\ \(!others\.length\)\ \{\ setCount\('没有其它
+\ \ \ \ \ \ if\ \(!cmp\)\ \{\ setCount\('对比失败：插件数据不完整
+\ \ \ \ setCount\(`别名「\$\{el\.q\.value\.trim\(\)\}」→\ 
+\ \ if\ \(i\ >=\ 0\)\ \{\ favorites\.splice\(i,\ 1\);\ 
+\ \ \ \ \ \ setCount\(`已在文件管理器打开：\$\{r\.opened\ \?\?\ 
+\ \ \ \ setCount\(`插件页面报错：\$\{String\(msg\.error\ 
+\ \ \ \ \ \ \(\)\ =>\ \{\ setCount\('复制失败——剪贴板不可用'\);\ 
+\ \ \ \ setCount\(`已导出\ \$\{data\.plugins\.length\}
+\ \ \ \ \ \ setCount\('已清空搜索'\);
+\ \ \ \ \ \ setCount\(`第\ \$\{pick\ \+\ 1\}\ 项：\$\{filter
+\ \ \ \ \ \ setCount\('剪贴板是空的'\);
+\ \ \ \ \ \ \ \ setCount\(`剪贴板识别为「\$\{label\}」——回车直接
+\ \ \ \ setCount\(`加载失败：\$\{e\.message\}`\);
+\ \ \ \ setCount\(`历史里的\ \$\{hh\}\ 已不存在（插件可能被卸载）`\)
+\ \ \ \ \ \ setCount\(`来自分享链接的搜索「\$\{term\}」`\);
+\ \ \ \ setCount\(b\.dataset\.keysMaster\ ===\ 'o
+\ \ \ \ \ \ setCount\(`已导入快照（\$\{snap\.action\?\.plu
+\ \ \ \ \}\ catch\ \(err\)\ \{\ setCount\(`快照渲染失败：\$\{e
+\ \ if\ \(/\^✗\|失败\|错误\|不可用\|拒绝/\.test\(text\)\)\ el\.c
+\ \ else\ if\ \(/\^✓\|完成\|已/\.test\(text\)\)\ el\.coun
+\ \ \ \ \ \ setCount\(`已打标签：\$\{\(actionTags\[key\]\
+\ \ \ \ setCount\(`别名「\$\{el\.q\.value\.trim\(\)\}」→\ 
+\ \ if\ \(i\ >=\ 0\)\ \{\ favorites\.splice\(i,\ 1\);\ 
+\ \ \ \ \ \ setCount\(`已在文件管理器打开：\$\{r\.opened\ \?\?\ 
+\ \ \ \ setCount\(`插件页面报错：\$\{String\(msg\.error\ 
+\ \ \ \ \ \ \(\)\ =>\ \{\ setCount\('复制失败——剪贴板不可用'\);\ 
+\ \ \ \ \ \ setCount\(`已打标签：\$\{\(actionTags\[key\]\
+\ \ \ \ setCount\(`别名「\$\{el\.q\.value\.trim\(\)\}」→\ \$\{aliasHit
+\ \ if\ \(i\ >=\ 0\)\ \{\ favorites\.splice\(i,\ 1\);\ setCount\('
+\ \ \ \ \ \ setCount\(`已在文件管理器打开：\$\{r\.opened\ \?\?\ ''\}`\);
+\ \ \ \ setCount\(`插件页面报错：\$\{String\(msg\.error\ \?\?\ ''\)\.sli
+\ \ \ \ \ \ \(\)\ =>\ \{\ setCount\('复制失败——剪贴板不可用'\);\ \},
+\ \ \ \ \ \ setCount\(`已打标签：\$\{\(actionTags\[key\]\ \?\?\ \[\]\)\.map

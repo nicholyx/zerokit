@@ -679,6 +679,13 @@ const failed = results.filter(([, ok]) => !ok);
   check('183③ 风险条双重编码（斜向刻度）', css2.includes('repeating-linear-gradient(135deg, rgba(255,255,255,.28)'));
   check('183⑥⑧ 分区标题令牌+transition 全接 --ease', css2.includes('.detail-view h3, .sec-title') && css2.includes('.run-history .hist-label') && !/transition:[^;]*[^-)\w]ease[,;]/.test(css2));
   check('183③ 风险条内联只写 background-color（不覆盖条纹）', app2.includes('background-color:${barColor}') && !app2.includes('background:${barColor}'));
+  check('184① 弹层入场统一（pop-in 含 translateY(8px) 基准）', css2.includes('transform: scale(0.97) translateY(8px)'));
+  check('184⑦ 出场动效（zk-closing 类 + zk-pop-out）', css2.includes('.zk-closing') && css2.includes('@keyframes zk-pop-out') && app2.includes("classList.add('zk-closing')"));
+  {
+    const m = app2.match(/function setCount\(text, tone\) \{([\s\S]*?)\n\}/);
+    const body = m ? m[1] : '';
+    check('184⑧ setCount 真正赋值且不自调用（防递归）', body.includes('el.count.textContent = text') && !/setCount\(/.test(body));
+  }
 }
 
 console.log(`\n${'='.repeat(60)}\n通过 ${results.length - failed.length} / ${results.length}`);
