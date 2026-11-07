@@ -32,7 +32,8 @@ const die = (msg) => { console.error(`FAIL  ${msg}`); bad = 1; };
     if (/### (Added|Changed|Deprecated|Removed|Fixed|Security)\n[^\n]/.test(seg)) die('CHANGELOG：### 分类头后缺空行');
     // 有分类就必须有条目
     const item = seg.match(/### \w+\n\n(- [^\n])/);
-    if (!item) die('CHANGELOG：[Unreleased] 有分类头但没有条目');
+    const shellWithHeader = seg.includes('（下一版攒着）'); // 第一百七十轮⑧：带 ### Added 的空壳也是规范态
+    if (!item && !shellWithHeader) die('CHANGELOG：[Unreleased] 有分类头但没有条目');
   } else if (!placeholderOnly) {
     // 既没分类也不是规范空壳——可能是被清空的异常态
     if (seg.replace(/## \[Unreleased\]\n*/, '').trim().length > 0) die('CHANGELOG：[Unreleased] 段内容非规范（无分类头，也非空壳占位）');
@@ -86,4 +87,22 @@ const die = (msg) => { console.error(`FAIL  ${msg}`); bad = 1; };
 }
 
 if (bad) process.exit(1);
+
+// 第一百七十轮⑧：新条目必须落在 [Unreleased] 段内（三次事故的根治——空壳缺 ### Added 让插条锚点漂到已发布段）
+{
+  const cl = readFileSync(path.join(ROOT, 'CHANGELOG.md'), 'utf8');
+  const unreleased = cl.indexOf('## [Unreleased]');
+  const firstRelease = cl.search(/\n## \[\d/);
+  if (unreleased >= 0 && firstRelease > unreleased) {
+    const seg = cl.slice(unreleased, firstRelease);
+    if (!/### (Added|Changed|Deprecated|Removed|Fixed|Security)/.test(seg)) {
+      console.log('FAIL  [Unreleased] 段缺分类头（### Added 等）——新条目会插错段');
+      process.exitCode = 1;
+    } else if (/^### Added\n*$/m.test(seg) && !seg.includes('（下一版攒着）') && seg.replace(/### \w+\n|\s/g, '') === '') {
+      console.log('FAIL  [Unreleased] 的 ### Added 是空头——release-prep 空壳守卫会拒绝空归档');
+      process.exitCode = 1;
+    }
+  }
+}
+
 console.log('OK    质量护栏（CHANGELOG 格式/文档数字/绝对路径/版本行）');

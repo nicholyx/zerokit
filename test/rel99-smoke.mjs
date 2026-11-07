@@ -31,12 +31,10 @@ const run = (args) => spawnSync(process.execPath, [path.join(tree, 'scripts/rele
 const readTree = (f) => readFileSync(path.join(tree, f), 'utf8');
 const seedUnreleased = () => {
   const cl = readTree('CHANGELOG.md');
-  const m = cl.match(/## \[Unreleased\]\n\n([^]*?)\n\n## \[/);
-  if (!m || !m[1].startsWith('### Added')) {
-    writeFileSync(path.join(tree, 'CHANGELOG.md'), cl.replace(
-      /## \[Unreleased\]\n\n(?:（下一版攒着）\n\n?)?/,
-      '## [Unreleased]\n\n### Added\n\n- rel99 后续条目\n\n'));
-  }
+  // 第一百七十轮后空壳自带 ### Added + （下一版攒着）占位——两种形态都要能替换
+  writeFileSync(path.join(tree, 'CHANGELOG.md'), cl.replace(
+    /## \[Unreleased\]\n\n(?:### Added\n\n)?(?:（下一版攒着）\n\n?)?/,
+    '## [Unreleased]\n\n### Added\n\n- rel99 后续条目\n\n'));
 };
 
 console.log(`rel99-smoke（${home}）`);

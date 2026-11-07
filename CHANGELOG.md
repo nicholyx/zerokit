@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- 命令集 bundle 与 CHANGELOG 锚点根治：`zkit bundle create <名字> [--from|--all]` 把书签打包成 `.zbundle` 命令集（指纹与 .zshare 同口径）；`bundle list/diff/apply` 查看/与本机书签三桶对比/导入（重名自动加后缀不覆盖、重复导入无新增）；坏包拒绝文案与分享包同风格；typo 引导 bundl→bundle。**CHANGELOG 三次条目错段事故根治**：release-prep 空 [Unreleased] 段自带 `### Added` 占位（插条锚点不再漂移），guard146 新增「[Unreleased] 段缺分类头即 FAIL」断言（负例验证过）。
+
 （下一版攒着）
 
 ## [1.72.0] - 2026-11-07
