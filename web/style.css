@@ -2326,3 +2326,9 @@ html[data-theme="dark"] .tbl-wrap table.grid td:first-child { background: var(--
 .share-view .share-actions { padding: 4px 0 10px; }
 .share-table { background: var(--bg2, rgba(127,127,127,.08)); border-radius: 8px; padding: 12px; overflow: auto; max-height: 60vh; font-size: 12px; line-height: 1.7; white-space: pre; }
 [data-texport] { margin-left: 2px; }
+
+/* 第一百八十轮：书签 */
+.star.pin { margin-left: 2px; color: var(--fg-dim); }
+.star.pin.on { color: var(--accent); }
+.bk-table td { padding: 6px 10px; }
+#bmBadge { cursor: pointer; }

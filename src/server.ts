@@ -113,6 +113,7 @@ const API_METHODS: Record<string, string[]> = {
   '/api/prefs/export': ['POST'],
   '/api/prefs/import': ['POST'],
   '/api/timers': ['GET', 'POST'],
+  '/api/bookmarks': ['GET', 'POST', 'DELETE'],
   '/api/webstore': ['POST'],
   '/api/ai': ['GET'],
   '/api/chat': ['POST'],
@@ -131,6 +132,7 @@ const API_SPEC = {
     '/api/logs': { get: { summary: '审计日志（?limit=）' } },
     '/api/doctor': { get: { summary: '环境自检' } },
     '/api/markets': { get: { summary: '集市索引' } },
+    '/api/bookmarks': { get: { summary: '书签列表（与 CLI bookmarks.json 同源）' }, post: { summary: '新增书签', security: [{ token: [] }] }, delete: { summary: '删除书签（?name=）', security: [{ token: [] }] } },
     '/api/run': { post: { summary: '执行动作（body: plugin/action/values）', security: [{ token: [] }] } },
     '/api/stop': { post: { summary: '停止执行（body: key，缺省停全部）' } },
   },
@@ -669,6 +671,30 @@ export function createServer(): http.Server {
       }
       // 环境自检：与 CLI 的 `zkit doctor` 共用 buildDoctorReport，判定只有一份。
       // 第六十三轮①⑥：定时任务持久化桥——UI 读写 ~/.zerokit/timers.json
+
+      // 第一百八十轮⑥：书签 API（GET/POST/DELETE，与 CLI bookmarks.json 同源）
+      if (url.pathname === '/api/bookmarks' && req.method === 'GET') {
+        const { readBookmarks } = await import('./core/bookmarks.ts');
+        json(res, 200, { bookmarks: readBookmarks() });
+        return;
+      }
+      if (url.pathname === '/api/bookmarks' && req.method === 'POST') {
+        const { addBookmark } = await import('./core/bookmarks.ts');
+        const body = await readBody(req);
+        const err = addBookmark(String(body['name'] ?? ''), Array.isArray(body['argv']) ? body['argv'].map(String) : [], body['note'] ? String(body['note']) : undefined);
+        if (err) { json(res, 400, { error: err }); return; }
+        const { readBookmarks } = await import('./core/bookmarks.ts');
+        json(res, 200, { ok: true, bookmarks: readBookmarks() });
+        return;
+      }
+      if (url.pathname === '/api/bookmarks' && req.method === 'DELETE') {
+        const { removeBookmark } = await import('./core/bookmarks.ts');
+        const err = removeBookmark(String(url.searchParams.get('name') ?? ''));
+        if (err) { json(res, 404, { error: err }); return; }
+        const { readBookmarks } = await import('./core/bookmarks.ts');
+        json(res, 200, { ok: true, bookmarks: readBookmarks() });
+        return;
+      }
       if (url.pathname === '/api/timers' && req.method === 'GET') {
         const { loadTimers, nextFireTime } = await import('./core/timers.ts');
         const { timers } = loadTimers();
