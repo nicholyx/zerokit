@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [1.68.0] - 2026-11-07
+
+### Fixed
+
+- Windows 上 `plugin reinstall` 把自带插件误判为非自带源（`URL.pathname` 在盘符路径上产出 `/D:/…`，`existsSync` 恒 false）——改走 `fileURLToPath`；`doctor` 的桌面壳探测同款问题一并修复。`plugin info` 的风险构成从「read 3」改为机读友好的 `read:3`。
+
 ## [1.67.0] - 2026-11-07
 
 ### Added
