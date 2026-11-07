@@ -1781,6 +1781,9 @@ function openDetail(plugin, action, prefill) {
 
   const favKey = actionKey(plugin.id, action.id);
   const fav = isFavorite(favorites, favKey);
+  // 第一百八十轮④：钉住 ◉ = 存书签（带当前参数快照）；是否已钉看 argv 是否已有同名书签
+  const pinName = t('pinNameOf')(plugin.id, action.id);
+  const isPinned = (window.__zkBookmarks ?? []).some((b) => b.name === pinName);
   const note = notesStore[favKey]?.text ?? '';
   const mem = paramStore[favKey] ?? {};
   const initial = { ...mem, ...(prefill ?? {}) };
@@ -1945,7 +1948,8 @@ function openDetail(plugin, action, prefill) {
   el.detailView.innerHTML = `
     <div class="detail-head">
       <h2>${esc(action.title)}<button class="star big${fav ? ' on' : ''}" id="favBtn"
-        title="${fav ? t('unfav') : t('fav')}" aria-label="${fav ? t('unfav') : t('fav')}">${fav ? '★' : '☆'}</button></h2>
+        title="${fav ? t('unfav') : t('fav')}" aria-label="${fav ? t('unfav') : t('fav')}">${fav ? '★' : '☆'}</button><button class="star big pin${isPinned ? ' on' : ''}" id="pinBtn"
+        title="${isPinned ? t('unpin') : t('pin')}" aria-label="${isPinned ? t('unpin') : t('pin')}">${isPinned ? '◉' : '○'}</button></h2>
       <div class="meta">${esc(plugin.name)} · ${esc(action.id)} ·
         <span class="badge ${esc(action.risk)}">${esc(riskText(action.risk))}</span>
         ${steps.length ? `<span class="badge">${t('chainN')(steps.length)}</span>` : ''}
@@ -2421,6 +2425,28 @@ function openDetail(plugin, action, prefill) {
     btn.textContent = on ? '★' : '☆';
     btn.classList.toggle('on', on);
     btn.title = on ? t('unfav') : t('fav');
+  });
+  // 第一百八十轮④⑤⑦：钉住 = POST /api/bookmarks（argv 快照取当前表单值）；再点 = 删除
+  $('pinBtn')?.addEventListener('click', async () => {
+    const btn = $('pinBtn');
+    if ((window.__zkBookmarks ?? []).some((b) => b.name === pinName)) {
+      if (!confirm(t('unpinConfirm'))) return;
+      const r = await api(`/api/bookmarks?name=${encodeURIComponent(pinName)}`, { method: 'DELETE' }).catch(() => null);
+      window.__zkBookmarks = r?.bookmarks ?? window.__zkBookmarks;
+      el.count.textContent = t('unpinned');
+    } else {
+      const form = Object.fromEntries(Array.from(document.querySelectorAll('#paramForm input, #paramForm select, #paramForm textarea')).map((i) => [i.name, i.value]));
+      const argv = ['run', plugin.id, action.id];
+      for (const [k, v] of Object.entries(form)) if (v) argv.push(`--${k}`, v);
+      const r = await api('/api/bookmarks', { method: 'POST', body: { name: pinName, argv, note: `${plugin.name} · ${action.title}` } }).catch((e) => ({ error: e.message }));
+      if (r?.error) { el.count.textContent = r.error; return; }
+      window.__zkBookmarks = r?.bookmarks ?? [];
+      el.count.textContent = t('pinned');
+    }
+    const on2 = (window.__zkBookmarks ?? []).some((b) => b.name === pinName);
+    btn.textContent = on2 ? '◉' : '○';
+    btn.classList.toggle('on', on2);
+    btn.title = on2 ? t('unpin') : t('pin');
   });
   $('forgetParams')?.addEventListener('click', () => {
     delete paramStore[favKey];
@@ -8752,6 +8778,56 @@ function exitStats() {
 // ---------------------------------------------------------------- 结果收藏夹
 
 /** 收藏的结果：钉住某次执行的关键输出，重启后还在（本机 localStorage）。 */
+// 第一百八十轮③⑧：书签管理页——列表（名称/命令/时间/重跑/删除带确认）
+async function showBookmarks() {
+  mode = 'bookmarks';
+  el.modeLabel.textContent = t('bmkPage');
+  el.searchRow.classList.add('hidden');
+  hidePanels();
+  const view = el.allowView;
+  view.classList.remove('hidden');
+  if (location.hash !== '#/bookmarks') history.replaceState(null, '', '#/bookmarks');
+  let bms = window.__zkBookmarks ?? [];
+  try { const r = await api('/api/bookmarks'); bms = r.bookmarks ?? []; window.__zkBookmarks = bms; } catch { /* 离线就用手头缓存 */ }
+  if (!bms.length) {
+    view.innerHTML = `<div class="panel"><div class="e-title">${t('bmkEmpty')}</div></div>`;
+    return;
+  }
+  view.innerHTML = `<div class="panel"><h3>${t('bmkTitle')}（${bms.length}）</h3>
+    <table class="grid bk-table"><thead><tr><th>${t('bmkColName')}</th><th>${t('bmkColCmd')}</th><th>${t('bmkColAt')}</th><th></th></tr></thead>
+    <tbody>${bms.map((b) => `<tr><td>⭐ ${esc(b.name)}</td><td class="sub">${esc((b.argv ?? []).join(' '))}</td><td class="sub">${esc(new Date(b.createdAt).toLocaleDateString())}</td>
+      <td><button class="ghost mini" data-bk-run="${esc(b.name)}">${t('bmkRerun')}</button> <button class="ghost mini" data-bk-del="${esc(b.name)}">${t('bmkDel')}</button></td></tr>`).join('')}</tbody></table></div>`;
+  view.querySelectorAll('[data-bk-del]').forEach((b) => b.addEventListener('click', async () => {
+    if (!confirm(t('unpinConfirm'))) return;  // ⑧ 防误删
+    const r = await api(`/api/bookmarks?name=${encodeURIComponent(b.dataset.bkDel ?? '')}`, { method: 'DELETE' }).catch(() => null);
+    window.__zkBookmarks = r?.bookmarks ?? [];
+    showBookmarks();
+  }));
+  view.querySelectorAll('[data-bk-run]').forEach((b) => b.addEventListener('click', async () => {
+    const bm = (window.__zkBookmarks ?? []).find((x) => x.name === b.dataset.bkRun);
+    if (!bm) return;
+    const argv = bm.argv ?? [];
+    const params = {};
+    for (let k = 3; k + 1 < argv.length; k += 2) { const key = String(argv[k]).replace(/^--/, ''); params[key] = argv[k + 1]; }
+    const r = await api('/api/run', { method: 'POST', body: { plugin: argv[1], action: argv[2], values: params } }).catch((e) => ({ error: e.message }));
+    window.__zkLastBookmarkResult = r;
+    showBookmarkResult();
+  }));
+}
+
+// 第一百八十轮⑦：书签重跑结果（复用结果渲染层）
+function showBookmarkResult() {
+  const r = window.__zkLastBookmarkResult;
+  const view = el.allowView;
+  view.classList.remove('hidden');
+  hidePanels(); if (el.listView) el.listView.classList.remove('hidden');
+  if (!r) { view.innerHTML = `<div class="panel"><div class="e-title">${t('bmkNoResult')}</div></div>`; return; }
+  const lang = readJson('zerokit.lang', 'zh');
+  const okTxt = r.ok ? '✓' : '✗';
+  view.innerHTML = `<div class="panel"><div class="${r.ok ? 'ok-line' : 'err-line'}">${okTxt} ${r.ok ? t('bmkDone') : esc(r.error ?? t('bmkFail'))}</div>
+    <pre class="result-pre">${esc(typeof r.data === 'string' ? r.data : JSON.stringify(r.data, null, 2))}</pre></div>`;
+}
+
 async function showSaved() {
   mode = 'saved';
   el.modeLabel.textContent = t('modeSaved');
@@ -9073,6 +9149,7 @@ function showPalette() {
     { icon: '📰', label: '今日简报', hint: '跑了多少 / 成败 / 最常用', key: '', group: 'page', act: () => { location.hash = '#/brief'; } },
     { icon: '🗓', label: '时间线', hint: '按天复盘执行 + 周对比 + 时段分布', key: '', group: 'page', act: () => { location.hash = '#/timeline'; } },
     { icon: '📌', label: '收藏结果', hint: '钉住的重要输出', key: '', group: 'page', act: () => { location.hash = '#/saved'; } },
+    { icon: '⭐', label: I18N.zh.bmkPage, hint: I18N.zh.bmkHint, key: '', group: 'page', act: () => { location.hash = '#/bookmarks'; } },
     { icon: '◐', label: '深色 / 浅色', hint: '一键切换主题', key: 'Ctrl+Shift+D', group: 'op', act: () => toggleLightDark() },
     { icon: '☰', label: '设置抽屉', hint: '主题/语言/配置档/备份统一入口', key: '', group: 'page', act: () => openDrawer() },
     { icon: '🧪', label: '开发者面板', hint: 'dev 插件摘要/文件树/沙箱控制台 #/dev', key: '', group: 'page', act: () => { location.hash = '#/dev'; } },
@@ -9168,7 +9245,22 @@ function showPalette() {
         icon: c.icon, label: `> ${t(c.nameKey)}`, hint: t(c.hintKey),
         act: () => { runCommand(c.id); },
       }));
-      const pool = [...recentCmds, ...cmds];
+      // 第一百八十轮①：⭐ 书签分组（CLI bookmarks.json 经 /api/bookmarks 读到界面）
+      const bmItems = (window.__zkBookmarks ?? []).map((b) => ({
+        icon: '⭐', label: `> ${b.name}`, hint: b.argv ? `zkit ${b.argv.join(' ')}` : '',
+        act: async () => {
+          exitPalette();
+          // ⑦ 重跑书签 = 快照参数真执行（经 /api/run；destructive 仍由后端确认拦截）
+          const argv = b.argv ?? [];
+          const pl = argv[1] ?? ''; const ac = argv[2] ?? '';
+          const params = {};
+          for (let k = 3; k + 1 < argv.length; k += 2) { const key = String(argv[k]).replace(/^--/, ''); params[key] = argv[k + 1]; }
+          const r = await api('/api/run', { method: 'POST', body: { plugin: pl, action: ac, values: params } }).catch((e) => ({ error: e.message }));
+          el.count.textContent = r?.ok ? `⭐ ${b.name} · ${t('done')}` : (r?.error ?? t('runFailed'));
+          if (r?.ok && r.data !== undefined) { window.__zkLastBookmarkResult = r; location.hash = '#/bookmark-result'; }
+        },
+      }));
+      const pool = [...bmItems, ...recentCmds, ...cmds];
       items = cneedle ? pool.filter((x) => x.label.toLowerCase().includes(cneedle)
         || x.hint.toLowerCase().includes(cneedle)) : pool.slice(0, 24);
       sel = 0; paint(); return;
@@ -9762,6 +9854,14 @@ function buildEntries(list) {
 }
 
 async function load(notify) {
+  // 第一百八十轮⑤：书签从后端读（CLI bookmarks.json 同源），钉住态/命令面板都吃它
+  try { const r = await api('/api/bookmarks'); window.__zkBookmarks = r.bookmarks ?? []; } catch { window.__zkBookmarks = []; }
+  // 第一百八十轮②：顶栏书签徽标（有书签才显示数量；点进管理页）
+  {
+    const badge = document.getElementById('bmBadge');
+    if (badge) { const n = (window.__zkBookmarks ?? []).length; badge.textContent = n ? t('bookmarkN')(n) : ''; badge.classList.toggle('hidden', !n); }
+    if (!badge.dataset.bound) { badge.dataset.bound = '1'; badge.addEventListener('click', () => { location.hash = '#/bookmarks'; }); }
+  }
   // 第四十七轮⑤：首屏骨架屏——列表还空着时先画占位行，拉到数据后 renderList 覆盖
   if (!el.list.childElementCount && el.listView && !el.listView.classList.contains('hidden')) {
     el.list.innerHTML = skeletonRows(6).map(() => '<li class="skel-row" aria-hidden="true"></li>').join('');
@@ -9961,6 +10061,17 @@ function applyHash() {
   // #/saved  直接打开「收藏的结果」
   if ((location.hash || '') === '#/saved') {
     showSaved();
+    return;
+  }
+
+  // 第一百八十轮③：#/bookmarks 书签管理页（与 CLI bookmarks.json 同源）
+  if ((location.hash || '') === '#/bookmarks') {
+    showBookmarks();
+    return;
+  }
+  // 第一百八十轮⑦：书签重跑结果视图（palette 重跑后落这里）
+  if ((location.hash || '') === '#/bookmark-result') {
+    showBookmarkResult();
     return;
   }
 
