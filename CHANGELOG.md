@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- 性能回归防护网：scripts/perf-guard.mjs 进 lint——highlightHtml/filterRows 10k 项 <10ms/次、CLI 冷启动 <300ms 三预算断言 + O(n²) 参照实现自检（证明预算真实有效，非恒过）；基线快照补预算表。
 
 ## [2.2.0] - 2026-11-08
 
