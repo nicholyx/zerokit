@@ -66,6 +66,7 @@ node scripts/contrast-audit.mjs > /dev/null || { echo "对比度审计未达标"
 node scripts/cli-copy-audit.mjs > /dev/null || { echo "CLI 文案审计未达标"; exit 1; }
 node scripts/mcp-copy-audit.mjs > /dev/null || { echo "MCP 文案审计未达标"; exit 1; }
 node scripts/perf-guard.mjs > /dev/null || { echo "性能防护网未达标"; exit 1; }
+node scripts/dep-audit.mjs > /dev/null || { echo "依赖健康审计未达标"; exit 1; }
 if node scripts/i18n-scan.mjs; then
   echo "OK    i18n（硬编码中文白名单无新增）"
 else

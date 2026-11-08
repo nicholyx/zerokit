@@ -25,6 +25,7 @@
 | [插件清单规范](reference/plugin-spec.md) | plugin.toml 全字段 | 写插件前必读 |
 | [uTools 兼容矩阵](reference/utools-compat.md) | 逐 API 支持表 + 移植指引 | 想跑存量 uTools 插件 |
 | [v2 基线指标](reference/baseline-v2.md) | 冷启动/测试规模/插件数基线（脚本生成） | 评估性能回归 |
+| [依赖清单](reference/dependencies.md) | 每个依赖一行「为什么需要」+ 依赖规则 | 评审新依赖 / 供应链巡检 |
 | [Cookbook](reference/cookbook.md) | 十篇实战配方 | 照抄解决常见任务 |
 | [项目账本](reference/overview.md) | 已完成/待办/已知差距 | 想知道项目现状 |
 
