@@ -10345,6 +10345,7 @@ async function replayShareInWeb(pack) {
   } catch (e2) { $('count').textContent = `✗ 重放失败：${e2.message}`; }
 }
 
+window.openDrawer = openDrawer; // 第二百零五轮②：桌面壳托盘「打开设置」经 eval 调用
 window.__zerokit = {
   showShareImport,
   // 第一百一十四轮：批量调试/截图断言出口
