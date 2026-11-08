@@ -72,6 +72,7 @@ const HELP = `
 ${c.bold('zerokit')} —— 一份清单，四个面：启动器 / CLI / MCP / Web
 
 ${c.bold('用法')}  zkit <命令> [参数]
+${c.dim('相关命令')}  list · run · doctor · market · plugin · man（zkit man 看全表）
 
 ${c.dim('分节：基本 · 配置 · 插件 · 执行与历史 · 观测 · MCP 与 AI · 桌面 · 运维')}
 ${c.dim('逐条参考：zkit man（可 man zkit 外部翻阅）')}
@@ -130,8 +131,8 @@ ${c.bold('其他')}
   last [--show]           重跑最近一条成功命令（--show 只看不跑）
   history [N]             最近 N 条命令；--rerun N 重跑第 N 条
                           --grep 过滤 --since 2d/5h/today --failed 只看失败
-  bookmark add|list|rm|run  书签：常用命令组合起别名（zkit bookmark add 别名 run ...）
-  bundle create|list|diff|apply  命令集：书签打包成 .zbundle 流通（团队共享一组命令）
+  bookmark add|list|rm|run  书签：常用动作调用起别名（zkit bookmark add 别名 run ...）
+  bundle create|list|diff|apply  动作集：书签打包成 .zbundle 流通（团队共享一组动作调用）
   share <插件.动作> [--params JSON]  结果分享包 .zshare（run --from-share 重放）
   completion bash|zsh|fish  shell 补全脚本（eval "$(zkit completion bash)"）
   man                     完整命令参考（比本屏详细）
@@ -3024,7 +3025,7 @@ async function cmdCron(args: string[]): Promise<number> {
   return sub === undefined || sub === 'help' ? 0 : 2;
 }
 
-/** 第一百四十九轮：bookmark——常用命令组合起别名。add/list/rm/run，list --json 机读。 */
+/** 第一百四十九轮：bookmark——常用动作调用起别名。add/list/rm/run，list --json 机读。 */
 async function cmdBookmark(args: string[]): Promise<number> {
   const bm = await import('./core/bookmarks.ts');
   const cliX = await import('./core/cliX.ts');
@@ -4772,7 +4773,7 @@ const MAN_PAGE = `zkit(1) -- zerokit 命令行参考
   zkit last [--show]      重放最近一次执行（--show 只看不跑）
   zkit history [N]        历史倒序（--rerun N 重跑第 N 条）
   zkit bookmark add|list|rm|run
-                          书签：常用命令组合起别名（第一百四十九轮）
+                          书签：常用动作调用起别名（第一百四十九轮）
   zkit bundle create <名字> [--from a,b|--all]
                           把书签打包成 .zbundle 命令集（指纹与 .zshare 同口径）
   zkit bundle list|diff|apply <文件.zbundle>
