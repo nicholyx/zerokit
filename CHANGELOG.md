@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.0.0] - 2026-11-09
+
+### Added
+
 - 结果页签键盘闭环（Alt 修饰层，与行 j/k 区分）：Alt+j/k 页签间移动、Alt+x 关闭当前（跳过固定项）、Alt+p 固定切换、Alt+c 与相邻页签对比；活跃页签挂 aria-current="page"；速查浮层新增 Alt 组行（I18N 两语）；无页签时 Alt 系静默忽略不抢浏览器行为。
 
 ## [2.9.0] - 2026-11-09
@@ -73,10 +79,4 @@
 ### Added
 
 - MCP 面文案一致性巡检：新增 scripts/mcp-copy-audit.mjs 进 lint（JSON-RPC 实连 tools/list，四类护栏：工具数量/描述尾注结构/destructive 高风险句式/「命令」术语语境白名单）；复核 53 工具描述全部合规。
-
-## [1.98.0] - 2026-11-08
-
-### Added
-
-- CLI 文案一致性巡检：术语统一（书签/bundle 的「命令」→「动作调用」——动作是清单声明的可执行单元）；主帮助补「相关命令」段（与子命令同语言）；新增 scripts/cli-copy-audit.mjs 进 lint（旧术语清零/退出码语义/--no-color 无 ANSI 三类护栏）。
 
