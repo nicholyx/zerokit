@@ -6992,10 +6992,10 @@ function marketEntryHtml(m, e) {
       <div class="plug-card-head">
         <b>${esc(e.name)}</b>
         <span class="aid">${esc(e.id)}${e.version ? ` · v${esc(e.version)}` : ''}${typeof e.actionCount === 'number' ? ` · ${e.actionCount} 个动作` : ''}</span>
-        <span class="badge">${esc(m.name)}</span>${mixHtml}
-        ${installed ? `<span class="badge read">已装${e.installedVersion ? ` v${esc(e.installedVersion)}` : ''}</span>` : ''}
+        <span class="badge market-src" title="来源集市">🏪 ${esc(m.name)}</span>${mixHtml}
+        ${installed ? `<span class="badge read">✓ 已装${e.installedVersion ? ` v${esc(e.installedVersion)}` : ''}</span>` : ''}
         <span class="plug-ops">
-          ${installed ? '' : '<button class="ghost" data-op="preview">安装</button>'}
+          ${installed ? '' : '<button class="primary mini" data-op="preview">安装</button>'}
         </span>
       </div>
       <div class="plug-card-body">${esc(e.summary || '')}${tags}</div>
@@ -7083,11 +7083,11 @@ async function doMarketInstall() {
   const p = marketPreview;
   if (!p) return;
   const btn = $('marketInstall');
-  // 第一百三十七轮⑧：安装进度三阶段（拉取校验 → 落盘 → 自检）
-  if (btn) { btn.disabled = true; btn.textContent = '① 拉取与校验…'; }
+  // 第一百三十七轮⑧：安装进度三阶段（拉取校验 → 落盘 → 自检）；189 轮⑤：图标化状态前缀
+  if (btn) { btn.disabled = true; btn.classList.add('busy'); btn.textContent = '⏳ ① 拉取与校验…'; }
   try {
     const withDeps = $('marketWithDeps')?.checked === true;
-    if (btn) btn.textContent = '② 落盘安装…';
+    if (btn) btn.textContent = '⏳ ② 落盘安装…';
     const res = await api('/api/market/install', {
       method: 'POST',
       body: { id: p.id || p.entry?.id, market: p.market, confirm: p.confirm, withDeps },
@@ -7108,8 +7108,8 @@ async function doMarketInstall() {
       marketMsg(`已安装「${nm}」`, 'ok', p.id || p.entry?.id);
     }
   } catch (e) {
-    marketMsg(`安装失败：${e.message}`, 'err');
-    if (btn) { btn.disabled = false; btn.textContent = '确认安装'; }
+    marketMsg(`✗ 安装失败：${e.message}`, 'err');
+    if (btn) { btn.disabled = false; btn.classList.remove('busy'); btn.textContent = '确认安装'; }
   }
 }
 

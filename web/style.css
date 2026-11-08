@@ -2557,3 +2557,20 @@ html[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: color-mix
 .viz-empty-line::after { content: '暂无数据'; position: absolute; right: 0; top: -14px; font-size: 10px; color: var(--fg-dim); }
 /* ⑥ 图表容器统一：跟卡片体系（内边距令牌化） */
 .trend, .heat-row, .bar-chart { padding: var(--card-pad); padding-top: 8px; }
+
+/* ---------------- 第一百八十九轮：集市与安装流 ---------------- */
+/* ② 安装按钮分级：primary.mini（卡内小号主钮） */
+button.primary.mini { padding: 4px 12px; font-size: 12px; }
+/* ⑦ 来源标记：market-src 底色中性、图标双编码 */
+.badge.market-src { background: color-mix(in srgb, var(--fg) 7%, transparent); border-color: color-mix(in srgb, var(--line) 70%, transparent); }
+/* ③ 预览卡确认语义：accent 边框+浅 accent 底——明确「这是安装前最后一步」 */
+.market-preview-confirm, #marketPreview .plug-card {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+  background: color-mix(in srgb, var(--accent) 5%, var(--panel));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent), var(--shadow-1);
+}
+/* ⑤ 安装三态反馈：进度/成功/失败 */
+.market-install-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.market-install-state.ok { color: var(--ok); }
+.market-install-state.fail { color: var(--bad); }
+.market-install-state.busy { color: var(--fg-dim); }
