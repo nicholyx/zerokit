@@ -711,6 +711,8 @@ const failed = results.filter(([, ok]) => !ok);
   check('195⑦ roving tabindex 模式（0/-1 切换，无正数）', !/[tT]abindex="\s*[1-9]/.test(app2) && app2.includes("tabindex=\"${i === active ? 0 : -1}\""));
   check('195① a11y-scan 新规则源码在（tabindex-positive/aria-hidden-focus/focus-ring）', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'a11y-scan.mjs'), 'utf8').includes('tabindex-positive') && fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'a11y-scan.mjs'), 'utf8').includes('aria-hidden-focus'));
   check('195②⑦ 全站无 tabindex 正数（列表 roving 0/-1 模式）', !/tabindex="\s*[1-9]/.test(app2));
+  check('198⑨ 总检脚本进 lint（cli-copy/mcp-copy/contrast-audit/i18n-scan 四审计齐）', (() => { const lint = fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'lint.sh'), 'utf8'); return ['cli-copy-audit', 'mcp-copy-audit', 'contrast-audit', 'i18n-scan'].every((n) => lint.includes(n)); })());
+  check('198⑨ v2.0.0 总检条目入 CHANGELOG（占位行替换法）', fs.readFileSync(path.join(PKG_ROOT, 'CHANGELOG.md'), 'utf8').includes('v2.0.0 里程碑总检'));
   check('197⑧ mcp-copy-audit 进 lint（JSON-RPC 实连审计）', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'mcp-copy-audit.mjs'), 'utf8').includes('tools/list') && fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'lint.sh'), 'utf8').includes('mcp-copy-audit'));
   check('197① MCP 术语审计规则在（CLI 语境白名单）', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'mcp-copy-audit.mjs'), 'utf8').includes('zkit|命令行|安装|CLI|一条命令'));
   check('196⑨ CLI 文案审计脚本存在且检查旧术语/退出码/无色输出', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'cli-copy-audit.mjs'), 'utf8').includes('命令组合') && fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'cli-copy-audit.mjs'), 'utf8').includes('--no-color'));
