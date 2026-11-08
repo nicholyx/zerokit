@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [2.8.0] - 2026-11-09
+
+### Added
+
 - 设置持久化审计（第七审计线）：persist-audit.mjs 进 lint（localStorage 写点 vs BACKUP_GROUPS 覆盖，孤儿键=0 断言）；收编 10 个孤儿键（ai-assist/batchconc/ldensity/tdensity/textview.wrap/sortmode/timeline-collapsed/clip-hist/cmdhist/last-zshare——此前导出备份会丢这些设置）。
 
 ## [2.7.0] - 2026-11-09
@@ -73,10 +79,4 @@
 ### Added
 
 - 可访问性巡检第三波（14 轮设计重构后回归）：a11y-scan 新增三条规则（tabindex 正数/aria-hidden 含焦点元素/focus-ring 令牌覆盖率）并进 lint 护栏；逐动画核对 reduced-motion 全停覆盖（18 种动画）；roving tabindex 无正数确认。
-
-## [1.96.0] - 2026-11-08
-
-### Added
-
-- AI 工作台视觉收编令牌体系：用户消息 accent tint + 右对齐双重编码（与助手区分不靠色单一维度）；流式输出/工具输出接 --code-* 令牌；头部/输入区分隔线、meta 时间戳脱离硬编码色（tabular-nums）；新增空会话态。
 
