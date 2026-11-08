@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-11-08（第一百八十七轮，v1.89.0）
+> 最后更新：2026-11-08（第一百八十八轮，v1.90.0）
 
 ## 性能基线（第五十八轮建立，2026-10-28，Apple M4 / Node 22）
 
@@ -126,7 +126,7 @@ uTools 开始收费了。想找一个替代品，找了一圈发现真正的问�
 - 第一百八十五轮 v1.87.0（卡片体系与徽标语义）：五类卡 --card-border 对齐、可点卡悬停统一（无位移）、徽标语义表（tint 底+语义变量+tabular-nums）、统计卡 19px/650。\n- [x] 第一百六十四轮（v1.66.0）：HTTP API 面系统化——version/health 扩展/openapi.json/405 方法校验/错误信封/http-api.md（Issue #548）
 - 第一百八十六轮 v1.88.0（表单输入细节）：hover 先于 focus、必填双重标注、占位符焦点隐去、select 自绘箭头、accent-color、--input-pad、textarea 等宽。\n- [x] 第一百六十三轮（v1.65.0）：CLI 脚本化与自动化——exit-codes/--stdin/--timeout/--retries/--format/并发锁/cron（Issue #545）
 - 第一百八十七轮 v1.89.0（浅色主题独立设计）：线色白底淡化校准、代码块独立配色、对比度全表复核（审计脚本进 lint）、切换无闪烁（colorScheme+theme-color）。\n- [x] 第一百六十二轮（v1.64.0）：项目门面与元数据收官——topics/description/README 点分与安装包节/一句话现状（Issue #542）
-- [x] 第一百六十一轮（v1.63.0）：发布链工具化——release-chain.sh 固化 CI 轮询/merge 复核/tag 双确认/网络降级/资产等待（Issue #539）
+- 第一百八十八轮 v1.90.0（可视化统一）：--viz-* 令牌五件套、热力透明度阶梯（0.25→0.95）、空态基线、图表容器接 --card-pad。\n- [x] 第一百六十一轮（v1.63.0）：发布链工具化——release-chain.sh 固化 CI 轮询/merge 复核/tag 双确认/网络降级/资产等待（Issue #539）
 - [x] 第一百六十轮（v1.62.0）：数据健康与存储体检——usage 分项容量/junk 垃圾识别/clean 安全清理/snapshots 清点 + doctor 超 100MB 警告（Issue #536）
 - [x] 第一百五十九轮（v1.61.0）：shell 补全——bash/zsh/fish 三 shell、run 点分动作候选、书签动态候选、--keep 枚举；修 bash run 候选静默空缺陷（Issue #533）
 - [x] 第一百五十八轮（依赖养护）：四个 dependabot PR 清零（PR #532）
@@ -279,7 +279,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 
 ### 质量
 
-- 130 个文件、**3030 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
+- 130 个文件、**3032 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
 - `tsc --noEmit` 干净——**而且 CI 真的在跑它**（`typecheck` job）。
   曾经这里写着"干净"但没有任何地方执行这条命令，于是两个只有类型检查才看得见的
   错误在核心里躺了很久（`proxy.ts` 的 Buffer 泛型不兼容、`scaffold.ts` 的类型混用）。

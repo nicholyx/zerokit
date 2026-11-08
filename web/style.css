@@ -31,6 +31,12 @@
   --ease-out: cubic-bezier(.16, 1, .3, 1);       /* 开屏——长尾缓出 */
   --card-pad: 10px 14px;         /* 卡内区（head/body 通用内边距） */
   --input-pad: 9px 11px;         /* 输入框内边距（全站输入统一） */
+  /* 第一百八十八轮①：可视化令牌——线/点/网格/空态线全站统一 */
+  --viz-stroke-width: 1.5px;
+  --viz-dot: 2.5px;
+  --viz-grid: color-mix(in srgb, var(--fg) 8%, transparent);
+  --viz-empty: color-mix(in srgb, var(--fg) 14%, transparent);
+  --viz-fill: color-mix(in srgb, var(--accent) 14%, transparent);
   --card-border: color-mix(in srgb, var(--line) 88%, transparent);
   --card-hover-border: color-mix(in srgb, var(--accent) 38%, var(--line));
   --card-hover-bg: color-mix(in srgb, var(--fg) 3%, var(--panel));
@@ -975,7 +981,9 @@ mark.find-hit { background: var(--accent); color: var(--bg); border-radius: var(
 .heat-row { display: flex; gap: 3px; align-items: flex-end; padding: 8px 4px 2px; }
 .heat-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; }
 .heat-cell i { display: block; width: 100%; max-width: 18px; min-height: 2px;
-  background: var(--accent, #5aa9ff); border-radius: var(--r-sm, 2px) 2px 0 0; opacity: .85; }
+  /* 第一百八十八轮③：热力色阶语义化——透明度阶梯（0.25→0.95 由 JS 按值内插，CSS 兜底中档） */
+  background: color-mix(in srgb, var(--accent) 60%, transparent);
+  border-radius: var(--r-sm, 2px) 2px 0 0; }
 .heat-cell span { font-size: 9px; color: var(--fg-dim, #9aa4b2); }
 .report-body { white-space: pre-wrap; font-size: 13px; line-height: 1.7; margin: 8px 0; }
 .prefs-box .actions { gap: 8px; }
@@ -2535,3 +2543,17 @@ select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible,
 html[data-theme="light"] ::selection { background: color-mix(in srgb, var(--accent) 22%, transparent); }
 html[data-theme="light"] ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--fg) 22%, transparent); }
 html[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--fg) 34%, transparent); }
+
+/* ---------------- 第一百八十八轮①②④：可视化统一 ---------------- */
+.spark path, .spark polyline, [class*="trend"] svg polyline, .watch-trend svg polyline {
+  stroke: var(--accent);
+  stroke-width: var(--viz-stroke-width);
+}
+.spark circle, [class*="trend"] svg circle { r: var(--viz-dot); }
+.bar-col i, .trend-col i { background: var(--accent); }
+.bar-col.mute i, .trend-col.mute i { background: var(--viz-empty); }
+/* ⑤ 空数据可视化态：零值行给「空态基线」而非空白 */
+.viz-empty-line { height: 1px; background: var(--viz-empty); margin: 6px 0; position: relative; }
+.viz-empty-line::after { content: '暂无数据'; position: absolute; right: 0; top: -14px; font-size: 10px; color: var(--fg-dim); }
+/* ⑥ 图表容器统一：跟卡片体系（内边距令牌化） */
+.trend, .heat-row, .bar-chart { padding: var(--card-pad); padding-top: 8px; }
