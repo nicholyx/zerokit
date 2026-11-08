@@ -9178,10 +9178,10 @@ function showPalette() {
   ];
   overlay.innerHTML = `
     <div class="modal palette">
-      <input id="paletteQ" type="text" placeholder="搜动作、插件、页面或命令（? 键看全部快捷键）…" autocomplete="off" spellcheck="false">
+      <input id="paletteQ" type="text" placeholder="搜索动作、插件、页面或命令…（↑↓ 选择 · Enter 打开 · 1-9 直选）" autocomplete="off" spellcheck="false">
       <div class="palette-chips hidden" id="paletteChips"></div>
       <ul id="paletteList" role="listbox"></ul>
-      <div class="palette-foot">↑↓ 选择 · Enter 打开 · 1-9 直选 · Tab 补全 · Esc 关闭</div>
+      <div class="palette-foot">Tab 补全 · Esc 关闭 · 共 ${filtered.length} 项</div>
     </div>`;
   document.body.appendChild(overlay);
   const q = overlay.querySelector('#paletteQ');

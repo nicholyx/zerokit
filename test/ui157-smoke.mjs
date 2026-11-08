@@ -19,7 +19,7 @@ check('① 停止/重放/剪贴板进速查', app.includes('Ctrl+.') && app.incl
 // ③ 当前状态区
 check('③ 速查浮层当前状态区（第一百七十三轮起手册从 KEYMAP 渲染，状态区随旧浮层退役）', extras.includes('KEYMAP') && app.includes('filterKeymap(qEl.value'));
 // ④ palette 占位提示可搜动作与 ? 键
-check('④ palette 占位升级', app.includes('搜动作、插件、页面或命令（? 键看全部快捷键）'));
+check('④ palette 占位升级（191 轮语法统一：键盘提示入占位符）', app.includes('搜索动作、插件、页面或命令…（↑↓ 选择 · Enter 打开 · 1-9 直选）'));
 // ⑥ 滚动记忆：openDetail 存 + backToList 恢复
 check('⑥ openDetail 存滚动位置', app.includes("sessionStorage.setItem('zk.listScroll'"));
 check('⑥ backToList 恢复滚动', app.includes("sessionStorage.getItem('zk.listScroll')") && app.includes('sc.scrollTop = saved'));
