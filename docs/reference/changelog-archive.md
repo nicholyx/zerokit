@@ -2,6 +2,14 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [1.82.0] - 2026-11-07
+
+### Added
+
+- 书签与快速到达：动作详情页 ◉ 一键钉住（含当前参数快照，别名 pin-插件.动作），命令面板 `>` 前缀直达书签分组，顶栏 ⭐ 徽标常驻计数。
+- 书签管理页 `#/bookmarks`：表格列出名称/命令/创建时间，支持一键重跑（走 /api/run，结果页内联展示）与删除（带确认守卫）。
+- 书签与 CLI 双向同步：UI 钉住即写入 bookmarks.json（与 `zkit bookmark` 同一存储），新增 /api/bookmarks GET/POST/DELETE 三个端点并入 OpenAPI。
+
 ## [1.81.0] - 2026-11-07
 
 ### Added
