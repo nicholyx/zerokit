@@ -722,6 +722,9 @@ const failed = results.filter(([, ok]) => !ok);
   check('205⑥ 版本一致性语义注释（壳号即内核号）', fs.readFileSync(path.join(PKG_ROOT, 'apps', 'desktop', 'src-tauri', 'src', 'main.rs'), 'utf8').includes('壳号即内核号'));
   check('202⑥⑧ dep-audit 进 lint（幽灵依赖/lockfile/许可证三护栏）', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'lint.sh'), 'utf8').includes('dep-audit') && fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'dep-audit.mjs'), 'utf8').includes('许可证全 permissive'));
   check('202① 依赖对照文档 + Cargo 注释 + npm audit 0 高危（记录）', fs.existsSync(path.join(PKG_ROOT, 'docs', 'reference', 'dependencies.md')) && fs.readFileSync(path.join(PKG_ROOT, 'apps', 'desktop', 'src-tauri', 'Cargo.toml'), 'utf8').includes('# 桌面壳本体'));
+  check('206⑦ persist-audit 进 lint（孤儿键=0 第七审计线）', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'lint.sh'), 'utf8').includes('persist-audit') && fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'persist-audit.mjs'), 'utf8').includes('孤儿键'));
+  check('206② 孤儿键收编进 BACKUP_GROUPS（历史组+外观组扩容）', fs.readFileSync(path.join(PKG_ROOT, 'web', 'extras.js'), 'utf8').includes("'zerokit.clip-hist', 'zerokit.cmdhist'") && fs.readFileSync(path.join(PKG_ROOT, 'web', 'extras.js'), 'utf8').includes("'zerokit.ai-assist', 'zerokit.batchconc'"));
+
   check('197⑧ mcp-copy-audit 进 lint（JSON-RPC 实连审计）', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'mcp-copy-audit.mjs'), 'utf8').includes('tools/list') && fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'lint.sh'), 'utf8').includes('mcp-copy-audit'));
   check('197① MCP 术语审计规则在（CLI 语境白名单）', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'mcp-copy-audit.mjs'), 'utf8').includes('zkit|命令行|安装|CLI|一条命令'));
   check('196⑨ CLI 文案审计脚本存在且检查旧术语/退出码/无色输出', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'cli-copy-audit.mjs'), 'utf8').includes('命令组合') && fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'cli-copy-audit.mjs'), 'utf8').includes('--no-color'));
