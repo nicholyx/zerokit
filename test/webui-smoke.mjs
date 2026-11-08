@@ -725,6 +725,8 @@ const failed = results.filter(([, ok]) => !ok);
   check('206⑦ persist-audit 进 lint（孤儿键=0 第七审计线）', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'lint.sh'), 'utf8').includes('persist-audit') && fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'persist-audit.mjs'), 'utf8').includes('孤儿键'));
   check('206② 孤儿键收编进 BACKUP_GROUPS（历史组+外观组扩容）', fs.readFileSync(path.join(PKG_ROOT, 'web', 'extras.js'), 'utf8').includes("'zerokit.clip-hist', 'zerokit.cmdhist'") && fs.readFileSync(path.join(PKG_ROOT, 'web', 'extras.js'), 'utf8').includes("'zerokit.ai-assist', 'zerokit.batchconc'"));
   check('207②⑥ 列表 j/k+g/G 接线（browse 态，到尾停）', app2.includes("!typing && (e.key === 'j' || e.key === 'k')") && app2.includes("!typing && e.key === 'g'") && app2.includes("!typing && e.key === 'G'"));
+  check('208①-④ Alt 系页签键盘闭环（j/k/x/p/c + 无页签静默）', app2.includes("e.altKey && resultTabs.length && /^[jkxpc]$/i.test(e.key)") && app2.includes('Alt+x 关闭当前页签'));
+  check('208⑤⑥ rtab aria-current + 速查表 Alt 行', app2.includes('aria-current="page"') && (() => { const e2 = fs.readFileSync(path.join(PKG_ROOT, 'web', 'extras.js'), 'utf8'); return e2.includes("khAltTabs") && e2.includes("Alt j/k/x/p/c"); })());
 
   check('197⑧ mcp-copy-audit 进 lint（JSON-RPC 实连审计）', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'mcp-copy-audit.mjs'), 'utf8').includes('tools/list') && fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'lint.sh'), 'utf8').includes('mcp-copy-audit'));
   check('197① MCP 术语审计规则在（CLI 语境白名单）', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'mcp-copy-audit.mjs'), 'utf8').includes('zkit|命令行|安装|CLI|一条命令'));
