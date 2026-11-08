@@ -1012,7 +1012,7 @@ function renderListTools(base, q) {
   const hist = searchHistory.length
     ? `<div class="hist-chips${q.trim() ? ' while-typing' : ''}"><span class="hist-label">${t('recentSearchLabel')}</span>${searchHistory
       .map((x) => `<span class="chip-wrap"><button class="chip quiet" data-hist="${esc(x)}">${esc(x)}</button><button class="chip-x" data-hist-x="${esc(x)}" title="${t('histDelTip')}" aria-label="${t('histDelTip')}">✕</button></span>`).join('')}
-      <button class="chip quiet" id="clearHist">${t('clearAll')}</button></div>`
+      <button class="chip quiet" data-searches-import title="${t('searchesImportTip')}">⬆ ${t('searchesImport')}</button><button class="chip quiet" id="clearHist">${t('clearAll')}</button></div>`
     : '';
   el.listTools.innerHTML = `<div class="chips">${chips}</div>${hist}`;
   el.listTools.querySelectorAll('[data-filter]').forEach((b) => {
@@ -1039,6 +1039,28 @@ function renderListTools(base, q) {
       renderList();
     });
   });
+  // 第二百零九轮③⑦：搜索历史文件导入（data-searches-import → file input → searchesMerge → localStorage）
+  {
+    const imp = document.createElement('input');
+    imp.type = 'file'; imp.accept = '.json'; imp.style.display = 'none';
+    document.body.appendChild(imp);
+    imp.addEventListener('change', async () => {
+      const f = imp.files?.[0];
+      if (!f) return;
+      try {
+        const env = JSON.parse(await f.text());
+        const { searchesMerge } = await import('./extras.js');
+        const r = searchesMerge(readJson('zerokit.searches') ?? [], env.items);
+        if (!r.ok) { setCount(`✗ ${r.error}`); return; }
+        writeJson(PREF.searches, r.list);
+        setCount(t('searchesMerged')(r.list.length));
+        renderList();
+      } catch (e) { setCount(t('searchesReadFail')(e.message ?? '')); }
+    });
+    el.listTools.querySelectorAll('[data-searches-import]').forEach((b) => {
+      b.addEventListener('click', () => imp.click());
+    });
+  }
   $('clearHist')?.addEventListener('click', () => {
     searchHistory = [];
     writeJson(PREF.searches, searchHistory);
