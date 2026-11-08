@@ -62,10 +62,10 @@ const r3 = await send('tools/call', { name: 'zerokit_welcome', arguments: {} });
 console.log(JSON.stringify({ inList: r2.result.tools.some((t) => t.name === 'zerokit_welcome'), sc: r3.result.structuredContent != null && 'starterAction' in r3.result.structuredContent }));
 child.kill(); process.exit(0);
 `);
-  let probe = spawnSync(process.execPath, [probeScript], { encoding: 'utf8', timeout: 60000 });
-  if (probe.status !== 0) {
-    // 冷启动偶发（stdio 竞速）：再试一次
-    probe = spawnSync(process.execPath, [probeScript], { encoding: 'utf8', timeout: 60000 });
+  // 第一百九十八轮：Windows runner 冷启动慢（stdio 竞速+60s 超时被杀）——放宽到 120s 并允许三次
+  let probe = spawnSync(process.execPath, [probeScript], { encoding: 'utf8', timeout: 120000 });
+  for (let attempt = 0; attempt < 3 && probe.status !== 0; attempt++) {
+    probe = spawnSync(process.execPath, [probeScript], { encoding: 'utf8', timeout: 120000 });
   }
   try {
     const out = JSON.parse(probe.stdout.trim().split('\n').pop());
