@@ -695,6 +695,8 @@ const failed = results.filter(([, ok]) => !ok);
   check('187③⑥ 亮色代码块独立配色 + 无闪烁（colorScheme/theme-color）', css2.includes('html[data-theme="light"] .cmd-line') && app2.includes("style.colorScheme = resolved") && app2.includes('meta[name="theme-color"]'));
   check('188① 可视化令牌（--viz-* 五件套 + stroke 接线）', css2.includes('--viz-stroke-width') && css2.includes('--viz-empty') && css2.includes('.spark path, .spark polyline'));
   check('188③⑤ 热力透明度阶梯 + 空态基线', app2.includes('opacity:${(0.25 + 0.7') && css2.includes('.viz-empty-line'));
+  check('189①⑦ 集市卡来源双编码 + 安装钮 primary.mini', app2.includes('🏪 ${esc(m.name)}') && app2.includes("class=\"primary mini\" data-op=\"preview\""));
+  check('189③⑤ 预览卡确认语义 + 安装三态图标', css2.includes('.market-preview-confirm, #marketPreview .plug-card') && app2.includes("btn.classList.add('busy')") && app2.includes('✗ 安装失败：'));
   }
 }
 

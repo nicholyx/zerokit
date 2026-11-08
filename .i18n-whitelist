@@ -1502,3 +1502,9 @@ if \(n > 2000\) return '仍在执行…（插件可能在做重活）';
 \ \ \ \ setCount\(`插件页面报错：\$\{String\(msg\.error\ \?\?\ ''\)\.sli
 \ \ \ \ \ \ \(\)\ =>\ \{\ setCount\('复制失败——剪贴板不可用'\);\ \},
 \ \ \ \ \ \ setCount\(`已打标签：\$\{\(actionTags\[key\]\ \?\?\ \[\]\)\.map
+\ \ \ \ \ \ \ \ <span\ class="badge\ market\-src"\ title="来源集市
+\ \ \ \ \ \ \ \ \ \ \$\{installed\ \?\ ''\ :\ '<button\ class="prima
+\ \ if\ \(btn\)\ \{\ btn\.disabled\ =\ true;\ btn\.classList\.ad
+\ \ \ \ if\ \(btn\)\ btn\.textContent\ =\ '⏳\ ②\ 落盘安装…';
+\ \ \ \ marketMsg\(`✗\ 安装失败：\$\{e\.message\}`,\ 'err'\);
+\ \ \ \ if\ \(btn\)\ \{\ btn\.disabled\ =\ false;\ btn\.classList
