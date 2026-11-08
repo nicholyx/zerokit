@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- v2.0.0 里程碑总检：安全（MCP annotations/沙箱 env/打码/0600）、性能（冷启动 90-110ms、list 100ms）、文档（check-docs/生成器）、测试（130 文件 3052 断言、--shuffle 两轮、失败注入验证、慢用例 top5<24s）、发布链（release-prep 干跑、guard146、lint 三审计、对比度 44 组合、i18n 0、FFFD 0）五维度全过。
 
 ## [1.99.0] - 2026-11-08
 
