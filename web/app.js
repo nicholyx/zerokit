@@ -6653,6 +6653,8 @@ async function showLogs() {
   hidePanels();
   showPanelAnimated(el.logsView);
   if (location.hash !== '#/logs') history.replaceState(null, '', '#/logs');
+  // 第一百九十轮②：骨架屏推广——异步视图加载前统一骨架占位（避免空白一闪）
+  el.logsView.innerHTML = skeletonRows(5).map(() => '<div class="skel-row" aria-hidden="true"></div>').join('');
   await renderLogs();
 }
 
@@ -6852,6 +6854,7 @@ async function showDoctor() {
   hidePanels();
   showPanelAnimated(el.doctorView);
   if (location.hash !== '#/doctor') history.replaceState(null, '', '#/doctor');
+  el.doctorView.innerHTML = skeletonRows(4).map(() => '<div class="skel-row" aria-hidden="true"></div>').join('');
   await renderDoctor();
 }
 
@@ -7148,11 +7151,17 @@ async function doMarketOp(op, name) {
 }
 
 async function renderMarket() {
+  // 第一百九十轮②：集市请求前骨架
+  el.marketView.innerHTML = skeletonRows(4).map(() => '<div class="skel-row" aria-hidden="true"></div>').join('');
   try {
     marketData = await api('/api/markets');
   } catch (e) {
-    el.marketView.innerHTML = `<div class="ps-empty" role="status">读不到集市列表：${esc(e.message)}</div>
-      <div class="actions"><button class="primary" id="marketBack">返回</button></div>`;
+    // 第一百九十轮⑥：失败给明确重试入口（非纯文字）
+    el.marketView.innerHTML = `<div class="load-fail" role="status">
+      <div class="lf-msg">读不到集市列表：${esc(e.message)}</div>
+      <button class="ghost lf-retry" id="marketRetry">↻ 重试</button>
+      <button class="ghost" id="marketBack">返回</button></div>`;
+    $('marketRetry').addEventListener('click', () => renderMarket());
     $('marketBack').addEventListener('click', exitMarket);
     return;
   }

@@ -697,6 +697,8 @@ const failed = results.filter(([, ok]) => !ok);
   check('188③⑤ 热力透明度阶梯 + 空态基线', app2.includes('opacity:${(0.25 + 0.7') && css2.includes('.viz-empty-line'));
   check('189①⑦ 集市卡来源双编码 + 安装钮 primary.mini', app2.includes('🏪 ${esc(m.name)}') && app2.includes("class=\"primary mini\" data-op=\"preview\""));
   check('189③⑤ 预览卡确认语义 + 安装三态图标', css2.includes('.market-preview-confirm, #marketPreview .plug-card') && app2.includes("btn.classList.add('busy')") && app2.includes('✗ 安装失败：'));
+  check('190①⑤ 三态令牌 + shimmer 统一（zk-skel background-position）', css2.includes('--skeleton-base') && css2.includes('background-position: -180px 0') && css2.includes('.skel-row, .skel-block'));
+  check('190②⑥ 骨架推广三视图 + 失败重试入口（marketRetry）', app2.includes("el.logsView.innerHTML = skeletonRows(5)") && app2.includes("el.doctorView.innerHTML = skeletonRows(4)") && app2.includes("id=\"marketRetry\""));
   }
 }
 
