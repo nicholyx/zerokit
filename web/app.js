@@ -226,6 +226,11 @@ function applyTheme() {  const choice = normalizeTheme(localStorage.getItem(PREF
   const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true;
   const resolved = resolveTheme(choice, prefersDark);
   document.documentElement.dataset.theme = resolved;
+  // 第一百八十七轮⑥：切换无闪烁——color-scheme 同步原生控件，meta theme-color 同步浏览器框底色
+  document.documentElement.style.colorScheme = resolved;
+  let meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) { meta = document.createElement('meta'); meta.name = 'theme-color'; document.head.appendChild(meta); }
+  meta.content = resolved === 'light' ? '#f4f6fa' : '#0e1013';
   // 第四十七轮：主题按钮收进抽屉（openThemePop 渲染时带当前档位），顶栏不再有 themeBtn
 }
 

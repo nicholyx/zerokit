@@ -691,6 +691,8 @@ const failed = results.filter(([, ok]) => !ok);
   check('186①④ 输入 hover 渐显 + select 自绘箭头（appearance none）', css2.includes('.field input:hover, .field select:hover, .field textarea:hover') && css2.includes('appearance: none'));
   check('186② 必填双重标注（req-field 左缘条模板接线）', css2.includes('.field.req-field > input') && app2.includes("f.required ? ' req-field'"));
   check('186⑦⑧ 输入令牌 --input-pad + textarea 等宽', css2.includes('--input-pad') && css2.includes('.field textarea { font-family: var(--mono)'));
+  check('187② 亮色线淡化（--line #a5b0bd）+ 卡片边随主题', css2.includes('--line: #a5b0bd') && css2.includes('--card-border: color-mix(in srgb, var(--line) 72%, transparent)'));
+  check('187③⑥ 亮色代码块独立配色 + 无闪烁（colorScheme/theme-color）', css2.includes('html[data-theme="light"] .cmd-line') && app2.includes("style.colorScheme = resolved") && app2.includes('meta[name="theme-color"]'));
   }
 }
 

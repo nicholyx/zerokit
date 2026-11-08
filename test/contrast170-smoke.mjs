@@ -38,7 +38,7 @@ check('① 输出组合数', /44 组合全过/.test(r.stdout), r.stdout);
   const css = readFileSync(path.join(PKG_ROOT, 'web', 'style.css'), 'utf8');
   check('④ light accent 深变体', css.includes('html[data-theme="light"][data-accent="amber"]') && css.includes('#7d5400'));
   check('④ dark accent 保持亮值', css.includes('--accent: #5aa9ff;') || /:root\s*\{[^}]*--accent: #5aa9ff/s.test(css));
-  check('④ line 两档已修', css.includes('--line: #5b6575;') && css.includes('--line: #7c8899;'));
+  check('④ line 两档已修（187 轮亮色再校准 #848f9f：白底更淡且非文本 ≥3）', css.includes('--line: #5b6575;') && css.includes('--line: #848f9f;'));
 }
 
 // ⑤ lint.sh 挂了审计
