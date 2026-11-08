@@ -4612,7 +4612,7 @@ function renderTabBar() {
   bar.setAttribute('aria-label', '结果页签');
   bar.innerHTML = resultTabs.map((t) => `
     <button class="rtab${t.id === activeTab ? ' active' : ''}" data-rtab="${esc(t.id)}"
-      role="tab" aria-selected="${t.id === activeTab}"
+      role="tab" aria-selected="${t.id === activeTab}"${t.id === activeTab ? ' aria-current="page"' : ''}
       tabindex="${t.id === activeTab ? '0' : '-1'}"
       title="${esc(t.note ? `备注：${t.note}` : '点击切换 · 双击写备注 · 右键固定/取消固定')}${t.pinned ? '（已固定）' : ''}">
       ${t.pinned ? '📌 ' : ''}${esc(resultTabTitle(t.name, t.ts, Date.now(), lang))}
@@ -9566,6 +9566,43 @@ document.addEventListener('keydown', (e) => {
     const cur = resultTabs.findIndex((t) => t.id === activeTab);
     const nxt = resultTabs[cycleTabIndex(cur < 0 ? 0 : cur, resultTabs.length, e.key === ']' ? 1 : -1)];
     if (nxt) { activeTab = nxt.id; renderResult(nxt.res); renderTabBar(); }
+  }
+  // 第二百零八轮①-④⑦：Alt 系页签键盘闭环（Alt 修饰层与行 j/k 区分；无页签时静默忽略）
+  if (detail && !typing && e.altKey && resultTabs.length && /^[jkxpc]$/i.test(e.key)) {
+    e.preventDefault();
+    const cur = resultTabs.findIndex((t) => t.id === activeTab);
+    const k = e.key.toLowerCase();
+    if (k === 'j' || k === 'k') {                       // ① Alt+j/k 页签间移动（到尾停，207 轮语义）
+      const nxt = resultTabs[cycleTabIndex(cur < 0 ? 0 : cur, resultTabs.length, k === 'j' ? 1 : -1)];
+      if (nxt) { activeTab = nxt.id; renderResult(nxt.res); renderTabBar(); }
+    } else if (k === 'x' && cur >= 0) {                 // ② Alt+x 关闭当前页签（跳过固定项）
+      const alive = resultTabs.filter((t) => !t.pinned);
+      if (alive.length > 0) {
+        const t = resultTabs[cur];
+        if (t && !t.pinned) {
+          resultTabs.splice(cur, 1);
+          const fallback = resultTabs[resultTabs.length - 1];
+          activeTab = fallback ? fallback.id : '';
+          if (fallback) renderResult(fallback.res); else hidePanels(), showPanelAnimated(el.listView);
+          renderTabBar();
+        }
+      }
+    } else if (k === 'p' && cur >= 0) {                 // ③ Alt+p 固定/取消固定（与右键等价）
+      const t = resultTabs[cur];
+      if (t) { t.pinned = !t.pinned; renderTabBar(); }
+    } else if (k === 'c' && resultTabs.length >= 2) {   // ④ Alt+c 与相邻页签对比（⇄ 键盘等价）
+      const other = resultTabs[(cur + 1) % resultTabs.length];
+      if (other && other.id !== activeTab) {
+        window.__zkCompareA = resultTabs[cur];
+        window.__zkCompareB = other;
+        showCompareView(resultTabs[cur], other);
+        renderTabBar();
+      }
+    }
+  }
+  // 第二百零八轮①-④⑦ 块结束
+  // 第二十四轮⑦ 原块尾：[ ] 命中页签时 return（不落到底部 [ ] 过滤分支）
+  if (detail && !typing && (e.key === '[' || e.key === ']') && resultTabs.length) {
     return;
   }
   // 第六十九轮⑤：Tab 键在列表态快速过滤——只看带参数/无参数动作（再按切回全部）
