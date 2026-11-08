@@ -2,7 +2,7 @@
 //
 // 这些函数都在 web/extras.js 里，不碰 DOM / localStorage / fetch，
 // 所以可以直接在 Node 里跑。界面接线另由 webui-smoke 断言。
-import { paramsHint, recencyOrder, coActions, flattenRuns, THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref, OVERFLOW_ROWS, PAGE_ROWS, toAiMarkdown, packContext, toMcpConfig, toLlmJsonl, toCurl, watchTrendMarkdown, TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory, looksLikeTimestamp, humanTs, emptyReason, tocFromMd, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty } from '../web/extras.js';
+import { paramsHint, recencyOrder, coActions, flattenRuns, THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref, OVERFLOW_ROWS, PAGE_ROWS, toAiMarkdown, packContext, toMcpConfig, toLlmJsonl, toCurl, watchTrendMarkdown, TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory, looksLikeTimestamp, humanTs, emptyReason, tocFromMd, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, searchesExport, searchesMerge } from '../web/extras.js';
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -595,6 +595,13 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
   // ---- 第二十轮：数据备份与迁移 ----
   check('classifyKey: 收藏归组', classifyKey('zerokit.favorites') === '收藏与标记');
   check('206② 孤儿键收编（ai-assist/batchconc/ldensity 等 10 键全部进组）', ['zerokit.ai-assist','zerokit.batchconc','zerokit.ldensity','zerokit.tdensity','zerokit.textview.wrap','zerokit.sortmode','zerokit.timeline-collapsed','zerokit.clip-hist','zerokit.cmdhist','zerokit.last-zshare'].every((k) => classifyKey(k) !== null), ['zerokit.ai-assist','zerokit.ldensity'].map((k) => k + '=' + classifyKey(k)).join(','));
+  check('209①⑤ searchesExport 信封 + searchesMerge 置顶去重/8 上限', (() => {
+    const e = searchesExport(['a', 'b']);
+    const r1 = searchesMerge(['old'], ['new', 'a']);
+    const r2 = searchesMerge([], ['x1', 'x2', 'x3', 'x4', 'x5', 'x6', 'x7', 'x8', 'x9', 'x10']);
+    const r3 = searchesMerge([], 'nope');
+    return e.kind === 'searches' && e.items.length === 2 && r1.ok && JSON.stringify(r1.list) === JSON.stringify(['new', 'a', 'old']) && r2.ok && r2.list.length === 8 && !r3.ok;
+  })());
   check('207⑦ 速查表含 j/k 与 g/G（键位语言同步）', keyHelpList().some((r) => r.key.includes('j k')) && keyHelpList().some((r) => r.key === 'g / G'));
   check('classifyKey: 前缀键归组（列宽）', classifyKey('zerokit.colw.t3') === '表格列宽');
   check('classifyKey: 未知 zerokit 键归其它', classifyKey('zerokit.brand-new') === '其它');

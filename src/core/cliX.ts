@@ -6,6 +6,7 @@ import { HOME } from './paths.ts';
 
 /** 历史文件：~/.zerokit/history.json（数组，最新在尾）。 */
 export const HISTORY_FILE = (): string => path.join(HOME, 'history.json');
+export const SEARCHES_FILE = (): string => path.join(HOME, 'searches.json');
 
 export interface HistoryEntry {
   ts: string;          // ISO
@@ -16,6 +17,18 @@ export interface HistoryEntry {
 }
 
 /** ①读历史（坏行跳过）；不存在返回 []。 */
+/** 第二百零九轮：搜索历史文件读写（CLI 面真源；UI 从这里导入合并进 localStorage） */
+export function readSearches(): string[] {
+  const p = SEARCHES_FILE();
+  try {
+    const v = JSON.parse(fs.readFileSync(p, 'utf8'));
+    return Array.isArray(v) ? v.map(String).slice(0, 8) : [];
+  } catch { return []; }
+}
+export function writeSearches(list: string[]): void {
+  fs.mkdirSync(path.dirname(SEARCHES_FILE()), { recursive: true });
+  fs.writeFileSync(SEARCHES_FILE(), JSON.stringify(Array.isArray(list) ? list.map(String).slice(0, 8) : []));
+}
 export function readHistory(): HistoryEntry[] {
   const p = HISTORY_FILE();
   if (!fs.existsSync(p)) return [];

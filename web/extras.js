@@ -206,6 +206,21 @@ export function pushSearch(history, query, max = 8) {
   return [q, ...list.filter((x) => x !== q)].slice(0, max);
 }
 
+/** 第二百零九轮①：搜索历史独立导出信封（JSON 机读，与整包备份同语义） */
+export function searchesExport(history) {
+  return { app: 'zerokit', kind: 'searches', version: 1, exportedAt: new Date().toISOString(), items: Array.isArray(history) ? history.map(String) : [] };
+}
+
+/** 第二百零九轮②⑤：合并导入——非数组/含非字符串拒绝；置顶去重（与 pushSearch 同语义）；8 条上限 */
+export function searchesMerge(current, incoming, max = 8) {
+  if (!Array.isArray(incoming) || incoming.some((x) => typeof x !== 'string')) return { ok: false, error: '导入文件格式不对：应为字符串数组' };
+  let list = Array.isArray(current) ? current.map(String) : [];
+  for (const q of incoming.slice().reverse()) {
+    list = [q, ...list.filter((x) => x !== q)].slice(0, max);
+  }
+  return { ok: true, list };
+}
+
 /** 使用统计：按执行次数取前 N，次数相同看最近一次 */
 export function topActions(runStore, n = 5) {
   return Object.entries(runStore || {})
@@ -682,7 +697,7 @@ helpSearchTitle: '搜索', helpSearchBody: '支持中文关键词、拼音全拼
     logReload: '刷新', logShowDenied: '看被拒记录', logShowAll: '看全部记录', loading: '读取中…',
     doctorTitle: '环境自检', doctorSub: '解释器、插件依赖、必填配置——有问题的直接给修复命令',
     doctorReload: '重新检查', doctorChecking: '检查中…', doctorFailed: (m) => `自检失败：${m}`,
-    scopeRuns: '执行历史', scopeSearches: '搜索历史', scopeSaved: '结果快照', scopeTimers: '定时任务',
+    scopeRuns: '执行历史', scopeSearches: '搜索历史', scopeSaved: '结果快照', scopeTimers: '定时任务', searchesImport: '⬆ 导入历史', searchesImportTip: '从 searches.json 文件合并搜索历史（与 CLI 同一格式）', searchesMerged: (n) => `✓ 已合并 ${n} 条搜索历史`, searchesReadFail: (m) => `✗ 读不了文件：${m}`,
     profileDelConfirm: (n) => `删除配置档「${n}」？该档的外观/收藏/参数记忆将一并删除。`,
     backupExported: (n, b, f) => `已导出 ${n} 个键（${b} 字符）→ ${f}`,
     exportedDone: '已导出', watchCsvDone: (n) => `已导出 ${n} 次采样 CSV`,
@@ -1023,7 +1038,7 @@ helpSearchTitle: 'Search', helpSearchBody: 'Chinese keywords, full pinyin, or pi
     logReload: 'Reload', logShowDenied: 'Show denied', logShowAll: 'Show all', loading: 'Loading…',
     doctorTitle: 'Doctor', doctorSub: 'Interpreters, plugin deps, required settings — with fix commands when broken',
     doctorReload: 'Re-check', doctorChecking: 'Checking…', doctorFailed: (m) => `Doctor failed: ${m}`,
-    scopeRuns: 'Run history', scopeSearches: 'Search history', scopeSaved: 'Saved results', scopeTimers: 'Timers',
+    scopeRuns: 'Run history', scopeSearches: 'Search history', scopeSaved: 'Saved results', scopeTimers: 'Timers', searchesImport: '⬆ Import history', searchesImportTip: 'Merge search history from a searches.json file (same format as CLI)', searchesMerged: (n) => `Merged ${n} search history entries`, searchesReadFail: (m) => `Cannot read file: ${m}`,
     profileDelConfirm: (n) => `Delete profile "${n}"? Its appearance, favorites and remembered params will be removed too.`,
     backupExported: (n, b, f) => `Exported ${n} keys (${b} chars) → ${f}`,
     exportedDone: 'Exported', watchCsvDone: (n) => `Exported ${n} samples as CSV`,

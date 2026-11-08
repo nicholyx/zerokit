@@ -1512,3 +1512,4 @@ if \(n > 2000\) return '仍在执行…（插件可能在做重活）';
 \ \ \ \ \ \ <button\ class="ghost\ lf\-retry"\ id="marketRet
 \ \ \ \ \ \ <button\ class="ghost"\ id="marketBack">返回</bu
 <div\ class="palette\-foot">Tab\ 补全\ ·\ Esc\ 关闭\ ·\ 共\ \$\{fi
+if\ \(!Array\.isArray\(incoming\)\ \|\|\ incoming\.some\(\(x\)\ =>\ typeof\ x\ !==\ 'string'\)\)\ return\ \{\ ok:

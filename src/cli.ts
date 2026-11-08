@@ -551,6 +551,38 @@ function cmdConfigUsage(): number {
 }
 
 async function cmdConfig(args: string[]): Promise<number> {
+  // 第二百零九轮①②：config searches 子命令（搜索历史独立导入导出）
+  if (args[0] === 'searches') {
+    const { SEARCHES_FILE, readSearches, writeSearches } = await import('./core/cliX.ts');
+    const { createRequire } = await import('node:module');
+    const { searchesExport, searchesMerge } = createRequire(import.meta.url)('../web/extras.js') as { searchesExport: (h: unknown) => { items: string[] }; searchesMerge: (c: unknown, i: unknown, max?: number) => { ok: boolean; list?: string[]; error?: string } };
+    const sub = args[1] ?? 'list';
+    if (sub === 'export') {
+      const oi = args.indexOf('--out');
+      const file = oi >= 0 ? args[oi + 1] : 'zerokit-searches.json';
+      const envelope = searchesExport(readSearches());
+      fs.writeFileSync(file ?? 'zerokit-searches.json', JSON.stringify(envelope, null, 2));
+      process.stdout.write(`✓ 已导出 ${envelope.items.length} 条搜索历史 → ${file}\n`);
+      return 0;
+    }
+    if (sub === 'import') {
+      const fi = args.indexOf('--file');
+      const file = fi >= 0 ? args[fi + 1] : '';
+      if (!file) { process.stderr.write(c.red('用法：zkit config searches import --file <文件>') + '\n'); return 2; }
+      let incoming;
+      try { incoming = JSON.parse(fs.readFileSync(file, 'utf8')).items; }
+      catch (e) { process.stderr.write(c.red(`✗ 读不了文件：${(e as Error).message}`) + '\n'); return 1; }
+      const r = searchesMerge(readSearches(), Array.isArray(incoming) ? incoming.map(String) : []);
+      if (!r.ok) { process.stderr.write(c.red(`✗ ${r.error}`) + '\n'); return 1; }
+      writeSearches(r.list ?? []);
+      process.stdout.write(`✓ 合并完成，现有 ${r.list?.length ?? 0} 条（置顶去重，8 条上限）\n`);
+      return 0;
+    }
+    if (sub === 'clear') { writeSearches([]); process.stdout.write('✓ 已清空搜索历史文件\n'); return 0; }
+    const list = readSearches();
+    process.stdout.write(list.length ? list.map((x, i) => `  ${i + 1}. ${x}`).join('\n') + '\n' : '（搜索历史文件为空——UI 侧可在日志页导入）\n');
+    return 0;
+  }
   const json = args.includes('--json');
   const reveal = args.includes('--reveal');
   const fromStdin = args.includes('--stdin');
