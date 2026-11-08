@@ -1608,8 +1608,15 @@ export function digitPick(key, n) {
 export function filterRows(rows, terms) {
   const qs = (Array.isArray(terms) ? terms : []).map((t) => String(t ?? '').trim().toLowerCase()).filter(Boolean);
   if (!qs.length) return rows;
+  // 第二百零四轮④：hay 构造换 for-in 累加（省掉 Object.values 数组分配 + map 数组 + join 三次中间分配）
   return rows.filter((row) => {
-    const hay = Object.values(row).map((v) => String(v ?? '')).join('\n').toLowerCase();
+    let hay = '';
+    for (const k in row) {
+      const v = row[k];
+      if (v !== undefined && v !== null) hay += v;
+      hay += '\n';
+    }
+    hay = hay.toLowerCase();
     return qs.every((q) => hay.includes(q));
   });
 }
@@ -2272,6 +2279,9 @@ export function tabEvict(tabs, limit = 8) {
  * ⑤⑥结果查询：对表格行做过滤。支持普通词（子串）与数字比较（size>100、<=5、=7）。
  * 返回过滤后的行数组（浅拷贝，不改原表）。
  */
+// 第二百零四轮⑤：resultQuery 的比较符正则提升到模块级（热路径零重编译）
+const RESULT_QUERY_CMP_RE = /^[\w\u4e00-\u9fa5.-]+(>=|<=|>|<|=)(-?\d+(?:\.\d+)?)$/;
+
 export function resultQuery(rows, q) {
   if (!Array.isArray(rows)) return [];
   if (!q || !String(q).trim()) return rows.slice();
