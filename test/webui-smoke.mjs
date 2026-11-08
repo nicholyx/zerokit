@@ -703,6 +703,8 @@ const failed = results.filter(([, ok]) => !ok);
   check('191⑦ 面板占位符与 foot 语法统一（键盘提示归占位符+计数入 foot）', app2.includes('搜索动作、插件、页面或命令…（↑↓ 选择 · Enter 打开 · 1-9 直选）') && app2.includes('Tab 补全 · Esc 关闭 · 共 ${filtered.length} 项'));
   check('192①④ 抽屉扫视结构（组左缘条）+ 危险区红缘子卡', css2.includes('.drawer-section { position: relative; padding-left: 10px; border-left: 2px solid') && css2.includes('.drawer-danger-zone') && app2.includes('<div class="drawer-danger-zone">'));
   check('192⑥ 抽屉 stagger 入场（drawer-anim + 400ms 摘除）', css2.includes('@keyframes drawer-stagger') && app2.includes("classList.add('drawer-anim')") && app2.includes("classList.remove('drawer-anim')"));
+  check('193①④ 表头令牌 + 汇总行强化（2px 上边框+12% tint）', css2.includes('#result table thead th, .tbl-wrap table thead th') && css2.includes('tr.gsum-row td') && css2.includes('border-top: 2px solid color-mix(in srgb, var(--accent) 40%'));
+  check('193⑦ 代码令牌 --code-*（暗默认+亮覆写）+ 斑马纹 3%', css2.includes('--code-bg: #0b0d10') && css2.includes('--code-bg: #f7f9fc') && css2.includes('tr:nth-child(2n) td { background: color-mix(in srgb, var(--fg) 3%'));
   }
 }
 
