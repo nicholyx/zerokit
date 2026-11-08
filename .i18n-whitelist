@@ -1508,3 +1508,6 @@ if \(n > 2000\) return '仍在执行…（插件可能在做重活）';
 \ \ \ \ if\ \(btn\)\ btn\.textContent\ =\ '⏳\ ②\ 落盘安装…';
 \ \ \ \ marketMsg\(`✗\ 安装失败：\$\{e\.message\}`,\ 'err'\);
 \ \ \ \ if\ \(btn\)\ \{\ btn\.disabled\ =\ false;\ btn\.classList
+\ \ \ \ \ \ <div\ class="lf\-msg">读不到集市列表：\$\{esc\(e\.message\)
+\ \ \ \ \ \ <button\ class="ghost\ lf\-retry"\ id="marketRet
+\ \ \ \ \ \ <button\ class="ghost"\ id="marketBack">返回</bu
