@@ -1,10 +1,12 @@
 # Changelog
 
+> **v2 线语义化承诺（自 2.0.0 起）**：minor = 新功能批次（每轮十项）；patch = 修复与维护。破坏性变更升 major 并在升级指南中说明。
+
 ## [Unreleased]
 
 ### Added
 
-（下一版攒着）
+- j/k 键盘导航终端级一致性：列表 browse 态新增 j/k 移动（此前只有 ↑↓/数字选）与 g/G 首尾跳（vim 惯例）；三处（列表/表格/面板）统一「到尾停 + scrollIntoView nearest 跟随」；键位速查浮层同步（↑↓/j k 合并行 + g/G 行，I18N 两语）；补修 184 轮回归——zk-closing 出场态只在 CSS，JS 关闭路径（closeDrawer）从未挂类，现经 zkExit 统一出口；五个过时断言修正（123② 断言的 json-foldable 已被 154 轮树渲染替代、185⑥ 全局禁令收紧到 hb 徽标、187② 线色值纠正 #848f9f、199⑤⑥ 注记迁移 CHANGELOG 头部）。
 
 ## [2.8.0] - 2026-11-09
 

@@ -596,7 +596,7 @@ helpSearchTitle: '搜索', helpSearchBody: '支持中文关键词、拼音全拼
     helpSafetyTitle: '安全防护', helpSafetyBody: '危险参数值（rm -rf / 系统目录 / dd 直写）执行前黄条警示；同一动作 3 秒内连点会弹确认；结果与日志里的 token 默认打码；动作详情页有风险横条与失败率。',
     scResultNav: '在结果里上下选择', scOpenRun: '打开动作 / 执行', scConfirmRun: '直接确认执行（会改动）并记住', scEsc: '返回上一层 / 清空搜索',
     scAi: '切到 AI 工作台（在搜索框开头输入）', scCheat: '打开这份快捷键速查', scFocus: '聚焦搜索框',
-    khResultNav: '在结果间移动（roving focus 跟随）', khPage: '翻页跳转（长列表按视口跳）', khHomeEnd: '跳到第一条 / 最后一条',
+    khResultNav: '在结果间移动（列表/表格/面板统一，到尾停）', khGG: '跳到第一条（g）/ 最后一条（G）', khPage: '翻页跳转（长列表按视口跳）', khHomeEnd: '跳到第一条 / 最后一条',
     khQuickPick: '快选第 N 条（选中后回车打开）', khDirectOpen: '直开第 N 条', khOpen: '打开选中项', khOpenRun: '打开并直接执行',
     khEsc: '清空搜索 / 逐层关闭浮层', khFav: '收藏 / 取消收藏当前项', khTag: '给当前项打标签（数字键选已有标签）',
     khCopyExport: '结果区：复制 / 导出', khShow: '显示本键位表', khPalette: '命令面板', khCheat: '快捷键速查',
@@ -937,7 +937,7 @@ helpSearchTitle: 'Search', helpSearchBody: 'Chinese keywords, full pinyin, or pi
     helpSafetyTitle: 'Safety', helpSafetyBody: 'Dangerous parameter values (rm -rf /, system dirs, raw dd) trigger a yellow warning; rapid re-clicks within 3s ask for confirmation; tokens in results and logs are masked by default; the action page shows a risk bar and failure rate.',
     scResultNav: 'Move up/down in results', scOpenRun: 'Open action / run', scConfirmRun: 'Confirm & run (mutating) and remember', scEsc: 'Go back one level / clear search',
     scAi: 'Switch to AI workbench (type ? at the start of the search box)', scCheat: 'Open this shortcut cheat sheet', scFocus: 'Focus the search box',
-    khResultNav: 'Move between results (roving focus follows)', khPage: 'Page jump (long lists jump by viewport)', khHomeEnd: 'Jump to first / last',
+    khResultNav: 'Move between results (list/table/palette unified, stop at ends)', khGG: 'Jump to first (g) / last (G)', khPage: 'Page jump (long lists jump by viewport)', khHomeEnd: 'Jump to first / last',
     khQuickPick: 'Quick-pick the Nth (Enter to open)', khDirectOpen: 'Directly open the Nth', khOpen: 'Open the selected item', khOpenRun: 'Open and run directly',
     khEsc: 'Clear search / close overlays layer by layer', khFav: 'Favorite / unfavorite the current item', khTag: 'Tag the current item (number keys pick existing tags)',
     khCopyExport: 'Result area: copy / export', khShow: 'Show this key table', khPalette: 'Command palette', khCheat: 'Shortcut cheat sheet',
@@ -3209,7 +3209,8 @@ export function comboLabel(q, filter) {
 /** 第五十二轮⑨：键位表数据（? 浮层与帮助页共用）。 */
 export function keyHelpList() {
   return [
-    { key: '↑ ↓', whatKey: 'khResultNav' },
+    { key: '↑ ↓ / j k', whatKey: 'khResultNav' },
+    { key: 'g / G', whatKey: 'khGG' },
     { key: 'PgUp / PgDn', whatKey: 'khPage' },
     { key: 'Home / End', whatKey: 'khHomeEnd' },
     { key: '1–9', whatKey: 'khQuickPick' },
