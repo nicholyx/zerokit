@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [2.7.0] - 2026-11-09
+
+### Added
+
 - 桌面壳与 CLI/启动器一致性巡检：托盘「打开设置」从跳回首页改为真正打开设置抽屉（openDrawer 挂 window 供壳 eval 调用）；热键对照表 docs/reference/desktop-keys.md（全局 Alt+Space 系 vs UI Ctrl 系分层审计原则——两层永不交叉）；Cargo/main.rs 补版本语义注释（壳号即内核号，release-prep 五处同步保证）。
 
 ## [2.6.0] - 2026-11-09
@@ -73,11 +79,4 @@
 ### Added
 
 - AI 工作台视觉收编令牌体系：用户消息 accent tint + 右对齐双重编码（与助手区分不靠色单一维度）；流式输出/工具输出接 --code-* 令牌；头部/输入区分隔线、meta 时间戳脱离硬编码色（tabular-nums）；新增空会话态。
-
-## [1.95.0] - 2026-11-08
-
-### Added
-
-- 结果表格精修：表头 sticky 底色/2px 下边框/600 字重令牌化；斑马纹 fg 3% 两主题复核；选中行加左缘记号（inset 3px accent）；汇总行 2px 上边框+12% tint 与数据行明确区隔；KV 表键列等宽 34%。
-- 代码/命令输出令牌化：--code-bg/fg/cmd 三变量（暗默认+亮色纸面覆写），pre.out/cmd-line 全部脱离硬编码色。
 
