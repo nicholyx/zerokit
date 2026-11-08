@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [1.99.0] - 2026-11-08
+
+### Added
+
+- MCP 面文案一致性巡检：新增 scripts/mcp-copy-audit.mjs 进 lint（JSON-RPC 实连 tools/list，四类护栏：工具数量/描述尾注结构/destructive 高风险句式/「命令」术语语境白名单）；复核 53 工具描述全部合规。
+
 ## [1.98.0] - 2026-11-08
 
 ### Added
