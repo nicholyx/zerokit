@@ -92,7 +92,7 @@ run(['plugin', 'bundled']);
   const dir2 = path.join(tmp, 'scaf2');
   run(['plugin', 'new', 'demo69', '--dir', dir2]);
   const toml2 = fs.readFileSync(path.join(dir2, 'demo69', 'plugin.toml'), 'utf8');
-  check('⑧ 无参数默认 summary', toml2.includes('一句话说清这个插件干什么'), toml2.slice(0, 300));
+  check('⑧ 无参数默认 summary（203 轮升级：≥8 字「什么时候用」句式，lint 零告警）', toml2.includes('什么时候用'), toml2.slice(0, 300));
   check('⑧ 无 author 无注释行', !toml2.includes('# author:'));
 }
 // ⑦ 管道自动无色（isTTY 判定）+ ⑨⑩ 由全量与断言数覆盖

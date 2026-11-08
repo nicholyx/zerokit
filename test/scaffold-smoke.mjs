@@ -202,6 +202,23 @@ risk        = "read"
 fs.rmSync(TMP_HOME, { recursive: true, force: true });
 fs.rmSync(TMP_WORK, { recursive: true, force: true });
 
+// 第二百零三轮回：模板出版级质量（零告警/三步清单/出厂可跑）
+{
+  const home2 = fs.mkdtempSync(path.join(os.tmpdir(), 'sf203-'));
+  const sh2 = (args) => spawnSync(process.execPath, ['src/cli.ts', ...args], {
+    cwd: PKG_ROOT, encoding: 'utf8', timeout: 120000, windowsHide: true,
+    env: { ...process.env, ZEROKIT_HOME: home2 },
+  });
+  const newDir = path.join(home2, 'sf', 'demo203');
+  const g = sh2(['plugin', 'new', 'demo203', '--name', '总检模板', '--dir', path.dirname(newDir)]);
+  check('203④ 生成后打印三步清单（dev/lint --score/run）', g.stdout.includes('1. zkit plugin dev') && g.stdout.includes('2. zkit plugin lint') && g.stdout.includes('3. zkit run'), (g.stdout + g.stderr).slice(0, 120));
+  const lint = sh2(['plugin', 'lint', newDir, '--score']);
+  check('203① 生成的模板 lint 零告警（100/100）', lint.stdout.includes('100/100'), lint.stdout.slice(-120));
+  sh2(['plugin', 'add', newDir]);
+  const run1 = sh2(['run', 'demo203', 'hello', '--name', 'zerokit']);
+  check('203⑥ 模板出厂即可跑（hello 输出问候）', (run1.stdout || '').includes('zerokit'), (run1.stdout + run1.stderr).slice(0, 100));
+  fs.rmSync(home2, { recursive: true, force: true });
+}
 const passed = results.filter(([, ok]) => ok).length;
 console.log(`\n${'='.repeat(60)}\n通过 ${passed} / ${results.length}`);
 if (passed !== results.length) process.exit(1);
