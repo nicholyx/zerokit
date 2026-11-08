@@ -547,7 +547,7 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
 // ------------------------------------------------ 第十九轮：安全与危险操作防护
 {
   const { dangerousPattern, maskSecrets, rateLimitHits, trimAuditLog, actionRiskCard } = await import('../web/extras.js');
-  const { classifyKey, collectBackup, parseBackup, mergeBackup, backupFilename } = await import('../web/extras.js');
+  const { classifyKey, collectBackup, parseBackup, mergeBackup, backupFilename, keyHelpList } = await import('../web/extras.js');
   check('dangerousPattern: rm -rf 命中', dangerousPattern('rm -rf /tmp/x') !== null);
   check('dangerousPattern: 系统目录命中', dangerousPattern('cp a /etc/hosts') !== null);
   check('dangerousPattern: 格式化命中', dangerousPattern('mkfs.ext4 /dev/sda1') !== null);
@@ -595,6 +595,7 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
   // ---- 第二十轮：数据备份与迁移 ----
   check('classifyKey: 收藏归组', classifyKey('zerokit.favorites') === '收藏与标记');
   check('206② 孤儿键收编（ai-assist/batchconc/ldensity 等 10 键全部进组）', ['zerokit.ai-assist','zerokit.batchconc','zerokit.ldensity','zerokit.tdensity','zerokit.textview.wrap','zerokit.sortmode','zerokit.timeline-collapsed','zerokit.clip-hist','zerokit.cmdhist','zerokit.last-zshare'].every((k) => classifyKey(k) !== null), ['zerokit.ai-assist','zerokit.ldensity'].map((k) => k + '=' + classifyKey(k)).join(','));
+  check('207⑦ 速查表含 j/k 与 g/G（键位语言同步）', keyHelpList().some((r) => r.key.includes('j k')) && keyHelpList().some((r) => r.key === 'g / G'));
   check('classifyKey: 前缀键归组（列宽）', classifyKey('zerokit.colw.t3') === '表格列宽');
   check('classifyKey: 未知 zerokit 键归其它', classifyKey('zerokit.brand-new') === '其它');
   check('classifyKey: 非 zerokit 键拒绝', classifyKey('other.key') === null);

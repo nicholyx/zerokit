@@ -9634,6 +9634,17 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'ArrowUp') {
     e.preventDefault();
     if (filtered.length) { active = Math.max(active - 1, 0); paintActive(); }
+  } else if (!typing && (e.key === 'j' || e.key === 'k')) {
+    // 第二百零七轮②：列表 j/k（vim 语义）——与表格/面板统一：到尾停、滚屏跟随
+    e.preventDefault();
+    if (filtered.length) { active = e.key === 'j' ? Math.min(active + 1, filtered.length - 1) : Math.max(active - 1, 0); paintActive(); }
+  } else if (!typing && e.key === 'g') {
+    // 第二百零七轮⑥：g/G 首尾跳（vim 惯例）——g 首行 / G 尾行
+    e.preventDefault();
+    if (filtered.length) { active = 0; paintActive(); }
+  } else if (!typing && e.key === 'G') {
+    e.preventDefault();
+    if (filtered.length) { active = filtered.length - 1; paintActive(); }
   } else if (e.key === 'Home') {
     e.preventDefault();
     if (filtered.length) { active = 0; paintActive(); }
@@ -10516,8 +10527,17 @@ document.querySelectorAll('#keysMasterRow [data-keys-master]').forEach((b) => {
     setCount(b.dataset.keysMaster === 'off' ? '快捷键已整体关闭（? 与 Esc 保留）' : '快捷键已开启');
   });
 });
+// 第二百零七轮回归补修（184⑦）：zk-closing 出场态此前只在 CSS，JS 关闭路径从未挂类
+function zkExit(el, ms = 150) {
+  if (!el || el.classList.contains('zk-closing')) return;
+  el.classList.add('zk-closing');
+  setTimeout(() => {
+    el.classList.remove('zk-closing');
+    el.classList.add('hidden');
+  }, ms);
+}
 function closeDrawer() {
-  $('drawer')?.classList.add('hidden');
+  zkExit($('drawer'));
   $('drawerMask')?.classList.add('hidden');
 }
 $('drawerBtn')?.addEventListener('click', () => {
