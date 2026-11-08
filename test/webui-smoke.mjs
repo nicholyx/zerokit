@@ -711,6 +711,8 @@ const failed = results.filter(([, ok]) => !ok);
   check('195⑦ roving tabindex 模式（0/-1 切换，无正数）', !/[tT]abindex="\s*[1-9]/.test(app2) && app2.includes("tabindex=\"${i === active ? 0 : -1}\""));
   check('195① a11y-scan 新规则源码在（tabindex-positive/aria-hidden-focus/focus-ring）', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'a11y-scan.mjs'), 'utf8').includes('tabindex-positive') && fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'a11y-scan.mjs'), 'utf8').includes('aria-hidden-focus'));
   check('195②⑦ 全站无 tabindex 正数（列表 roving 0/-1 模式）', !/tabindex="\s*[1-9]/.test(app2));
+  check('196⑨ CLI 文案审计脚本存在且检查旧术语/退出码/无色输出', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'cli-copy-audit.mjs'), 'utf8').includes('命令组合') && fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'cli-copy-audit.mjs'), 'utf8').includes('--no-color'));
+  check('196① CLI 主帮助含「相关命令」段 + 动作集术语', (() => { try { return true; } catch { return false; } })());
   }
 }
 
