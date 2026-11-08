@@ -274,7 +274,7 @@ export function scaffoldPlugin(id: string, opts: ScaffoldOptions = {}): Scaffold
   if (opts.summary) manifest = manifest.replace('__SUMMARY__', opts.summary);
   // 占位没人替换就落默认文案（example 模板 / 未传 --description 时）
   manifest = manifest.includes('__SUMMARY__')
-    ? manifest.replace('__SUMMARY__', '一句话说清这个插件干什么（会显示在启动器搜索里）')
+    ? manifest.replace('__SUMMARY__', `${name}：把一句话简介写成「什么时候用」（启动器搜索与 AI 路由都读它）`)
     : manifest;
   if (opts.author) {
     manifest = manifest.replace('[plugin]\n', `# author: ${opts.author}\n[plugin]\n`);

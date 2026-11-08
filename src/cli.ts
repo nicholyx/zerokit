@@ -1728,7 +1728,9 @@ async function cmdPlugin(args: string[]): Promise<number> {
     process.stdout.write(`  ${c.cyan('启动器')}     关键词 ${p.keywords.map((k) => `"${k}"`).join(' / ') || p.id} → 动作列表 → 参数表单\n`);
     process.stdout.write(`  ${c.cyan('工作台')}     模型的工具，对话式调用，${RISK_LABEL[first.risk] ?? first.risk}动作按策略确认\n`);
     process.stdout.write(`\n${c.bold('下一步')}：\n`);
-    process.stdout.write(c.dim(`  zkit plugin dev ${r.dir}   进入开发模式（改文件即生效，四个面都会跟上）\n`));
+    process.stdout.write(c.dim(`  1. zkit plugin dev ${r.dir}    开发模式——改文件即生效，四个面都跟上\n`));
+    process.stdout.write(c.dim(`  2. zkit plugin lint ${r.dir} --score    体检：质量分 + 最该先修的一项\n`));
+    process.stdout.write(c.dim(`  3. zkit run ${p.id} ${first.id}    真跑第一个动作（模板出厂即可跑）\n`));
     return 0;
   }
   if (sub === 'dev') {
