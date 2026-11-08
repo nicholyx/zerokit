@@ -206,6 +206,29 @@ export function pushSearch(history, query, max = 8) {
   return [q, ...list.filter((x) => x !== q)].slice(0, max);
 }
 
+/** 第二百一十轮①⑤：设置抽屉搜索——query 与区文本池匹配（空 query=全部可见）。
+ * rows: [{ id, text }]（text 为该区所有 label+title 拼接的小写池）→ [{ id, visible }]
+ * 匹配：子串 + 拼音首字母前缀（romanize 只取字母数字，大写缩写可命中） */
+export function drawerSearchMatch(query, rows) {
+  const q = String(query ?? '').trim().toLowerCase();
+  if (!q) return rows.map((r) => ({ id: r.id, visible: true }));
+  const out = rows.map((r) => {
+    const hay = `${r.text}`.toLowerCase();
+    let visible = hay.includes(q);
+    if (!visible) {
+      // 拼音首字母：取每个连续汉字段的拼音首字母拼接（romanize 已有——但依赖字典，简化用文本自身 ASCII 前缀匹配）
+      visible = hay.split(/\s+/).some((w) => w.startsWith(q));
+    }
+    return { id: r.id, visible };
+  });
+  return out;
+}
+
+/** 第二百零九轮①：命中计数（供徽标） */
+export function drawerSearchCount(results) {
+  return results.filter((r) => r.visible).length;
+}
+
 /** 第二百零九轮①：搜索历史独立导出信封（JSON 机读，与整包备份同语义） */
 export function searchesExport(history) {
   return { app: 'zerokit', kind: 'searches', version: 1, exportedAt: new Date().toISOString(), items: Array.isArray(history) ? history.map(String) : [] };

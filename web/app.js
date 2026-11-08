@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint, configProgress, validateSettingInput, formCanSave, parseConfigHash, textLines, textStats, fmtElapsed, paceVerdict, paceReassure, copyTextRaw, copyWithNumbers, copyWithTitle, extractUrls, colTooltipStats, shouldFreeze, tableSizeBadge, batchColVis, csvEscape, exportCsv, mdTableVis, exportMeta, shareEnvelope, shareAlive } from './extras.js';
+import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint, configProgress, validateSettingInput, formCanSave, parseConfigHash, textLines, textStats, fmtElapsed, paceVerdict, paceReassure, copyTextRaw, copyWithNumbers, copyWithTitle, extractUrls, colTooltipStats, shouldFreeze, tableSizeBadge, batchColVis, csvEscape, exportCsv, mdTableVis, exportMeta, shareEnvelope, shareAlive , drawerSearchMatch, drawerSearchCount } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote, defaultChip, enumHint, actionHealthBadge, descNeedsFold, inQuietHours, notifyThrottle, pushNotifyLog, parseHm } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -10564,6 +10564,38 @@ let drawerTrap = null;
 function openDrawer() {
   const dr = $('drawer');
   dr?.classList.remove('hidden');
+  // 第二百一十轮①-⑥：抽屉搜索接线（构建区文本池 → input 过滤 → 计数徽标 → 空态 → Esc 清 → / 聚焦）
+  {
+    const secs = [...(dr?.querySelectorAll('.drawer-section, .drawer-links') ?? [])];
+    const pool = secs.map((sec, i) => ({
+      id: i,
+      text: (sec.querySelector('.row-label')?.textContent ?? '') + ' ' +
+        [...sec.querySelectorAll('button, label, input')].map((x) => x.textContent ?? x.title ?? x.placeholder ?? '').join(' '),
+      el: sec,
+    }));
+    const input = $('drawerSearch');
+    const cnt = $('dsCount');
+    if (input && !input.dataset.bound210) {
+      input.dataset.bound210 = '1';
+      input.addEventListener('input', () => {
+        const q = input.value;
+        const res = drawerSearchMatch(q, pool);
+        const shown = drawerSearchCount(res);
+        pool.forEach((p) => { p.el.classList.toggle('hidden', !res.find((r) => r.id === p.id)?.visible); });
+        if (cnt) {
+          cnt.classList.toggle('hidden', !q);
+          cnt.textContent = q ? `${shown} / ${pool.length} 区` : '';
+        }
+      });
+      input.addEventListener('keydown', (e2) => {
+        if (e2.key === 'Escape') { input.value = ''; input.dispatchEvent(new Event('input')); }
+        if (e2.key === 'Enter') { input.value = ''; input.dispatchEvent(new Event('input')); }
+      });
+    }
+    dr?.addEventListener('keydown', function dsHotkey(e2) {
+      if (e2.key === '/' && document.activeElement !== input) { e2.preventDefault(); input?.focus(); }
+    }, { once: false });
+  }
   // 第一百九十二轮⑥：组从上到下 stagger 入场（rAF 双帧后摘除，重复打开也回放一次）
   if (dr) { dr.classList.add('drawer-anim'); setTimeout(() => dr.classList.remove('drawer-anim'), 400); }
   $('drawerMask')?.classList.remove('hidden');
