@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### Added
+
+（下一版攒着）
+
+## [2.0.0] - 2026-11-08
+
+### Added
+
 - 修复：welcome80 MCP 探针在 Windows runner 冷启动竞速下偶发超时（60s→120s + 三次重试）。
 
 - v2.0.0 里程碑总检：安全（MCP annotations/沙箱 env/打码/0600）、性能（冷启动 90-110ms、list 100ms）、文档（check-docs/生成器）、测试（130 文件 3052 断言、--shuffle 两轮、失败注入验证、慢用例 top5<24s）、发布链（release-prep 干跑、guard146、lint 三审计、对比度 44 组合、i18n 0、FFFD 0）五维度全过。
@@ -77,10 +84,4 @@
 - 浅色主题独立校准：边框体系按「白底物理隐喻」淡化（--line #7c8899→#848f9f，非文本 ≥3 达标且视觉更轻）；代码块/命令行亮色独立配色（暖白纸面+深墨字，非暗色直翻）；文本层级全表对比度复核（fg 15.68 / dim 5.89 / 语义色全部 ≥4.5）。
 - 主题切换无闪烁：color-scheme 同步原生控件、meta theme-color 同步浏览器框底色。
 - 新增 scripts/contrast-audit.mjs 进 lint.sh（44 组合全过护栏化）。
-
-## [1.88.0] - 2026-11-08
-
-### Added
-
-- 表单输入细节打磨：输入框 hover 先于 focus 渐显（可预期性）；必填项双重标注（label * + 左缘细条）；占位符焦点隐去推广到全部输入框；select 自绘箭头（appearance:none + SVG，双主题）；checkbox/radio accent-color 统一；输入令牌 --input-pad；textarea 等宽排版。
 
