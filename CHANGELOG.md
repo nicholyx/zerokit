@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [1.99.0] - 2026-11-08
+
+### Added
+
 - MCP 面文案一致性巡检：新增 scripts/mcp-copy-audit.mjs 进 lint（JSON-RPC 实连 tools/list，四类护栏：工具数量/描述尾注结构/destructive 高风险句式/「命令」术语语境白名单）；复核 53 工具描述全部合规。
 
 ## [1.98.0] - 2026-11-08
@@ -76,12 +82,4 @@
 ### Added
 
 - 表单输入细节打磨：输入框 hover 先于 focus 渐显（可预期性）；必填项双重标注（label * + 左缘细条）；占位符焦点隐去推广到全部输入框；select 自绘箭头（appearance:none + SVG，双主题）；checkbox/radio accent-color 统一；输入令牌 --input-pad；textarea 等宽排版。
-
-## [1.87.0] - 2026-11-08
-
-### Added
-
-- 卡片体系令牌化：五类卡（结果/插件/统计/集市/仪表盘）边框统一走 --card-border；可点卡片悬停态统一（accent 渐显边框+背景微亮，无位移）；仪表盘磁贴取消 translateY 位移对齐全站原则。
-- 徽标语义表：risk 三色/健康四态全部走语义变量（--ok/--warn/--bad/--accent）+ 同色 12% tint 底；排印统一（11px/500/胶囊/tabular-nums）。
-- 统计卡数字层级强化（19px/650 + tabular-nums）。
 
