@@ -62,6 +62,7 @@ fi
 
 # a11y 静态扫描（第六十六轮）：已知反模式正则盘点
 echo "=== i18n 扫描 ==="
+node scripts/contrast-audit.mjs > /dev/null || { echo "对比度审计未达标"; exit 1; }
 if node scripts/i18n-scan.mjs; then
   echo "OK    i18n（硬编码中文白名单无新增）"
 else

@@ -205,6 +205,10 @@ main { flex: 1; overflow-y: auto; margin-top: 14px; }
   border-radius: var(--r-md); padding: 9px 11px; margin: 12px 0;
   color: #9fd0ff; word-break: break-all;
 }
+html[data-theme="light"] .cmd-line {
+  /* 第一百八十七轮③：亮色命令行——纸面反白（深字浅底，非暗底直翻） */
+  background: #eef2f7; border-color: color-mix(in srgb, var(--line) 50%, transparent); color: #1d4e7a;
+}
 
 .field { margin-bottom: var(--sp-3); }
 /* 第一百八十三轮②：表单精修——label 小写字重次级、聚焦 accent 双环统一 */
@@ -612,16 +616,18 @@ mark { background: rgba(90,169,255,.28); color: inherit; border-radius: var(--r-
 /* ---------------- 浅色主题 ----------------
    只覆盖变量与少数硬编码颜色；组件本身用变量写的，所以改动面很小。 */
 html[data-theme="light"] {
+  /* 第一百八十七轮：亮色独立校准——线是结构非文字，白底上应更淡（物理隐喻反转） */
   --bg: #f4f6fa;
   --panel: #ffffff;
   --panel-2: #edf1f7;
-  --line: #7c8899;
-  --fg: #1f2933;
-  --fg-dim: #5f6b7a;
+  --line: #848f9f;
+  --fg: #1a2430;
+  --fg-dim: #59657a;
   --accent: #0e7d80;
   --ok: #07703c;
   --warn: #b45309;
   --bad: #cf2e2e;
+  --card-border: color-mix(in srgb, var(--line) 72%, transparent);
 }
 html[data-theme="light"] .item.active { border-color: #b9cff3; }
 html[data-theme="light"] .item .aid { color: #64748b; }
@@ -634,7 +640,14 @@ html[data-theme="light"] .plug-card,
 html[data-theme="light"] .ps-item,
 html[data-theme="light"] .stat-card { background: var(--panel); }
 html[data-theme="light"] .ps-tail { background: #f7f9fc; color: #475569; }
-html[data-theme="light"] pre.out { color: #22303f; }
+html[data-theme="light"] pre.out {
+  /* 第一百八十七轮③：亮色代码块独立配色——暖白纸面 + 深墨字（非暗色直翻） */
+  color: #26313d;
+  background: #f7f9fc;
+  border: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+  border-radius: var(--r-sm);
+  padding: 8px 10px;
+}
 html[data-theme="light"] .wb-msg.me .wb-text { background: #e7efff; border-color: #c7d8f7; }
 html[data-theme="light"] .wb-msg.sys .wb-text { color: #33414f; }
 html[data-theme="light"] .wb-input input { background: #fff; }
@@ -2517,3 +2530,8 @@ select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible,
 
 /* 第一百八十五轮⑥：健康徽标「新」档（无运行记录）——accent 语义 */
 .badge.hb-新 { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 42%, transparent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+/* ---------------- 第一百八十七轮⑤：亮色选区/滚动条 ---------------- */
+html[data-theme="light"] ::selection { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+html[data-theme="light"] ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--fg) 22%, transparent); }
+html[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--fg) 34%, transparent); }
