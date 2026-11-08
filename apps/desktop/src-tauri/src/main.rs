@@ -756,7 +756,7 @@ fn main() {
                 let menu = Menu::with_items(app, &[&show, &settings, &reload, &logs, &devtools, &quit])?;
 
                 let hotkey_tip = registered.first().cloned().unwrap_or_else(|| "托盘呼出".into());
-                let shell_ver = app.package_info().version.to_string();
+                let shell_ver = app.package_info().version.to_string(); // 与内核同仓同版（release-prep 五处同步），壳号即内核号
                 let ui_port = std::env::var("ZEROKIT_PORT").ok().unwrap_or_default(); // 第一百三十五轮③：tooltip 带端口
                 TrayIconBuilder::new()
                     .menu(&menu)
@@ -774,11 +774,11 @@ fn main() {
                     .on_menu_event(|app, event| match event.id.as_ref() {
                         "show" => toggle_window(app),
                         "settings" => {
-                            // 壳没有自己的设置页：把内核 UI 的外观面板路由带出来
+                            // 第二百零五轮②：与启动器对齐——设置在抽屉里（不再是 #/ 首页）
                             if let Some(window) = app.get_webview_window("main") {
                                 let _ = window.show();
                                 let _ = window.set_focus();
-                                let _ = window.eval("if (window.__zerokit) { try { location.hash = '#/'; } catch {} }");
+                                let _ = window.eval("if (window.openDrawer) { try { window.openDrawer(); } catch {} } else { try { location.hash = '#/'; } catch {} }");
                             }
                         }
                         "reload" => {
