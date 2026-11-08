@@ -707,6 +707,10 @@ const failed = results.filter(([, ok]) => !ok);
   check('193⑦ 代码令牌 --code-*（暗默认+亮覆写）+ 斑马纹 3%', css2.includes('--code-bg: #0b0d10') && css2.includes('--code-bg: #f7f9fc') && css2.includes('tr:nth-child(2n) td { background: color-mix(in srgb, var(--fg) 3%'));
   check('194② 用户消息 accent tint + 右对齐双重编码', css2.includes('.wb-msg.me .wb-text') && css2.includes('margin-left: auto; max-width: 88%') && !css2.includes('background: #1b2735'));
   check('194⑦ 工作台硬编码色清零（wb 区块全令牌化）', !css2.includes('border-bottom: 1px solid #1a1f26') && css2.includes('.wb-meta') && css2.includes('font-variant-numeric: tabular-nums'));
+  check('195①② a11y 扫描扩展规则在 lint 体系 + reduced-motion 全停块在', css2.includes('animation-duration: 0.01ms !important') && css2.includes('--focus-ring'));
+  check('195⑦ roving tabindex 模式（0/-1 切换，无正数）', !/[tT]abindex="\s*[1-9]/.test(app2) && app2.includes("tabindex=\"${i === active ? 0 : -1}\""));
+  check('195① a11y-scan 新规则源码在（tabindex-positive/aria-hidden-focus/focus-ring）', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'a11y-scan.mjs'), 'utf8').includes('tabindex-positive') && fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'a11y-scan.mjs'), 'utf8').includes('aria-hidden-focus'));
+  check('195②⑦ 全站无 tabindex 正数（列表 roving 0/-1 模式）', !/tabindex="\s*[1-9]/.test(app2));
   }
 }
 
