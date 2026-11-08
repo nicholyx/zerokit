@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-11-08（第一百九十七轮，v1.99.0）
+> 最后更新：2026-11-08（第一百九十八轮，v2.0.0 总检轮）
 
 ## 性能基线（第五十八轮建立，2026-10-28，Apple M4 / Node 22）
 
@@ -136,7 +136,7 @@ uTools 开始收费了。想找一个替代品，找了一圈发现真正的问�
 - 第一百九十五轮 v1.97.0（a11y 第三波巡检）：扫描器三新规则进 lint、reduced-motion 全覆盖核对、roving tabindex 确认、对比度 44 组合复核。\n- [x] 第一百四十九轮（v1.53.0）：history 与重跑体验——`--grep 子串`/`--since Nd/Nh/today` 过滤、`zkit bookmark`（add/list/rm/run，0600 原子写）、`--rerun-last` 一键重跑、默认视图含 ✓/✗ 失败标记、非交互终端重跑提示（issue #505）
 - 第一百九十六轮 v1.98.0（CLI 文案一致性）：术语统一动作调用、主帮助相关命令段、cli-copy-audit 进 lint。\n- [x] 第一百四十六轮（v1.50.0）：质量护栏——CHANGELOG 格式/文档数字同步/绝对路径/版本行四断言进 lint.sh、verify-remote.sh push/tag 复核、FFFD 进 lint、提交信息空行分隔（issue #495）
 - 第一百九十七轮 v1.99.0（MCP 文案一致性）：mcp-copy-audit JSON-RPC 实连四护栏进 lint，53 工具复核全过。\n- [x] 第一百四十五轮（v1.49.0）：deep 文档补全——《插件运行时》与《安全边界》两篇深读文落坑位、index/quickstart/plugin-spec 交叉链、已知差距销账（issue #488）
-- [x] 第一百四十四轮（v1.48.0）：插件作者体验——plugin new --from 复制起步/lint 修复指引/doc --md 落盘/publish-ready 5 项汇总/pack 自动补 README/模板首跑零告警/cookbook 发布前自查清单（issue #485）
+- 第一百九十八轮（v2.0.0 总检）：五维度 24 项全过——安全/性能/文档/测试/发布链；总检文档步骤版本号提前写被 polish95 护栏拦截（护栏价值实证）。\n- [x] 第一百四十四轮（v1.48.0）：插件作者体验——plugin new --from 复制起步/lint 修复指引/doc --md 落盘/publish-ready 5 项汇总/pack 自动补 README/模板首跑零告警/cookbook 发布前自查清单（issue #485）
 
 ### 内核
 
@@ -279,7 +279,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 
 ### 质量
 
-- 130 个文件、**3052 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
+- 130 个文件、**3054 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
 - `tsc --noEmit` 干净——**而且 CI 真的在跑它**（`typecheck` job）。
   曾经这里写着"干净"但没有任何地方执行这条命令，于是两个只有类型检查才看得见的
   错误在核心里躺了很久（`proxy.ts` 的 Buffer 泛型不兼容、`scaffold.ts` 的类型混用）。
