@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [2.6.0] - 2026-11-09
+
+### Added
+
 - 热路径性能优化（perf-guard 护栏下）：filterRows 的 hay 构造从 Object.values+map+join 换成 for-in 累加——10k 快 12%、50k 快 41%（省三次中间数组分配）；resultQuery 的比较符正则提升到模块级（热路径零重编译）；highlightSegments indexOf 扫描经 profiling 确认已最优，显式不动。
 
 ## [2.5.0] - 2026-11-09
@@ -74,10 +80,4 @@
 
 - 结果表格精修：表头 sticky 底色/2px 下边框/600 字重令牌化；斑马纹 fg 3% 两主题复核；选中行加左缘记号（inset 3px accent）；汇总行 2px 上边框+12% tint 与数据行明确区隔；KV 表键列等宽 34%。
 - 代码/命令输出令牌化：--code-bg/fg/cmd 三变量（暗默认+亮色纸面覆写），pre.out/cmd-line 全部脱离硬编码色。
-
-## [1.94.0] - 2026-11-08
-
-### Added
-
-- 设置抽屉扫视结构升级：各区组头锚点条（accent 左缘 2px）、区间间距 --sp 令牌化；「分类清除」危险区红缘子卡隔离（视觉即语义：这一区碰了不可逆）；抽屉打开组从上到下 stagger 入场（400ms 摘除）。
 
