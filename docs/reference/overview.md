@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-11-08（第一百九十四轮，v1.96.0）
+> 最后更新：2026-11-08（第一百九十五轮，v1.97.0）
 
 ## 性能基线（第五十八轮建立，2026-10-28，Apple M4 / Node 22）
 
@@ -133,7 +133,7 @@ uTools 开始收费了。想找一个替代品，找了一圈发现真正的问�
 - 第一百九十二轮 v1.94.0（抽屉扫视结构）：组头锚点条、区间 --sp 节奏、危险区红缘子卡、打开 stagger 入场。\n- [x] 第一百五十七轮（v1.60.0）：键盘速查收口——`?` 浮层全局化+当前状态区+键位全收口、列表滚动位置记忆、命令面板占位提示；issue 已存在项逐条核实（Issue #529）
 - 第一百九十三轮 v1.95.0（结果表格精修）：表头/斑马/选中/汇总令牌化、--code-* 三变量、KV 键列等宽。\n- [x] 第一百五十六轮（v1.59.1）：文档旅程一致性——run 点分简写（sysinfo.overview 等价两段）、README/quickstart --yes 校准、man 十二命令对齐、journey156-smoke 10 项
 - 第一百九十四轮 v1.96.0（工作台收编）：用户消息 tint+右对齐、--code-* 接入、硬编码色清零、空会话态。\n- [x] 第一百五十轮（v1.54.0）：哨兵与可观测——`run --diff` 结果对比（基线指纹）、`--alert` 断言哨兵（exit 0/2 给脚本当条件）、`--watch --diff` 静默无变化轮次、`ui --log` server 请求日志（脱敏 query）、`logs server --tail/--follow`。
-- [x] 第一百四十九轮（v1.53.0）：history 与重跑体验——`--grep 子串`/`--since Nd/Nh/today` 过滤、`zkit bookmark`（add/list/rm/run，0600 原子写）、`--rerun-last` 一键重跑、默认视图含 ✓/✗ 失败标记、非交互终端重跑提示（issue #505）
+- 第一百九十五轮 v1.97.0（a11y 第三波巡检）：扫描器三新规则进 lint、reduced-motion 全覆盖核对、roving tabindex 确认、对比度 44 组合复核。\n- [x] 第一百四十九轮（v1.53.0）：history 与重跑体验——`--grep 子串`/`--since Nd/Nh/today` 过滤、`zkit bookmark`（add/list/rm/run，0600 原子写）、`--rerun-last` 一键重跑、默认视图含 ✓/✗ 失败标记、非交互终端重跑提示（issue #505）
 - [x] 第一百四十六轮（v1.50.0）：质量护栏——CHANGELOG 格式/文档数字同步/绝对路径/版本行四断言进 lint.sh、verify-remote.sh push/tag 复核、FFFD 进 lint、提交信息空行分隔（issue #495）
 - [x] 第一百四十五轮（v1.49.0）：deep 文档补全——《插件运行时》与《安全边界》两篇深读文落坑位、index/quickstart/plugin-spec 交叉链、已知差距销账（issue #488）
 - [x] 第一百四十四轮（v1.48.0）：插件作者体验——plugin new --from 复制起步/lint 修复指引/doc --md 落盘/publish-ready 5 项汇总/pack 自动补 README/模板首跑零告警/cookbook 发布前自查清单（issue #485）
@@ -279,7 +279,7 @@ uTools 的护城河其实是 **OS 级能力**（读活动窗口、模拟键鼠�
 
 ### 质量
 
-- 130 个文件、**3044 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
+- 130 个文件、**3048 项断言**，一条命令跑完：`node scripts/test-all.mjs`（不联网、不花钱）。
 - `tsc --noEmit` 干净——**而且 CI 真的在跑它**（`typecheck` job）。
   曾经这里写着"干净"但没有任何地方执行这条命令，于是两个只有类型检查才看得见的
   错误在核心里躺了很久（`proxy.ts` 的 Buffer 泛型不兼容、`scaffold.ts` 的类型混用）。

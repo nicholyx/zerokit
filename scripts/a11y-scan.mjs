@@ -35,6 +35,15 @@ for (const file of targets) {
     if (/<span[^>]*onclick/.test(l) && !/role=/.test(l)) {
       add(file, n, 'span-role', 'onclick 的 span 缺 role（读屏不认为可点）');
     }
+    // 5.（第一百九十五轮①）tabindex 正数——打乱自然 Tab 顺序
+    const tm = l.match(/tabindex="(\d+)"/);
+    if (tm && Number(tm[1]) > 0) {
+      add(file, n, 'tabindex-positive', 'tabindex 正数打乱自然顺序（用 0 或 -1）');
+    }
+    // 6. aria-hidden 挂在含焦点元素（可聚焦）的容器上
+    if (/aria-hidden="true"/.test(l) && /(input|button|select|textarea|a href)/.test(l)) {
+      add(file, n, 'aria-hidden-focus', 'aria-hidden 容器内含可聚焦元素（读屏坟场）');
+    }
     // 4. table 无 caption 且类是 cmp（对比表要求可读出语境）
     if (/<table class="[^"]*cmp/.test(l) && !/caption/.test(l)) {
       add(file, n, 'cmp-caption', '对比表缺 caption');
@@ -50,5 +59,14 @@ if (findings.length) {
   console.error(`a11y 扫描发现 ${findings.length} 处：`);
   for (const f of findings) console.error('  ' + f);
   process.exit(1);
+}
+// 7.（第一百九十五轮①）focus-ring 覆盖率：style.css 必须有 focus-visible 令牌且引用交互元素
+{
+  const cssPath = path.join(ROOT, 'web', 'style.css');
+  if (fs.existsSync(cssPath)) {
+    const css = fs.readFileSync(cssPath, 'utf8');
+    if (!css.includes('--focus-ring')) add(cssPath, 0, 'focus-ring-missing', '缺 --focus-ring 焦点环令牌');
+    if (!/focus-visible/.test(css)) add(cssPath, 0, 'focus-visible-missing', '缺 :focus-visible 规则');
+  }
 }
 console.log('a11y 静态扫描通过（0 findings）');

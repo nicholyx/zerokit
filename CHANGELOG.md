@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- 可访问性巡检第三波（14 轮设计重构后回归）：a11y-scan 新增三条规则（tabindex 正数/aria-hidden 含焦点元素/focus-ring 令牌覆盖率）并进 lint 护栏；逐动画核对 reduced-motion 全停覆盖（18 种动画）；roving tabindex 无正数确认。
 
 ## [1.96.0] - 2026-11-08
 
