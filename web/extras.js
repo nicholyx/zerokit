@@ -1964,8 +1964,8 @@ export function actionRiskCard(runs, risk) {
 // ==================================================================
 export const BACKUP_GROUPS = [
   { match: ['zerokit.favorites', 'zerokit.plugin-tags', 'zerokit.action-tags', 'zerokit.nicknames', 'zerokit.aliases', 'zerokit.action-hotkeys'], label: '收藏与标记' },
-  { match: ['zerokit.runs', 'zerokit.params', 'zerokit.searches', 'zerokit.recent', 'zerokit.saved-results', 'zerokit.run-notes'], label: '历史与参数' },
-  { match: ['zerokit.theme', 'zerokit.accent', 'zerokit.font-scale', 'zerokit.lang', 'zerokit.plugin-sort'], label: '外观与设置' },
+  { match: ['zerokit.runs', 'zerokit.params', 'zerokit.searches', 'zerokit.recent', 'zerokit.saved-results', 'zerokit.run-notes', 'zerokit.clip-hist', 'zerokit.cmdhist', 'zerokit.last-zshare'], label: '历史与参数' },
+  { match: ['zerokit.theme', 'zerokit.accent', 'zerokit.font-scale', 'zerokit.lang', 'zerokit.plugin-sort', 'zerokit.ldensity', 'zerokit.tdensity', 'zerokit.textview.wrap', 'zerokit.sortmode', 'zerokit.timeline-collapsed', 'zerokit.ai-assist', 'zerokit.batchconc'], label: '外观与设置' },
   { match: ['zerokit.snapA', 'zerokit.snapB', 'zerokit.snapCur'], label: '配置快照' },
 ];
 const PREFIX_GROUPS = [
