@@ -5,7 +5,7 @@
 > 和另外两份文档的分工：`design.md` 记录**为什么这么设计**（连同被实测推翻的直觉），
 > `plugin-spec.md` 是**怎么写插件**的规范。这份是项目层面的账本。
 >
-> 最后更新：2026-11-08（第一百九十八轮，v2.0.0 总检轮）
+> 最后更新：2026-11-08（第一百九十九轮，v2.1.0）
 
 ## 性能基线（第五十八轮建立，2026-10-28，Apple M4 / Node 22）
 
@@ -137,7 +137,7 @@ uTools 开始收费了。想找一个替代品，找了一圈发现真正的问�
 - 第一百九十六轮 v1.98.0（CLI 文案一致性）：术语统一动作调用、主帮助相关命令段、cli-copy-audit 进 lint。\n- [x] 第一百四十六轮（v1.50.0）：质量护栏——CHANGELOG 格式/文档数字同步/绝对路径/版本行四断言进 lint.sh、verify-remote.sh push/tag 复核、FFFD 进 lint、提交信息空行分隔（issue #495）
 - 第一百九十七轮 v1.99.0（MCP 文案一致性）：mcp-copy-audit JSON-RPC 实连四护栏进 lint，53 工具复核全过。\n- [x] 第一百四十五轮（v1.49.0）：deep 文档补全——《插件运行时》与《安全边界》两篇深读文落坑位、index/quickstart/plugin-spec 交叉链、已知差距销账（issue #488）
 - 第一百九十八轮（v2.0.0 总检）：五维度 24 项全过——安全/性能/文档/测试/发布链；总检文档步骤版本号提前写被 polish95 护栏拦截（护栏价值实证）。\n- [x] 第一百四十四轮（v1.48.0）：插件作者体验——plugin new --from 复制起步/lint 修复指引/doc --md 落盘/publish-ready 5 项汇总/pack 自动补 README/模板首跑零告警/cookbook 发布前自查清单（issue #485）
-
+- 第一百九十九轮 v2.1.0（v2 线治理基线）：SECURITY/SUPPORT、CONTRIBUTING 治理段、baseline-v2 快照+生成脚本、CHANGELOG v2 语义化承诺、四面健康巡检全绿。\n
 ### 内核
 
 | 能力 | 说明 |
