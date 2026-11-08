@@ -699,6 +699,8 @@ const failed = results.filter(([, ok]) => !ok);
   check('189③⑤ 预览卡确认语义 + 安装三态图标', css2.includes('.market-preview-confirm, #marketPreview .plug-card') && app2.includes("btn.classList.add('busy')") && app2.includes('✗ 安装失败：'));
   check('190①⑤ 三态令牌 + shimmer 统一（zk-skel background-position）', css2.includes('--skeleton-base') && css2.includes('background-position: -180px 0') && css2.includes('.skel-row, .skel-block'));
   check('190②⑥ 骨架推广三视图 + 失败重试入口（marketRetry）', app2.includes("el.logsView.innerHTML = skeletonRows(5)") && app2.includes("el.doctorView.innerHTML = skeletonRows(4)") && app2.includes("id=\"marketRetry\""));
+  check('191② 面板选中项 accent 左缘（与搜索同语言）', css2.includes('border-left: 3px solid var(--accent);') && css2.includes('.palette-item.on'));
+  check('191⑦ 面板占位符与 foot 语法统一（键盘提示归占位符+计数入 foot）', app2.includes('搜索动作、插件、页面或命令…（↑↓ 选择 · Enter 打开 · 1-9 直选）') && app2.includes('Tab 补全 · Esc 关闭 · 共 ${filtered.length} 项'));
   }
 }
 

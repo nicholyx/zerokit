@@ -906,7 +906,12 @@ html[data-theme="light"] { --accent: #1d66d6; }
 .palette ul { list-style: none; margin: 0; padding: 0; max-height: 46vh; overflow: auto; }
 .palette-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px;
   border-radius: var(--r-md); cursor: pointer; }
-.palette-item.on { background: var(--hover, rgba(128,128,128,.15)); }
+.palette-item.on {
+  /* 第一百九十一轮②：选中项高亮与搜索列表同语言（accent 左缘+微底色） */
+  background: var(--hover, color-mix(in srgb, var(--fg) 8%, transparent));
+  border-left: 3px solid var(--accent);
+  padding-left: 9px;
+}
 .palette-item.none { color: var(--fg-dim); cursor: default; }
 .palette-icon { width: 22px; text-align: center; }
 .palette-label { font-weight: 600; }
@@ -2597,3 +2602,24 @@ button.primary.mini { padding: 4px 12px; font-size: 12px; }
 .load-fail { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 22px 0; }
 .load-fail .lf-msg { color: var(--fg-dim); font-size: 12.5px; }
 .load-fail .lf-retry { min-width: 96px; }
+
+/* ---------------- 第一百九十一轮③⑥：面板/搜索一致性 ---------------- */
+/* 历史条（两入口同语言：点击回填+单条删） */
+.pal-hist-chip, .hist-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11.5px; padding: 2px 8px; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  color: var(--fg-dim); cursor: pointer;
+  transition: border-color var(--tr-fast) var(--ease), color var(--tr-fast) var(--ease);
+}
+.pal-hist-chip:hover, .hist-chip:hover { border-color: var(--accent); color: var(--fg); }
+/* ⑥ 分组头：面板 group 头与搜索分组头共用样式（小型大写间距条） */
+.pal-group-head, .group-head {
+  font-size: 11px; font-weight: 600; color: var(--fg-dim);
+  letter-spacing: .4px; padding: var(--sp-2) var(--sp-2) var(--sp-1);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 40%, transparent);
+}
+/* ⑧ 面板窄屏：≤720px 全宽贴底（与搜索建议卡一致） */
+@media (max-width: 720px) {
+  .modal.palette { width: 100%; max-width: none; border-radius: var(--r-lg) var(--r-lg) 0 0; margin: 0; align-self: flex-end; }
+}
