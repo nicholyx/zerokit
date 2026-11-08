@@ -701,6 +701,8 @@ const failed = results.filter(([, ok]) => !ok);
   check('190②⑥ 骨架推广三视图 + 失败重试入口（marketRetry）', app2.includes("el.logsView.innerHTML = skeletonRows(5)") && app2.includes("el.doctorView.innerHTML = skeletonRows(4)") && app2.includes("id=\"marketRetry\""));
   check('191② 面板选中项 accent 左缘（与搜索同语言）', css2.includes('border-left: 3px solid var(--accent);') && css2.includes('.palette-item.on'));
   check('191⑦ 面板占位符与 foot 语法统一（键盘提示归占位符+计数入 foot）', app2.includes('搜索动作、插件、页面或命令…（↑↓ 选择 · Enter 打开 · 1-9 直选）') && app2.includes('Tab 补全 · Esc 关闭 · 共 ${filtered.length} 项'));
+  check('192①④ 抽屉扫视结构（组左缘条）+ 危险区红缘子卡', css2.includes('.drawer-section { position: relative; padding-left: 10px; border-left: 2px solid') && css2.includes('.drawer-danger-zone') && app2.includes('<div class="drawer-danger-zone">'));
+  check('192⑥ 抽屉 stagger 入场（drawer-anim + 400ms 摘除）', css2.includes('@keyframes drawer-stagger') && app2.includes("classList.add('drawer-anim')") && app2.includes("classList.remove('drawer-anim')"));
   }
 }
 

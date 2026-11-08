@@ -337,12 +337,14 @@ function openThemePop() {
       <button data-backup="import" title="${t('importTitle')}">${t('importData')}</button>
       <button data-backup="purge" title="${t('purgeTitle')}">${t('purgeData')}</button>
     </div>
-    <div class="tp-head">${t('wipeHead')}</div>
-    <div class="tp-row tp-scope-wipe">
-      <button data-scope-wipe="runs" title="${t('wipeRunsTitle')}">${t('wipeRuns')} <span data-scope-count="runs"></span></button>
-      <button data-scope-wipe="searches" title="${t('wipeSearchesTitle')}">${t('wipeSearches')} <span data-scope-count="searches"></span></button>
-      <button data-scope-wipe="saved" title="${t('wipeSavedTitle')}">${t('wipeSaved')} <span data-scope-count="saved"></span></button>
-      <button data-scope-wipe="timers" title="${t('wipeTimersTitle')}">${t('wipeTimers')} <span data-scope-count="timers"></span></button>
+    <div class="drawer-danger-zone">
+      <div class="tp-head">${t('wipeHead')}</div>
+      <div class="tp-row tp-scope-wipe">
+        <button data-scope-wipe="runs" title="${t('wipeRunsTitle')}">${t('wipeRuns')} <span data-scope-count="runs"></span></button>
+        <button data-scope-wipe="searches" title="${t('wipeSearchesTitle')}">${t('wipeSearches')} <span data-scope-count="searches"></span></button>
+        <button data-scope-wipe="saved" title="${t('wipeSavedTitle')}">${t('wipeSaved')} <span data-scope-count="saved"></span></button>
+        <button data-scope-wipe="timers" title="${t('wipeTimersTitle')}">${t('wipeTimers')} <span data-scope-count="timers"></span></button>
+      </div>
     </div>
     <div class="tp-head">${t('profileHead')} <small class="tp-profile-cur">${esc(curProfileName())}</small></div>
     <div class="tp-row tp-profiles">
@@ -10489,7 +10491,10 @@ $('themeFast')?.addEventListener('click', toggleLightDark);
   // 第四十七轮①：设置抽屉——管理类入口统一收纳
 let drawerTrap = null;
 function openDrawer() {
-  $('drawer')?.classList.remove('hidden');
+  const dr = $('drawer');
+  dr?.classList.remove('hidden');
+  // 第一百九十二轮⑥：组从上到下 stagger 入场（rAF 双帧后摘除，重复打开也回放一次）
+  if (dr) { dr.classList.add('drawer-anim'); setTimeout(() => dr.classList.remove('drawer-anim'), 400); }
   $('drawerMask')?.classList.remove('hidden');
   openThemePop();   // 主题区常驻抽屉
   paintKeysMaster();   // 第一百七十三轮③：快捷键总闸状态同步

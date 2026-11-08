@@ -2623,3 +2623,37 @@ button.primary.mini { padding: 4px 12px; font-size: 12px; }
 @media (max-width: 720px) {
   .modal.palette { width: 100%; max-width: none; border-radius: var(--r-lg) var(--r-lg) 0 0; margin: 0; align-self: flex-end; }
 }
+
+/* ---------------- 第一百九十二轮：设置抽屉扫视结构 ---------------- */
+/* ① 组图标+组头锚点：drawer-section 前置编号/图标由 index.html 提供，这里给视觉条 */
+.drawer-section { position: relative; padding-left: 10px; border-left: 2px solid color-mix(in srgb, var(--accent) 28%, transparent); margin-left: 4px; }
+.drawer-section .row-label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600; color: var(--fg-dim);
+  letter-spacing: .5px; margin-bottom: var(--sp-2);
+}
+/* ② 区间间距节奏令牌化 */
+.drawer-section + .drawer-section { margin-top: var(--sp-4); }
+.drawer-links { margin-top: var(--sp-3); }
+/* ④ 危险区（清除痕迹）视觉隔离：红缘子卡 */
+.drawer-danger-zone {
+  border: 1px solid color-mix(in srgb, var(--bad) 38%, transparent);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--bad) 5%, transparent);
+  padding: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+.drawer-danger-zone .row-label { color: var(--bad); }
+.drawer-danger-zone .choice-row button { border-color: color-mix(in srgb, var(--bad) 40%, transparent); }
+.drawer-danger-zone .choice-row button:hover { border-color: var(--bad); color: var(--bad); }
+/* ⑥ 抽屉打开动效：组从上到下 stagger（openDrawer 时挂 drawer-anim，内容渐进） */
+.drawer.drawer-anim > * { animation: drawer-stagger .3s var(--ease-out) both; }
+.drawer.drawer-anim > *:nth-child(1) { animation-delay: 0ms; }
+.drawer.drawer-anim > *:nth-child(2) { animation-delay: 30ms; }
+.drawer.drawer-anim > *:nth-child(3) { animation-delay: 60ms; }
+.drawer.drawer-anim > *:nth-child(4) { animation-delay: 90ms; }
+.drawer.drawer-anim > *:nth-child(5) { animation-delay: 120ms; }
+@keyframes drawer-stagger { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .drawer.drawer-anim > * { animation: none; }
+}
