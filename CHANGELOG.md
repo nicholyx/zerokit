@@ -1,8 +1,12 @@
 # Changelog
 
-> **v2 线语义化承诺（自 2.0.0 起）**：minor = 新功能批次（每轮十项）；patch = 修复与维护。破坏性变更升 major 并在升级指南中说明。
-
 ## [Unreleased]
+
+### Added
+
+（下一版攒着）
+
+## [2.9.0] - 2026-11-09
 
 ### Added
 
@@ -75,10 +79,4 @@
 ### Added
 
 - CLI 文案一致性巡检：术语统一（书签/bundle 的「命令」→「动作调用」——动作是清单声明的可执行单元）；主帮助补「相关命令」段（与子命令同语言）；新增 scripts/cli-copy-audit.mjs 进 lint（旧术语清零/退出码语义/--no-color 无 ANSI 三类护栏）。
-
-## [1.97.0] - 2026-11-08
-
-### Added
-
-- 可访问性巡检第三波（14 轮设计重构后回归）：a11y-scan 新增三条规则（tabindex 正数/aria-hidden 含焦点元素/focus-ring 令牌覆盖率）并进 lint 护栏；逐动画核对 reduced-motion 全停覆盖（18 种动画）；roving tabindex 无正数确认。
 
