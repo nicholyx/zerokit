@@ -715,6 +715,8 @@ const failed = results.filter(([, ok]) => !ok);
   check('198⑨ v2.0.0 总检条目入 CHANGELOG（占位行替换法）', fs.readFileSync(path.join(PKG_ROOT, 'CHANGELOG.md'), 'utf8').includes('v2.0.0 里程碑总检'));
   check('199①② 治理三件套在（SECURITY/SUPPORT/baseline-v2）', fs.existsSync(path.join(PKG_ROOT, 'SECURITY.md')) && fs.existsSync(path.join(PKG_ROOT, 'SUPPORT.md')) && fs.existsSync(path.join(PKG_ROOT, 'docs', 'reference', 'baseline-v2.md')));
   check('199⑤⑥ baseline 脚本 + CHANGELOG v2 语义化注记', fs.existsSync(path.join(PKG_ROOT, 'scripts', 'baseline-snapshot.mjs')) && fs.readFileSync(path.join(PKG_ROOT, 'CHANGELOG.md'), 'utf8').includes('v2 线语义化承诺'));
+  check('200①② 项目故事（story.md）+ 里程里程碑年表 + 导航行', fs.existsSync(path.join(PKG_ROOT, 'docs', 'guide', 'story.md')) && fs.readFileSync(path.join(PKG_ROOT, 'docs', 'guide', 'story.md'), 'utf8').includes('里程碑年表') && fs.readFileSync(path.join(PKG_ROOT, 'docs', 'README.md'), 'utf8').includes('guide/story.md'));
+  check('200⑥ README「项目故事」链接 + 四面巡检记录', fs.readFileSync(path.join(PKG_ROOT, 'README.md'), 'utf8').includes('guide/story.md'));
   check('197⑧ mcp-copy-audit 进 lint（JSON-RPC 实连审计）', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'mcp-copy-audit.mjs'), 'utf8').includes('tools/list') && fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'lint.sh'), 'utf8').includes('mcp-copy-audit'));
   check('197① MCP 术语审计规则在（CLI 语境白名单）', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'mcp-copy-audit.mjs'), 'utf8').includes('zkit|命令行|安装|CLI|一条命令'));
   check('196⑨ CLI 文案审计脚本存在且检查旧术语/退出码/无色输出', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'cli-copy-audit.mjs'), 'utf8').includes('命令组合') && fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'cli-copy-audit.mjs'), 'utf8').includes('--no-color'));
