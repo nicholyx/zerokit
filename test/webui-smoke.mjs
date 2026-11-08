@@ -705,6 +705,8 @@ const failed = results.filter(([, ok]) => !ok);
   check('192⑥ 抽屉 stagger 入场（drawer-anim + 400ms 摘除）', css2.includes('@keyframes drawer-stagger') && app2.includes("classList.add('drawer-anim')") && app2.includes("classList.remove('drawer-anim')"));
   check('193①④ 表头令牌 + 汇总行强化（2px 上边框+12% tint）', css2.includes('#result table thead th, .tbl-wrap table thead th') && css2.includes('tr.gsum-row td') && css2.includes('border-top: 2px solid color-mix(in srgb, var(--accent) 40%'));
   check('193⑦ 代码令牌 --code-*（暗默认+亮覆写）+ 斑马纹 3%', css2.includes('--code-bg: #0b0d10') && css2.includes('--code-bg: #f7f9fc') && css2.includes('tr:nth-child(2n) td { background: color-mix(in srgb, var(--fg) 3%'));
+  check('194② 用户消息 accent tint + 右对齐双重编码', css2.includes('.wb-msg.me .wb-text') && css2.includes('margin-left: auto; max-width: 88%') && !css2.includes('background: #1b2735'));
+  check('194⑦ 工作台硬编码色清零（wb 区块全令牌化）', !css2.includes('border-bottom: 1px solid #1a1f26') && css2.includes('.wb-meta') && css2.includes('font-variant-numeric: tabular-nums'));
   }
 }
 
