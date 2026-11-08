@@ -8606,7 +8606,7 @@ function showStats() {
         const maxH = Math.max(1, ...heat.map((x) => x.total));
         return heat.map((b) => `
           <div class="heat-cell" title="${b.hour}:00 — ${t('statsRunsN')(b.total)}">
-            <i style="height:${Math.max(2, Math.round((b.total / maxH) * 32))}px"></i>
+            <i style="height:${Math.max(2, Math.round((b.total / maxH) * 32))}px;opacity:${(0.25 + 0.7 * (b.total / maxH)).toFixed(2)}"></i>
             <span>${b.hour}</span>
           </div>`).join('');
       })()}
