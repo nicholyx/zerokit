@@ -1,10 +1,12 @@
 # Changelog
 
+> **v2 线语义化承诺（自 2.0.0 起）**：minor = 新功能批次（每轮十项）；patch = 修复与维护。破坏性变更升 major 并在升级指南中说明。
+
 ## [Unreleased]
 
 ### Added
 
-（下一版攒着）
+- v2 线治理基线：新增 SECURITY.md（漏洞报告私密渠道+响应时限+版本支持）与 SUPPORT.md（支持矩阵+求助路径）；CONTRIBUTING 增「治理」段（决策规则/语义化承诺）；docs/reference/baseline-v2.md 基线指标快照（冷启动 99ms/130 文件 3054 断言/13 插件 52 动作）+ scripts/baseline-snapshot.mjs 生成脚本（--check 检测版本漂移）。
 
 ## [2.0.0] - 2026-11-08
 

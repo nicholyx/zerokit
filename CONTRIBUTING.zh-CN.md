@@ -148,3 +148,11 @@ MCP 副作用动作默认拒绝）见 [`SECURITY.md`](SECURITY.md)。
 10. **改断言前先问「是产品错了还是测试过期了」**——语义放宽（如第五十五轮中文 key）要同步改测试并注明轮次，不是把断言删了完事。
 
 顺带一提：`node scripts/test-all.mjs --shuffle` 用随机顺序跑全量，用于暴露测试间的隐式顺序依赖——理论上每个测试都该自包含。
+
+
+## 治理（v2 线起）
+
+- **决策规则**：单人主仓库维护（@nicholyx）。功能走 Issue → 聚焦分支 → PR → CI 全绿 → squash merge；CI 是唯一硬门禁（`required_approving_review_count: 0`）。
+- **语义化承诺**：minor = 新功能批次；patch = 修复与维护；major = 破坏性变更（附升级指南）。
+- **安全漏洞**：走 [SECURITY.md](SECURITY.md) 的私密渠道，不开公开 Issue。
+- **外部贡献**：PR 同流程；维护者负责 review 与合并。改动会记入 CHANGELOG 并署名贡献者。
