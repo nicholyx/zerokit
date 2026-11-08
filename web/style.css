@@ -41,6 +41,10 @@
   --skeleton-base: color-mix(in srgb, var(--fg) 6%, transparent);
   --skeleton-shine: color-mix(in srgb, var(--fg) 14%, transparent);
   --empty-dim: color-mix(in srgb, var(--fg-dim) 55%, transparent);
+  /* 第一百九十三轮⑦：代码/结果文本令牌（暗默认+亮色覆写在 light 块） */
+  --code-bg: #0b0d10;
+  --code-fg: #cdd6e2;
+  --code-cmd: #9fd0ff;
   --card-border: color-mix(in srgb, var(--line) 88%, transparent);
   --card-hover-border: color-mix(in srgb, var(--accent) 38%, var(--line));
   --card-hover-bg: color-mix(in srgb, var(--fg) 3%, var(--panel));
@@ -213,7 +217,7 @@ main { flex: 1; overflow-y: auto; margin-top: 14px; }
   font-family: var(--mono); font-size: 12px;
   background: #0b0d10; border: 1px solid var(--line);
   border-radius: var(--r-md); padding: 9px 11px; margin: 12px 0;
-  color: #9fd0ff; word-break: break-all;
+  color: var(--code-cmd); word-break: break-all;
 }
 html[data-theme="light"] .cmd-line {
   /* 第一百八十七轮③：亮色命令行——纸面反白（深字浅底，非暗底直翻） */
@@ -293,9 +297,9 @@ button.primary:disabled { opacity: .5; cursor: default; }
 
 pre.out {
   margin: 0; font-family: var(--mono); font-size: 12.5px;
-  /* 第一百八十三轮④：等宽输出行高/字距节奏 */
+  /* 第一百八十三轮④：等宽输出行高/字距节奏；193 轮⑦接 --code-* 令牌 */
   line-height: 1.6; letter-spacing: .1px;
-  white-space: pre-wrap; word-break: break-word; color: #cdd6e2;
+  white-space: pre-wrap; word-break: break-word; color: var(--code-fg);
 }
 
 table.kv { width: 100%; border-collapse: collapse; }
@@ -650,9 +654,13 @@ html[data-theme="light"] .plug-card,
 html[data-theme="light"] .ps-item,
 html[data-theme="light"] .stat-card { background: var(--panel); }
 html[data-theme="light"] .ps-tail { background: #f7f9fc; color: #475569; }
+html[data-theme="light"] {
+  /* 第一百九十三轮⑦：亮色代码令牌（187 轮纸面体系） */
+  --code-bg: #f7f9fc; --code-fg: #26313d; --code-cmd: #1d4e7a;
+}
 html[data-theme="light"] pre.out {
   /* 第一百八十七轮③：亮色代码块独立配色——暖白纸面 + 深墨字（非暗色直翻） */
-  color: #26313d;
+  color: var(--code-fg);
   background: #f7f9fc;
   border: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
   border-radius: var(--r-sm);
@@ -2657,3 +2665,24 @@ button.primary.mini { padding: 4px 12px; font-size: 12px; }
 @media (prefers-reduced-motion: reduce) {
   .drawer.drawer-anim > * { animation: none; }
 }
+
+/* ---------------- 第一百九十三轮：结果表格精修 ---------------- */
+/* ① 表头令牌：sticky 头底色/边框/字重统一（不透明白 protects 滚动内容穿透） */
+#result table thead th, .tbl-wrap table thead th {
+  background: var(--panel);
+  border-bottom: 2px solid color-mix(in srgb, var(--line) 70%, transparent);
+  font-weight: 600; letter-spacing: .2px;
+}
+/* ② 斑马纹：极淡 fg 3%，两主题行间可辨不喧宾 */
+#result table tbody tr:nth-child(2n) td { background: color-mix(in srgb, var(--fg) 3%, transparent); }
+/* ③ 行悬停已有（accent 10%）；选中行加重（accent 18% 既有）——补足左缘记号 */
+#result table tbody tr.row-sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+/* ④ 汇总行强化：上边框加重 + 背景加深（与数据行明确区隔） */
+tr.gsum-row td {
+  border-top: 2px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+/* ⑥ 数字列 tabular 全表兜底 */
+#result table td.num, #result table td[style*="text-align:right"] { font-variant-numeric: tabular-nums; }
+/* ⑧ KV 表键列统一宽度+等宽 */
+table.kv td:first-child { width: 34%; font-family: var(--mono); font-size: 12px; }
