@@ -231,7 +231,7 @@ mcp-allow.json      已授权给 AI 调用的有副作用动作
 
 ## 参与贡献
 
-[CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md) · [SECURITY](SECURITY.md) · [SUPPORT](SUPPORT.md) 里有完整的十条军规（跨平台坑、
+[项目故事](docs/guide/story.md) · [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md) · [SECURITY](SECURITY.md) · [SUPPORT](SUPPORT.md) 里有完整的十条军规（跨平台坑、
 断言写法、提交规范）——都是真实事故换来的。带
 `good first issue` 标签的是适合首次贡献的切入点。
 
