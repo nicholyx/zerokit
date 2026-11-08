@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.1.0] - 2026-11-09
+
+### Added
+
 - 搜索历史独立导入导出：CLI `zkit config searches export/import/list/clear`（searches.json 文件真源，CLI 面读写）；UI 日志页 chips 区加「⬆ 导入历史」按钮（File input → searchesMerge → localStorage，与 CLI 同一信封格式）；合并语义与 pushSearch 一致（置顶去重、8 条上限、非数组拒绝）；新纯函数 searchesExport/searchesMerge。
 
 ## [3.0.0] - 2026-11-09
@@ -73,10 +79,4 @@
 - 修复：welcome80 MCP 探针在 Windows runner 冷启动竞速下偶发超时（60s→120s + 三次重试）。
 
 - v2.0.0 里程碑总检：安全（MCP annotations/沙箱 env/打码/0600）、性能（冷启动 90-110ms、list 100ms）、文档（check-docs/生成器）、测试（130 文件 3052 断言、--shuffle 两轮、失败注入验证、慢用例 top5<24s）、发布链（release-prep 干跑、guard146、lint 三审计、对比度 44 组合、i18n 0、FFFD 0）五维度全过。
-
-## [1.99.0] - 2026-11-08
-
-### Added
-
-- MCP 面文案一致性巡检：新增 scripts/mcp-copy-audit.mjs 进 lint（JSON-RPC 实连 tools/list，四类护栏：工具数量/描述尾注结构/destructive 高风险句式/「命令」术语语境白名单）；复核 53 工具描述全部合规。
 
