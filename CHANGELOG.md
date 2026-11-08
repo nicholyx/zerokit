@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [2.4.0] - 2026-11-08
+
+### Added
+
 - 依赖健康与供应链巡检（第六审计线）：scripts/dep-audit.mjs 进 lint（幽灵依赖/lockfile 一致/许可证白名单三护栏）；npm audit 修复 5 项漏洞（2 high：body-parser DoS、zod 内存耗尽；3 moderate）现 0 高危；docs/reference/dependencies.md 依赖对照表（每个依赖一行为什么）；Cargo.toml 逐条用途注释。
 
 ## [2.3.0] - 2026-11-08
@@ -74,10 +80,4 @@
 ### Added
 
 - 面板与搜索交互一致性：键盘提示从 foot 移入占位符（输入法打字时不低头看脚注）；面板选中项 accent 左缘与搜索列表同语言；面板 foot 增加结果计数；历史 chips/分组头双入口同样式令牌化；窄屏面板全宽贴底。
-
-## [1.92.0] - 2026-11-08
-
-### Added
-
-- 三态（加载/空/失败）语言统一：骨架屏令牌化（--skeleton-base/shine）+ shimmer 渐变位移（取代 opacity 闪烁）；骨架屏从列表推广到集市/日志/自检三个异步视图；新增三档 spinner（sm/md/lg）；集市请求失败给「↻ 重试」明确入口（非纯文字）。
 
