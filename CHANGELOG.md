@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [1.92.0] - 2026-11-08
+
+### Added
+
 - 三态（加载/空/失败）语言统一：骨架屏令牌化（--skeleton-base/shine）+ shimmer 渐变位移（取代 opacity 闪烁）；骨架屏从列表推广到集市/日志/自检三个异步视图；新增三档 spinner（sm/md/lg）；集市请求失败给「↻ 重试」明确入口（非纯文字）。
 
 ## [1.91.0] - 2026-11-08
@@ -95,15 +101,4 @@
 ### Fixed
 
 - 修复结果查询框（整表查询，如 `size>100`）输入不生效的缺陷：事件绑定作用域是 `.tbl-wrap`，而查询栏渲染在其外——改为绑定最近结果容器
-
-## [1.80.0] - 2026-11-07
-
-### Added
-
-- 新增 `zkit commands` 一行式命令索引（分类节 + 常用旗标），比 `--help` 全文扫读快
-- 新增 `zkit alias add/rm/list` 用户级短命令（`zkit top` → `zkit run sysinfo top --head 3`），0600 存 `aliases.json`；重名、内置命令名、指向别名均拒绝
-- `zkit run` 用法错误时附「相关命令」联想段（同类别命令，如 run → list · show · doctor）
-- `zkit version` 与 `--version` 同义（此前只有旗标形态）
-
-（下一版攒着）
 
