@@ -10246,11 +10246,22 @@ function showShareView(shareId) {
   const cols = env.cols ?? [];
   const numericCols = cols.filter((c) => isNumericColumn(rows.map((r) => r?.[c])));
   const tableHtml = rows.length ? mdTableVis(rows, cols, numericCols) : '';
+  // 第二百二十八轮③：分享快照导出 zkresult（visCols/rows/at 完整落盘——对方可导入回放）
+  const zkr = buildZkresult({ data: rows, ok: true }, { plugin: (env.action || '').split('.')[0], action: (env.action || '').split('.')[1] || '', title: env.action || '' }, window.__zkVersion ?? '');
   view.innerHTML = `<div class="panel share-view">
     <div class="share-meta sub">${t('shareFrom')}「${esc(env.action)}」 · ${new Date(env.at).toLocaleString()} · ${rows.length} ${t('shareRows')} × ${cols.length} ${t('shareCols')} · ${t('shareValid')}</div>
-    <div class="share-actions"><button class="primary mini" id="shareRerun">${t('shareRerun')}</button></div>
+    <div class="share-actions"><button class="primary mini" id="shareRerun">${t('shareRerun')}</button><button class="ghost mini" id="shareZkr">${t('shareZkrBtn')}</button></div>
     <pre class="share-table">${esc(tableHtml)}</pre>
   </div>`;
+  document.getElementById('shareZkr')?.addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(zkr, null, 2)], { type: exportMime('json') });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `zerokit-share-${shareId}-${zkr.savedAt.slice(0, 10)}.zkresult.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
   document.getElementById('shareRerun')?.addEventListener('click', () => {
     location.hash = '#/';
     setTimeout(() => { const q = document.getElementById('q'); if (q) { q.value = (env.action || '').split('.')[0]; q.dispatchEvent(new Event('input', { bubbles: true })); } }, 100);
