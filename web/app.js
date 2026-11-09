@@ -6878,6 +6878,43 @@ async function renderLogs() {
 }
 
 // ---------------------------------------------------------------- 环境自检
+async function showDashboard() {
+  mode = 'dashboard';
+  el.modeLabel.textContent = t('dash220Title');
+  el.searchRow.classList.add('hidden');
+  hidePanels();
+  showPanelAnimated(el.doctorView);
+  if (location.hash !== '#/dashboard') history.replaceState(null, '', '#/dashboard');
+  try {
+    const d = await api('/api/health-snapshot');
+    const state = d.ok ? '✓ 全部健康' : `⚠ ${d.doctor.errors} 项需处理`;
+    el.doctorView.innerHTML = `
+      <div class="panel">
+        <h2>${t('dash220Title')} <span class="badge ${d.ok ? 'read' : 'warn'}">${state}</span></h2>
+        <p class="sub">${t('dash220Sub')}</p>
+        <div class="dash-tiles">
+          <div class="dash-tile"><span class="dt-name">v${esc(d.version)}</span><span>${t('dash220Ver')}</span></div>
+          <div class="dash-tile"><span class="dt-name">${d.doctor.errors} / ${d.doctor.warnings}</span><span>${t('dash220Doc')}</span></div>
+          <div class="dash-tile"><span class="dt-name">${d.services.running} / ${d.services.total}</span><span>${t('dash220Svc')}</span></div>
+          <div class="dash-tile"><span class="dt-name">${d.cache.hits} / ${d.cache.misses}</span><span>${t('dash220Cache')}</span></div>
+          <div class="dash-tile"><span class="dt-name">${d.plugins.count} / ${d.plugins.actions}</span><span>${t('dash220Plug')}</span></div>
+        </div>
+        <div class="actions">
+          <button class="ghost" id="dashDoctor">${t('dash220GoDoc')}</button>
+          <button class="ghost" id="dashSvc">${t('dash220GoSvc')}</button>
+          <button class="ghost" id="dashCache">${t('dash220GoCache')}</button>
+          <button class="ghost" id="dashBack">${t('backToList')}</button>
+        </div>
+      </div>`;
+    $('dashDoctor')?.addEventListener('click', () => { location.hash = '#/doctor'; });
+    $('dashSvc')?.addEventListener('click', () => { location.hash = '#/services'; });
+    $('dashCache')?.addEventListener('click', () => { location.hash = '#/cache'; });
+    $('dashBack')?.addEventListener('click', () => { location.hash = '#/'; });
+  } catch (e) {
+    el.doctorView.innerHTML = `<div class="ps-empty" role="status">${t('cacheLoadFail')}${esc(e.message)}</div>`;
+  }
+}
+
 async function showServices() {
   mode = 'services';
   el.modeLabel.textContent = t('svcPanel');
@@ -9313,6 +9350,7 @@ function showPalette() {
     { icon: '⭐', label: I18N.zh.bmkPage, hint: I18N.zh.bmkHint, key: '', group: 'page', act: () => { location.hash = '#/bookmarks'; } },
     { icon: '◐', label: '深色 / 浅色', hint: '一键切换主题', key: 'Ctrl+Shift+D', group: 'op', act: () => toggleLightDark() },
     { icon: '☰', label: '设置抽屉', hint: '主题/语言/配置档/备份统一入口', key: '', group: 'page', act: () => openDrawer() },
+    { icon: '🩺', label: '全景总检', hint: '四面健康一屏看全：doctor/服务/缓存/插件', key: '', group: 'page', act: () => { location.hash = '#/dashboard'; } },
     { icon: '⚡', label: '缓存面板', hint: '只读动作缓存条目与命中统计', key: '', group: 'page', act: () => { location.hash = '#/cache'; } },
     { icon: '🔧', label: '服务面板', hint: '插件声明的后台服务：状态与停止', key: '', group: 'page', act: () => { location.hash = '#/services'; } },
     { icon: '🧪', label: '开发者面板', hint: 'dev 插件摘要/文件树/沙箱控制台 #/dev', key: '', group: 'page', act: () => { location.hash = '#/dev'; } },
@@ -10208,6 +10246,7 @@ function applyHash() {
   if ((location.hash || '') === '#/timeline') { showTimeline(); return; }
 
   // 第二百一十六轮④：#/services 服务面板
+  if ((location.hash || '') === '#/dashboard') { showDashboard(); return; }
   if ((location.hash || '') === '#/services') { showServices(); return; }
   // #/cache 缓存面板（213 轮走 case 分支，这里补直达）
   if ((location.hash || '') === '#/cache') { showCache(); return; }
@@ -10654,6 +10693,7 @@ function applyLang(rerender = false) {
     case 'doctor': showDoctor(); break;
     case 'cache': showCache(); break;
     case 'services': showServices(); break;
+    case 'dashboard': showDashboard(); break;
     case 'plugins': showPlugins(); break;
     case 'dash': showDash(); break;
     case 'stats': showStats(); break;
@@ -10782,6 +10822,7 @@ $('dlActivity')?.addEventListener('click', () => { closeDrawer(); location.hash 
 $('dlLogs')?.addEventListener('click', () => { closeDrawer(); $('logsBtn')?.click(); });
 $('dlDoctor')?.addEventListener('click', () => { closeDrawer(); $('doctorBtn')?.click(); });
   $('dlCache')?.addEventListener('click', () => { location.hash = '#/cache'; });
+  $('dlDash')?.addEventListener('click', () => { location.hash = '#/dashboard'; });
 $('dlSaved')?.addEventListener('click', () => { closeDrawer(); $('savedBtn')?.click(); });
 // 第九十三轮④：导入 .zkresult 快照回放——外来快照只读展示，重跑会明示「将本地执行」
 $('dlImportSnap')?.addEventListener('click', () => {
