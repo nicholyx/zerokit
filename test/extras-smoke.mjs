@@ -2,7 +2,7 @@
 //
 // 这些函数都在 web/extras.js 里，不碰 DOM / localStorage / fetch，
 // 所以可以直接在 Node 里跑。界面接线另由 webui-smoke 断言。
-import { paramsHint, recencyOrder, coActions, flattenRuns, THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref, OVERFLOW_ROWS, PAGE_ROWS, toAiMarkdown, packContext, toMcpConfig, toLlmJsonl, toCurl, watchTrendMarkdown, TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory, looksLikeTimestamp, humanTs, emptyReason, tocFromMd, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, searchesExport, searchesMerge, drawerSearchMatch, drawerSearchCount, resultCacheKey, resultCacheHit, exportMime, exportFilename, buildZkresult, parseZkresult } from '../web/extras.js';
+import { paramsHint, recencyOrder, coActions, flattenRuns, THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref, OVERFLOW_ROWS, PAGE_ROWS, toAiMarkdown, packContext, toMcpConfig, toLlmJsonl, toCurl, watchTrendMarkdown, TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory, looksLikeTimestamp, humanTs, emptyReason, tocFromMd, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, searchesExport, searchesMerge, drawerSearchMatch, drawerSearchCount, resultCacheKey, resultCacheHit, exportMime, exportFilename, buildZkresult, parseZkresult, ZKRESULT_MAX_BYTES, ZKRESULT_MAX_DEPTH, stripUnsafeKeys } from '../web/extras.js';
 import { romanize, scorePinyin, pinyinFuzzyScore } from '../web/pinyin.js';
 
 const results = [];
@@ -600,6 +600,20 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
   check('222③④ 拼音容错融合（fuzzy 分档 + 精确不变 + 5s 缓存复用）', (() => {
   check('224①⑥ exportMime 五类映射 + exportFilename 边界（空 ext→txt/非法字符清洗/时间戳）', (() => {
   check('228⑤ zkresult 往返等价（buildZkresult → parseZkresult 字段一致）', (() => {
+  check('229② 大小上限（>8MB 拒绝）', (() => {
+    const r = parseZkresult('x'.repeat(9 * 1024 * 1024));
+    return !r.ok && r.error.includes('8MB');
+  })());
+  check('229④ 原型污染键剥离（__proto__ 不落地）', (() => {
+    const evil = JSON.parse('{"app":"zerokit","kind":"zkresult","result":{},"savedAt":"2026-01-01","__proto__":{"polluted":true}}');
+    const r = parseZkresult(JSON.stringify(evil));
+    return r.ok && !('polluted' in r.snapshot) && !('polluted' in Object.prototype);
+  })());
+  check('229③ 深嵌套净化不崩（100 层）', (() => {
+    const deep = { app: 'zerokit', kind: 'zkresult', savedAt: '2026-01-01', result: { data: null } };
+    let cur = deep.result; for (let i = 0; i < 100; i++) { cur.data = { data: null }; cur = cur.data; }
+    return parseZkresult(JSON.stringify(deep)).ok === true;
+  })());
     const snap = buildZkresult({ data: [{ k: 'v' }], ok: true, ms: 12 }, { plugin: 'demo', action: 'list', title: '列表' }, '9.9.9');
     const back = parseZkresult(JSON.stringify(snap));
     return back.ok && back.snapshot.version === '9.9.9' && back.snapshot.action?.plugin === 'demo'
