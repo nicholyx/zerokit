@@ -52,6 +52,32 @@ export function romanize(text) {
   return result;
 }
 
+/** 第二百二十二轮③：编辑距离 ≤1（拼音前缀容错——漏/错一个字母仍命中），不引入新依赖 */
+function editDistance1(a, b) {
+  if (a === b) return 0;
+  if (Math.abs(a.length - b.length) > 1) return 2;
+  let i = 0, j = 0, diff = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    diff++;
+    if (diff > 1) return 2;
+    if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; }
+  }
+  return diff + (a.length - i) + (b.length - j);
+}
+
+/**
+ * 第二百二十二轮③：容错得分——前缀编辑距离 ≤1 视为近似前缀命中。
+ * 分数比精确前缀低一档（44/36），保证错字命中排在正确命中之后。
+ */
+export function pinyinFuzzyScore(r, token) {
+  if (!r || !r.full || token.length < 2) return 0;
+  const ini = r.initials, ful = r.full;
+  if (ini.length >= token.length && editDistance1(ini.slice(0, token.length), token) <= 1) return 44;
+  if (ful.length >= token.length && editDistance1(ful.slice(0, token.length), token) <= 1) return 36;
+  return 0;
+}
+
 /**
  * 拼音匹配得分。刻意排在「字面前缀」（82 分）之下：
  * 打 dl 时如果真有插件叫 dl，它应该赢过拼音猜出来的「代理」。
@@ -71,5 +97,7 @@ export function scorePinyin(r, token) {
     if (r.initials.includes(token)) return 40;
     if (r.full.includes(token)) return 30;
   }
-  return 0;
+  // 第二百二十二轮④：容错融合——漏/错一个字母的近似前缀（44/36），
+  // 排在所有精确命中之后，保证错字命中不压过正确命中。
+  return pinyinFuzzyScore(r, token);
 }
