@@ -3,6 +3,7 @@
 // 这些函数都在 web/extras.js 里，不碰 DOM / localStorage / fetch，
 // 所以可以直接在 Node 里跑。界面接线另由 webui-smoke 断言。
 import { paramsHint, recencyOrder, coActions, flattenRuns, THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref, OVERFLOW_ROWS, PAGE_ROWS, toAiMarkdown, packContext, toMcpConfig, toLlmJsonl, toCurl, watchTrendMarkdown, TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory, looksLikeTimestamp, humanTs, emptyReason, tocFromMd, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, searchesExport, searchesMerge, drawerSearchMatch, drawerSearchCount, resultCacheKey, resultCacheHit } from '../web/extras.js';
+import { romanize, scorePinyin, pinyinFuzzyScore } from '../web/pinyin.js';
 
 const results = [];
 const check = (name, ok, detail = '') => {
@@ -596,6 +597,13 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
   check('classifyKey: 收藏归组', classifyKey('zerokit.favorites') === '收藏与标记');
   check('206② 孤儿键收编（ai-assist/batchconc/ldensity 等 10 键全部进组）', ['zerokit.ai-assist','zerokit.batchconc','zerokit.ldensity','zerokit.tdensity','zerokit.textview.wrap','zerokit.sortmode','zerokit.timeline-collapsed','zerokit.clip-hist','zerokit.cmdhist','zerokit.last-zshare'].every((k) => classifyKey(k) !== null), ['zerokit.ai-assist','zerokit.ldensity'].map((k) => k + '=' + classifyKey(k)).join(','));
   check('209①⑤ searchesExport 信封 + searchesMerge 置顶去重/8 上限', (() => {
+  check('222③④ 拼音容错融合（fuzzy 分档 + 精确不变 + 5s 缓存复用）', (() => {
+    const r = romanize('代理历史');
+    const das = scorePinyin(r, 'das');
+    const dql = scorePinyin(r, 'dqls');
+    const dl = scorePinyin(r, 'dl');
+    return das === 36 && dql === 44 && dl === 60 && pinyinFuzzyScore(r, 'x') === 0;
+  })());
   check('211①⑥ resultCacheKey/Hit（参数指纹排序稳定 + TTL 过期）', (() => {
     const k1 = resultCacheKey('p', 'a', { b: 1, a: 'x' });
     const k2 = resultCacheKey('p', 'a', { a: 'x', b: 1 });
