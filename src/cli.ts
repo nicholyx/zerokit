@@ -4002,6 +4002,15 @@ async function cmdAudit(args: string[]): Promise<number> {
     const esc = (v: unknown) => { const t = v == null ? '' : String(v); return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
     const head = 'ts,decision,caller,plugin,action,ms,error';
     const lines = [head, ...records.map((r) => [r.ts, r.decision, r.caller, r.plugin, r.action, typeof r.ms === 'number' ? r.ms : '', r.error ?? ''].map(esc).join(','))];
+    const oi = args.indexOf('--out');
+    let csvFile = oi >= 0 && args[oi + 1] && !['yaml', 'csv', 'table', 'md', 'tsv', 'json'].includes(args[oi + 1] ?? '') ? args[oi + 1] : undefined;
+    if (csvFile && !/\.csv$/i.test(csvFile)) csvFile += '.csv';
+    if (csvFile) {
+      // 第二百二十五轮③：CSV BOM（落文件时 Excel 中文兼容；stdout 保持纯文本供管道）
+      fs.writeFileSync(csvFile, '\ufeff' + lines.join('\n') + '\n');
+      process.stdout.write(c.green(`✓ 已写入 ${csvFile}（${lines.length} 行，含 BOM）\n`));
+      return 0;
+    }
     process.stdout.write(lines.join('\n') + '\n');
     return 0;
   }

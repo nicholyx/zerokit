@@ -94,6 +94,8 @@ console.log('STREAM:'+ok+' LINES:'+ls.length);p.kill();process.exit(0);},6500);`
   check('⑥ p50/p95/max', all.includes('p50') && all.includes('p95') && (all.includes('max') || all.includes('最慢')));
 }
 
+import fs from 'node:fs';
+import os from 'node:os';
 // ⑦ audit --export csv：表头+行+字段序
 {
   const r = run(['audit', '--export', 'csv', '--last', '3']);
@@ -101,6 +103,17 @@ console.log('STREAM:'+ok+' LINES:'+ls.length);p.kill();process.exit(0);},6500);`
   check('⑦ CSV 表头', lines[0] === 'ts,decision,caller,plugin,action,ms,error');
   check('⑦ CSV 行数=3+表头', lines.length === 4);
   check('⑦ CSV 引号转义（error 含逗号安全）', lines.slice(1).every((l) => l.split(',').length === 7 || l.includes('"')));
+}
+// 第二百二十五轮⑧：CSV BOM + 自动扩展名（--out 落文件）
+{
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'c120bom-'));
+  const env2 = { ...process.env, ZEROKIT_HOME: path.join(home, 'zk') };
+  const r1 = run(['audit', '--export', 'csv', '--out', path.join(home, 'audit.csv'), '--last', '3']);
+  const raw = fs.readFileSync(path.join(home, 'audit.csv')).slice(0, 3);
+  check('225③ CSV 文件带 UTF-8 BOM', raw[0] === 0xef && raw[1] === 0xbb && raw[2] === 0xbf, JSON.stringify([...raw]));
+  const r2 = run(['audit', '--export', 'csv', '--out', path.join(home, 'audit-noext').replace(/\\/g, '/'), '--last', '3']);
+  check('225② 无扩展名自动补 .csv', fs.existsSync(path.join(home, 'audit-noext.csv')));
+  fs.rmSync(home, { recursive: true, force: true });
 }
 // ⑦ 只支持 csv
 {
