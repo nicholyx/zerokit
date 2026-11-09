@@ -621,6 +621,28 @@ async function cmdService(args: string[]): Promise<number> {
   return 2;
 }
 
+/** 第二百二十轮④：zkit dashboard——四面健康全景（文本版） */
+async function cmdDashboard(): Promise<number> {
+  const [doctorMod, servicesMod, cliXCache] = await Promise.all([
+    import('./core/doctor.ts'), import('./core/services.ts'), import('./core/cliX.ts'),
+  ]);
+  const report = await doctorMod.buildDoctorReport();
+  const errCount = report.plugins.filter((p) => !p.ok).length + report.tools.filter((t) => !t.ok).length;
+  const warnCount = report.plugins.reduce((acc, p) => acc + p.problems.filter((x) => x.level === 'warning').length, 0);
+  const services = servicesMod.listServices();
+  const running = services.filter((x) => x.running).length;
+  const cache = cliXCache.cacheStats();
+  const entries = listPlugins();
+  const actCount = entries.reduce((acc, e) => acc + (e.plugin?.actions.length ?? 0), 0);
+  process.stdout.write(`${c.bold('zerokit 全景总检')}\n`);
+  process.stdout.write(`  doctor：✗${errCount}  ⚠${warnCount}  ✓${report.plugins.filter((p) => p.ok).length + report.tools.filter((t) => t.ok).length}\n`);
+  process.stdout.write(`  服务：${running}/${services.length} 在跑\n`);
+  process.stdout.write(`  缓存：${cache.total} 条（命中 ${cache.hits} / 未命中 ${cache.misses}）\n`);
+  process.stdout.write(`  插件：${entries.length} 个 / ${actCount} 个动作\n`);
+  if (errCount > 0) process.stdout.write(c.yellow('\n  有需要处理的项——zkit doctor 看详情\n'));
+  return 0;
+}
+
 async function cmdCache(args: string[]): Promise<number> {
   const x = await import('./core/cliX.ts');
   const sub = args[0] ?? 'stats';
@@ -5277,6 +5299,8 @@ async function main(): Promise<number> {
       return cmdShow(rest);
     case 'run':
       return cmdRun(rest);
+    case 'dashboard':
+      return await cmdDashboard();
     case 'cache':
       return await cmdCache(rest);
     case 'config':

@@ -1528,3 +1528,6 @@ el\.modeLabel\.textContent\ =\ t\('svcPanel'\);
 setCount\(r\.ok\ \?\ `✓\ \$\{id\}\ 已重启：\$\{r\.message\}`\ :\ `✗\ \$\{r\.message\}`\);
 if\ \(!window\.confirm\(`停止服务\ \$\{id\}？`\)\)\ return;
 if\ \(!window\.confirm\(`重启服务\ \$\{id\}？`\)\)\ return;
+const\ state\ =\ d\.ok\ \?\ '✓\ 全部健康'\ :\ `⚠\ \$\{d\.doctor\.errors\}\ 项需处理`;
+全景总检', hint: '四面健康一屏看全
+<button\ class="drawer\-link"\ id="dlDash"\ title="四面健康总检：doctor/服务/缓存
