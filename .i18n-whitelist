@@ -1526,3 +1526,5 @@ setCount\(one\?\.ok\ \?\ `✓\ 已停止\ \$\{id\}`\ :\ `✗\ \$\{one\?\.message
 \{\ icon:\ '🔧',\ label:\ '服务面板',\ hint:\ '插件声明的后台服务：状态与停止',\ key:\ '',
 el\.modeLabel\.textContent\ =\ t\('svcPanel'\);
 setCount\(r\.ok\ \?\ `✓\ \$\{id\}\ 已重启：\$\{r\.message\}`\ :\ `✗\ \$\{r\.message\}`\);
+if\ \(!window\.confirm\(`停止服务\ \$\{id\}？`\)\)\ return;
+if\ \(!window\.confirm\(`重启服务\ \$\{id\}？`\)\)\ return;

@@ -6912,6 +6912,7 @@ async function showServices() {
     el.doctorView.querySelectorAll('[data-svc-stop]').forEach((b) => {
       b.addEventListener('click', async () => {
         const id = b.dataset.svcStop;
+        if (!window.confirm(`停止服务 ${id}？`)) return;
         const r = await api('/api/kill', { method: 'POST', body: { ids: [id] } });
         const one = r.results?.[0];
         setCount(one?.ok ? `✓ 已停止 ${id}` : `✗ ${one?.message ?? '停止失败'}`);
@@ -6929,6 +6930,7 @@ async function showServices() {
     el.doctorView.querySelectorAll('[data-svc-restart]').forEach((b) => {
       b.addEventListener('click', async () => {
         const id = b.dataset.svcRestart;
+        if (!window.confirm(`重启服务 ${id}？`)) return;
         await api('/api/kill', { method: 'POST', body: { ids: [id] } });
         const r = await api('/api/services/start', { method: 'POST', body: { service: id } });
         setCount(r.ok ? `✓ ${id} 已重启：${r.message}` : `✗ ${r.message}`);
@@ -6936,6 +6938,13 @@ async function showServices() {
       });
     });
     $('svcBack')?.addEventListener('click', () => { location.hash = '#/'; });
+    // 第二百一十八轮⑤：5s 自动刷新运行状态（不依赖手动重进）
+    window.__svcAutoRefresh?.stop?.();
+    const timer = setInterval(() => {
+      if (mode !== 'services' || !location.hash.startsWith('#/services')) { clearInterval(timer); return; }
+      showServices();
+    }, 5000);
+    window.__svcAutoRefresh = { stop: () => clearInterval(timer) };
   } catch (e) {
     el.doctorView.innerHTML = `<div class="ps-empty" role="status">${t('cacheLoadFail')}${esc(e.message)}</div>`;
   }

@@ -1592,7 +1592,9 @@ export function createServer(): http.Server {
         const target = String(body['service'] ?? '');
         const i = target.lastIndexOf('.');
         if (!target || i <= 0) { fail(res, 400, 'service 应为 插件.服务 形式'); return; }
-        const r = await startService(target.slice(0, i), target.slice(i + 1));
+        const r = await startService(target.slice(0, i), target.slice(i + 1), 'ui');
+        // 第二百一十八轮①：start 补审计（与 CLI stop 同语言——decision + reason）
+        audit({ ts: new Date().toISOString(), caller: 'ui', plugin: target.slice(0, i), action: `service-start:${target.slice(i + 1)}`, tool: 'service', risk: 'mutate', decision: r.ok ? 'allow' : 'deny', reason: r.message });
         json(res, 200, { ok: r.ok, message: r.message, pid: r.pid });
         return;
       }
