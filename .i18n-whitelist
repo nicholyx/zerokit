@@ -1521,3 +1521,7 @@ fresh-toggle\" title=\"跳过 10s 结果缓存
 const\ rows\ =\ data\.items\.map\(\(it\)\ =>\ `<tr><td>\$\{esc\(it\.key\)\}</td>
 \{\ icon:\ '⚡',\ label:\ '缓存面板',\ hint:\ '只读动作缓存条目与命中统计'
 <button\ class="drawer\-link"\ id="dlCache"\ title="只读动作缓存面板
+\ \ \ \ \$\{svcHtml\ \?\ `<div\ class="ps\-group"><h3>插件声明的服务</h3>\$\{svc
+setCount\(one\?\.ok\ \?\ `✓\ 已停止\ \$\{id\}`\ :\ `✗\ \$\{one\?\.message\ \?\?\ '停止失败'\}`\);
+\{\ icon:\ '🔧',\ label:\ '服务面板',\ hint:\ '插件声明的后台服务：状态与停止',\ key:\ '',
+el\.modeLabel\.textContent\ =\ t\('svcPanel'\);

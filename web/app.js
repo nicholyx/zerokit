@@ -6878,6 +6878,45 @@ async function renderLogs() {
 }
 
 // ---------------------------------------------------------------- 环境自检
+async function showServices() {
+  mode = 'services';
+  el.modeLabel.textContent = t('svcPanel');
+  el.searchRow.classList.add('hidden');
+  hidePanels();
+  showPanelAnimated(el.doctorView);
+  if (location.hash !== '#/services') history.replaceState(null, '', '#/services');
+  try {
+    const data = await api('/api/services');
+    const rows = data.services.map((sv) => {
+      const mark = sv.running ? '●' : '○';
+      const pid = sv.pid ? `PID ${sv.pid}` : t('svcStopped');
+      const port = sv.port ? ` :${sv.port}` : '';
+      const stopBtn = sv.running && sv.canStop
+        ? `<button class="ghost svc-stop" data-svc-stop="${esc(sv.pluginId)}.${esc(sv.id)}">${t('svcStopBtn')}</button>` : '';
+      return `<tr><td>${mark} <b>${esc(sv.pluginName)}</b> · ${esc(sv.id)}</td><td>${esc(sv.title)}</td><td>${pid}${port}</td><td>${stopBtn}</td></tr>`;
+    }).join('');
+    el.doctorView.innerHTML = `
+      <div class="panel">
+        <h2>${t('svcPanel')}</h2>
+        <p class="sub">${t('svcSub')}</p>
+        <table class="grid"><thead><tr><th>${t('svcColId')}</th><th>${t('svcColTitle')}</th><th>${t('svcColState')}</th><th></th></tr></thead><tbody>${rows || `<tr><td colspan="4">${t('svcEmpty')}</td></tr>`}</tbody></table>
+        <div class="actions"><button class="ghost" id="svcBack">${t('backToList')}</button></div>
+      </div>`;
+    el.doctorView.querySelectorAll('[data-svc-stop]').forEach((b) => {
+      b.addEventListener('click', async () => {
+        const id = b.dataset.svcStop;
+        const r = await api('/api/kill', { method: 'POST', body: { ids: [id] } });
+        const one = r.results?.[0];
+        setCount(one?.ok ? `✓ 已停止 ${id}` : `✗ ${one?.message ?? '停止失败'}`);
+        showServices();
+      });
+    });
+    $('svcBack')?.addEventListener('click', () => { location.hash = '#/'; });
+  } catch (e) {
+    el.doctorView.innerHTML = `<div class="ps-empty" role="status">${t('cacheLoadFail')}${esc(e.message)}</div>`;
+  }
+}
+
 async function showCache() {
   mode = 'cache';
   el.modeLabel.textContent = t('cachePanel');
@@ -9228,6 +9267,7 @@ function showPalette() {
     { icon: '◐', label: '深色 / 浅色', hint: '一键切换主题', key: 'Ctrl+Shift+D', group: 'op', act: () => toggleLightDark() },
     { icon: '☰', label: '设置抽屉', hint: '主题/语言/配置档/备份统一入口', key: '', group: 'page', act: () => openDrawer() },
     { icon: '⚡', label: '缓存面板', hint: '只读动作缓存条目与命中统计', key: '', group: 'page', act: () => { location.hash = '#/cache'; } },
+    { icon: '🔧', label: '服务面板', hint: '插件声明的后台服务：状态与停止', key: '', group: 'page', act: () => { location.hash = '#/services'; } },
     { icon: '🧪', label: '开发者面板', hint: 'dev 插件摘要/文件树/沙箱控制台 #/dev', key: '', group: 'page', act: () => { location.hash = '#/dev'; } },
     // 第八十五轮②：操作类命令——切主题/切语言/备份/清历史
     { icon: '☀', label: '主题：浅色', hint: '切换到浅色主题', key: '', group: 'op', act: () => { exitPalette(); try { localStorage.setItem(PREF.theme, 'light'); } catch { /* 忽略 */ } applyTheme(); } },
@@ -10120,6 +10160,10 @@ function applyHash() {
   // 第五十四轮：#/timeline 时间线与复盘
   if ((location.hash || '') === '#/timeline') { showTimeline(); return; }
 
+  // 第二百一十六轮④：#/services 服务面板
+  if ((location.hash || '') === '#/services') { showServices(); return; }
+  // #/cache 缓存面板（213 轮走 case 分支，这里补直达）
+  if ((location.hash || '') === '#/cache') { showCache(); return; }
   // #/ps  直接打开「运行中」
   if ((location.hash || '') === '#/ps') {
     showPs();
@@ -10562,6 +10606,7 @@ function applyLang(rerender = false) {
     case 'logs': showLogs(); break;
     case 'doctor': showDoctor(); break;
     case 'cache': showCache(); break;
+    case 'services': showServices(); break;
     case 'plugins': showPlugins(); break;
     case 'dash': showDash(); break;
     case 'stats': showStats(); break;

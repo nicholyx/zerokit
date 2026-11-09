@@ -551,6 +551,40 @@ function cmdConfigUsage(): number {
 }
 
 /** 第二百零二轮①③④：缓存面板 CLI——zkit cache stats|clear|prune */
+/** 第二百一十六轮②：zkit service list|status|stop——后台服务生命周期 CLI 面（与 UI 同一存储） */
+async function cmdService(args: string[]): Promise<number> {
+  const { listServices, stopService } = await import('./core/services.ts');
+  const { audit } = await import('./core/runner.ts');
+  const sub = args[0] ?? 'list';
+  if (sub === 'list' || sub === 'status') {
+    const all = listServices();
+    if (!all.length) { process.stdout.write('没有声明服务的插件。\n'); return 0; }
+    for (const sv of all) {
+      const mark = sv.running ? '●' : '○';
+      const pid = sv.pid ? `PID ${sv.pid}` : '停着';
+      const port = sv.port ? ` :${sv.port}` : '';
+      process.stdout.write(`${mark} ${sv.pluginId}.${sv.id}  ${sv.title}  ${pid}${port}\n`);
+      if (sv.stopCommand) process.stdout.write(`    停止：${sv.stopCommand}\n`);
+    }
+    return 0;
+  }
+  if (sub === 'stop') {
+    const target = args[1] ?? '';
+    if (!target || !target.includes('.')) {
+      process.stderr.write('用法：zkit service stop 插件.服务\n');
+      return 2;
+    }
+    const i = target.lastIndexOf('.');
+    const r = await stopService(target.slice(0, i), target.slice(i + 1));
+    audit({ ts: new Date().toISOString(), caller: 'cli', plugin: target.slice(0, i), action: `service-stop:${target.slice(i + 1)}`, tool: 'service', risk: 'mutate', decision: r.ok ? 'allow' : 'deny', reason: r.message });
+    if (r.ok) process.stdout.write(`✓ 已停止 ${target}\n`);
+    else { process.stderr.write(`✗ ${r.message}\n`); return 1; }
+    return 0;
+  }
+  process.stderr.write('用法：zkit service <list|status|stop> [插件.服务]\n');
+  return 2;
+}
+
 async function cmdCache(args: string[]): Promise<number> {
   const x = await import('./core/cliX.ts');
   const sub = args[0] ?? 'stats';
@@ -5225,6 +5259,8 @@ async function main(): Promise<number> {
       return await cmdTimers(rest);
     case 'market':
       return cmdMarket(rest);
+    case 'service':
+      return cmdService(rest);
     case 'ps':
       return cmdPs();
     case 'kill':
