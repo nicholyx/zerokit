@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [3.8.0] - 2026-11-09
+
+### Added
+
+- services 面板与后台服务生命周期：CLI `zkit service list|status|stop 插件.服务`（与 UI 同一存储，stop 走审计）；server /api/services GET 端点 + OpenAPI；UI #/services 面板（服务表+停止按钮，复用 ps 面板形态与全站令牌）；命令面板「服务面板」入口 + 抽屉链接；I18N zh/en 全键。
+
 ## [3.7.0] - 2026-11-09
 
 ### Added

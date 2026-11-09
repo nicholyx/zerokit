@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.20.0] - 2026-11-10
+
+### Added
+
 - result 分享页与 zkresult 双向往返：分享页（#/share/<id>）新增「导出 zkresult」按钮（buildZkresult 完整落盘 visCols/rows/at——对方可导入回放）；extras-smoke +1 往返等价断言（buildZkresult → parseZkresult 字段一致）。
 
 ## [3.19.0] - 2026-11-10
@@ -72,10 +78,4 @@
 ### Added
 
 - 服务生命周期闭环（启动/重启补全）：[[service]] 新增 run 可选字段（启动命令 argv）；zkit service start/restart 子命令（start 走审计）；/api/services/start POST 端点；UI 面板启动/重启按钮（canStart 门卫）；重复启动防护；clipboard 服务补 run 字段。
-
-## [3.8.0] - 2026-11-09
-
-### Added
-
-- services 面板与后台服务生命周期：CLI `zkit service list|status|stop 插件.服务`（与 UI 同一存储，stop 走审计）；server /api/services GET 端点 + OpenAPI；UI #/services 面板（服务表+停止按钮，复用 ps 面板形态与全站令牌）；命令面板「服务面板」入口 + 抽屉链接；I18N zh/en 全键。
 
