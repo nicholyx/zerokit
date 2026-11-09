@@ -8,6 +8,34 @@ import { HOME } from './paths.ts';
 export const HISTORY_FILE = (): string => path.join(HOME, 'history.json');
 export const SEARCHES_FILE = (): string => path.join(HOME, 'searches.json');
 
+/** 第二百一十一轮①：只读动作 TTL 缓存——cacheKey（插件.动作+参数指纹）与缓存文件路径 */
+export const RESULT_CACHE_FILE = (): string => path.join(HOME, 'result-cache.json');
+export function cacheKey(pluginId: string, actionId: string, values: Record<string, unknown>): string {
+  const flat = Object.keys(values ?? {}).sort().map((k) => `${k}=${String(values[k] ?? '')}`).join('&');
+  return `${pluginId}.${actionId}?${flat}`;
+}
+/** 第二百一十一轮①：cacheHit——entry { key, at, result } 且 age < TTL 时命中 */
+export function cacheHit(entry: { key?: string; at?: number } | undefined, key: string, ttlMs: number, now = Date.now()): boolean {
+  if (!entry || entry.key !== key || typeof entry.at !== 'number') return false;
+  return now - entry.at < ttlMs;
+}
+/** 第二百一十一轮⑥：缓存读写（数据目录内，可抛弃） */
+export function readResultCache(): Record<string, { key: string; at: number; result: unknown }> {
+  try {
+    const v = JSON.parse(fs.readFileSync(RESULT_CACHE_FILE(), 'utf8'));
+    return v && typeof v === 'object' ? v : {};
+  } catch { return {}; }
+}
+export function writeResultCacheEntry(key: string, result: unknown): void {
+  const all = readResultCache();
+  // 只留最近 20 条（防膨胀）
+  const entries = Object.entries(all).sort((a, b) => (b[1].at ?? 0) - (a[1].at ?? 0)).slice(0, 19);
+  const next = Object.fromEntries(entries);
+  next[key] = { key, at: Date.now(), result };
+  fs.mkdirSync(path.dirname(RESULT_CACHE_FILE()), { recursive: true });
+  fs.writeFileSync(RESULT_CACHE_FILE(), JSON.stringify(next));
+}
+
 export interface HistoryEntry {
   ts: string;          // ISO
   plugin: string;
