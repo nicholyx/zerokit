@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.16.0] - 2026-11-10
+
+### Added
+
 - 导出格式规范化：exportMime 五类映射（csv/json/md/txt/zkresult.json，未知兜底 octet-stream）进 extras；全站 15 处下载点字面 MIME 统一接令牌；CSV 全部加 UTF-8 BOM（Excel 中文不乱码）；watch CSV 文件名统一走 exportFilename（时间戳形态）；extras-smoke +1 断言（五类映射+边界）。
 
 ## [3.15.0] - 2026-11-10
@@ -72,10 +78,4 @@
 ### Added
 
 - 缓存面板与命中统计：zkit cache stats/prune/clear [--older-than] 三子命令；/api/cache GET/DELETE 端点；UI #/cache 面板（条目表+命中统计瓷贴+剔除/清空）；命中计数落盘 cache-stats.json（CLI/server 双面累计 hits/misses）；I18N zh/en 全键。
-
-## [3.4.0] - 2026-11-09
-
-### Added
-
-- UI 执行路径接缓存（三面闭环收官）：/api/run 接 TTL 缓存（与 CLI 共用 result-cache.json——CLI 跑过 UI 秒回）；响应带 cacheHit 标记 → UI 结果卡显示「⚡ 缓存」徽标；详情页只读动作显示「强制刷新」复选框（勾选传 fresh）。
 
