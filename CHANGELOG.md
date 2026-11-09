@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- CLI 导出与 UI 对齐：audit --export csv 落文件加 UTF-8 BOM（Excel 中文兼容，stdout 保持纯文本供管道）；--out 无扩展名自动补 .csv；cli120-smoke +2 断言（BOM 字节核对/自动扩展名）。
 
 ## [3.16.0] - 2026-11-10
 
