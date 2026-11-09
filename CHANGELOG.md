@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.14.0] - 2026-11-09
+
+### Added
+
 - 搜索拼音增强：scorePinyin 融合容错档——漏/错一个字母的近似前缀（编辑距离 ≤1，44/36 两档）排在所有精确命中之后；pinyinFuzzyScore 独立导出（可测）；romanize 内建 cache（8000 条）复用确认（⑤ 性能已有）；extras-smoke +1 断言（fuzzy 分档 + 精确不变）。
 
 ## [3.13.0] - 2026-11-09
@@ -71,10 +77,4 @@
 ### Added
 
 - 只读动作 TTL 缓存：CLI run 同参数 10s 内秒回（⚡ 缓存徽标 + --fresh 跳过 + ZEROKIT_CACHE_TTL=0 关闭 + 写类永不缓存）；缓存命中走同一输出管线（--copy/--out/--format 不因缓存丢失——cli45/148 两个测试抓到后修正）；cacheKey/cacheHit/readResultCache/writeResultCacheEntry 纯函数层（数据目录 result-cache.json，20 条上限）；UI 面 resultCacheKey/Hit 同语义纯函数。
-
-## [3.2.0] - 2026-11-09
-
-### Added
-
-- 设置抽屉搜索定位：抽屉顶部搜索框（输入即过滤七大区，命中区显示/其余隐藏）；命中计数徽标「N / M 区」；无匹配区隐藏即空态；Esc 清空恢复；/ 键抽屉内聚焦搜索框；匹配含中文子串+首词前缀；纯函数 drawerSearchMatch/Count 可测。
 
