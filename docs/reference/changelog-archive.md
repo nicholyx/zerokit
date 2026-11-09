@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [2.1.0] - 2026-11-08
+
+### Added
+
+- v2 线治理基线：新增 SECURITY.md（漏洞报告私密渠道+响应时限+版本支持）与 SUPPORT.md（支持矩阵+求助路径）；CONTRIBUTING 增「治理」段（决策规则/语义化承诺）；docs/reference/baseline-v2.md 基线指标快照（冷启动 99ms/130 文件 3054 断言/13 插件 52 动作）+ scripts/baseline-snapshot.mjs 生成脚本（--check 检测版本漂移）。
+
 ## [2.0.0] - 2026-11-08
 
 ### Added

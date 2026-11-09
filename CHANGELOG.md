@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.3.0] - 2026-11-09
+
+### Added
+
 - 只读动作 TTL 缓存：CLI run 同参数 10s 内秒回（⚡ 缓存徽标 + --fresh 跳过 + ZEROKIT_CACHE_TTL=0 关闭 + 写类永不缓存）；缓存命中走同一输出管线（--copy/--out/--format 不因缓存丢失——cli45/148 两个测试抓到后修正）；cacheKey/cacheHit/readResultCache/writeResultCacheEntry 纯函数层（数据目录 result-cache.json，20 条上限）；UI 面 resultCacheKey/Hit 同语义纯函数。
 
 ## [3.2.0] - 2026-11-09
@@ -71,10 +77,4 @@
 ### Added
 
 - 项目故事文档 docs/guide/story.md（第 200 轮整轮里程碑）：为什么做/三个关键决策（无构建/数据可抛弃/annotations 不可信）/走过的弯路（弯路全变护栏）/里程碑年表 20 节点/数据总览（引用基线快照）/v2 线路线与新贡献者起点；docs 导航与 README 均已链入。
-
-## [2.1.0] - 2026-11-08
-
-### Added
-
-- v2 线治理基线：新增 SECURITY.md（漏洞报告私密渠道+响应时限+版本支持）与 SUPPORT.md（支持矩阵+求助路径）；CONTRIBUTING 增「治理」段（决策规则/语义化承诺）；docs/reference/baseline-v2.md 基线指标快照（冷启动 99ms/130 文件 3054 断言/13 插件 52 动作）+ scripts/baseline-snapshot.mjs 生成脚本（--check 检测版本漂移）。
 
