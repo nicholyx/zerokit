@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [2.6.0] - 2026-11-09
+
+### Added
+
+- 热路径性能优化（perf-guard 护栏下）：filterRows 的 hay 构造从 Object.values+map+join 换成 for-in 累加——10k 快 12%、50k 快 41%（省三次中间数组分配）；resultQuery 的比较符正则提升到模块级（热路径零重编译）；highlightSegments indexOf 扫描经 profiling 确认已最优，显式不动。
+
 ## [2.5.0] - 2026-11-09
 
 ### Added
