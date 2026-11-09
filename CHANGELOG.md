@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.4.0] - 2026-11-09
+
+### Added
+
 - UI 执行路径接缓存（三面闭环收官）：/api/run 接 TTL 缓存（与 CLI 共用 result-cache.json——CLI 跑过 UI 秒回）；响应带 cacheHit 标记 → UI 结果卡显示「⚡ 缓存」徽标；详情页只读动作显示「强制刷新」复选框（勾选传 fresh）。
 
 ## [3.3.0] - 2026-11-09
@@ -71,10 +77,4 @@
 ### Added
 
 - 性能回归防护网：scripts/perf-guard.mjs 进 lint——highlightHtml/filterRows 10k 项 <10ms/次、CLI 冷启动 <300ms 三预算断言 + O(n²) 参照实现自检（证明预算真实有效，非恒过）；基线快照补预算表。
-
-## [2.2.0] - 2026-11-08
-
-### Added
-
-- 项目故事文档 docs/guide/story.md（第 200 轮整轮里程碑）：为什么做/三个关键决策（无构建/数据可抛弃/annotations 不可信）/走过的弯路（弯路全变护栏）/里程碑年表 20 节点/数据总览（引用基线快照）/v2 线路线与新贡献者起点；docs 导航与 README 均已链入。
 
