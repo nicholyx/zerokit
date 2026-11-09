@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Plugin, Service } from './manifest.ts';
@@ -35,6 +35,8 @@ export interface ServiceStatus {
   stopCommand?: string;
   /** 是否能用 stop 命令停（否则只能按 PID 杀） */
   canStop: boolean;
+  /** 第二百一十七轮⑤：是否声明了 run 启动命令（面板据此显示「启动」按钮） */
+  canStart: boolean;
 }
 
 /**
@@ -122,6 +124,7 @@ function serviceOf(plugin: Plugin, s: Service): ServiceStatus {
     description: s.description,
     running: false,
     canStop: Boolean(s.stop && s.stop.length > 0) || Boolean(s.pidFile),
+    canStart: Boolean(s.run && s.run.length > 0),
   };
 
   if (s.port !== undefined) status.port = s.port;
@@ -175,6 +178,36 @@ export interface StopOutcome {
  * 停掉一个服务。优先用插件自己声明的 stop 命令（它知道怎么优雅退出）；
  * 没有就按检测到的 PID 杀掉。
  */
+/** 第二百一十七轮②：启动服务——service.run 命令（spawn 后登记进程表，detached 脱离本进程） */
+export interface StartOutcome { ok: boolean; message: string; pid?: number }
+export async function startService(pluginId: string, serviceId: string): Promise<StartOutcome> {
+  const entry = listPlugins().find((e) => e.plugin?.id === pluginId);
+  const svc = entry?.plugin?.services.find((s) => s.id === serviceId);
+  if (!entry?.plugin || !svc) return { ok: false, message: `没有插件 ${pluginId} 或服务 ${serviceId}` };
+  if (!svc.run || svc.run.length === 0) return { ok: false, message: `服务 ${pluginId}.${serviceId} 没有声明 run 启动命令` };
+  const status = serviceOf(entry.plugin, svc);
+  if (status.running) return { ok: false, message: `服务已在运行（PID ${status.pid}），不重复启动` };
+  // 直接 spawn：占位符解析复用 previewCommand 的 vars 逻辑
+  const vars: Record<string, string> = {
+    plugin_dir: entry.plugin.dir,
+    home: HOME,
+    node: process.execPath,
+    ...(resolveTool('python') ? { python: resolveTool('python')!.path } : {}),
+  };
+  const argv = svc.run.map((a) => a.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? `{${k}}`));
+  const child = spawn(argv[0]!, argv.slice(1), {
+    cwd: svc.cwd ? path.resolve(entry.plugin.dir, svc.cwd) : entry.plugin.dir,
+    env: { ...process.env, ...svc.env },
+    stdio: 'ignore',
+    detached: true,
+  });
+  child.unref();
+  // 给端口/pid 文件一点时间生效再报状态
+  await new Promise((r) => setTimeout(r, 600));
+  const after = serviceOf(entry.plugin, svc);
+  return { ok: true, message: after.running ? `已启动（PID ${after.pid}）` : '已启动（等端口监听确认）', pid: child.pid };
+}
+
 export async function stopService(pluginId: string, serviceId: string): Promise<StopOutcome> {
   const entry = listPlugins().find((e) => e.plugin?.id === pluginId);
   const plugin = entry?.plugin;

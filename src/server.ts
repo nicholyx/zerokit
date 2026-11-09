@@ -90,6 +90,7 @@ const API_METHODS: Record<string, string[]> = {
   '/api/run': ['POST'],
   '/api/cache': ['GET', 'DELETE'],
   '/api/services': ['GET'],
+  '/api/services/start': ['POST'],
   '/api/stop': ['POST'],
   '/api/kill': ['POST'],
   '/api/open': ['POST'],
@@ -138,6 +139,7 @@ const API_SPEC = {
     '/api/run': { post: { summary: '执行动作（body: plugin/action/values）', security: [{ token: [] }] } },
     '/api/cache': { get: { summary: '缓存面板（条目+命中统计）', security: [{ token: [] }] }, delete: { summary: '清空缓存', security: [{ token: [] }] } },
     '/api/services': { get: { summary: '声明服务的清单与状态', security: [{ token: [] }] } },
+    '/api/services/start': { post: { summary: '启动声明服务（body: service=插件.服务）', security: [{ token: [] }] } },
     '/api/stop': { post: { summary: '停止执行（body: key，缺省停全部）' } },
   },
   components: { securitySchemes: { token: { type: 'apiKey', in: 'header', name: 'X-ZeroKit-Token' } } },
@@ -1583,6 +1585,17 @@ export function createServer(): http.Server {
       }
       // 第二百一十三轮⑥：缓存面板端点
       // 第二百一十六轮③：服务清单机读端点
+      // 第二百一十七轮④：服务启动端点（UI 启动按钮对位）
+      if (url.pathname === '/api/services/start' && req.method === 'POST') {
+        const body = await readBody(req);
+        const { startService } = await import('./core/services.ts');
+        const target = String(body['service'] ?? '');
+        const i = target.lastIndexOf('.');
+        if (!target || i <= 0) { fail(res, 400, 'service 应为 插件.服务 形式'); return; }
+        const r = await startService(target.slice(0, i), target.slice(i + 1));
+        json(res, 200, { ok: r.ok, message: r.message, pid: r.pid });
+        return;
+      }
       if (url.pathname === '/api/services' && req.method === 'GET') {
         const { listServices } = await import('./core/services.ts');
         json(res, 200, { services: listServices() });

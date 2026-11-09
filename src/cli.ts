@@ -568,6 +568,29 @@ async function cmdService(args: string[]): Promise<number> {
     }
     return 0;
   }
+  if (sub === 'start') {
+    const target = args[1] ?? '';
+    if (!target || !target.includes('.')) { process.stderr.write('用法：zkit service start 插件.服务\n'); return 2; }
+    const i = target.lastIndexOf('.');
+    const { startService } = await import('./core/services.ts');
+    const r = await startService(target.slice(0, i), target.slice(i + 1));
+    audit({ ts: new Date().toISOString(), caller: 'cli', plugin: target.slice(0, i), action: `service-start:${target.slice(i + 1)}`, tool: 'service', risk: 'mutate', decision: r.ok ? 'allow' : 'deny', reason: r.message });
+    if (r.ok) process.stdout.write(`✓ ${target} ${r.message}\n`);
+    else { process.stderr.write(`✗ ${r.message}\n`); return 1; }
+    return 0;
+  }
+  if (sub === 'restart') {
+    const target = args[1] ?? '';
+    if (!target || !target.includes('.')) { process.stderr.write('用法：zkit service restart 插件.服务\n'); return 2; }
+    const i = target.lastIndexOf('.');
+    const { startService } = await import('./core/services.ts');
+    const stopR = await stopService(target.slice(0, i), target.slice(i + 1));
+    const startR = await startService(target.slice(0, i), target.slice(i + 1));
+    audit({ ts: new Date().toISOString(), caller: 'cli', plugin: target.slice(0, i), action: `service-restart:${target.slice(i + 1)}`, tool: 'service', risk: 'mutate', decision: startR.ok ? 'allow' : 'deny', reason: `${stopR.message} → ${startR.message}` });
+    if (startR.ok) process.stdout.write(`✓ 已重启 ${target}：${startR.message}\n`);
+    else { process.stderr.write(`✗ ${startR.message}\n`); return 1; }
+    return 0;
+  }
   if (sub === 'stop') {
     const target = args[1] ?? '';
     if (!target || !target.includes('.')) {

@@ -55,6 +55,8 @@ id          = "watcher"
 title       = "剪贴板监听"
 description = "常驻轮询剪贴板的进程，负责把新内容写进历史"
 pidFile     = "clipboard.pid"
+# 第二百一十七轮②：启动命令补全——watch-start 同 argv，服务面板/CLI 可直接起
+run         = ["{node}", "clipboard.mjs", "watch-start", "{data_dir}", "clipboard.pid", "200", "2000", "700"]
 # 这里写死的 "clipboard.pid" 和上面的 pidFile 是同一个文件。
 # 注意不能写成 {pid_file} 占位符：services.ts 拼停止命令时传的是空的参数表，
 # 占位符会被整段丢掉，命令就跑了空。

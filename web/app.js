@@ -6891,9 +6891,16 @@ async function showServices() {
       const mark = sv.running ? '●' : '○';
       const pid = sv.pid ? `PID ${sv.pid}` : t('svcStopped');
       const port = sv.port ? ` :${sv.port}` : '';
+      const full = `${esc(sv.pluginId)}.${esc(sv.id)}`;
       const stopBtn = sv.running && sv.canStop
-        ? `<button class="ghost svc-stop" data-svc-stop="${esc(sv.pluginId)}.${esc(sv.id)}">${t('svcStopBtn')}</button>` : '';
-      return `<tr><td>${mark} <b>${esc(sv.pluginName)}</b> · ${esc(sv.id)}</td><td>${esc(sv.title)}</td><td>${pid}${port}</td><td>${stopBtn}</td></tr>`;
+        ? `<button class="ghost svc-stop" data-svc-stop="${full}">${t('svcStopBtn')}</button>` : '';
+      // 第二百一十七轮⑤：启动/重启按钮（run 未声明的服务不显示）
+      const canStart = sv.canStart !== false;
+      const startBtn = !sv.running && canStart
+        ? `<button class="ghost svc-start" data-svc-start="${full}">${t('svcStartBtn')}</button>` : '';
+      const restartBtn = sv.running
+        ? `<button class="ghost svc-restart" data-svc-restart="${full}">${t('svcRestartBtn')}</button>` : '';
+      return `<tr><td>${mark} <b>${esc(sv.pluginName)}</b> · ${esc(sv.id)}</td><td>${esc(sv.title)}</td><td>${pid}${port}</td><td>${startBtn}${stopBtn}${restartBtn}</td></tr>`;
     }).join('');
     el.doctorView.innerHTML = `
       <div class="panel">
@@ -6908,6 +6915,23 @@ async function showServices() {
         const r = await api('/api/kill', { method: 'POST', body: { ids: [id] } });
         const one = r.results?.[0];
         setCount(one?.ok ? `✓ 已停止 ${id}` : `✗ ${one?.message ?? '停止失败'}`);
+        showServices();
+      });
+    });
+    el.doctorView.querySelectorAll('[data-svc-start]').forEach((b) => {
+      b.addEventListener('click', async () => {
+        const id = b.dataset.svcStart;
+        const r = await api('/api/services/start', { method: 'POST', body: { service: id } });
+        setCount(r.ok ? `✓ ${id} ${r.message}` : `✗ ${r.message}`);
+        showServices();
+      });
+    });
+    el.doctorView.querySelectorAll('[data-svc-restart]').forEach((b) => {
+      b.addEventListener('click', async () => {
+        const id = b.dataset.svcRestart;
+        await api('/api/kill', { method: 'POST', body: { ids: [id] } });
+        const r = await api('/api/services/start', { method: 'POST', body: { service: id } });
+        setCount(r.ok ? `✓ ${id} 已重启：${r.message}` : `✗ ${r.message}`);
         showServices();
       });
     });
