@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [2.8.0] - 2026-11-09
+
+### Added
+
+- 设置持久化审计（第七审计线）：persist-audit.mjs 进 lint（localStorage 写点 vs BACKUP_GROUPS 覆盖，孤儿键=0 断言）；收编 10 个孤儿键（ai-assist/batchconc/ldensity/tdensity/textview.wrap/sortmode/timeline-collapsed/clip-hist/cmdhist/last-zshare——此前导出备份会丢这些设置）。
+
 ## [2.6.0] - 2026-11-09
 
 ### Added

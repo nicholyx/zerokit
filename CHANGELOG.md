@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.10.0] - 2026-11-09
+
+### Added
+
 - 服务生命周期安全收口：startService 补 run 命令来源校验（argv[0] 必须是已知工具或插件目录内路径——防越界命令）；/api/services/start 补审计（decision + reason，与 CLI stop 同语言）；UI 面板停止/重启按钮确认守卫；面板 5s 自动刷新运行状态。
 
 ## [3.9.0] - 2026-11-09
@@ -72,8 +78,3 @@
 
 - j/k 键盘导航终端级一致性：列表 browse 态新增 j/k 移动（此前只有 ↑↓/数字选）与 g/G 首尾跳（vim 惯例）；三处（列表/表格/面板）统一「到尾停 + scrollIntoView nearest 跟随」；键位速查浮层同步（↑↓/j k 合并行 + g/G 行，I18N 两语）；补修 184 轮回归——zk-closing 出场态只在 CSS，JS 关闭路径（closeDrawer）从未挂类，现经 zkExit 统一出口；五个过时断言修正（123② 断言的 json-foldable 已被 154 轮树渲染替代、185⑥ 全局禁令收紧到 hb 徽标、187② 线色值纠正 #848f9f、199⑤⑥ 注记迁移 CHANGELOG 头部）。
 
-## [2.8.0] - 2026-11-09
-
-### Added
-
-- 设置持久化审计（第七审计线）：persist-audit.mjs 进 lint（localStorage 写点 vs BACKUP_GROUPS 覆盖，孤儿键=0 断言）；收编 10 个孤儿键（ai-assist/batchconc/ldensity/tdensity/textview.wrap/sortmode/timeline-collapsed/clip-hist/cmdhist/last-zshare——此前导出备份会丢这些设置）。
