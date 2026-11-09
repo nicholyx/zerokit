@@ -6900,7 +6900,9 @@ async function showServices() {
         ? `<button class="ghost svc-start" data-svc-start="${full}">${t('svcStartBtn')}</button>` : '';
       const restartBtn = sv.running
         ? `<button class="ghost svc-restart" data-svc-restart="${full}">${t('svcRestartBtn')}</button>` : '';
-      return `<tr><td>${mark} <b>${esc(sv.pluginName)}</b> · ${esc(sv.id)}</td><td>${esc(sv.title)}</td><td>${pid}${port}</td><td>${startBtn}${stopBtn}${restartBtn}</td></tr>`;
+      // 第二百一十九轮③：日志按钮（展开尾部）
+      const logBtn = `<button class="ghost svc-logs" data-svc-logs="${full}">${t('svcLogsBtn')}</button>`;
+      return `<tr><td>${mark} <b>${esc(sv.pluginName)}</b> · ${esc(sv.id)}</td><td>${esc(sv.title)}</td><td>${pid}${port}</td><td>${logBtn}${startBtn}${stopBtn}${restartBtn}</td></tr><tr class="svc-log-row hidden" data-svc-log-row="${full}"><td colspan="4"><pre class="svc-log-pre">${t('svcLogsLoading')}</pre></td></tr>`;
     }).join('');
     el.doctorView.innerHTML = `
       <div class="panel">
@@ -6935,6 +6937,18 @@ async function showServices() {
         const r = await api('/api/services/start', { method: 'POST', body: { service: id } });
         setCount(r.ok ? `✓ ${id} 已重启：${r.message}` : `✗ ${r.message}`);
         showServices();
+      });
+    });
+    el.doctorView.querySelectorAll('[data-svc-logs]').forEach((b) => {
+      b.addEventListener('click', async () => {
+        const full = b.dataset.svcLogs;
+        const row = el.doctorView.querySelector(`[data-svc-log-row="${full}"]`);
+        if (!row) return;
+        if (!row.classList.contains('hidden')) { row.classList.add('hidden'); return; }
+        row.classList.remove('hidden');
+        const pre = row.querySelector('pre');
+        const lines = await api(`/api/services/logs?service=${encodeURIComponent(full)}&tail=30`);
+        pre.textContent = lines.hasLog && lines.lines?.length ? lines.lines.join('\n') : t('svcNoLogs');
       });
     });
     $('svcBack')?.addEventListener('click', () => { location.hash = '#/'; });

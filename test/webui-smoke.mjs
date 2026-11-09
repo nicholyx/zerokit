@@ -734,6 +734,7 @@ const failed = results.filter(([, ok]) => !ok);
   check('214 可复现构建文档 + 导航行', fs.existsSync(path.join(PKG_ROOT, 'docs', 'reference', 'reproducibility.md')) && fs.readFileSync(path.join(PKG_ROOT, 'docs', 'README.md'), 'utf8').includes('reproducibility.md'));
   check('218①② services start 审计 + run 来源校验', (() => { const sv = fs.readFileSync(path.join(PKG_ROOT, 'src', 'core', 'services.ts'), 'utf8'); return sv.includes('拒绝启动（防越界命令）') && sv.includes("caller = 'ui'"); })());
   check('218③⑤ 面板确认守卫 + 5s 自动刷新', app2.includes('window.confirm(`停止服务') && app2.includes('__svcAutoRefresh'));
+  check('219②③ 服务日志端点 + UI 日志展开按钮', (() => { const srv = fs.readFileSync(path.join(PKG_ROOT, 'src', 'server.ts'), 'utf8'); return srv.includes('/api/services/logs') && app2.includes('data-svc-logs') && app2.includes('svc-log-pre'); })());
   check('213⑤ showCache 面板 + COMMAND_LIST/抽屉入口 + I18N 键', app2.includes('async function showCache') && app2.includes("case 'cache': showCache()") && (() => { const e2 = fs.readFileSync(path.join(PKG_ROOT, 'web', 'extras.js'), 'utf8'); return e2.includes('cachePanel') && e2.includes('cachePruneBtn'); })());
 
   check('197⑧ mcp-copy-audit 进 lint（JSON-RPC 实连审计）', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'mcp-copy-audit.mjs'), 'utf8').includes('tools/list') && fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'lint.sh'), 'utf8').includes('mcp-copy-audit'));

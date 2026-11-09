@@ -2,7 +2,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Plugin, Service } from './manifest.ts';
-import { HOME } from './paths.ts';
+import { HOME, LOG_DIR, ensureDirs } from './paths.ts';
 import { listPlugins } from './registry.ts';
 import { resolveTool } from './resolve.ts';
 import { isAlive } from './runtime.ts';
@@ -180,6 +180,18 @@ export interface StopOutcome {
  */
 /** 第二百一十七轮②：启动服务——service.run 命令（spawn 后登记进程表，detached 脱离本进程） */
 export interface StartOutcome { ok: boolean; message: string; pid?: number }
+/** 第二百一十九轮②：服务日志尾部——按启动命令推断日志文件（bg.插件.首词.log 约定），无文件返回 null */
+export function serviceLogTail(pluginId: string, serviceId: string, tail = 20): string[] | null {
+  const entry = listPlugins().find((e) => e.plugin?.id === pluginId);
+  const svc = entry?.plugin?.services.find((s) => s.id === serviceId);
+  if (!entry?.plugin || !svc?.run || svc.run.length === 0) return null;
+  // 约定（217 轮起）：startService 把服务 stdout 落 LOG_DIR/bg.<插件>.<服务>.log
+  const f = path.join(LOG_DIR, `bg.${pluginId}.${serviceId}.log`);
+  if (!fs.existsSync(f)) return null;
+  const lines = fs.readFileSync(f, 'utf8').split('\n').filter((l) => l.length > 0);
+  return lines.length ? lines.slice(-tail) : null;
+}
+
 export async function startService(pluginId: string, serviceId: string, caller = 'ui'): Promise<StartOutcome> {
   const entry = listPlugins().find((e) => e.plugin?.id === pluginId);
   const svc = entry?.plugin?.services.find((s) => s.id === serviceId);
@@ -204,12 +216,17 @@ export async function startService(pluginId: string, serviceId: string, caller =
   if (!knownTool && !inPluginDir) {
     return { ok: false, message: `服务 ${pluginId}.${serviceId} 的启动命令不在插件目录内且不是已知工具——拒绝启动（防越界命令）` };
   }
+  // 第二百一十九轮②：stdout 落 LOG_DIR（与 runner 后台动作同约定 bg.插件.服务.log）——日志有源可查
+  ensureDirs();
+  const logPath = path.join(LOG_DIR, `bg.${pluginId}.${serviceId}.log`);
+  const logFd = fs.openSync(logPath, 'w');
   const child = spawn(argv[0]!, argv.slice(1), {
     cwd: svc.cwd ? path.resolve(entry.plugin.dir, svc.cwd) : entry.plugin.dir,
     env: { ...process.env, ...svc.env },
-    stdio: 'ignore',
+    stdio: ['ignore', logFd, logFd],
     detached: true,
   });
+  fs.closeSync(logFd);
   child.unref();
   // 给端口/pid 文件一点时间生效再报状态
   await new Promise((r) => setTimeout(r, 600));
