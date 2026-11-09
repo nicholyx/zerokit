@@ -28,6 +28,12 @@ uTools 的插件是 JS 调 `utools.*` 私有 API，DeepSeek Harness 的插件是
 
 ## 快速开始
 
+## 脚本消费者：CLI JSON 契约
+
+写脚本/CI 断言消费 `zkit <cmd> --json` 时，看 [`docs/contract/cli-json-v1.md`](docs/contract/cli-json-v1.md)——
+标注「稳定」的字段 v1 内不改名不删除；其余字段随时可能变。
+
+
 要求：**Node ≥ 22.18**（直接跑 TS 源码，无构建步骤）；三平台均可（macOS / Linux / Windows）。
 Windows 上建议 Git Bash 或 WSL；PowerShell 也能跑，但示例命令按 bash 写。
 

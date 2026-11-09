@@ -151,7 +151,13 @@ MCP 副作用动作默认拒绝）见 [`SECURITY.md`](SECURITY.md)。
 
 
 ## 治理（v2 线起）
-## 维护轮改断言计数的流程（第二百二十三轮起）
+## 维护轮改断言计数的流程
+
+## CLI JSON 输出契约（第二百二十七轮起）
+
+改 `src/cli.ts` 里任何 `--json` 输出的字段前，先看 [`docs/contract/cli-json-v1.md`](docs/contract/cli-json-v1.md)——
+v1 稳定集内的字段不能改名/删除/改类型；要破坏性变更先升 v2 并更新契约测试（test/contract-v1-smoke.mjs）。
+（第二百二十三轮起）
 
 - 改动 test/ 里的测试后，跑 `node scripts/sync-counts.mjs`——自动同步 overview/START-HERE 两处基线行。
 - 别手改计数：guard146 会比对 test/ 实际数字，手改不同步会被 CI 拦（220/221/222 连续三轮同款事故的根治）。

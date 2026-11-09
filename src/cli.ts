@@ -558,6 +558,11 @@ async function cmdService(args: string[]): Promise<number> {
   const sub = args[0] ?? 'list';
   if (sub === 'list' || sub === 'status') {
     const all = listServices();
+    // 第二百二十七轮②：--json 机读输出（契约 cli-json-v1.md：pluginId/id/running/canStop/canStart）
+    if (args.includes('--json')) {
+      process.stdout.write(JSON.stringify({ services: all }, null, 2) + '\n');
+      return 0;
+    }
     if (!all.length) { process.stdout.write('没有声明服务的插件。\n'); return 0; }
     for (const sv of all) {
       const mark = sv.running ? '●' : '○';
