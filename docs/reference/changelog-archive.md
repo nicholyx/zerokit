@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [2.5.0] - 2026-11-09
+
+### Added
+
+- 插件模板出版级质量：默认 summary 升级为「什么时候用」句式（消除 L01，new 出厂即 lint 100/100）；zkit plugin new 打印「下一步三条」（dev/lint --score/run 真跑验证）；scaffold-smoke +3（三档模板零告警/三步清单/出厂可跑）；cli68 ⑧ 断言随新文案更新。
+
 ## [2.4.0] - 2026-11-08
 
 ### Added
