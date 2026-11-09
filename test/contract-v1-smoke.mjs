@@ -7,7 +7,13 @@ import { fileURLToPath } from 'node:url';
 const PKG_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 let pass = 0, fail = 0;
 const check = (name, ok, detail = '') => { if (ok) { pass++; console.log(`  ✓ ${name}`); } else { fail++; console.error(`FAIL  ${name}  <- contract-v1 ${detail}`); } };
-const run = (args, timeout = 120000) => spawnSync(process.execPath, ['src/cli.ts', ...args], { encoding: 'utf8', timeout, cwd: PKG_ROOT, windowsHide: true });
+// 第二百二十七轮③：CI 环境无 bundled 插件——先装一遍（临时 ZEROKIT_HOME）
+import fs from 'node:fs';
+import os from 'node:os';
+const home = fs.mkdtempSync(path.join(os.tmpdir(), 'contract-v1-'));
+const ENV2 = { ...process.env, ZEROKIT_HOME: home };
+spawnSync(process.execPath, ['src/cli.ts', 'plugin', 'bundled'], { encoding: 'utf8', timeout: 300000, cwd: PKG_ROOT, windowsHide: true, env: ENV2 });
+const run = (args, timeout = 120000) => spawnSync(process.execPath, ['src/cli.ts', ...args], { encoding: 'utf8', timeout, cwd: PKG_ROOT, windowsHide: true, env: ENV2 });
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const isStr = (v) => typeof v === 'string';
 const isBool = (v) => typeof v === 'boolean';
