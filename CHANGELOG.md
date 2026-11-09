@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- 可复现构建审计（第八审计线）：scripts/repro-check.mjs 进 lint（engines 覆盖 CI Node/Cargo.lock 在库含桌面壳条目/package-lock 非空三断言）；docs/reference/reproducibility.md 审计记录（npm ci 干跑过、cargo audit 本机未装记为已知差距）。
 
 ## [3.5.0] - 2026-11-09
 
