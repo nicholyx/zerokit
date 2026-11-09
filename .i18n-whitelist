@@ -1556,3 +1556,13 @@ const\ state\ =\ d\.ok\ \?\ '✓\ 全部健康'\ :\ `⚠\ \$\{d\.doctor\.errors\
 \ \ \ \ setCount\(`已改间隔：每\ \$\{intervalLabel\(sec\)\}（下轮生效）`\);
 \ \*\ ③\ 连续失败\ ≥3\ 次后，通知正文带前\ 3\ 条错误摘要（人不在屏幕前也能从通知判断\ severity）；
 if\ \(!sec\)\ \{\ setCount\('间隔需要\ 5–3600\ 秒'\);\ return;\ \}
+/\*\*\ ③快速执行语法：`;插件\.动作`\ →\ \{plugin,\ action\}；不匹配返回\ null\ \*/
+/\*\*\ ④⑧\ 解析\+校验快照：非\ zerokit\ 快照\ /\ 缺\ result\ /\ 缺\ app\ 各自报错；返回\ \{ok,snapshot\|er
+/\*\*\ ⑤历史深链解析：\#/history/<plugin>\.<action>\ →\ key；不匹配返回\ null。\ \*/
+\ \ if\ \(!\('result'\ in\ j\)\)\ return\ \{\ ok:\ false,\ error:\ '快照缺\ result\ 字段'\ \};
+\ \ if\ \(!j\ \|\|\ typeof\ j\ !==\ 'object'\)\ return\ \{\ ok:\ false,\ error:\ '快照不是对象'
+\ \ if\ \(!j\?\.savedAt\ \|\|\ Number\.isNaN\(Date\.parse\(j\.savedAt\)\)\)\ return\ \{\ ok:
+\ \ if\ \(j\.app\ !==\ 'zerokit'\ \|\|\ j\.kind\ !==\ 'zkresult'\)\ return\ \{\ ok:\ false
+\ \ if\ \(raw\.length\ >\ ZKRESULT_MAX_BYTES\)\ return\ \{\ ok:\ false,\ error:\ `快照超
+\ \ try\ \{\ j\ =\ JSON\.parse\(raw\);\ \}\ catch\ \{\ return\ \{\ ok:\ false,\ error:\ '不是合
+\ \*\ 返回\ null（不匹配）或\ \{\ field,\ reason\ \}——reason\ 是给人看的「为什么建议填这里」。

@@ -3779,14 +3779,34 @@ export function buildZkresult(result, action = {}, version = '0.0.0') {
 }
 
 /** ④⑧ 解析+校验快照：非 zerokit 快照 / 缺 result / 缺 app 各自报错；返回 {ok,snapshot|error}。 */
+/** 第二百二十九轮②：导入大小上限（8MB——正常快照几 KB，超限多半是恶意/误导出） */
+export const ZKRESULT_MAX_BYTES = 8 * 1024 * 1024;
+/** 第二百二十九轮③：渲染深度上限（超过按截断处理，防爆栈） */
+export const ZKRESULT_MAX_DEPTH = 12;
+
+/** 第二百二十九轮④：剥掉原型污染键（__proto__/constructor/prototype）——返回净化副本 */
+export function stripUnsafeKeys(obj, depth = 0) {
+  if (depth > ZKRESULT_MAX_DEPTH || !obj || typeof obj !== 'object') return obj;
+  const out = Array.isArray(obj) ? [] : {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+    out[k] = (v && typeof v === 'object') ? stripUnsafeKeys(v, depth + 1) : v;
+  }
+  return out;
+}
+
 export function parseZkresult(text) {
+  const raw = String(text ?? '');
+  // 第二百二十九轮②：大小防线（先查长度——JSON.parse 一个几百 MB 字符串本身就会卡死）
+  if (raw.length > ZKRESULT_MAX_BYTES) return { ok: false, error: `快照超过大小上限（${ZKRESULT_MAX_BYTES / 1024 / 1024}MB）——正常快照只有几 KB，这个文件多半不是快照` };
   let j;
-  try { j = JSON.parse(String(text ?? '')); } catch { return { ok: false, error: '不是合法 JSON' }; }
+  try { j = JSON.parse(raw); } catch { return { ok: false, error: '不是合法 JSON' }; }
   if (!j || typeof j !== 'object') return { ok: false, error: '快照不是对象' };
   if (j.app !== 'zerokit' || j.kind !== 'zkresult') return { ok: false, error: '不是 zerokit 结果快照（app/kind 不匹配）' };
   if (!('result' in j)) return { ok: false, error: '快照缺 result 字段' };
   if (!j?.savedAt || Number.isNaN(Date.parse(j.savedAt))) return { ok: false, error: '快照时间戳不合法' };
-  return { ok: true, snapshot: j };
+  // 第二百二十九轮③④：深度钳制 + 原型污染剥离（返回净化副本）
+  return { ok: true, snapshot: stripUnsafeKeys(j) };
 }
 
 /** ⑦ 复制命令带注释头：zkit run … 前面加一行「# 插件名 · 动作名」。 */

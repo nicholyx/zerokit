@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- 导入快照安全边界强化：parseZkresult 三重防线——大小上限 8MB（超限友好报错，先查长度再 JSON.parse 防卡死）、原型污染键剥离（__proto__/constructor/prototype 净化副本）、深嵌套深度钳制（12 层截断防爆栈）；extras-smoke +3 断言（超大/污染键/100 层深嵌套）。
 
 ## [3.20.0] - 2026-11-10
 
