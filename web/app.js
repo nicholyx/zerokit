@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint, configProgress, validateSettingInput, formCanSave, parseConfigHash, textLines, textStats, fmtElapsed, paceVerdict, paceReassure, copyTextRaw, copyWithNumbers, copyWithTitle, extractUrls, colTooltipStats, shouldFreeze, tableSizeBadge, batchColVis, csvEscape, exportCsv, mdTableVis, exportMeta, shareEnvelope, shareAlive , drawerSearchMatch, drawerSearchCount } from './extras.js';
+import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint, configProgress, validateSettingInput, formCanSave, parseConfigHash, textLines, textStats, fmtElapsed, paceVerdict, paceReassure, copyTextRaw, copyWithNumbers, copyWithTitle, extractUrls, colTooltipStats, shouldFreeze, tableSizeBadge, batchColVis, csvEscape, exportCsv, mdTableVis, exportMeta, shareEnvelope, shareAlive , drawerSearchMatch, drawerSearchCount , exportMime, CSV_BOM } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote, defaultChip, enumHint, actionHealthBadge, descNeedsFold, inQuietHours, notifyThrottle, pushNotifyLog, parseHm } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -1301,7 +1301,7 @@ function renderListInner() {
     // ⑦导出清单（第一百一十四轮⑥：下载 JSON 之外再复制行格式——可贴可分享可回导）
     bar.querySelector('#batchExport')?.addEventListener('click', () => {
       const list = batch.map((b) => ({ plugin: b.plugin.id, action: b.action.id, values: paramStore[actionKey(b.plugin.id, b.action.id)] ?? {} }));
-      const blob = new Blob([JSON.stringify(list, null, 2)], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify(list, null, 2)], { type: exportMime('json') });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = exportFilename('batch', 'json');
@@ -3476,10 +3476,10 @@ function showWatchPanel() {
     const w = watchRegistry()[b.dataset.wcsv];
     if (!w || !w.samples.length) { setCount('还没有采样，导出啥呀'); return; }
     const csv = watchCsv(w.samples);
-    const blob = new Blob([csv], { type: 'text/csv' });
+    const blob = new Blob([CSV_BOM + csv], { type: exportMime('csv') });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `watch-${w.pluginId}-${w.actionId}-${Date.now()}.csv`;
+    a.download = exportFilename(`watch-${w.pluginId}`, w.actionId, 'csv');
     a.click();
     URL.revokeObjectURL(a.href);
     setCount(t('watchCsvDone')(w.samples.length));
@@ -3834,7 +3834,7 @@ function showTimers() {
   el.allowView.querySelector('#timersExport')?.addEventListener('click', async (ev) => {
     const pack = exportTimers(timerRegistry());
     const name = exportFilename('timers', 'json');
-    const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(pack, null, 2)], { type: exportMime('json') });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = name; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
@@ -4243,7 +4243,7 @@ async function exportBackup() {
     if (skippedSecrets) backup.meta.skippedSecrets = skippedSecrets;
   } catch { /* 无 server 时退化为纯本地导出 */ }
   const fname = backupFilename(Date.now(), backup.plugins?.length ?? 0);
-  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: exportMime('json') });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -4821,7 +4821,7 @@ function bindResultMenu(box, res) {
 
 function downloadCsv(data) {
   const { toCsv } = window.__zerokit;
-  const blob = new Blob(['\ufeff' + toCsv(data)], { type: 'text/csv;charset=utf-8' });  // BOM：Excel 双击打开不乱码
+  const blob = new Blob([CSV_BOM + '\ufeff' + toCsv(data)], { type: exportMime('csv') });  // BOM：Excel 双击打开不乱码
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -5204,7 +5204,7 @@ function renderResult(res) {
     setTimeout(() => { btn.textContent = t('fbCopyPlain'); }, 1500);
   });
   $('saveRes')?.addEventListener('click', () => {
-    const blob = new Blob([copyText], { type: 'text/plain;charset=utf-8' });
+    const blob = new Blob([copyText], { type: exportMime('txt') });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -5215,7 +5215,7 @@ function renderResult(res) {
   // 第九十三轮③：导出 .zkresult 快照——含插件/动作/版本/时间元数据，对方可导入回放
   $('snapRes')?.addEventListener('click', () => {
     const snap = buildZkresult(res, detail ? { plugin: detail.plugin.id, action: detail.action.id, title: detail.action.title } : {}, window.__zkVersion ?? '');
-    const blob = new Blob([JSON.stringify(snap, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(snap, null, 2)], { type: exportMime('json') });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -5226,7 +5226,7 @@ function renderResult(res) {
   });
   $('mdRes')?.addEventListener('click', () => {
     const title = detail ? `${detail.plugin.name} · ${detail.action.title}` : 'zerokit 结果';
-    const blob = new Blob([resultMarkdown(title, res)], { type: 'text/markdown;charset=utf-8' });
+    const blob = new Blob([resultMarkdown(title, res)], { type: exportMime('md') });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -5633,7 +5633,7 @@ function renderDiffBody(diffs, onlyChanged, side) {
   overlay.querySelector('#diffMd')?.addEventListener('click', () => {
     const md = ['| 字段 | 较早 | 最新 |', '| --- | --- | --- |',
       ...diffs.map((d) => `| \`${String(d.path).replace(/\|/g, '\\|')}\` | ${String(d.from).replace(/\|/g, '\\|')} | ${String(d.to).replace(/\|/g, '\\|')} |`)].join('\n');
-    const blob = new Blob([md], { type: 'text/markdown' });
+    const blob = new Blob([md], { type: exportMime('md') });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url; link.download = 'result-diff.md'; link.click();
@@ -5974,7 +5974,7 @@ function bindTextView(res) {
     }
     if (act === 'save-txt') {
       const raw = String(res.data !== undefined && typeof res.data === 'string' ? res.data : (res.stdout ?? ''));
-      const blob = new Blob([raw], { type: 'text/plain;charset=utf-8' });
+      const blob = new Blob([raw], { type: exportMime('txt') });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
@@ -6458,7 +6458,7 @@ function bindTableSorts(scope) {
         if (mode === 'csv' || mode === 'copy') {
           const text = `${exportMeta(actionName, view.length)}\n${exportCsv(view, visCols)}`;
           if (mode === 'copy') { navigator.clipboard?.writeText(text); closePop(); return; }
-          const blob = new Blob([`\ufeff${text}`], { type: 'text/csv;charset=utf-8' });
+          const blob = new Blob([CSV_BOM + `\ufeff${text}`], { type: exportMime('csv') });
           const a = document.createElement('a');
           a.href = URL.createObjectURL(blob);
           a.download = `${(actionName || 'table').replace(/[^\w.-]+/g, '_')}.csv`;
@@ -6468,7 +6468,7 @@ function bindTableSorts(scope) {
         } else if (mode === 'md') {
           const numericCols = visCols.filter((c) => isNumericColumn(view.map((r2) => r2?.[c])));
           const text = `${exportMeta(actionName, view.length)}\n\n${mdTableVis(view, visCols, numericCols)}\n`;
-          const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
+          const blob = new Blob([text], { type: exportMime('md') });
           const a = document.createElement('a');
           a.href = URL.createObjectURL(blob);
           a.download = `${(actionName || 'table').replace(/[^\w.-]+/g, '_')}.md`;
@@ -6783,7 +6783,7 @@ async function renderLogs() {
       const csv = [head, ...es.map((e) => [
         cell(e.ts), cell(e.plugin), cell(e.action), cell(e.decision), cell(e.ms), cell(e.exitCode),
       ].join(','))].join('\n');
-      const blob = new Blob([csv], { type: 'text/csv' });
+      const blob = new Blob([CSV_BOM + csv], { type: exportMime('csv') });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = `zerokit-logs-${logsFile}-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -6802,7 +6802,7 @@ async function renderLogs() {
       if (logsRange) d2.entries = filterAudit(d2.entries ?? [], { range: logsRange });
       const es = d2.entries ?? [];
       if (!es.length) { setCount('没有可导出的行'); return; }
-      const blob = new Blob([JSON.stringify(es, null, 2)], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify(es, null, 2)], { type: exportMime('json') });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = `zerokit-logs-${logsFile}-${new Date().toISOString().slice(0, 10)}.json`;
@@ -7605,7 +7605,7 @@ async function showPluginHome(id) {
   });
   $('homeExport')?.addEventListener('click', () => {
     const md = buildCapabilitiesMd(p);
-    const blob = new Blob([md], { type: 'text/markdown' });
+    const blob = new Blob([md], { type: exportMime('md') });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `${p.id}-capabilities.md`;
@@ -7670,7 +7670,7 @@ async function showPluginHome(id) {
 function exportInstalledList() {
   api('/api/plugins').then(({ plugins: ps }) => {
     const data = installedList(ps);
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: exportMime('json') });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `zerokit-plugins-${new Date().toISOString().slice(0, 10)}.json`;
@@ -8921,7 +8921,7 @@ function showStats() {
     }
     try {
       const r = await api('/api/prefs/export', { method: 'POST', body: { prefs } });
-      const blob = new Blob([JSON.stringify(r.payload, null, 2)], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify(r.payload, null, 2)], { type: exportMime('json') });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url; a.download = `zerokit-prefs-${new Date().toISOString().slice(0, 10)}.json`; a.click();
