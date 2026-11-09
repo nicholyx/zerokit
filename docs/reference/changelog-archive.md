@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [3.7.0] - 2026-11-09
+
+### Added
+
+- 动作参数校验强化：plugin.toml 参数新增 min/max（数字范围）/pattern（字符串模式）可选字段；coerceParam 转换后统一 validateConstraints（越界/不匹配在确认前 fail，错误带合法值说明）；MCP inputSchema 透传 minimum/maximum/enum/pattern（模型可调用前自校验）；脚手架 chain 模板 value 参数示范 min/max；param215-smoke 新文件 8 断言；plugin-spec.md 字段表更新。
+
 ## [3.6.0] - 2026-11-09
 
 ### Added
