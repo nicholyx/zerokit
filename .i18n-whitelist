@@ -1531,3 +1531,28 @@ if\ \(!window\.confirm\(`重启服务\ \$\{id\}？`\)\)\ return;
 const\ state\ =\ d\.ok\ \?\ '✓\ 全部健康'\ :\ `⚠\ \$\{d\.doctor\.errors\}\ 项需处理`;
 全景总检', hint: '四面健康一屏看全
 <button\ class="drawer\-link"\ id="dlDash"\ title="四面健康总检：doctor/服务/缓存
+/\*\*\ ①⑤\ 监控设置弹窗：间隔档位\ \+\ 停止条件（连续失败\ N\ 次\ /\ 结果包含某串）\ \*/
+\ \*\ ③\ 连续失败\ ≥3\ 次后，通知正文带前\ 3\ 条错误摘要（人不在屏幕前也能从通知判断\ severity）；
+\ \ \ \ \ \ note:\ quietNow\ \?\ '静默时段，未弹出'\ :\ suppressed\ \?\ '节流合并，未弹出'\ :\ \(kind\ ==
+\ \ \ \ \ \ setCount\(`⇄\ \$\{w\.title\}\ \$\{kind\ ===\ 'alert'\ \?\ '连续失败'\ :\ '结果有变化'\}（第\ 
+\ \ \ \ \ \ \ \ body:\ `⚠\ \$\{w\.title\}\ 连续失败\ \$\{failStreakNow\}\ 次`,
+\ \ \ \ const\ stateMark\ =\ w\.paused\ \?\ '⏸\ 暂停'\ :\ lastOk\ \?\ '⏱\ 运行中'\ :\ '✗\ 连续失败';
+\ \ \ \ \ \ \$\{failReason\ \?\ `<span\ class="bad\ watch\-fail\-reason">失败原因：\$\{esc\(f
+\ \ \ \ \ \ <span\ class="watch\-interval\-row"><label\ class="sub">改间隔</label><
+\ \ //\ 第二百二十六轮③④：改间隔——scheduleWatch\ 重启（下轮生效）\+\ 落盘（重启保留）
+\ \ \ \ setCount\(`已改间隔：每\ \$\{intervalLabel\(sec\)\}（下轮生效）`\);
+/\*\*\ ①⑤\ 监控设置弹窗：间隔档位\ \+\ 停止条件（连续失败\ N\ 次\ /\ 结果包含某串）\ \*/
+\ \ //\ 第二百二十六轮③④：改间隔——scheduleWatch\ 重启（下轮生效）\+\ 落盘（重启保留）
+\ \ \ \ //\ 第二百二十六轮②⑤：失败原因\ \+\ 三态徽标（运行/失败/暂停）
+\ \ \ \ \ \ //\ 第四十八轮⑧：自动停带失败原因摘要——最近一次失败给分类，不只「已停」
+\ \ \ \ \ \ :\ '等待第一次采样…';
+\ \ \ \ \ \ <span\ class="watch\-interval\-row"><label\ class="sub">改间
+\ \ \ \ \ \ \ \ body:\ `⚠\ \$\{w\.title\}\ 连续失败\ \$\{failStreakNow\}\ 次`,
+\ \ \ \ \ \ \$\{failReason\ \?\ `<span\ class="bad\ watch\-fail\-reason">失败
+\ \ \ \ \ \ \?\ `最近：\$\{JSON\.stringify\(lastSample\?\.data\ \?\?\ ''\)\.slice\(0
+\ \ \ \ \ \ note:\ quietNow\ \?\ '静默时段，未弹出'\ :\ suppressed\ \?\ '节流合并，未弹出'\ 
+\ \ \ \ \ \ setCount\(`⇄\ \$\{w\.title\}\ \$\{kind\ ===\ 'alert'\ \?\ '连续失败'\ :\ '
+\ \ \ \ const\ stateMark\ =\ w\.paused\ \?\ '⏸\ 暂停'\ :\ lastOk\ \?\ '⏱\ 运行中'\ :
+\ \ \ \ setCount\(`已改间隔：每\ \$\{intervalLabel\(sec\)\}（下轮生效）`\);
+\ \*\ ③\ 连续失败\ ≥3\ 次后，通知正文带前\ 3\ 条错误摘要（人不在屏幕前也能从通知判断\ severity）；
+if\ \(!sec\)\ \{\ setCount\('间隔需要\ 5–3600\ 秒'\);\ return;\ \}

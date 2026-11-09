@@ -735,6 +735,8 @@ const failed = results.filter(([, ok]) => !ok);
   check('218①② services start 审计 + run 来源校验', (() => { const sv = fs.readFileSync(path.join(PKG_ROOT, 'src', 'core', 'services.ts'), 'utf8'); return sv.includes('拒绝启动（防越界命令）') && sv.includes("caller = 'ui'"); })());
   check('218③⑤ 面板确认守卫 + 5s 自动刷新', app2.includes('window.confirm(`停止服务') && app2.includes('__svcAutoRefresh'));
   check('219②③ 服务日志端点 + UI 日志展开按钮', (() => { const srv = fs.readFileSync(path.join(PKG_ROOT, 'src', 'server.ts'), 'utf8'); return srv.includes('/api/services/logs') && app2.includes('data-svc-logs') && app2.includes('svc-log-pre'); })());
+  check('226②⑤ watch 失败原因 + 三态徽标 + 改间隔接线', app2.includes('watch-fail-reason') && app2.includes("w.paused ? '⏸ 暂停' : lastOk ? '⏱ 运行中' : '✗ 连续失败'") && app2.includes('data-winterval-save'));
+  check('226④ 改间隔落盘（persistWatch + scheduleWatch 重启）', app2.includes('scheduleWatch(k, sec)') && app2.includes('void persistWatch();'));
   check('220①②⑥ /api/health-snapshot 端点 + UI dashboard 页 + 命令面板/抽屉入口', (() => { const srv = fs.readFileSync(path.join(PKG_ROOT, 'src', 'server.ts'), 'utf8'); return srv.includes('/api/health-snapshot') && app2.includes('async function showDashboard') && app2.includes("case 'dashboard': showDashboard()") && fs.readFileSync(path.join(PKG_ROOT, 'web', 'index.html'), 'utf8').includes('dlDash'); })());
   check('220④ CLI dashboard 命令 + I18N dash220 键', app2.includes('dash220Title') && fs.readFileSync(path.join(PKG_ROOT, 'src', 'cli.ts'), 'utf8').includes('cmdDashboard'));
   check('221①② 快照落盘 health-history.jsonl + /api/health-history 端点', (() => { const srv = fs.readFileSync(path.join(PKG_ROOT, 'src', 'server.ts'), 'utf8'); return srv.includes('health-history.jsonl') && srv.includes('/api/health-history'); })());
