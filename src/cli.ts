@@ -591,6 +591,19 @@ async function cmdService(args: string[]): Promise<number> {
     else { process.stderr.write(`✗ ${startR.message}\n`); return 1; }
     return 0;
   }
+  if (sub === 'logs') {
+    const target = args[1] ?? '';
+    if (!target || !target.includes('.')) { process.stderr.write('用法：zkit service logs 插件.服务 [--tail N]\n'); return 2; }
+    const i = target.lastIndexOf('.');
+    const ti = args.indexOf('--tail');
+    const tail = ti >= 0 ? Math.max(1, Number(args[ti + 1]) || 20) : 20;
+    const { serviceLogTail } = await import('./core/services.ts');
+    const lines = serviceLogTail(target.slice(0, i), target.slice(i + 1), tail);
+    if (lines === null) { process.stdout.write('该服务还没有日志（未启动过或未产生输出）\n'); return 0; }
+    if (!lines.length) { process.stdout.write('（日志为空）\n'); return 0; }
+    process.stdout.write(lines.join('\n') + '\n');
+    return 0;
+  }
   if (sub === 'stop') {
     const target = args[1] ?? '';
     if (!target || !target.includes('.')) {

@@ -91,6 +91,7 @@ const API_METHODS: Record<string, string[]> = {
   '/api/cache': ['GET', 'DELETE'],
   '/api/services': ['GET'],
   '/api/services/start': ['POST'],
+  '/api/services/logs': ['GET'],
   '/api/stop': ['POST'],
   '/api/kill': ['POST'],
   '/api/open': ['POST'],
@@ -140,6 +141,7 @@ const API_SPEC = {
     '/api/cache': { get: { summary: '缓存面板（条目+命中统计）', security: [{ token: [] }] }, delete: { summary: '清空缓存', security: [{ token: [] }] } },
     '/api/services': { get: { summary: '声明服务的清单与状态', security: [{ token: [] }] } },
     '/api/services/start': { post: { summary: '启动声明服务（body: service=插件.服务）', security: [{ token: [] }] } },
+    '/api/services/logs': { get: { summary: '服务日志尾部（query: service=插件.服务&tail=N）', security: [{ token: [] }] } },
     '/api/stop': { post: { summary: '停止执行（body: key，缺省停全部）' } },
   },
   components: { securitySchemes: { token: { type: 'apiKey', in: 'header', name: 'X-ZeroKit-Token' } } },
@@ -1586,6 +1588,18 @@ export function createServer(): http.Server {
       // 第二百一十三轮⑥：缓存面板端点
       // 第二百一十六轮③：服务清单机读端点
       // 第二百一十七轮④：服务启动端点（UI 启动按钮对位）
+      // 第二百一十九轮②：服务日志尾部端点
+      if (url.pathname === '/api/services/logs' && req.method === 'GET') {
+        const { serviceLogTail } = await import('./core/services.ts');
+        const u = new URL(req.url ?? '', 'http://x');
+        const target = String(u.searchParams.get('service') ?? '');
+        const tail = Math.max(1, Math.min(200, Number(u.searchParams.get('tail') ?? 20) || 20));
+        const i = target.lastIndexOf('.');
+        if (!target || i <= 0) { fail(res, 400, 'service 应为 插件.服务 形式'); return; }
+        const lines = serviceLogTail(target.slice(0, i), target.slice(i + 1), tail);
+        json(res, 200, { lines: lines ?? null, hasLog: lines !== null });
+        return;
+      }
       if (url.pathname === '/api/services/start' && req.method === 'POST') {
         const body = await readBody(req);
         const { startService } = await import('./core/services.ts');
