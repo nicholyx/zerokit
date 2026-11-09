@@ -180,14 +180,16 @@ export interface StopOutcome {
  */
 /** 第二百一十七轮②：启动服务——service.run 命令（spawn 后登记进程表，detached 脱离本进程） */
 export interface StartOutcome { ok: boolean; message: string; pid?: number }
-export async function startService(pluginId: string, serviceId: string): Promise<StartOutcome> {
+export async function startService(pluginId: string, serviceId: string, caller = 'ui'): Promise<StartOutcome> {
   const entry = listPlugins().find((e) => e.plugin?.id === pluginId);
   const svc = entry?.plugin?.services.find((s) => s.id === serviceId);
   if (!entry?.plugin || !svc) return { ok: false, message: `没有插件 ${pluginId} 或服务 ${serviceId}` };
   if (!svc.run || svc.run.length === 0) return { ok: false, message: `服务 ${pluginId}.${serviceId} 没有声明 run 启动命令` };
   const status = serviceOf(entry.plugin, svc);
   if (status.running) return { ok: false, message: `服务已在运行（PID ${status.pid}），不重复启动` };
+  // 第二百一十八轮②：run 命令来源校验——argv[0] 占位符解析后必须是已知工具或落在插件目录内（防越界命令）
   // 直接 spawn：占位符解析复用 previewCommand 的 vars 逻辑
+  const toolNames = ['node', 'python', 'git', 'kit', process.execPath];
   const vars: Record<string, string> = {
     plugin_dir: entry.plugin.dir,
     home: HOME,
@@ -195,6 +197,13 @@ export async function startService(pluginId: string, serviceId: string): Promise
     ...(resolveTool('python') ? { python: resolveTool('python')!.path } : {}),
   };
   const argv = svc.run.map((a) => a.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? `{${k}}`));
+  // 校验：首元素必须是已知工具名（解析成功）或插件目录内的路径
+  const first = argv[0] ?? '';
+  const knownTool = toolNames.includes(first);
+  const inPluginDir = first.startsWith(entry.plugin.dir);
+  if (!knownTool && !inPluginDir) {
+    return { ok: false, message: `服务 ${pluginId}.${serviceId} 的启动命令不在插件目录内且不是已知工具——拒绝启动（防越界命令）` };
+  }
   const child = spawn(argv[0]!, argv.slice(1), {
     cwd: svc.cwd ? path.resolve(entry.plugin.dir, svc.cwd) : entry.plugin.dir,
     env: { ...process.env, ...svc.env },
