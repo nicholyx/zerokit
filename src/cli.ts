@@ -1180,7 +1180,24 @@ async function cmdRun(args: string[]): Promise<number> {
       }
     }
   }
+  // 第二百一十一轮②⑤⑥：只读动作 TTL 缓存（默认 10s；--fresh 跳过；ZEROKIT_CACHE_TTL=0 关闭；写类永不缓存）
+  const cliXCache = await import('./core/cliX.ts');
+  const cacheTtlSec = Number(process.env.ZEROKIT_CACHE_TTL ?? '10');
+  const fresh = args.includes('--fresh');
+  const cacheable = action.risk === 'read' && !fresh && cacheTtlSec > 0;
+  const cacheK = cliXCache.cacheKey(plugin.id, action.id, withDefaults.values ?? {});
   let result: RunResult;
+  if (cacheable) {
+    const cached = cliXCache.readResultCache()[cacheK];
+    const entry = cached && cached.key === cacheK && typeof cached.at === 'number'
+      ? cached
+      : undefined;
+    if (entry && Date.now() - entry.at < cacheTtlSec * 1000) {
+      result = entry.result as RunResult;
+      process.stderr.write(c.dim(`⚡ 缓存（${Math.round((Date.now() - entry.at) / 100) / 10}s 前，--fresh 强制刷新）\n`));
+      // 第二百零二轮判据：缓存命中也走同一输出管线（--copy/--out/--format 不因缓存丢失）
+    }
+  }
   try {
     result = await runAction(plugin, action, { caller: 'cli', values: withDefaults.values });
     for (let attempt = 0; attempt < retries && result.ok === false; attempt++) {
@@ -1191,6 +1208,7 @@ async function cmdRun(args: string[]): Promise<number> {
   } finally {
     if (lockPath) { try { fs.rmSync(lockPath, { force: true }); } catch { /* 陈锁已被别人抢走 */ } }
   }
+  if (cacheable && result.ok) cliXCache.writeResultCacheEntry(cacheK, result);
   for (const [k, v] of savedEnv) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
   // 第四十五轮⑤：成功执行进历史（重放要干净的参数面）
   // 第一百四十九轮⑦：失败也进历史（exitCode=1）——history 默认视图 ✓/✗ 全量展示，

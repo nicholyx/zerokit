@@ -229,6 +229,16 @@ export function drawerSearchCount(results) {
   return results.filter((r) => r.visible).length;
 }
 
+/** 第二百一十一轮①（UI 面）：结果缓存 key 与命中——与 CLI cliX.cacheKey/cacheHit 同语义 */
+export function resultCacheKey(pluginId, actionId, values) {
+  const flat = Object.keys(values ?? {}).sort().map((k) => `${k}=${String(values[k] ?? '')}`).join('&');
+  return `${pluginId}.${actionId}?${flat}`;
+}
+export function resultCacheHit(entry, key, ttlMs, now = Date.now()) {
+  if (!entry || entry.key !== key || typeof entry.at !== 'number') return false;
+  return now - entry.at < ttlMs;
+}
+
 /** 第二百零九轮①：搜索历史独立导出信封（JSON 机读，与整包备份同语义） */
 export function searchesExport(history) {
   return { app: 'zerokit', kind: 'searches', version: 1, exportedAt: new Date().toISOString(), items: Array.isArray(history) ? history.map(String) : [] };
