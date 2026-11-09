@@ -3424,17 +3424,24 @@ function showWatchPanel() {
   const reg = watchRegistry();
   const rows = Object.entries(reg).map(([k, w]) => {
     const lastOk = w.samples.at(-1)?.ok !== false;
+    // 第二百二十六轮②⑤：失败原因 + 三态徽标（运行/失败/暂停）
+    const lastSample = w.samples.at(-1);
+    const failReason = !lastOk && lastSample?.error ? String(lastSample.error).slice(0, 120) : '';
+    const stateMark = w.paused ? '⏸ 暂停' : lastOk ? '⏱ 运行中' : '✗ 连续失败';
+    const stateCls = w.paused ? '' : lastOk ? 'read' : 'bad';
     const summary = w.samples.length
-      ? `最近：${JSON.stringify(w.samples.at(-1)?.data ?? '').slice(0, 80)}`
+      ? `最近：${JSON.stringify(lastSample?.data ?? '').slice(0, 80)}`
       : '等待第一次采样…';
     return `
     <div class="run-row watch-row">
-      <span class="badge ${lastOk ? 'read' : 'bad'}">⏱</span>
+      <span class="badge ${stateCls}">${stateMark}</span>
       <span class="run-when">${esc(w.title)}（每 ${esc(intervalLabel(w.interval))}）</span>
-      <span class="sub">${w.runs} 次采样 · ${w.changes} 次变更${w.changes > 0 && w.samples.length ? ' · 上次变化 ' + relTime(w.samples.at(-1)?.ts ?? Date.now()) : ''}</span>
+      <span class="sub">${w.runs} 次采样 · ${w.changes} 次变更${w.changes > 0 && w.samples.length ? ' · 上次变化 ' + relTime(lastSample?.ts ?? Date.now()) : ''}</span>
       <span class="watch-spark">${(w.samples ?? []).slice(-10).map((sm) => `<i class="${sm.ok ? 'ok' : 'bad'}"${Number.isFinite(sm.ms) ? ` title="${esc(relTime(sm.ts))} · 耗时 ${fmtElapsed(sm.ms)}"` : ''}></i>`).join('')}</span>
       <span class="watch-summary">${esc(summary)}</span>
+      ${failReason ? `<span class="bad watch-fail-reason">失败原因：${esc(failReason)}</span>` : ''}
       ${w.stopReason ? `<span class="bad">${esc(w.stopReason)}</span>` : ''}
+      <span class="watch-interval-row"><label class="sub">改间隔</label><input class="watch-interval-input" data-winterval="${esc(k)}" type="number" min="5" value="${w.interval}" aria-label="轮询间隔秒">秒<button class="ghost mini" data-winterval-save="${esc(k)}">改</button></span>
       <button class="ghost mini" data-wnotify="${esc(k)}" title="变化时是否弹通知">${w.notify === false ? '通知关' : '通知开'}</button>
       <button class="ghost mini" data-wstop="${esc(k)}">停止</button>
       <button class="ghost mini" data-wcsv="${esc(k)}">导出 CSV</button>
@@ -3470,6 +3477,20 @@ function showWatchPanel() {
   }));
   el.allowView.querySelectorAll('[data-wstop]').forEach((b) => b.addEventListener('click', () => {
     stopWatch(b.dataset.wstop);
+    showWatchPanel();
+  }));
+  // 第二百二十六轮③④：改间隔——scheduleWatch 重启（下轮生效）+ 落盘（重启保留）
+  el.allowView.querySelectorAll('[data-winterval-save]').forEach((b) => b.addEventListener('click', () => {
+    const k = b.dataset.wintervalSave;
+    const reg2 = watchRegistry(); const w3 = reg2[k];
+    if (!w3) return;
+    const input = el.allowView.querySelector(`[data-winterval="${k}"]`);
+    const sec = Math.max(5, Math.min(3600, Number(input?.value ?? 0) || 0));
+    if (!sec) { setCount('间隔需要 5–3600 秒'); return; }
+    w3.interval = sec;
+    scheduleWatch(k, sec);
+    void persistWatch();
+    setCount(`已改间隔：每 ${intervalLabel(sec)}（下轮生效）`);
     showWatchPanel();
   }));
   el.allowView.querySelectorAll('[data-wcsv]').forEach((b) => b.addEventListener('click', () => {
