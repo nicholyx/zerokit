@@ -205,6 +205,8 @@ export interface Service {
   pidFile?: string;
   /** 停止命令（argv 数组）。没有就按检测到的 PID 直接结束 */
   stop?: string[];
+  /** 第二百一十七轮②：启动命令（argv 数组，占位符 {plugin_dir}/{node} 同 stop）——没有则无法从面板启动 */
+  run?: string[];
   cwd?: string;
   env: Record<string, string>;
 }
@@ -669,6 +671,9 @@ function parseServices(raw: unknown, errors: string[]): Service[] {
     if (pidFile) service.pidFile = pidFile;
     const stop = asStringArray(s['stop']);
     if (stop.length > 0) service.stop = stop;
+    // 第二百一十七轮②：run（启动命令）解析
+    const runCmd = asStringArray(s['run']);
+    if (runCmd.length > 0) service.run = runCmd;
     const cwd = asString(s['cwd']);
     if (cwd) service.cwd = cwd;
     out.push(service);

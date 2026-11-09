@@ -1525,3 +1525,4 @@ const\ rows\ =\ data\.items\.map\(\(it\)\ =>\ `<tr><td>\$\{esc\(it\.key\)\}</td>
 setCount\(one\?\.ok\ \?\ `✓\ 已停止\ \$\{id\}`\ :\ `✗\ \$\{one\?\.message\ \?\?\ '停止失败'\}`\);
 \{\ icon:\ '🔧',\ label:\ '服务面板',\ hint:\ '插件声明的后台服务：状态与停止',\ key:\ '',
 el\.modeLabel\.textContent\ =\ t\('svcPanel'\);
+setCount\(r\.ok\ \?\ `✓\ \$\{id\}\ 已重启：\$\{r\.message\}`\ :\ `✗\ \$\{r\.message\}`\);
