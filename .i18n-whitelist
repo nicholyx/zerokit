@@ -1518,3 +1518,6 @@ cnt\.textContent\ =\ q\ \?\ `\$\{shown\}\ /\ \$\{pool\.length\}\ 区`\ :\ '';
 \$\{action\.risk\ ===\ 'read'\ \?\ `<label\ class="field\ check\ fresh\-toggle"\
 const\ cacheBadge\ =\ res\.cacheHit\ \?\ `<span\ class="badge"\ title="结果来自\ 10s
 fresh-toggle\" title=\"跳过 10s 结果缓存
+const\ rows\ =\ data\.items\.map\(\(it\)\ =>\ `<tr><td>\$\{esc\(it\.key\)\}</td>
+\{\ icon:\ '⚡',\ label:\ '缓存面板',\ hint:\ '只读动作缓存条目与命中统计'
+<button\ class="drawer\-link"\ id="dlCache"\ title="只读动作缓存面板

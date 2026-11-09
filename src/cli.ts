@@ -550,6 +550,49 @@ function cmdConfigUsage(): number {
   return 2;
 }
 
+/** 第二百零二轮①③④：缓存面板 CLI——zkit cache stats|clear|prune */
+async function cmdCache(args: string[]): Promise<number> {
+  const x = await import('./core/cliX.ts');
+  const sub = args[0] ?? 'stats';
+  const json = args.includes('--json');
+  if (sub === 'stats') {
+    const ttlSec = Number(process.env.ZEROKIT_CACHE_TTL ?? '10');
+    const s = x.cacheStats();
+    if (json) { process.stdout.write(JSON.stringify(s) + '\n'); return 0; }
+    process.stdout.write(`缓存统计（TTL ${ttlSec}s）：\n`);
+    process.stdout.write(`  条目：${s.total}\n`);
+    process.stdout.write(`  最老条目：${s.total ? Math.round(s.oldestAgeMs / 1000) + 's 前' : '—'}\n`);
+    process.stdout.write(`  命中 / 未命中：${s.hits} / ${s.misses}\n`);
+    return 0;
+  }
+  if (sub === 'prune') {
+    const ttlSec = Number(process.env.ZEROKIT_CACHE_TTL ?? '10');
+    const removed = x.cachePrune(ttlSec * 1000);
+    process.stdout.write(`✓ 已剔除 ${removed} 条过期条目\n`);
+    return 0;
+  }
+  if (sub === 'clear') {
+    const oi = args.indexOf('--older-than');
+    if (oi >= 0) {
+      const spec = args[oi + 1] ?? '';
+      const h = /^(\d+)h$/.exec(spec);
+      if (!h) { process.stderr.write('用法：zkit cache clear --older-than 2h\n'); return 2; }
+      const cutoff = Date.now() - Number(h[1]) * 3600_000;
+      const all = x.readResultCache();
+      const kept = Object.fromEntries(Object.entries(all).filter(([, e]) => (e.at ?? 0) >= cutoff));
+      const removed = Object.keys(all).length - Object.keys(kept).length;
+      x.writeResultCacheFromEntries(kept);
+      process.stdout.write(`✓ 已清理 ${removed} 条（${spec} 之前的）\n`);
+      return 0;
+    }
+    x.cacheClearAll();
+    process.stdout.write('✓ 已清空全部缓存\n');
+    return 0;
+  }
+  process.stderr.write('用法：zkit cache <stats|clear|prune> [--json]\n');
+  return 2;
+}
+
 async function cmdConfig(args: string[]): Promise<number> {
   // 第二百零九轮①②：config searches 子命令（搜索历史独立导入导出）
   if (args[0] === 'searches') {
@@ -1193,6 +1236,7 @@ async function cmdRun(args: string[]): Promise<number> {
       ? cached
       : undefined;
     if (entry && Date.now() - entry.at < cacheTtlSec * 1000) {
+      cliXCache.bumpCacheStats(true);
       result = entry.result as RunResult;
       process.stderr.write(c.dim(`⚡ 缓存（${Math.round((Date.now() - entry.at) / 100) / 10}s 前，--fresh 强制刷新）\n`));
       // 第二百零二轮判据：缓存命中也走同一输出管线（--copy/--out/--format 不因缓存丢失）
@@ -1208,7 +1252,7 @@ async function cmdRun(args: string[]): Promise<number> {
   } finally {
     if (lockPath) { try { fs.rmSync(lockPath, { force: true }); } catch { /* 陈锁已被别人抢走 */ } }
   }
-  if (cacheable && result.ok) cliXCache.writeResultCacheEntry(cacheK, result);
+  if (cacheable && result.ok) { cliXCache.writeResultCacheEntry(cacheK, result); cliXCache.bumpCacheStats(false); }
   for (const [k, v] of savedEnv) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
   // 第四十五轮⑤：成功执行进历史（重放要干净的参数面）
   // 第一百四十九轮⑦：失败也进历史（exitCode=1）——history 默认视图 ✓/✗ 全量展示，
@@ -5163,6 +5207,8 @@ async function main(): Promise<number> {
       return cmdShow(rest);
     case 'run':
       return cmdRun(rest);
+    case 'cache':
+      return await cmdCache(rest);
     case 'config':
       return cmdConfig(rest);
     case 'plugin':

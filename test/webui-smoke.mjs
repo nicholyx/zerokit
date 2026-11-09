@@ -729,6 +729,8 @@ const failed = results.filter(([, ok]) => !ok);
   check('208⑤⑥ rtab aria-current + 速查表 Alt 行', app2.includes('aria-current="page"') && (() => { const e2 = fs.readFileSync(path.join(PKG_ROOT, 'web', 'extras.js'), 'utf8'); return e2.includes("khAltTabs") && e2.includes("Alt j/k/x/p/c"); })());
   check('212①⑥ server /api/run 缓存（risk=read + fresh 参数 + cacheHit 响应 + 共用 result-cache）', app2.includes('window.openDrawer = openDrawer') === false && fs.readFileSync(path.join(PKG_ROOT, 'src', 'server.ts'), 'utf8').includes('cacheHit') && fs.readFileSync(path.join(PKG_ROOT, 'src', 'server.ts'), 'utf8').includes("body['fresh'] === true"));
   check('212③④ UI ⚡缓存徽标 + 强制刷新复选框（只读动作）', app2.includes('⚡ 缓存') && app2.includes('id="freshToggle"') && app2.includes("freshBox?.checked === true"));
+  check('213⑥⑦ /api/cache GET+DELETE 端点 + server bump 命中统计', (() => { const srv = fs.readFileSync(path.join(PKG_ROOT, 'src', 'server.ts'), 'utf8'); return srv.includes("'/api/cache'" ) && srv.includes('bumpCacheStats'); })());
+  check('213⑤ showCache 面板 + COMMAND_LIST/抽屉入口 + I18N 键', app2.includes('async function showCache') && app2.includes("case 'cache': showCache()") && (() => { const e2 = fs.readFileSync(path.join(PKG_ROOT, 'web', 'extras.js'), 'utf8'); return e2.includes('cachePanel') && e2.includes('cachePruneBtn'); })());
 
   check('197⑧ mcp-copy-audit 进 lint（JSON-RPC 实连审计）', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'mcp-copy-audit.mjs'), 'utf8').includes('tools/list') && fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'lint.sh'), 'utf8').includes('mcp-copy-audit'));
   check('197① MCP 术语审计规则在（CLI 语境白名单）', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'mcp-copy-audit.mjs'), 'utf8').includes('zkit|命令行|安装|CLI|一条命令'));

@@ -6878,6 +6878,36 @@ async function renderLogs() {
 }
 
 // ---------------------------------------------------------------- 环境自检
+async function showCache() {
+  mode = 'cache';
+  el.modeLabel.textContent = t('cachePanel');
+  el.searchRow.classList.add('hidden');
+  hidePanels();
+  showPanelAnimated(el.doctorView);
+  if (location.hash !== '#/cache') history.replaceState(null, '', '#/cache');
+  try {
+    const data = await api('/api/cache');
+    const rows = data.items.map((it) => `<tr><td>${esc(it.key)}</td><td>${it.ageSec}s 前</td><td>${it.expired ? t('cacheExpired') : t('cacheFresh')}</td><td>${it.ok ? '✓' : '✗'}</td></tr>`).join('');
+    el.doctorView.innerHTML = `
+      <div class="panel">
+        <h2>${t('cachePanel')}</h2>
+        <p class="sub">${t('cacheSub')(data.ttlSec)}</p>
+        <div class="dash-tiles">
+          <div class="dash-tile"><span class="dt-name">${data.total}</span><span>${t('cacheTotal')}</span></div>
+          <div class="dash-tile"><span class="dt-name">${data.hits}</span><span>${t('cacheHits')}</span></div>
+          <div class="dash-tile"><span class="dt-name">${data.misses}</span><span>${t('cacheMisses')}</span></div>
+        </div>
+        <table class="grid"><thead><tr><th>${t('cacheKey')}</th><th>${t('cacheAge')}</th><th>${t('cacheState')}</th><th>✓</th></tr></thead><tbody>${rows || `<tr><td colspan="4">${t('cacheEmpty')}</td></tr>`}</tbody></table>
+        <div class="actions"><button class="ghost" id="cachePrune">${t('cachePruneBtn')}</button><button class="ghost btn-danger" id="cacheClear">${t('cacheClearBtn')}</button><button class="ghost" id="cacheBack">返回</button></div>
+      </div>`;
+    $('cachePrune')?.addEventListener('click', async () => { await api('/api/cache/prune', { method: 'POST' }); showCache(); });
+    $('cacheClear')?.addEventListener('click', async () => { await api('/api/cache', { method: 'DELETE' }); showCache(); });
+    $('cacheBack')?.addEventListener('click', () => { location.hash = '#/'; });
+  } catch (e) {
+    el.doctorView.innerHTML = `<div class="ps-empty" role="status">${t('cacheLoadFail')}${esc(e.message)}</div>`;
+  }
+}
+
 async function showDoctor() {
   mode = 'doctor';
   el.modeLabel.textContent = t('modeDoctor');
@@ -9197,6 +9227,7 @@ function showPalette() {
     { icon: '⭐', label: I18N.zh.bmkPage, hint: I18N.zh.bmkHint, key: '', group: 'page', act: () => { location.hash = '#/bookmarks'; } },
     { icon: '◐', label: '深色 / 浅色', hint: '一键切换主题', key: 'Ctrl+Shift+D', group: 'op', act: () => toggleLightDark() },
     { icon: '☰', label: '设置抽屉', hint: '主题/语言/配置档/备份统一入口', key: '', group: 'page', act: () => openDrawer() },
+    { icon: '⚡', label: '缓存面板', hint: '只读动作缓存条目与命中统计', key: '', group: 'page', act: () => { location.hash = '#/cache'; } },
     { icon: '🧪', label: '开发者面板', hint: 'dev 插件摘要/文件树/沙箱控制台 #/dev', key: '', group: 'page', act: () => { location.hash = '#/dev'; } },
     // 第八十五轮②：操作类命令——切主题/切语言/备份/清历史
     { icon: '☀', label: '主题：浅色', hint: '切换到浅色主题', key: '', group: 'op', act: () => { exitPalette(); try { localStorage.setItem(PREF.theme, 'light'); } catch { /* 忽略 */ } applyTheme(); } },
@@ -10530,6 +10561,7 @@ function applyLang(rerender = false) {
     case 'market': showMarket(); break;
     case 'logs': showLogs(); break;
     case 'doctor': showDoctor(); break;
+    case 'cache': showCache(); break;
     case 'plugins': showPlugins(); break;
     case 'dash': showDash(); break;
     case 'stats': showStats(); break;
@@ -10657,6 +10689,7 @@ $('dlLang')?.addEventListener('click', () => {
 $('dlActivity')?.addEventListener('click', () => { closeDrawer(); location.hash = '#/activity'; });
 $('dlLogs')?.addEventListener('click', () => { closeDrawer(); $('logsBtn')?.click(); });
 $('dlDoctor')?.addEventListener('click', () => { closeDrawer(); $('doctorBtn')?.click(); });
+  $('dlCache')?.addEventListener('click', () => { location.hash = '#/cache'; });
 $('dlSaved')?.addEventListener('click', () => { closeDrawer(); $('savedBtn')?.click(); });
 // 第九十三轮④：导入 .zkresult 快照回放——外来快照只读展示，重跑会明示「将本地执行」
 $('dlImportSnap')?.addEventListener('click', () => {

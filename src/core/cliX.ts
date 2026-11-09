@@ -26,6 +26,44 @@ export function readResultCache(): Record<string, { key: string; at: number; res
     return v && typeof v === 'object' ? v : {};
   } catch { return {}; }
 }
+/** 第二百一十三轮①⑦：命中计数落盘（hits/misses 随读写累计，STATS_FILE 持久化） */
+export const CACHE_STATS_FILE = (): string => path.join(HOME, 'cache-stats.json');
+export function readCacheStats(): { hits: number; misses: number } {
+  try {
+    const v = JSON.parse(fs.readFileSync(CACHE_STATS_FILE(), 'utf8'));
+    return { hits: v.hits ?? 0, misses: v.misses ?? 0 };
+  } catch { return { hits: 0, misses: 0 }; }
+}
+export function bumpCacheStats(hit: boolean): void {
+  const s = readCacheStats();
+  s[hit ? 'hits' : 'misses']++;
+  fs.mkdirSync(path.dirname(CACHE_STATS_FILE()), { recursive: true });
+  fs.writeFileSync(CACHE_STATS_FILE(), JSON.stringify(s));
+}
+/** 第二百一十三轮①：cacheStats——总条数/最老条目 age/命中统计汇总 */
+export function cacheStats(now = Date.now()): { total: number; oldestAgeMs: number; hits: number; misses: number } {
+  const all = readResultCache();
+  const entries = Object.values(all);
+  const oldest = entries.length ? Math.max(...entries.map((e) => now - (e.at ?? 0))) : 0;
+  const { hits, misses } = readCacheStats();
+  return { total: entries.length, oldestAgeMs: entries.length ? oldest : 0, hits, misses };
+}
+/** 第二百一十三轮③④：清理——olderThanMs 之外全清；prune 只剔除已过期条目 */
+export function writeResultCacheFromEntries(entries: Record<string, { key: string; at: number; result: unknown }>): void {
+  fs.mkdirSync(path.dirname(RESULT_CACHE_FILE()), { recursive: true });
+  fs.writeFileSync(RESULT_CACHE_FILE(), JSON.stringify(entries));
+}
+export function cacheClearAll(): void {
+  fs.mkdirSync(path.dirname(RESULT_CACHE_FILE()), { recursive: true });
+  fs.writeFileSync(RESULT_CACHE_FILE(), '{}');
+}
+export function cachePrune(ttlMs: number, now = Date.now()): number {
+  const all = readResultCache();
+  const kept = Object.fromEntries(Object.entries(all).filter(([, e]) => now - (e.at ?? 0) < ttlMs));
+  const removed = Object.keys(all).length - Object.keys(kept).length;
+  if (removed > 0) fs.writeFileSync(RESULT_CACHE_FILE(), JSON.stringify(kept));
+  return removed;
+}
 export function writeResultCacheEntry(key: string, result: unknown): void {
   const all = readResultCache();
   // 只留最近 20 条（防膨胀）
