@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.12.0] - 2026-11-09
+
+### Added
+
 - 四面健康总检页（第 220 轮整轮里程碑）：/api/health-snapshot 端点（聚合 doctor/服务/缓存/插件）；UI #/dashboard 全景页（五瓷贴：版本/doctor/服务/缓存/插件，dash-tiles 复用）；CLI zkit dashboard（文本版全景）；命令面板「全景总检」顶置入口 + 抽屉链接；I18N dash220 十一键 zh/en。
 
 ## [3.11.0] - 2026-11-09
@@ -71,10 +77,4 @@
 ### Added
 
 - 搜索历史独立导入导出：CLI `zkit config searches export/import/list/clear`（searches.json 文件真源，CLI 面读写）；UI 日志页 chips 区加「⬆ 导入历史」按钮（File input → searchesMerge → localStorage，与 CLI 同一信封格式）；合并语义与 pushSearch 一致（置顶去重、8 条上限、非数组拒绝）；新纯函数 searchesExport/searchesMerge。
-
-## [3.0.0] - 2026-11-09
-
-### Added
-
-- 结果页签键盘闭环（Alt 修饰层，与行 j/k 区分）：Alt+j/k 页签间移动、Alt+x 关闭当前（跳过固定项）、Alt+p 固定切换、Alt+c 与相邻页签对比；活跃页签挂 aria-current="page"；速查浮层新增 Alt 组行（I18N 两语）；无页签时 Alt 系静默忽略不抢浏览器行为。
 
