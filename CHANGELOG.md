@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- 总检页深化——历史趋势与导出：/api/health-snapshot GET 落盘 health-history.jsonl（保留 60 条）；/api/health-history GET 端点；UI dashboard 历史趋势区（最近 10 条快照表）；CLI zkit dashboard --history（文本历史）/--export 文件（当前快照 JSON 导出）；I18N dashHist 四键 zh/en。
 
 ## [3.12.0] - 2026-11-09
 

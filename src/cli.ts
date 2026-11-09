@@ -622,7 +622,10 @@ async function cmdService(args: string[]): Promise<number> {
 }
 
 /** 第二百二十轮④：zkit dashboard——四面健康全景（文本版） */
-async function cmdDashboard(): Promise<number> {
+async function cmdDashboard(args: string[]): Promise<number> {
+  const histFlag = args.includes('--history');
+  const ei = args.indexOf('--export');
+  const exportFile = ei >= 0 ? args[ei + 1] : '';
   const [doctorMod, servicesMod, cliXCache] = await Promise.all([
     import('./core/doctor.ts'), import('./core/services.ts'), import('./core/cliX.ts'),
   ]);
@@ -634,6 +637,25 @@ async function cmdDashboard(): Promise<number> {
   const cache = cliXCache.cacheStats();
   const entries = listPlugins();
   const actCount = entries.reduce((acc, e) => acc + (e.plugin?.actions.length ?? 0), 0);
+  if (histFlag) {
+    const hp = path.join(HOME, 'logs', 'health-history.jsonl');
+    const history = fs.existsSync(hp)
+      ? fs.readFileSync(hp, 'utf8').split('\n').filter((l) => l.trim()).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean).slice(-20)
+      : [];
+    if (!history.length) { process.stdout.write('（还没有快照历史——zkit dashboard 跑一次就有了）\n'); return 0; }
+    process.stdout.write(`${c.bold('健康快照历史（最近 20 条）')}\n`);
+    for (const h of history.reverse()) {
+      const mark = h.ok ? c.green('✓') : c.yellow('⚠');
+      process.stdout.write(`  ${mark} ${h.ts?.slice(0, 19).replace('T', ' ')}  ✗${h.errors} ⚠${h.warnings}  服务 ${h.servicesRunning}/${h.servicesTotal}  缓存 ${h.cacheHits}/${h.cacheMisses}\n`);
+    }
+    return 0;
+  }
+  if (exportFile) {
+    const snap = { ts: new Date().toISOString(), version: JSON.parse(fs.readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')).version, doctor: { errors: errCount, warnings: warnCount }, services: { running, total: services.length }, cache, plugins: { count: entries.length, actions: actCount } };
+    fs.writeFileSync(exportFile, JSON.stringify(snap, null, 2));
+    process.stdout.write(`✓ 快照已导出 → ${exportFile}\n`);
+    return 0;
+  }
   process.stdout.write(`${c.bold('zerokit 全景总检')}\n`);
   process.stdout.write(`  doctor：✗${errCount}  ⚠${warnCount}  ✓${report.plugins.filter((p) => p.ok).length + report.tools.filter((t) => t.ok).length}\n`);
   process.stdout.write(`  服务：${running}/${services.length} 在跑\n`);
@@ -5300,7 +5322,7 @@ async function main(): Promise<number> {
     case 'run':
       return cmdRun(rest);
     case 'dashboard':
-      return await cmdDashboard();
+      return await cmdDashboard(rest);
     case 'cache':
       return await cmdCache(rest);
     case 'config':
