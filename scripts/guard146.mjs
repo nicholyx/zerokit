@@ -59,9 +59,9 @@ const die = (msg) => { console.error(`FAIL  ${msg}`); bad = 1; };
   const sh = readNum('START-HERE.md');
   if (!ov) { die('overview.md 找不到「N 个文件 M 项断言」数字'); }
   if (!sh) { die('START-HERE.md 找不到「N 个文件 M 项断言」数字'); }
-  if (ov && sh && ov.files !== smokeFiles) die(`overview 文件数 ${ov.files} ≠ test/ 实际 ${smokeFiles} 个 smoke 文件`);
-  if (ov && sh && sh.files !== smokeFiles) die(`START-HERE 文件数 ${sh.files} ≠ test/ 实际 ${smokeFiles} 个 smoke 文件`);
-  if (ov && sh && ov.asserts !== sh.asserts) die(`overview 断言数 ${ov.asserts} ≠ START-HERE ${sh.asserts}`);
+  if (ov && sh && ov.files !== smokeFiles) die(`overview 文件数 ${ov.files} ≠ test/ 实际 ${smokeFiles} 个 smoke 文件——跑 node scripts/sync-counts.mjs 自动修正`);
+  if (ov && sh && sh.files !== smokeFiles) die(`START-HERE 文件数 ${sh.files} ≠ test/ 实际 ${smokeFiles} 个 smoke 文件——跑 node scripts/sync-counts.mjs 自动修正`);
+  if (ov && sh && ov.asserts !== sh.asserts) die(`overview 断言数 ${ov.asserts} ≠ START-HERE ${sh.asserts}——跑 node scripts/sync-counts.mjs 自动修正`);
   if (ov && sh) console.log(`OK    文档数字同步（${smokeFiles} 文件 / ${ov.asserts} 断言，两处一致）`);
 }
 

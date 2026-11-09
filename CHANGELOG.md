@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- guard146 计数同步自动化（根治连续三轮同款事故）：scripts/sync-counts.mjs 从 test-all 实际跑出的数字自动同步 overview/START-HERE 两处基线行；guard146 三条计数 FAIL 报错统一引导「跑 node scripts/sync-counts.mjs 自动修正」；CONTRIBUTING 增维护轮改计数流程。
 
 ## [3.14.0] - 2026-11-09
 

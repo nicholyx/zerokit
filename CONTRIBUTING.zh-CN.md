@@ -151,6 +151,11 @@ MCP 副作用动作默认拒绝）见 [`SECURITY.md`](SECURITY.md)。
 
 
 ## 治理（v2 线起）
+## 维护轮改断言计数的流程（第二百二十三轮起）
+
+- 改动 test/ 里的测试后，跑 `node scripts/sync-counts.mjs`——自动同步 overview/START-HERE 两处基线行。
+- 别手改计数：guard146 会比对 test/ 实际数字，手改不同步会被 CI 拦（220/221/222 连续三轮同款事故的根治）。
+
 
 - **决策规则**：单人主仓库维护（@nicholyx）。功能走 Issue → 聚焦分支 → PR → CI 全绿 → squash merge；CI 是唯一硬门禁（`required_approving_review_count: 0`）。
 - **语义化承诺**：minor = 新功能批次；patch = 修复与维护；major = 破坏性变更（附升级指南）。
