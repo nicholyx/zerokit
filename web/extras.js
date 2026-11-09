@@ -1792,6 +1792,22 @@ export function toJsonl(data) {
 }
 
 /** ④ 可预测导出文件名：插件-动作-时间戳.扩展名（非法字符归一成 -，防路径穿越）。 */
+/** 第二百二十四轮①：导出格式 MIME 映射——五类统一，未知类型兜底 application/octet-stream */
+export function exportMime(ext) {
+  const e = String(ext || 'txt').toLowerCase().replace(/^\./, '');
+  const map = {
+    csv: 'text/csv;charset=utf-8',
+    json: 'application/json',
+    md: 'text/markdown',
+    txt: 'text/plain;charset=utf-8',
+    'zkresult.json': 'application/json',
+  };
+  return map[e] ?? 'application/octet-stream';
+}
+
+/** 第二百二十四轮③：CSV UTF-8 BOM（Excel 打开中文不乱码） */
+export const CSV_BOM = '\ufeff';
+
 export function exportFilename(pluginId, actionId, ext, now = new Date()) {
   const clean = (s) => String(s || 'result').replace(/[^\w.-]+/g, '-').replace(/^-+|\.+/g, '').replace(/-+$/g, '').slice(0, 40) || 'result';
   const pad = (n) => String(n).padStart(2, '0');
