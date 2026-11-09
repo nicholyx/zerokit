@@ -2008,6 +2008,7 @@ function openDetail(plugin, action, prefill) {
     <div id="riskCard" class="risk-card"></div>
     <div id="runHistory" class="run-history"></div>
     <div class="actions action-tier">
+      ${action.risk === 'read' ? `<label class="field check fresh-toggle" title="跳过 10s 结果缓存，强制真跑"><input type="checkbox" id="freshToggle"> 强制刷新</label>` : ''}
       <button class="primary run-main" id="runBtn">▶ 执行</button>
       <button class="ghost" id="previewBtn" title="${t('previewTip')}">${t('previewCmd')}</button>
       <button class="ghost" id="backBtn">返回</button>
@@ -2711,9 +2712,11 @@ async function executeAction(plugin, action, values, remember = false) {
     window.__zkDestructiveOk = true;
     setTimeout(() => { window.__zkDestructiveOk = false; }, 10_000);
   }
+  const freshBox = document.getElementById('freshToggle');
+  const fresh = freshBox?.checked === true;
   let res = await api('/api/run', {
     method: 'POST',
-    body: { plugin: plugin.id, action: action.id, values },
+    body: { plugin: plugin.id, action: action.id, values, fresh },
   });
   if (res.needConfirm) {
     const ok = await askConfirm(plugin, action, res);
@@ -2726,9 +2729,11 @@ async function executeAction(plugin, action, values, remember = false) {
     }
     res = await api('/api/run', {
       method: 'POST',
-      body: { plugin: plugin.id, action: action.id, values, confirm: res.confirm },
+      body: { plugin: plugin.id, action: action.id, values, confirm: res.confirm, fresh },
     });
   }
+  // 第二百一十二轮③：cacheHit 透传给结果卡（⚡ 缓存徽标由 renderResult 消费）
+  if (res && typeof res === 'object') res.cacheHit = Boolean(res.cacheHit);
   return res;
 }
 
@@ -4915,6 +4920,8 @@ function renderResult(res) {
     return '';
   })();
   const msBadge = ms ? `<span class="ms-badge" title="本次耗时">⏱ ${esc(ms)}</span>` : '';
+  // 第二百一十二轮③：⚡ 缓存徽标（server 响应 cacheHit:true 时显示——结果复用自 10s 内缓存）
+  const cacheBadge = res.cacheHit ? `<span class="badge" title="结果来自 10s 内缓存（勾选强制刷新或 CLI --fresh 可重跑）">⚡ 缓存</span>` : '';
 
   let body = '';
   // 第十九轮④：文本输出默认脱敏（token/Bearer/长 hex 打码；开关在 actions 区 🕶）
@@ -5116,7 +5123,7 @@ function renderResult(res) {
   const copyText = res.data !== undefined ? JSON.stringify(res.data, null, 2) : (res.stdout ?? '');
   box.innerHTML = `
     <div class="card">
-      <div class="card-head" id="cardHead" title="${t('foldToggle')}">${head}${msBadge}${slowBadge}${paceBadge}
+      <div class="card-head" id="cardHead" title="${t('foldToggle')}">${head}${msBadge}${slowBadge}${paceBadge}${cacheBadge}
         <span style="margin-left:auto" class="aid">${esc(res.command || '')}</span>
         <button class="ghost" id="cardFold" title="${t('foldToggle')}">${t('foldUp')}</button>
       </div>

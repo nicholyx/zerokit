@@ -1199,7 +1199,29 @@ export function createServer(): http.Server {
           json(res, 400, { error: prepared.errors.join('；') });
           return;
         }
-        const result = await runAction(plugin, action, { caller: 'ui', values: prepared.values });
+        // 第二百一十二轮①⑤⑥：只读动作 TTL 缓存（与 CLI 共用 result-cache.json——跨面复用）
+        const cliXCache = await import('./core/cliX.ts');
+        const fresh = body['fresh'] === true;
+        const cacheTtlSec = Number(process.env.ZEROKIT_CACHE_TTL ?? '10');
+        const cacheable = action.risk === 'read' && !fresh && cacheTtlSec > 0;
+        const cacheK = cliXCache.cacheKey(plugin.id, action.id, prepared.values ?? {});
+        let result: Awaited<ReturnType<typeof runAction>> | undefined;
+        let cacheHit = false;
+        if (cacheable) {
+          const cached = cliXCache.readResultCache()[cacheK];
+          const entry = cached && cached.key === cacheK && typeof cached.at === 'number' && Date.now() - cached.at < cacheTtlSec * 1000
+            ? cached
+            : undefined;
+          if (entry) {
+            result = entry.result as Awaited<ReturnType<typeof runAction>>;
+            cacheHit = true;
+          }
+        }
+        if (!result) {
+          result = await runAction(plugin, action, { caller: 'ui', values: prepared.values });
+          if (cacheable && result.ok) cliXCache.writeResultCacheEntry(cacheK, result);
+        }
+        if (!result) { fail(res, 500, '执行未返回结果'); return; }
         json(res, 200, {
           ok: result.ok,
           stdout: result.stdout,
@@ -1207,6 +1229,7 @@ export function createServer(): http.Server {
           error: result.error,
           ms: result.ms,
           command: displayCommand(result.argv ?? []),
+          cacheHit,
         });
         return;
       }
@@ -1625,16 +1648,33 @@ export function createServer(): http.Server {
         const ac = new AbortController();
         const runKey = `${plugin.id}.${action.id}`;
         runningRuns.set(runKey, ac);
+        // 第二百一十二轮①⑤⑥：只读 TTL 缓存（与 CLI 共用 result-cache.json）
+        const cliXCache = await import('./core/cliX.ts');
+        const fresh = body['fresh'] === true;
+        const cacheTtlSec = Number(process.env.ZEROKIT_CACHE_TTL ?? '10');
+        const cacheable = action.risk === 'read' && !fresh && cacheTtlSec > 0 && !ac.signal.aborted;
+        const cacheK = cliXCache.cacheKey(plugin.id, action.id, withDefaults.values ?? {});
+        let cachedEntry = cacheable ? cliXCache.readResultCache()[cacheK] : undefined;
+        cachedEntry = cachedEntry && cachedEntry.key === cacheK && typeof cachedEntry.at === 'number' && Date.now() - cachedEntry.at < cacheTtlSec * 1000
+          ? cachedEntry
+          : undefined;
         let result;
         try {
-          result = await runAction(plugin, action, {
-            caller: 'ui', values: withDefaults.values, signal: ac.signal,
-          });
+          if (cachedEntry) {
+            result = cachedEntry.result as typeof result;
+          } else {
+            result = await runAction(plugin, action, {
+              caller: 'ui', values: withDefaults.values, signal: ac.signal,
+            });
+          }
         } finally {
           runningRuns.delete(runKey);
+          if (cacheable && !cachedEntry && result?.ok) cliXCache.writeResultCacheEntry(cacheK, result);
         }
+        if (!result) { fail(res, 500, '执行未返回结果'); return; }
         json(res, 200, {
           needConfirm: false,
+          cacheHit: Boolean(cachedEntry),
           ok: result.ok,
           render: action.render,
           output: action.output,

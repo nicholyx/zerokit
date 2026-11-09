@@ -1515,3 +1515,6 @@ if \(n > 2000\) return '仍在执行…（插件可能在做重活）';
 if\ \(!Array\.isArray\(incoming\)\ \|\|\ incoming\.some\(\(x\)\ =>\ typeof\ x\ !==\ 'string'\)\)\ return\ \{\ ok:
 cnt\.textContent\ =\ q\ \?\ `\$\{shown\}\ /\ \$\{pool\.length\}\ 区`\ :\ '';
 <input\ id="drawerSearch"\ type="text"\ placeholder="搜索设置…（字体/历史/配置档）"
+\$\{action\.risk\ ===\ 'read'\ \?\ `<label\ class="field\ check\ fresh\-toggle"\
+const\ cacheBadge\ =\ res\.cacheHit\ \?\ `<span\ class="badge"\ title="结果来自\ 10s
+fresh-toggle\" title=\"跳过 10s 结果缓存

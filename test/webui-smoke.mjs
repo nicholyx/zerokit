@@ -727,6 +727,8 @@ const failed = results.filter(([, ok]) => !ok);
   check('207②⑥ 列表 j/k+g/G 接线（browse 态，到尾停）', app2.includes("!typing && (e.key === 'j' || e.key === 'k')") && app2.includes("!typing && e.key === 'g'") && app2.includes("!typing && e.key === 'G'"));
   check('208①-④ Alt 系页签键盘闭环（j/k/x/p/c + 无页签静默）', app2.includes("e.altKey && resultTabs.length && /^[jkxpc]$/i.test(e.key)") && app2.includes('Alt+x 关闭当前页签'));
   check('208⑤⑥ rtab aria-current + 速查表 Alt 行', app2.includes('aria-current="page"') && (() => { const e2 = fs.readFileSync(path.join(PKG_ROOT, 'web', 'extras.js'), 'utf8'); return e2.includes("khAltTabs") && e2.includes("Alt j/k/x/p/c"); })());
+  check('212①⑥ server /api/run 缓存（risk=read + fresh 参数 + cacheHit 响应 + 共用 result-cache）', app2.includes('window.openDrawer = openDrawer') === false && fs.readFileSync(path.join(PKG_ROOT, 'src', 'server.ts'), 'utf8').includes('cacheHit') && fs.readFileSync(path.join(PKG_ROOT, 'src', 'server.ts'), 'utf8').includes("body['fresh'] === true"));
+  check('212③④ UI ⚡缓存徽标 + 强制刷新复选框（只读动作）', app2.includes('⚡ 缓存') && app2.includes('id="freshToggle"') && app2.includes("freshBox?.checked === true"));
 
   check('197⑧ mcp-copy-audit 进 lint（JSON-RPC 实连审计）', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'mcp-copy-audit.mjs'), 'utf8').includes('tools/list') && fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'lint.sh'), 'utf8').includes('mcp-copy-audit'));
   check('197① MCP 术语审计规则在（CLI 语境白名单）', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'mcp-copy-audit.mjs'), 'utf8').includes('zkit|命令行|安装|CLI|一条命令'));

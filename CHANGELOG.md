@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- UI 执行路径接缓存（三面闭环收官）：/api/run 接 TTL 缓存（与 CLI 共用 result-cache.json——CLI 跑过 UI 秒回）；响应带 cacheHit 标记 → UI 结果卡显示「⚡ 缓存」徽标；详情页只读动作显示「强制刷新」复选框（勾选传 fresh）。
 
 ## [3.3.0] - 2026-11-09
 
