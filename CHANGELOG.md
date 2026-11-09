@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.15.0] - 2026-11-10
+
+### Added
+
 - guard146 计数同步自动化（根治连续三轮同款事故）：scripts/sync-counts.mjs 从 test-all 实际跑出的数字自动同步 overview/START-HERE 两处基线行；guard146 三条计数 FAIL 报错统一引导「跑 node scripts/sync-counts.mjs 自动修正」；CONTRIBUTING 增维护轮改计数流程。
 
 ## [3.14.0] - 2026-11-09
@@ -72,10 +78,4 @@
 ### Added
 
 - UI 执行路径接缓存（三面闭环收官）：/api/run 接 TTL 缓存（与 CLI 共用 result-cache.json——CLI 跑过 UI 秒回）；响应带 cacheHit 标记 → UI 结果卡显示「⚡ 缓存」徽标；详情页只读动作显示「强制刷新」复选框（勾选传 fresh）。
-
-## [3.3.0] - 2026-11-09
-
-### Added
-
-- 只读动作 TTL 缓存：CLI run 同参数 10s 内秒回（⚡ 缓存徽标 + --fresh 跳过 + ZEROKIT_CACHE_TTL=0 关闭 + 写类永不缓存）；缓存命中走同一输出管线（--copy/--out/--format 不因缓存丢失——cli45/148 两个测试抓到后修正）；cacheKey/cacheHit/readResultCache/writeResultCacheEntry 纯函数层（数据目录 result-cache.json，20 条上限）；UI 面 resultCacheKey/Hit 同语义纯函数。
 
