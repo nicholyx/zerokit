@@ -93,6 +93,7 @@ const API_METHODS: Record<string, string[]> = {
   '/api/services/start': ['POST'],
   '/api/services/logs': ['GET'],
   '/api/health-snapshot': ['GET'],
+  '/api/health-history': ['GET'],
   '/api/stop': ['POST'],
   '/api/kill': ['POST'],
   '/api/open': ['POST'],
@@ -144,6 +145,7 @@ const API_SPEC = {
     '/api/services/start': { post: { summary: '启动声明服务（body: service=插件.服务）', security: [{ token: [] }] } },
     '/api/services/logs': { get: { summary: '服务日志尾部（query: service=插件.服务&tail=N）', security: [{ token: [] }] } },
     '/api/health-snapshot': { get: { summary: '四面健康总检快照（doctor/服务/缓存/插件）', security: [{ token: [] }] } },
+    '/api/health-history': { get: { summary: '健康快照历史（最近 60 条）', security: [{ token: [] }] } },
     '/api/stop': { post: { summary: '停止执行（body: key，缺省停全部）' } },
   },
   components: { securitySchemes: { token: { type: 'apiKey', in: 'header', name: 'X-ZeroKit-Token' } } },
@@ -1607,6 +1609,17 @@ export function createServer(): http.Server {
           (acc, e) => ({ actions: acc.actions + (e.plugin?.actions.length ?? 0) }),
           { actions: 0 },
         );
+        // 第二百二十一轮①：快照落盘 health-history.jsonl（保留 60 条）
+        const snapEntry = { ts: new Date().toISOString(), ok: errCount === 0, errors: errCount, warnings: warnCount, servicesRunning: services.filter((x) => x.running).length, servicesTotal: services.length, cacheHits: cacheStats.hits, cacheMisses: cacheStats.misses, plugins: entries.length, actions: actCount };
+        const histPath = path.join(LOG_DIR, 'health-history.jsonl');
+        try {
+          fs.mkdirSync(path.dirname(histPath), { recursive: true });
+          const prev = fs.existsSync(histPath)
+            ? fs.readFileSync(histPath, 'utf8').split('\n').filter((l) => l.trim()).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean)
+            : [];
+          prev.push(snapEntry);
+          fs.writeFileSync(histPath, prev.slice(-60).map((x) => JSON.stringify(x)).join('\n') + '\n');
+        } catch { /* 落盘失败不阻断快照响应 */ }
         json(res, 200, {
           version: SERVER_VERSION,
           ok: errCount === 0,
@@ -1615,6 +1628,15 @@ export function createServer(): http.Server {
           cache: cacheStats,
           plugins: { count: entries.length, actions: actCount },
         });
+        return;
+      }
+      // 第二百二十一轮②：健康历史机读
+      if (url.pathname === '/api/health-history' && req.method === 'GET') {
+        const histPath = path.join(LOG_DIR, 'health-history.jsonl');
+        const history = fs.existsSync(histPath)
+          ? fs.readFileSync(histPath, 'utf8').split('\n').filter((l) => l.trim()).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean).slice(-60)
+          : [];
+        json(res, 200, { history });
         return;
       }
       if (url.pathname === '/api/services/logs' && req.method === 'GET') {

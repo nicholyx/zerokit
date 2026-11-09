@@ -6887,6 +6887,15 @@ async function showDashboard() {
   if (location.hash !== '#/dashboard') history.replaceState(null, '', '#/dashboard');
   try {
     const d = await api('/api/health-snapshot');
+    // 第二百二十一轮③：历史趋势（最近 10 条快照）
+    let histHtml = '';
+    try {
+      const hist = await api('/api/health-history');
+      const rows = (hist.history ?? []).slice(-10).reverse().map((h) =>
+        `<tr><td>${esc(h.ts?.slice(0, 19).replace('T', ' ') ?? '')}</td><td>${h.ok ? '✓' : `⚠ ${h.errors}`}</td><td>${h.servicesRunning}/${h.servicesTotal}</td><td>${h.cacheHits}/${h.cacheMisses}</td></tr>`).join('');
+      histHtml = `<h3 class="sec-title">${t('dashHistTitle')}</h3>
+        <table class="grid"><thead><tr><th>${t('dashHistTs')}</th><th>${t('dashHistState')}</th><th>${t('dash220Svc')}</th><th>${t('dash220Cache')}</th></tr></thead><tbody>${rows || `<tr><td colspan="4">${t('dashHistEmpty')}</td></tr>`}</tbody></table>`;
+    } catch { /* 历史读不到不影响主视图 */ }
     const state = d.ok ? '✓ 全部健康' : `⚠ ${d.doctor.errors} 项需处理`;
     el.doctorView.innerHTML = `
       <div class="panel">
@@ -6899,6 +6908,7 @@ async function showDashboard() {
           <div class="dash-tile"><span class="dt-name">${d.cache.hits} / ${d.cache.misses}</span><span>${t('dash220Cache')}</span></div>
           <div class="dash-tile"><span class="dt-name">${d.plugins.count} / ${d.plugins.actions}</span><span>${t('dash220Plug')}</span></div>
         </div>
+        ${histHtml}
         <div class="actions">
           <button class="ghost" id="dashDoctor">${t('dash220GoDoc')}</button>
           <button class="ghost" id="dashSvc">${t('dash220GoSvc')}</button>
