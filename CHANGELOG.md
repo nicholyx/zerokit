@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.13.0] - 2026-11-09
+
+### Added
+
 - 总检页深化——历史趋势与导出：/api/health-snapshot GET 落盘 health-history.jsonl（保留 60 条）；/api/health-history GET 端点；UI dashboard 历史趋势区（最近 10 条快照表）；CLI zkit dashboard --history（文本历史）/--export 文件（当前快照 JSON 导出）；I18N dashHist 四键 zh/en。
 
 ## [3.12.0] - 2026-11-09
@@ -71,10 +77,4 @@
 ### Added
 
 - 设置抽屉搜索定位：抽屉顶部搜索框（输入即过滤七大区，命中区显示/其余隐藏）；命中计数徽标「N / M 区」；无匹配区隐藏即空态；Esc 清空恢复；/ 键抽屉内聚焦搜索框；匹配含中文子串+首词前缀；纯函数 drawerSearchMatch/Count 可测。
-
-## [3.1.0] - 2026-11-09
-
-### Added
-
-- 搜索历史独立导入导出：CLI `zkit config searches export/import/list/clear`（searches.json 文件真源，CLI 面读写）；UI 日志页 chips 区加「⬆ 导入历史」按钮（File input → searchesMerge → localStorage，与 CLI 同一信封格式）；合并语义与 pushSearch 一致（置顶去重、8 条上限、非数组拒绝）；新纯函数 searchesExport/searchesMerge。
 
