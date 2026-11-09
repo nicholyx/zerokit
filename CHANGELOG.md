@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.17.0] - 2026-11-10
+
+### Added
+
 - CLI 导出与 UI 对齐：audit --export csv 落文件加 UTF-8 BOM（Excel 中文兼容，stdout 保持纯文本供管道）；--out 无扩展名自动补 .csv；cli120-smoke +2 断言（BOM 字节核对/自动扩展名）。
 
 ## [3.16.0] - 2026-11-10
@@ -72,10 +78,4 @@
 ### Added
 
 - 可复现构建审计（第八审计线）：scripts/repro-check.mjs 进 lint（engines 覆盖 CI Node/Cargo.lock 在库含桌面壳条目/package-lock 非空三断言）；docs/reference/reproducibility.md 审计记录（npm ci 干跑过、cargo audit 本机未装记为已知差距）。
-
-## [3.5.0] - 2026-11-09
-
-### Added
-
-- 缓存面板与命中统计：zkit cache stats/prune/clear [--older-than] 三子命令；/api/cache GET/DELETE 端点；UI #/cache 面板（条目表+命中统计瓷贴+剔除/清空）；命中计数落盘 cache-stats.json（CLI/server 双面累计 hits/misses）；I18N zh/en 全键。
 

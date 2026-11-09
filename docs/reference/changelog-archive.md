@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [3.5.0] - 2026-11-09
+
+### Added
+
+- 缓存面板与命中统计：zkit cache stats/prune/clear [--older-than] 三子命令；/api/cache GET/DELETE 端点；UI #/cache 面板（条目表+命中统计瓷贴+剔除/清空）；命中计数落盘 cache-stats.json（CLI/server 双面累计 hits/misses）；I18N zh/en 全键。
+
 ## [3.4.0] - 2026-11-09
 
 ### Added
