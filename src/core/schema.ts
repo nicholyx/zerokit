@@ -40,6 +40,11 @@ export function toJsonSchema(action: Action): JsonSchemaObject {
       : p.description;
     if (hint) schema['description'] = hint;
     if (p.default !== undefined) schema['default'] = p.default;
+    // 第二百一十五轮④：min/max/enum/pattern 透传进 JSON Schema（模型可在调用前自校验）
+    if (p.min !== undefined) schema['minimum'] = p.min;
+    if (p.max !== undefined) schema['maximum'] = p.max;
+    if (p.enum) schema['enum'] = p.enum;
+    if (p.pattern) schema['pattern'] = p.pattern;
     properties[p.name] = schema;
     if (p.required) required.push(p.name);
   }
@@ -110,6 +115,24 @@ export function toFormFields(action: Action): FormField[] {
 /** 把外部来的原始值（CLI 字符串 / 表单字符串 / JSON）转成参数声明的类型 */
 export function coerceParam(p: ActionParam, raw: unknown): { value?: unknown; error?: string } {
   const text = typeof raw === 'string' ? raw.trim() : raw;
+  // 第二百一十五轮②：范围/模式校验在类型转换后统一做（validateConstraints）——错误带合法值说明
+  const validate = (v: unknown): { value?: unknown; error?: string } => {
+    if (typeof v === 'number') {
+      if (p.min !== undefined && v < p.min) return { error: `参数 ${p.name} 不能小于 ${p.min}，收到 ${v}` };
+      if (p.max !== undefined && v > p.max) return { error: `参数 ${p.name} 不能大于 ${p.max}，收到 ${v}` };
+    }
+    if (typeof v === 'string' && v !== '' && p.pattern) {
+      try {
+        if (!new RegExp(p.pattern).test(v)) {
+          return { error: `参数 ${p.name} 不匹配要求的格式（${p.pattern}），收到 "${v}"` };
+        }
+      } catch { /* 清单里的正则写错——跳过校验不阻断执行 */ }
+    }
+    if (typeof v === 'string' && p.type === 'string' && p.enum && !p.enum.includes(v)) {
+      return { error: `参数 ${p.name} 只能是：${p.enum.join(' / ')}，收到 "${v}"` };
+    }
+    return { value: v };
+  };
   switch (p.type) {
     case 'boolean': {
       if (typeof text === 'boolean') return { value: text };
@@ -124,12 +147,12 @@ export function coerceParam(p: ActionParam, raw: unknown): { value?: unknown; er
       if (!Number.isFinite(n) || !Number.isInteger(n)) {
         return { error: `参数 ${p.name} 需要整数，收到 "${text}"` };
       }
-      return { value: n };
+      return validate(n);
     }
     case 'number': {
       const n = Number(text);
       if (!Number.isFinite(n)) return { error: `参数 ${p.name} 需要数字，收到 "${text}"` };
-      return { value: n };
+      return validate(n);
     }
     case 'enum': {
       const s = String(text);
@@ -140,7 +163,7 @@ export function coerceParam(p: ActionParam, raw: unknown): { value?: unknown; er
     }
     default: {
       if (text === undefined || text === null) return { value: undefined };
-      return { value: String(text) };
+      return validate(String(text));
     }
   }
 }

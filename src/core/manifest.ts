@@ -78,6 +78,12 @@ export interface ActionParam {
   required: boolean;
   default?: unknown;
   enum?: string[];
+  /** 第二百一十五轮①：数字范围下限（type=number/integer 时生效） */
+  min?: number;
+  /** 数字范围上限 */
+  max?: number;
+  /** 字符串模式（type=string 时生效，JS 正则源码，锚点不必写） */
+  pattern?: string;
   /** CLI 短名，例如 -d。可选 */
   short?: string;
   /** 敏感值（密码/token）。会在审计日志和确认框里打码，UI 上也按密码框渲染 */
@@ -351,6 +357,37 @@ function parseParams(raw: unknown, actionId: string, errors: string[]): ActionPa
     const short = asString(p['short']);
     if (short) param.short = short;
     if (p['secret'] === true) param.secret = true;
+    // 第二百一十五轮①：min/max/pattern 解析与合法性校验（类型匹配/数字/min<max）
+    if (p['min'] !== undefined || p['max'] !== undefined) {
+      if (type !== 'number' && type !== 'integer') {
+        errors.push(`动作 ${actionId}: 参数 ${name} 的 min/max 只对 number/integer 有意义（该参数是 ${type}）`);
+      } else {
+        const mn = p['min'] !== undefined ? Number(p['min']) : undefined;
+        const mx = p['max'] !== undefined ? Number(p['max']) : undefined;
+        const badNum = (mn !== undefined && !Number.isFinite(mn)) || (mx !== undefined && !Number.isFinite(mx));
+        if (badNum) {
+          errors.push(`动作 ${actionId}: 参数 ${name} 的 min/max 需要数字`);
+        } else if (mn !== undefined && mx !== undefined && mn >= mx) {
+          errors.push(`动作 ${actionId}: 参数 ${name} 的 min（${mn}）必须小于 max（${mx}）`);
+        } else {
+          if (mn !== undefined) param.min = mn;
+          if (mx !== undefined) param.max = mx;
+        }
+      }
+    }
+    if (p['pattern'] !== undefined) {
+      if (type !== 'string') {
+        errors.push(`动作 ${actionId}: 参数 ${name} 的 pattern 只对 string 有意义（该参数是 ${type}）`);
+      } else {
+        const pat = asString(p['pattern']);
+        try {
+          new RegExp(pat ?? '');
+          param.pattern = pat;
+        } catch {
+          errors.push(`动作 ${actionId}: 参数 ${name} 的 pattern 不是合法正则（${pat}）`);
+        }
+      }
+    }
     out.push(param);
   }
   return out;

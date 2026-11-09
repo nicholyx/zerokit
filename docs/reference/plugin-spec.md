@@ -282,6 +282,8 @@ env_pass = ["HTTP_PROXY"]  # 环境变量白名单：声明后宿主机其余变
 |---|---|---|
 | `name` | ✅ | `^[a-zA-Z_][a-zA-Z0-9_]*$`。要能同时当 JSON Schema 属性名和 CLI flag |
 | `type` | | `string`（默认）/ `integer` / `number` / `boolean` / `path` / `enum` |
+| `min` / `max` | number | 数字参数范围（type=number/integer）——转换后校验，越界在确认前报错 |
+| `pattern` | string | 字符串模式（JS 正则源码）——不匹配在确认前报错 |
 | `description` | | 会进 MCP 的 `inputSchema.description`，是模型判断传什么的依据 |
 | `required` | | 默认 `false` |
 | `default` | | 默认值 |
