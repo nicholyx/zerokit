@@ -88,6 +88,7 @@ const API_METHODS: Record<string, string[]> = {
   '/api/update-check': ['GET'],
   '/api/preview': ['POST'],
   '/api/run': ['POST'],
+  '/api/cache': ['GET', 'DELETE'],
   '/api/stop': ['POST'],
   '/api/kill': ['POST'],
   '/api/open': ['POST'],
@@ -134,6 +135,7 @@ const API_SPEC = {
     '/api/markets': { get: { summary: '集市索引' } },
     '/api/bookmarks': { get: { summary: '书签列表（与 CLI bookmarks.json 同源）' }, post: { summary: '新增书签', security: [{ token: [] }] }, delete: { summary: '删除书签（?name=）', security: [{ token: [] }] } },
     '/api/run': { post: { summary: '执行动作（body: plugin/action/values）', security: [{ token: [] }] } },
+    '/api/cache': { get: { summary: '缓存面板（条目+命中统计）', security: [{ token: [] }] }, delete: { summary: '清空缓存', security: [{ token: [] }] } },
     '/api/stop': { post: { summary: '停止执行（body: key，缺省停全部）' } },
   },
   components: { securitySchemes: { token: { type: 'apiKey', in: 'header', name: 'X-ZeroKit-Token' } } },
@@ -1215,6 +1217,7 @@ export function createServer(): http.Server {
           if (entry) {
             result = entry.result as Awaited<ReturnType<typeof runAction>>;
             cacheHit = true;
+            cliXCache.bumpCacheStats(true);
           }
         }
         if (!result) {
@@ -1576,6 +1579,33 @@ export function createServer(): http.Server {
         json(res, 200, { pack: v.pack, replay: policy, note: 'CLI 侧 zkit share --view 可比对指纹' });
         return;
       }
+      // 第二百一十三轮⑥：缓存面板端点
+      if (url.pathname === '/api/cache' && req.method === 'GET') {
+        const cliXCache = await import('./core/cliX.ts');
+        const ttlSec = Number(process.env.ZEROKIT_CACHE_TTL ?? '10');
+        const now = Date.now();
+        const all = cliXCache.readResultCache();
+        const stats = cliXCache.cacheStats(now);
+        const items = Object.values(all)
+          .sort((a, b) => (b.at ?? 0) - (a.at ?? 0))
+          .map((e) => ({
+            key: e.key,
+            at: e.at,
+            ageSec: Math.round((now - (e.at ?? 0)) / 1000),
+            expired: now - (e.at ?? 0) >= ttlSec * 1000,
+            ok: (e.result as { ok?: boolean })?.ok ?? false,
+          }));
+        json(res, 200, { ttlSec, total: stats.total, hits: stats.hits, misses: stats.misses, items });
+        return;
+      }
+      if (url.pathname === '/api/cache' && req.method === 'DELETE') {
+        const cliXCache = await import('./core/cliX.ts');
+        const ttlSec = Number(process.env.ZEROKIT_CACHE_TTL ?? '10');
+        const removed = cliXCache.cachePrune(ttlSec * 1000);
+        cliXCache.cacheClearAll();
+        json(res, 200, { ok: true, removed });
+        return;
+      }
       if (url.pathname === '/api/run' && req.method === 'POST') {
         const body = await readBody(req);
         const pluginId = String(body['plugin'] ?? '');
@@ -1667,6 +1697,7 @@ export function createServer(): http.Server {
               caller: 'ui', values: withDefaults.values, signal: ac.signal,
             });
           }
+          cliXCache.bumpCacheStats(Boolean(cachedEntry));
         } finally {
           runningRuns.delete(runKey);
           if (cacheable && !cachedEntry && result?.ok) cliXCache.writeResultCacheEntry(cacheK, result);
