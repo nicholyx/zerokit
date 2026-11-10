@@ -94,6 +94,7 @@ const API_METHODS: Record<string, string[]> = {
   '/api/services/logs': ['GET'],
   '/api/health-snapshot': ['GET'],
   '/api/health-history': ['GET'],
+  '/api/doctor-history': ['GET'],
   '/api/stop': ['POST'],
   '/api/kill': ['POST'],
   '/api/open': ['POST'],
@@ -146,6 +147,7 @@ const API_SPEC = {
     '/api/services/logs': { get: { summary: '服务日志尾部（query: service=插件.服务&tail=N）', security: [{ token: [] }] } },
     '/api/health-snapshot': { get: { summary: '四面健康总检快照（doctor/服务/缓存/插件）', security: [{ token: [] }] } },
     '/api/health-history': { get: { summary: '健康快照历史（最近 60 条）', security: [{ token: [] }] } },
+    '/api/doctor-history': { get: { summary: 'doctor 体检历史（最近 50 条）', security: [{ token: [] }] } },
     '/api/stop': { post: { summary: '停止执行（body: key，缺省停全部）' } },
   },
   components: { securitySchemes: { token: { type: 'apiKey', in: 'header', name: 'X-ZeroKit-Token' } } },
@@ -1631,6 +1633,12 @@ export function createServer(): http.Server {
         return;
       }
       // 第二百二十一轮②：健康历史机读
+      // 第二百三十六轮⑤：doctor 历史机读（面板趋势数据源）
+      if (url.pathname === '/api/doctor-history' && req.method === 'GET') {
+        const { readDoctorHistory } = await import('./core/doctor.ts');
+        json(res, 200, { history: readDoctorHistory().slice(0, 50) });
+        return;
+      }
       if (url.pathname === '/api/health-history' && req.method === 'GET') {
         const histPath = path.join(LOG_DIR, 'health-history.jsonl');
         const history = fs.existsSync(histPath)
