@@ -88,13 +88,14 @@ check('② 四态图标', batchStateIcon('ok') === '✓' && batchStateIcon('fail
 {
   const fs = await import('node:fs');
   const appjs = fs.readFileSync(path.join(PKG_ROOT, 'web/app.js'), 'utf8');
-  check('⑦ 失败不中断（runOne then 落状态不断链）', appjs.includes("states[i] = r.ok ? 'ok' : 'fail'; paint(); return r;"));
+  const batchjs = fs.readFileSync(path.join(PKG_ROOT, 'web/batch.js'), 'utf8'); // 第二百四十二轮：批量域迁出
+  check('⑦ 失败不中断（runOne then 落状态不断链）', batchjs.includes("states[i] = r.ok ? 'ok' : 'fail'; paint(); return r;"));
   check('⑧ 空队列按钮禁用', appjs.includes("${batch.length ? '' : 'disabled'}"));
-  check('⑧ runBatch 空守卫注释', appjs.includes('空队列守卫'));
+  check('⑧ runBatch 空守卫注释', batchjs.includes('空队列守卫'));
   check('③ ps 面板批量提示', appjs.includes('ps-batch-note'));
-  check('① 进度条挂载', appjs.includes("id = 'batchProgress'") || appjs.includes("prog.id = 'batchProgress'"));
+  check('① 进度条挂载', batchjs.includes("prog.id = 'batchProgress'") || appjs.includes("id = 'batchProgress'"));
   // ⑥ chunkWindows 复用（不是新写并发逻辑）
-  check('⑥ 复用 chunkWindows', appjs.includes('chunkWindows(ordered.length, conc)'));
+  check('⑥ 复用 chunkWindows', batchjs.includes('chunkWindows(ordered.length, conc)'));
 }
 
 rmSync(home, { recursive: true, force: true });

@@ -41,7 +41,8 @@ check('② 耗时徽标', app.includes('msBadge') && app.includes('⏱ ${esc(ms)
 check('② 快慢徽标', app.includes('pace-fast') && app.includes('pace-slow') && app.includes('paceVerdict(res.ms, avg'));
 check('③ 安抚行', app.includes('paceNote') && app.includes('paceReassure'));
 check('④ 失败也显示耗时徽标', app.includes('const msBadge = ms ?') && !app.includes('res.ok === true ? msBadge'));
-check('⑤ 批量单项计时', app.includes('oneT0') && app.includes("states[i] === 'running' && oneT0.has(i)"));
+const batchjs = readFileSync(path.join(PKG_ROOT, 'web/batch.js'), 'utf8');
+check('⑤ 批量单项计时（242 轮起在 web/batch.js）', batchjs.includes('oneT0') && batchjs.includes("states[i] === 'running' && oneT0.has(i)"));
 check('⑥ 监控点悬停耗时', app.includes('耗时 ${fmtElapsed(sm.ms)}'));
 check('⑧ CLI ⏱ 尾行', cli.includes('⏱ ${result.ms < 1000'));
 check('⑧ quiet/json/pipe 免打', cli.includes('!asJson && !quiet && !pipeCmd && !fmtTpl'));
