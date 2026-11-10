@@ -2,6 +2,13 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [3.14.0] - 2026-11-09
+
+### Added
+
+- 搜索拼音增强：scorePinyin 融合容错档——漏/错一个字母的近似前缀（编辑距离 ≤1，44/36 两档）排在所有精确命中之后；pinyinFuzzyScore 独立导出（可测）；romanize 内建 cache（8000 条）复用确认（⑤ 性能已有）；extras-smoke +1 断言（fuzzy 分档 + 精确不变）。
+- 修复：CI npm ci 显式指定官方 registry——lockfile 里 110 条 resolved URL 是 npmmirror（本机全局 npm config 写入随 lockfile 提交），npmmirror 数据库故障时 CI 安装全挂。显式 --registry 覆盖 lockfile 的 resolved，CI 不再依赖第三方镜像可用性。
+
 ## [3.12.0] - 2026-11-09
 
 ### Added
