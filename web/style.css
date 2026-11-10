@@ -2727,3 +2727,7 @@ table.kv td:first-child { width: 34%; font-family: var(--mono); font-size: 12px;
 .zero-hits-panel .chip { display: inline-flex; align-items: center; gap: 4px; }
 .chip-x { border: none; background: none; color: var(--fg); opacity: .55; cursor: pointer; padding: 0 2px; font-size: 13px; }
 .chip-x:hover { opacity: 1; color: var(--bad); }
+
+/* 第二百三十六轮：doctor 走势条 */
+.doc-sparks { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.doc-spark-strip i { width: 10px; height: 14px; border-radius: 2px; margin-right: 3px; display: inline-block; }

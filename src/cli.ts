@@ -2845,6 +2845,18 @@ async function cmdUpdate(rest: string[]): Promise<number> {
   return 0;
 }
 
+/** 第二百三十六轮④：zkit doctor --trend——文本版体检走势（最近 10 次） */
+async function cmdDoctorTrend(): Promise<number> {
+  const { readDoctorHistory } = await import('./core/doctor.ts');
+  const hist = readDoctorHistory().slice(0, 10).reverse();
+  if (hist.length < 2) { process.stdout.write('（历史不足 2 次——再跑一次 zkit doctor 就有走势了）\n'); return 0; }
+  for (const h of hist) {
+    const mark = h.errors > 0 ? c.red(`✗${h.errors}`) : c.green('✓');
+    process.stdout.write(`  ${String(h.ts).slice(5, 16).replace('T', ' ')}  ${mark}  ⚠${h.warnings}  ✓${h.passed}\n`);
+  }
+  return 0;
+}
+
 async function cmdDoctor(): Promise<number> {
   const report = await buildDoctorReport();
   // ⑨最近错误计数：审计里的 deny/非零退出——「环境没坏但一直在失败」要浮出来
@@ -5296,6 +5308,8 @@ async function main(): Promise<number> {
       return 0;
     }
     case 'doctor':
+      // 第二百三十六轮④：doctor --trend 文本走势
+      if (rest.includes('--trend')) return await cmdDoctorTrend();
       // 第一百五十一轮⑤：doctor --first-run 只查引导三件事
       if (rest.includes('--first-run')) {
         const ob = await import('./core/onboard.ts');

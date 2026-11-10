@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint, configProgress, validateSettingInput, formCanSave, parseConfigHash, textLines, textStats, fmtElapsed, paceVerdict, paceReassure, copyTextRaw, copyWithNumbers, copyWithTitle, extractUrls, colTooltipStats, shouldFreeze, tableSizeBadge, batchColVis, csvEscape, exportCsv, mdTableVis, exportMeta, shareEnvelope, shareAlive , drawerSearchMatch, drawerSearchCount , exportMime, CSV_BOM , paletteMatchLine, recordZeroHit , suggestFromZeroHits } from './extras.js';
+import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint, configProgress, validateSettingInput, formCanSave, parseConfigHash, textLines, textStats, fmtElapsed, paceVerdict, paceReassure, copyTextRaw, copyWithNumbers, copyWithTitle, extractUrls, colTooltipStats, shouldFreeze, tableSizeBadge, batchColVis, csvEscape, exportCsv, mdTableVis, exportMeta, shareEnvelope, shareAlive , drawerSearchMatch, drawerSearchCount , exportMime, CSV_BOM , paletteMatchLine, recordZeroHit , suggestFromZeroHits , doctorTrendSparks } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote, defaultChip, enumHint, actionHealthBadge, descNeedsFold, inQuietHours, notifyThrottle, pushNotifyLog, parseHm } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -7133,7 +7133,12 @@ async function renderDoctor() {
     : (hist.length >= 2
       ? `<div class="doc-trend">${hist.slice(0, 5).map((e) => `<span class="doc-trend-item">✗${e.errors}/⚠${e.warnings}</span>`).join('<span class="trend-arrow">→</span>')}</div>`
       : '');
-  const sumHtml = sumLine ? `<div class="doc-summary" role="status">${esc(sumLine)}</div>${trendHtml}` : '';
+  // 第二百三十六轮②：错误/警告 sparkline（最近 10 次，旧→新——一眼看出走势）
+  const sparks = doctorTrendSparks(hist, 10);
+  const sparkHtml = sparks.length >= 2
+    ? `<div class="doc-sparks" title="${t('docSparkTip')}"><span class="sub">${t('docSparkLabel')}</span><span class="watch-spark doc-spark-strip">${sparks.map((sp) => `<i class="${sp.errors > 0 ? 'bad' : sp.warnings > 0 ? 'warn' : 'ok'}" title="${esc(String(sp.ts).slice(5, 16).replace('T', ' '))} ✗${sp.errors} ⚠${sp.warnings}"></i>`).join('')}</span></div>`
+    : '';
+  const sumHtml = sumLine ? `<div class="doc-summary" role="status">${esc(sumLine)}</div>${trendHtml}${sparkHtml}` : '';
   const toolRows = (r.tools ?? []).map((t) => `<div class="doc-line ${t.ok ? '' : 'bad'}">
       <span class="doc-mark">${t.ok ? '✓' : '!'}</span>
       <span class="doc-name">${esc(t.name)}</span>
