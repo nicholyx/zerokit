@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.30.0] - 2026-11-10
+
+### Added
+
 - batch 失败重跑体验补全：盘点确认「只重跑失败」25 轮已有（batchRetry 按钮/runBatch(failEntries) 重入/无失败隐藏）——webui 断言锁定既有接线；补重跑批次视觉标记（进度条左缘警示条 + 汇总卡 ↻ 徽标——区分新结果 vs 保留旧结果）。
 
 ## [3.29.0] - 2026-11-10
@@ -71,10 +77,4 @@
 ### Added
 
 - CLI JSON 输出契约 v1：docs/contract/cli-json-v1.md 契约文档（doctor/list/ps/service/cache 五命令稳定字段表+消费者守则——v1 内不改名不删除，只加不改）；service list --json 机读输出补齐（pluginId/id/running/canStop/canStart）；contract-v1-smoke 新文件 8 断言（逐命令关键字段快照，破坏即红）；README/CONTRIBUTING 提及契约文档。
-
-## [3.18.0] - 2026-11-10
-
-### Added
-
-- watch 面板体验补全：采样失败原因展示（watch-fail-reason 行内文本，截断 120 字）；三态徽标（⏱ 运行中/✗ 连续失败/⏸ 暂停）；面板改轮询间隔（输入框+确认，scheduleWatch 重启下轮生效+persistWatch 落盘重启保留）；webui +2 断言（接线/落盘）。
 
