@@ -1572,3 +1572,5 @@ if\ \(!sec\)\ \{\ setCount\('间隔需要\ 5–3600\ 秒'\);\ return;\ \}
 \ \ if\ \(!m\)\ return\ \{\ zh:\ `无匹配\ ·\ 共\ \$\{t\}\ 个候选——试试更短的关键词或拼音首字母`,\ en:\ `No\ match\ ·\ \$
 \ \ return\ \{\ zh:\ `命中\ \$\{m\}\ /\ \$\{t\}\ 个候选`,\ en:\ `\$\{m\}\ of\ \$\{t\}\ candidates\ matched`,\ 
 export\ function\ paletteMatchLine\(matched,\ candidates\)\ \{
+\ \ \ \ //\ 第二百三十九轮③：到期高亮——≤5\ 分钟\ warn\ /\ 已过期\ exp（catch\-up\ 前的视觉态）
+<span\ class="timer\-next\$\{dueCls\}"\ title="下次触发">
