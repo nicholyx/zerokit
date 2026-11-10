@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.33.0] - 2026-11-11
+
+### Added
+
 - v4 清债第一轮——web/app.js 拆分预检与试点：结构盘点（11273 行/249 顶层函数/29 import）；静态断言依赖面分析（webui-smoke 68 条 app2.includes 落点 Top：showServices 8/showPalette 7/showWatchPanel 6）；docs/debt/app-split-plan.md 五步拆分方案（每步独立 minor/断言同步改指向/3134 底线不降）；第一步试点完成——键盘域拆出 web/keys.js（注入式工厂 createKeys(ui) + app 侧惰性 getter __keys()，避免循环依赖与 TDZ）；4 条过时断言更新为拆分形态。
 
 ## [3.32.0] - 2026-11-11
@@ -71,10 +77,4 @@
 ### Added
 
 - 服务面板日志抽屉与下载：行内展开支持 tail 参数选择（30/100/全部）；下载完整日志按钮（.log 文件，exportMime txt）；server /api/services/logs 支持 tail=all（钳 5000 行防超大响应）；错误行高亮（error/fail/✗/exception 标红）；webui +2 断言。
-
-## [3.21.0] - 2026-11-10
-
-### Added
-
-- 导入快照安全边界强化：parseZkresult 三重防线——大小上限 8MB（超限友好报错，先查长度再 JSON.parse 防卡死）、原型污染键剥离（__proto__/constructor/prototype 净化副本）、深嵌套深度钳制（12 层截断防爆栈）；extras-smoke +3 断言（超大/污染键/100 层深嵌套）。
 
