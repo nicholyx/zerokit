@@ -108,7 +108,7 @@ jobs:
 
       - name: 安装依赖并瘦身（tauri CLI 由 lockfile 锁定；类型/源映射不进安装包）
         run: |
-          npm ci --ignore-scripts
+          npm ci --ignore-scripts --registry=https://registry.npmjs.org
           npx --no-install tauri --version
           node scripts/strip-types.mjs node_modules
         # strip-types 删 .d.ts/.map/CHANGELOG/README——Node 22 类型擦除只读 .js，
