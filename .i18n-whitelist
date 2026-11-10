@@ -1566,3 +1566,4 @@ if\ \(!sec\)\ \{\ setCount\('间隔需要\ 5–3600\ 秒'\);\ return;\ \}
 \ \ if\ \(raw\.length\ >\ ZKRESULT_MAX_BYTES\)\ return\ \{\ ok:\ false,\ error:\ `快照超
 \ \ try\ \{\ j\ =\ JSON\.parse\(raw\);\ \}\ catch\ \{\ return\ \{\ ok:\ false,\ error:\ '不是合
 \ \*\ 返回\ null（不匹配）或\ \{\ field,\ reason\ \}——reason\ 是给人看的「为什么建议填这里」。
+\ \ \ \ \ \ \ \ row\.innerHTML\ =\ `<div\ class="svc\-log\-bar"><select\ class="svc\-l
