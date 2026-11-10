@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.35.0] - 2026-11-11
+
+### Added
+
 - app.js 拆分第三步——面板壳域注入式迁出（refs=0 子集）：15 个零外部状态耦合的纯渲染函数迁 web/panels.js（createPanels(ui) 工厂 + __panels() 惰性 getter）；迭代验证式提取（每删一个函数立即 node --check——renderTextView 删除伤邻居被自动跳过，renderDiffBody 实为 diffResults 内部物）；app.js 10765 行（累计 -508）；4 条断言更新（webui×2/density53×2）；方案表第 3 步 refs=0 层完成。
 
 ## [3.34.0] - 2026-11-11
@@ -71,10 +77,4 @@
 ### Added
 
 - 审计导出与面板筛选同口径复核 + 文件名上下文化：CSV/JSON 导出走 filterAudit（113 轮既有）复核锁定（webui 断言）；CSV BOM + exportMime 令牌复核；导出文件名带筛选上下文（range/outcome 进文件名——多份导出不混淆）。
-
-## [3.23.0] - 2026-11-10
-
-### Added
-
-- 审计面板时间范围筛选补「最近 1 小时」：AUDIT_RANGES 四档→五档（1h 滚动窗口——与 today 的自然日边界不同，排障窗口更贴身）；filterAudit 支持 1h 档；CLI zkit audit --since 既有（1h/30m/3d/2w/45s 五单位）复核打通；extras-smoke +2 断言（1h 命中排除/组合正交）；audit113 四档断言更新为五档。
 
