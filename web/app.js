@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint, configProgress, validateSettingInput, formCanSave, parseConfigHash, textLines, textStats, fmtElapsed, paceVerdict, paceReassure, copyTextRaw, copyWithNumbers, copyWithTitle, extractUrls, colTooltipStats, shouldFreeze, tableSizeBadge, batchColVis, csvEscape, exportCsv, mdTableVis, exportMeta, shareEnvelope, shareAlive , drawerSearchMatch, drawerSearchCount , exportMime, CSV_BOM } from './extras.js';
+import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint, configProgress, validateSettingInput, formCanSave, parseConfigHash, textLines, textStats, fmtElapsed, paceVerdict, paceReassure, copyTextRaw, copyWithNumbers, copyWithTitle, extractUrls, colTooltipStats, shouldFreeze, tableSizeBadge, batchColVis, csvEscape, exportCsv, mdTableVis, exportMeta, shareEnvelope, shareAlive , drawerSearchMatch, drawerSearchCount , exportMime, CSV_BOM , paletteMatchLine, recordZeroHit } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote, defaultChip, enumHint, actionHealthBadge, descNeedsFold, inQuietHours, notifyThrottle, pushNotifyLog, parseHm } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -9561,6 +9561,14 @@ function showPalette() {
     }
     const foot = overlay.querySelector('.palette-foot');
     if (foot && !needle) { const st = paletteStatsLine(pages.length + COMMAND_LIST.length, entries.length); foot.dataset.stats = lang === 'en' ? st.en : st.zh; foot.prepend(Object.assign(document.createElement('span'), { textContent: `${lang === 'en' ? st.en : st.zh} · ` })); }
+    // 第二百三十三轮②③④：非空查询显示命中率行；0 命中收集高频零命中词（本地存储，为同义词表做数据）
+    if (foot && needle) {
+      const ml = paletteMatchLine(items.length, entries.length);
+      const mlText = lang === 'en' ? ml.en : ml.zh;
+      foot.dataset.stats = mlText;
+      foot.prepend(Object.assign(document.createElement('span'), { textContent: `${mlText} · `, className: ml.zero ? 'bad' : '' }));
+      if (ml.zero) writeJson('zerokit.paletteZeroHits', recordZeroHit(needle, readJson('zerokit.paletteZeroHits') ?? []));
+    }
   };
   /** ①②命令执行：解释 go 标记（hash 直跳 / UI 动作），并记入最近命令 */
   const runCommand = (name) => {

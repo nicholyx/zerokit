@@ -1567,3 +1567,8 @@ if\ \(!sec\)\ \{\ setCount\('间隔需要\ 5–3600\ 秒'\);\ return;\ \}
 \ \ try\ \{\ j\ =\ JSON\.parse\(raw\);\ \}\ catch\ \{\ return\ \{\ ok:\ false,\ error:\ '不是合
 \ \*\ 返回\ null（不匹配）或\ \{\ field,\ reason\ \}——reason\ 是给人看的「为什么建议填这里」。
 \ \ \ \ \ \ \ \ row\.innerHTML\ =\ `<div\ class="svc\-log\-bar"><select\ class="svc\-l
+/\*\*\ 第二百三十三轮②③：命中率统计行——matched/candidates\ \+\ 0\ 命中空态引导\ \*/
+\ \ return\ \{\ zh:\ `命中\ \$\{m\}\ /\ \$\{t\}\ 个候选`,\ en:\ `\$\{m\}\ of\ \$\{t\}\ candidates\ matc
+\ \ if\ \(!m\)\ return\ \{\ zh:\ `无匹配\ ·\ 共\ \$\{t\}\ 个候选——试试更短的关键词或拼音首字母`,\ en:\ `No\ match\ ·\ \$
+\ \ return\ \{\ zh:\ `命中\ \$\{m\}\ /\ \$\{t\}\ 个候选`,\ en:\ `\$\{m\}\ of\ \$\{t\}\ candidates\ matched`,\ 
+export\ function\ paletteMatchLine\(matched,\ candidates\)\ \{
