@@ -57,8 +57,8 @@ check('⑧ 导出按钮进工具栏', app.includes('data-texport='));
 check('⑧ CSV/MD/复制/分享四模式', app.includes('data-texp="csv"') && app.includes('data-texp="md"') && app.includes('data-texp="copy"') && app.includes('data-texp="share"'));
 check('④ 导出走筛选链（filterRows+resultQuery+sortRows）', app.includes('filterRows(rows0, fterms)') && app.includes('sortRows(qrows'));
 check('① CSV 下载带 BOM', app.includes("\\ufeff${text}"));
-check('⑤ 分享深链路由', app.includes('#/share/') && app.includes('showShareView'));
-check('⑥ 分享只读态+自己跑一次', app.includes('shareRerun') && app.includes("t('shareGoneTitle')"));
+check('⑤ 分享深链路由（244 轮拆分后 __share() 形态）', app.includes('#/share/') && app.includes('__share().showShareView'));
+check('⑥ 分享只读态+自己跑一次（244 轮起在 web/share.js）', (() => { const sj = readFileSync(path.join(PKG_ROOT, 'web', 'share.js'), 'utf8'); return sj.includes('shareRerun') && sj.includes("t('shareGoneTitle')"); })());
 check('⑤ 过期分享自清', app.includes('zerokit.share.') && app.includes('localStorage.removeItem(k)'));
 check('CSS 分享视图', css.includes('.share-view') && css.includes('.share-table'));
 

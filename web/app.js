@@ -20,6 +20,7 @@ import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare,
 import { createKeys } from './keys.js';
 import { createBatch } from './batch.js';
 import { createPanels } from './panels.js';
+import { createShare } from './share.js';
 
 // 第二百四十一轮⑤：键盘域拆分（注入式——首次用时创建，避免顶层 TDZ）
 let __keysInst = null;
@@ -32,6 +33,13 @@ const __batch = () => {
 // 第二百四十三轮②③：面板壳域注入式迁出（零状态耦合子集——15 个纯渲染函数）
 let __panelsInst = null;
 const __panels = () => {
+
+// 第二百四十四轮②③：导出/分享域注入式迁出
+let __shareInst = null;
+const __share = () => {
+  __shareInst ??= createShare({ esc, t, lang, api, setCount, closeDrawer, alert, hidePanels, isNumericColumn, mdTableVis, replayPolicyWeb, replayShareInWeb, webFingerprint, webValidateSharePack });
+  return __shareInst;
+};
   __panelsInst ??= createPanels({ esc, t, lang, actionKey, actionRiskCard, barsScale, diffResults, formatMs, hotkeyMap, maskSecrets, maskState, openDetail, perfMark, resultCompare, riskText, submit, wbSend, escClose });
   return __panelsInst;
 };
@@ -9833,46 +9841,11 @@ function showFirstRunGuide() {
 
 /** 支持 #/插件/动作 深链直达 */
 
-/** 第一百七十九轮⑥：分享打开态——只读渲染 + 来源信息条 + 「自己跑一次」。 */
-function showShareView(shareId) {
-  const env = readJson(`zerokit.share.${shareId}`, null);
-  const view = document.getElementById('view') ?? document.body;
-  hidePanels();
-  if (!env || !shareAlive(env)) {
-    view.innerHTML = `<div class="panel"><div class="empty-art"></div><div class="e-title">${t('shareGoneTitle')}</div><div class="e-hint">${t('shareGoneHint')}</div></div>`;
-    return;
-  }
-  const rows = env.rows ?? [];
-  const cols = env.cols ?? [];
-  const numericCols = cols.filter((c) => isNumericColumn(rows.map((r) => r?.[c])));
-  const tableHtml = rows.length ? mdTableVis(rows, cols, numericCols) : '';
-  // 第二百二十八轮③：分享快照导出 zkresult（visCols/rows/at 完整落盘——对方可导入回放）
-  const zkr = buildZkresult({ data: rows, ok: true }, { plugin: (env.action || '').split('.')[0], action: (env.action || '').split('.')[1] || '', title: env.action || '' }, window.__zkVersion ?? '');
-  view.innerHTML = `<div class="panel share-view">
-    <div class="share-meta sub">${t('shareFrom')}「${esc(env.action)}」 · ${new Date(env.at).toLocaleString()} · ${rows.length} ${t('shareRows')} × ${cols.length} ${t('shareCols')} · ${t('shareValid')}</div>
-    <div class="share-actions"><button class="primary mini" id="shareRerun">${t('shareRerun')}</button><button class="ghost mini" id="shareZkr">${t('shareZkrBtn')}</button></div>
-    <pre class="share-table">${esc(tableHtml)}</pre>
-  </div>`;
-  document.getElementById('shareZkr')?.addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify(zkr, null, 2)], { type: exportMime('json') });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `zerokit-share-${shareId}-${zkr.savedAt.slice(0, 10)}.zkresult.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  });
-  document.getElementById('shareRerun')?.addEventListener('click', () => {
-    location.hash = '#/';
-    setTimeout(() => { const q = document.getElementById('q'); if (q) { q.value = (env.action || '').split('.')[0]; q.dispatchEvent(new Event('input', { bubbles: true })); } }, 100);
-  });
-}
-
 function applyHash() {
   // 第一百七十九轮⑤⑥：#/share/<id> 只读分享打开态
   {
     const m = /^#\/share\/([a-z0-9]+)$/.exec(location.hash || '');
-    if (m) { showShareView(m[1]); return; }
+    if (m) { __share().showShareView(m[1]); return; }
   }
   // #/timers 定时任务面板
   if ((location.hash || '') === '#/timers') { showTimers(); return; }
@@ -10166,46 +10139,6 @@ function webValidateSharePack(raw) {
   if (!Array.isArray(raw.argv) || !raw.argv.length) return { ok: false, error: '分享包的 argv 不是非空数组' };
   return { ok: true, pack: raw };
 }
-
-/** ②③④⑤ 导入分享包视图：校验→展示→重放 */
-async function showShareImport(file) {
-  let raw;
-  try { raw = JSON.parse(await file.text()); }
-  catch { $('count').textContent = '分享包不是合法 JSON——文件可能损坏或传错了个普通文件'; return; }
-  const v = webValidateSharePack(raw);
-  if (!v.ok) { setCount(v.error); return; }
-  const pack = v.pack;
-  const fp = await webFingerprint(pack);
-  const replay = replayPolicyWeb(pack);
-  const rows = pack.result !== undefined && Array.isArray(pack.result)
-    ? `<div class="table-wrap"><table class="tbl"><thead><tr>${Object.keys(pack.result[0] ?? {}).slice(0, 6).map((c) => `<th>${c}</th>`).join('')}</tr></thead>
-       <tbody>${pack.result.slice(0, 8).map((r2) => `<tr>${Object.values(r2).slice(0, 6).map((cv) => `<td>${String(cv ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
-       ${pack.result.length > 8 ? `<div class="e-hint">${pack.result.length} 行——前 8 行预览，完整数据在包里</div>` : ''}`
-    : (pack.result !== undefined ? `<pre class="code">${JSON.stringify(pack.result, null, 2).slice(0, 600)}</pre>` : `<div class="e-hint">不带结果（非只读动作）</div>`);
-  const host = $('result');
-  if (!host) return;
-  host.innerHTML = `
-    <div class="view-head">
-      <span class="badge from-share">📨 来自分享包</span>
-      <b>${pack.action}</b> <span class="risk-dot" data-risk="${pack.risk}"></span>
-      <span class="dim">${pack.risk}</span>
-    </div>
-    <div class="share-meta">
-      制作：${String(pack.createdAt).replace('T', ' ').slice(0, 19)} · ${pack.env.os} · zerokit ${pack.env.appVersion}<br>
-      指纹：<code>${fp}</code><br>
-      命令：<code>${pack.argv.join(' ')}</code>
-      ${pack.note ? `<br>备注：${pack.note}` : ''}
-    </div>
-    ${rows}
-    <div class="action-tier">
-      ${replay.allowed
-        ? `<button class="primary run-main" id="replayShareBtn">▶ 在本机重放</button>`
-        : `<span class="e-hint">✗ ${replay.reason}</span>`}
-    </div>`;
-  const rb = document.getElementById('replayShareBtn');
-  if (rb) rb.addEventListener('click', () => replayShareInWeb(pack));
-}
-
 function replayPolicyWeb(pack) {
   if (pack.risk === 'destructive') {
     return { allowed: false, reason: `分享包的动作是 destructive（${pack.action}）——重放会有不可逆副作用，拒绝。需要的话看分享包里的结果，或手工确认后自己跑` };
@@ -10227,7 +10160,7 @@ async function replayShareInWeb(pack) {
 
 window.openDrawer = openDrawer; // 第二百零五轮②：桌面壳托盘「打开设置」经 eval 调用
 window.__zerokit = {
-  showShareImport,
+  showShareImport: (...a) => __share().showShareImport(...a),
   // 第一百一十四轮：批量调试/截图断言出口
   __batchState: () => ({ curKey: batchCurKey, baskets: [...batchMap.keys()], curLen: __batch().curBatch().length }),
 
@@ -10495,7 +10428,7 @@ $('dlHelp')?.addEventListener('click', () => { closeDrawer(); $('guideBtn')?.cli
 $('dlConfig')?.addEventListener('click', () => { closeDrawer(); location.hash = '#/config'; });
   $('shareImportFile')?.addEventListener('change', async (ev) => {
     const f = (ev.target)?.files?.[0];
-    if (f) await showShareImport(f);
+    if (f) await __share().showShareImport(f);
     (ev.target).value = '';
   });
 $('dlWatch')?.addEventListener('click', () => { closeDrawer(); location.hash = '#/watch'; });
