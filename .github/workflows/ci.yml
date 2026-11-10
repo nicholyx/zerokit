@@ -114,7 +114,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npm ci
+          npm ci --registry=https://registry.npmjs.org
 
       # Linux runner 上没有 xclip/xsel，也没有剪贴板会话——clipboard 插件的
       # 读取类用例本来就会走"缺工具"分支。装上 xclip 让它的**真实路径**
@@ -174,7 +174,7 @@ jobs:
           node-version: 22
 
       - name: 安装依赖
-        run: npm ci
+        run: npm ci --registry=https://registry.npmjs.org
 
       # 用仓库自己的脚本（与 package.json 同源），不在 CI 里另写一条 tsc 命令：
       # 两处命令一旦分叉，"本地过了 CI 却红"就会再发生一次。
@@ -208,7 +208,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npm ci
+          npm ci --registry=https://registry.npmjs.org
 
       - name: 装 Linux 剪贴板工具（让 clipboard 的真实路径也被测到）
         shell: bash
