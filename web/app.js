@@ -18,10 +18,18 @@ import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
 import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint, configProgress, validateSettingInput, formCanSave, parseConfigHash, textLines, textStats, fmtElapsed, paceVerdict, paceReassure, copyTextRaw, copyWithNumbers, copyWithTitle, extractUrls, colTooltipStats, shouldFreeze, tableSizeBadge, batchColVis, csvEscape, exportCsv, mdTableVis, exportMeta, shareEnvelope, shareAlive , drawerSearchMatch, drawerSearchCount , exportMime, CSV_BOM , paletteMatchLine, recordZeroHit , suggestFromZeroHits , doctorTrendSparks } from './extras.js';
 import { createKeys } from './keys.js';
+import { createBatch } from './batch.js';
 
 // 第二百四十一轮⑤：键盘域拆分（注入式——首次用时创建，避免顶层 TDZ）
 let __keysInst = null;
 const __keys = () => { __keysInst ??= createKeys({ setCount, esc, t, lang }); return __keysInst; };
+
+// 第二百四十二轮②③：批量域注入式迁出（createBatch + 惰性 getter——batch/entries 是 app 侧 let，经闭包引用传入）
+let __batchInst = null;
+const __batch = () => {
+  __batchInst ??= createBatch({ esc, t, lang, api, TOKEN, el, renderList, openDetail, paramStore, actionKey, entriesRef: () => entries, batchRef: () => batch, setCount });
+  return __batchInst;
+};
 
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote, defaultChip, enumHint, actionHealthBadge, descNeedsFold, inQuietHours, notifyThrottle, pushNotifyLog, parseHm } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
@@ -107,12 +115,6 @@ let runStore = {};
 // batch 作为「当前动作的篮子」视图保留（历史代码大量引用 batch.length/push/splice）。
 const batchMap = new Map();   // actionKey -> entry[]
 let batchCurKey = '';
-function curBatch() {
-  if (!batchCurKey) return [];
-  let arr = batchMap.get(batchCurKey);
-  if (!arr) { arr = []; batchMap.set(batchCurKey, arr); }
-  return arr;
-}
 let batch = [];        // 批量篮：Alt+点击加入的 entry 列表（{plugin, action}）
 let savedList = [];   // 收藏的结果（本机）
 let notesStore = {};  // 执行备注：actionKey -> { text, ts }
@@ -1074,141 +1076,6 @@ function renderListTools(base, q) {
   });
 }
 
-/** 批量顺序执行：逐个跑篮子里的动作（destructive 排最后），完成后弹汇总卡片。
- * 每项用已记忆的参数（参数记忆参数不存在时用默认值），失败不阻断后面的项。 */
-async function runBatch(retryItems) {
-  const source = Array.isArray(retryItems) ? retryItems : batch;   // 防御：事件对象/undefined 都回落整篮
-
-  if (!source.length) return; // 第八项：空队列守卫（按钮禁用是第一道，这里是第二道）
-  // destructive 排最后：失败不至于挡住只读项
-  const ordered = [...source].sort((a, b) =>
-    (a.action.risk === 'destructive' ? 1 : 0) - (b.action.risk === 'destructive' ? 1 : 0));
-  const results = [];
-  const btn = document.getElementById('batchRun');
-  if (btn) { btn.disabled = true; btn.textContent = '执行中…'; }
-  // 第九十八轮①②：逐项状态表 + 实时计数条（执行期间插在列表顶上，每项一行可点）
-  const states = ordered.map(() => 'queued');
-  let prog = document.getElementById('batchProgress');
-  if (retryItems && prog) prog.remove();
-  prog = document.createElement('div');
-  prog.id = 'batchProgress';
-  prog.className = 'batch-progress' + (retryItems ? ' batch-retry-run' : '');
-  el.listView.insertBefore(prog, el.list);
-  const paint = () => {
-    const c = batchCounts(states);
-    prog.innerHTML = `
-      <div class="bp-counts" role="status">${esc(batchCountsLabel(c))}</div>
-      <div class="bp-rows">${ordered.map((e, i) => `
-        <div class="bp-row st-${states[i]}" data-bp="${i}"${results[i]?.error ? ` title="${esc(String(results[i].error).slice(0, 140))}"` : ''}>
-          <span class="bp-ic">${batchStateIcon(states[i])}</span>
-          <span class="bp-name">${esc(e.action.title)}</span>
-          <span class="bp-src">${esc(e.plugin.name)}</span>
-          <span class="bp-ms">${states[i] === 'ok' || states[i] === 'fail' ? formatMs(results[i]?.ms || 0) : (states[i] === 'running' && oneT0.has(i) ? fmtElapsed(Date.now() - oneT0.get(i)) : '')}</span>
-        </div>`).join('')}</div>`;
-  };
-  paint();
-  // 第一百七十七轮⑤：单项进行中计时（增量反馈——不等整批，跑一项亮一项耗时）
-  const oneT0 = new Map();
-  const runOne = async (entry, i) => {
-    const key = actionKey(entry.plugin.id, entry.action.id);
-    const values = paramStore[key] ?? {};
-    const payload = { plugin: entry.plugin.id, action: entry.action.id, values };
-    states[i] = 'running'; oneT0.set(i, Date.now()); paint();
-    const tick = setInterval(() => {
-      if (states[i] === 'running') paint();
-    }, 500);
-    try {
-      return await (async () => {
-      const r = await fetch('/api/run', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-zerokit-token': TOKEN },
-        body: JSON.stringify(payload),
-      });
-      const j = await r.json().catch(() => ({ ok: false, error: '响应不是 JSON' }));
-      return { entry, ok: j.ok !== false && r.ok, ms: j.ms ?? 0, error: j.error };
-      })();
-    } catch (err) {
-      return { entry, ok: false, ms: 0, error: String(err) };
-    } finally {
-      clearInterval(tick); oneT0.delete(i);
-    }
-  };
-  // 第二十五轮⑧：并发窗口——窗口内并行、窗口间串行（1=纯串行，默认 3）
-  const conc = Math.max(1, Math.min(8, Number(readJson('zerokit.batchconc', 3)) || 3));
-  // 第一百一十四轮⑦：暂停标记——「跑完当前项后停」：窗口边界检查，
-  // 已并发的窗口跑完，未开始的不再进。暂停按钮挂在进度条上。
-  let paused = false;
-  const pauseBtn = document.createElement('button');
-  pauseBtn.className = 'ghost mini bp-pause';
-  pauseBtn.textContent = '⏸ 暂停';
-  pauseBtn.onclick = () => {
-    paused = !paused;
-    pauseBtn.textContent = paused ? '▶ 继续' : '⏸ 暂停';
-    pauseBtn.classList.toggle('paused', paused);
-  };
-  prog.appendChild(pauseBtn);
-  let wi = 0;
-  for (const win of chunkWindows(ordered.length, conc)) {
-    if (shouldPauseBatch(paused, wi)) {
-      // 暂停中：挂起等继续（200ms 轮询——队列场景不需要更细）
-      await new Promise((r) => setTimeout(r, 200));
-      wi--;   // 本窗口没跑，回退重进循环
-      continue;
-    }
-    // 第七项：失败不中断——窗口内逐项落状态，窗口间不因失败短路
-    const rs = await Promise.all(win.map((i) => runOne(ordered[i], i).then((r) => {
-      results[i] = r; states[i] = r.ok ? 'ok' : 'fail'; paint(); return r;
-    })));
-    results.push(...[]);
-    void rs;
-    wi++;
-  }
-  if (btn) { btn.disabled = false; btn.textContent = '顺序执行'; }
-  // 第一百一十八轮④：整篮跑完清空并收起浮条（汇总卡承担展示；重跑失败项路径保留浮条继续勾选）
-  if (!retryItems) { batch = []; }
-  renderList();
-  // 进度条使命完成：撤掉，换汇总卡
-  document.getElementById('batchProgress')?.remove();
-  // 第五项：批量完成写审计事件 batch_done（server 落 audit.log，审计页可查）
-  fetch('/api/batch-done', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-zerokit-token': TOKEN },
-    body: JSON.stringify({ items: ordered.map((e, i) => ({
-      plugin: e.plugin.id, action: e.action.id, ok: results[i]?.ok ?? false, ms: results[i]?.ms ?? 0,
-    })) }),
-  }).catch(() => {}); // 审计失败不挡汇总展示
-  // 汇总卡片：成功 N / 失败 M / 总耗时，失败项可点开
-  const ok = results.filter((r) => r.ok).length;
-  const failed = results.length - ok;
-  const totalMs = results.reduce((s, r) => s + (r.ms || 0), 0);
-  // 第四十八轮⑤：汇总行改走共享 batchSummary（成功/失败/未跑三段式）
-  const sum = document.createElement('div');
-  sum.id = 'batchSummary';
-  sum.className = 'batch-summary';
-  sum.innerHTML = `
-    <b class="${retryItems ? 'batch-retry-badge' : ''}">${retryItems ? t('batchRetryDone') : t('batchAllDone')}${t('paren')(conc)}</b>
-    <span>${esc(batchSummary(results.map((r) => ({ ok: r.ok })), ordered.length, I18N[pickLang(lang)]))}</span>
-    <span class="sub">总耗时 ${formatMs(totalMs)}</span>
-    ${failed ? `<ul class="batch-fails">${results.filter((r) => !r.ok).map((r, i) => `
-      <li data-fail="${i}" title="${esc(classifyError(r.error || '失败', I18N[pickLang(lang)]).title + '：' + String(r.error || '失败').slice(0, 120))}">✗ ${esc(r.entry.action.title)}（${esc(r.entry.plugin.name)}）</li>`).join('')}</ul>
-      <button class="ghost mini" id="batchRetry">只重跑失败的（${failed} 项）</button>` : ''}
-    <button class="ghost mini" id="batchSumClose">关闭</button>`;
-  el.listView.insertBefore(sum, el.list);
-  sum.querySelector('#batchSumClose').addEventListener('click', () => sum.remove());
-  // 第二十五轮⑥：一键重跑失败项（参数保持原样）
-  sum.querySelector('#batchRetry')?.addEventListener('click', () => {
-    const failEntries = results.filter((r) => !r.ok).map((r) => r.entry);
-    sum.remove();
-    runBatch(failEntries);
-  });
-  const failItems = [...sum.querySelectorAll('[data-fail]')];
-  const fails = results.filter((r) => !r.ok);
-  failItems.forEach((li) => li.addEventListener('click', () => {
-    const r = fails[Number(li.dataset.fail)];
-    if (r) openDetail(r.entry.plugin, r.entry.action);
-  }));
-}
-
 function renderList() {
   const t0 = performance.now();
   try {
@@ -1221,21 +1088,6 @@ function renderList() {
 }
 
 // 第一百一十四轮⑤：批量导入落地（剪贴板与文件共用）——不存在的动作跳过并计数
-function applyBatchImport(parsed) {
-  let added = 0;
-  for (const it of parsed.items) {
-    const entry = entries.find((en) => en.plugin.id === it.plugin && en.action.id === it.action);
-    if (entry) {
-      batch.push({ plugin: entry.plugin, action: entry.action });
-      if (it.values && Object.keys(it.values).length) paramStore[actionKey(it.plugin, it.action)] = it.values;
-      added += 1;
-    }
-  }
-  if (batchCurKey) batchMap.set(batchCurKey, batch);
-  renderList();
-  setCount(`导入了 ${added} 项（${parsed.items.length - added} 个动作不存在）`);
-}
-
 function renderListInner() {
   const aliasHit = aliasEntry(el.q.value);
   if (aliasHit && el.q.value.trim()) {
@@ -1272,7 +1124,7 @@ function renderListInner() {
         </li>`).join('')}</ol>`;
     el.listView.insertBefore(bar, el.list);
     // 点击监听不能直传 runBatch——Event 会当第一参（retryItems）误入「重跑失败项」路径
-    bar.querySelector('#batchRun').addEventListener('click', () => runBatch());
+    bar.querySelector('#batchRun').addEventListener('click', () => __batch().runBatch());
     bar.querySelector('#batchClear').addEventListener('click', () => { batch = []; renderList(); });
   bar.querySelector('#batchExport')?.addEventListener('click', () => {
     const lines = batchToLines(batch.map((e) => ({
@@ -1324,7 +1176,7 @@ function renderListInner() {
         const clip = await navigator.clipboard?.readText();
         if (clip && /\n|\[/.test(clip) && /^[\s"#\[{\w]/.test(clip) && (clip.includes('=') || clip.includes('"action"'))) {
           const pre = parseBatchList(clip);
-          if (pre.ok) { applyBatchImport(pre); return; }
+          if (pre.ok) { __batch().applyBatchImport(pre); return; }
         }
       } catch { /* 无剪贴板权限走文件 */ }
       const inp = document.createElement('input');
@@ -1334,7 +1186,7 @@ function renderListInner() {
         if (!text) return;
         const parsed = parseBatchList(text);
         if (!parsed.ok) { setCount(`导入失败：${parsed.error}`); return; }
-        applyBatchImport(parsed);
+        __batch().applyBatchImport(parsed);
       });
       inp.click();
     });
@@ -1757,7 +1609,7 @@ function openDetail(plugin, action, prefill) {
   detail = { plugin, action };
   // 第一百一十四轮①：切到新动作 = 换一份篮子（旧篮子留在 batchMap，回来还在）
   const nk = actionKey(plugin.id, action.id);
-  if (nk !== batchCurKey) { batchCurKey = nk; syncBatchView(); }
+  if (nk !== batchCurKey) { batchCurKey = nk; __batch().syncBatchView(); }
   // 第十八轮①：切到别的动作，旧监控自动停（一次只盯一个）
   for (const k of Object.keys(watchRegistry())) {
     if (k !== actionKey(plugin.id, action.id)) stopWatch(k);
@@ -2635,11 +2487,6 @@ function openDetail(plugin, action, prefill) {
 }
 
 // 第一百一十四轮①：batch 视图与 batchMap 当前份同步（换动作后调用）
-function syncBatchView() {
-  batch = curBatch();
-  renderList();
-}
-
 function backToList() {
   detail = null;
   // 第一百五十七轮⑥：返回列表时滚回离开时的位置（openDetail 存，renderList 完成后恢复）
@@ -10666,7 +10513,7 @@ window.openDrawer = openDrawer; // 第二百零五轮②：桌面壳托盘「打
 window.__zerokit = {
   showShareImport,
   // 第一百一十四轮：批量调试/截图断言出口
-  __batchState: () => ({ curKey: batchCurKey, baskets: [...batchMap.keys()], curLen: curBatch().length }),
+  __batchState: () => ({ curKey: batchCurKey, baskets: [...batchMap.keys()], curLen: __batch().curBatch().length }),
 
   // 第六十四轮：剪贴板工作流（截图脚本与自动化验证用）
   __zerokitShowClipSuggest: showClipSuggest,
@@ -10712,7 +10559,7 @@ window.__zerokit = {
   get health() { return pluginHealth(plugins); },
   cycleTheme, showShortcuts, showPluginHome, renderPrompts, showLogs, showDoctor,
   openDetail, submit, backToList, renderResult,
-  showPalette, runBatch, showMarket, showPlugins,
+  showPalette, runBatch: (...a) => __batch().runBatch(...a), showMarket, showPlugins,
   collectBackup, parseBackup, mergeBackup, classifyKey, backupFilename, exportBackup, openImportDialog,
   get batch() { return batch; },
   get logsPage() { return logsPage; },
