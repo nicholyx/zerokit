@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [3.24.0] - 2026-11-10
+
+### Added
+
+- 审计导出与面板筛选同口径复核 + 文件名上下文化：CSV/JSON 导出走 filterAudit（113 轮既有）复核锁定（webui 断言）；CSV BOM + exportMime 令牌复核；导出文件名带筛选上下文（range/outcome 进文件名——多份导出不混淆）。
+
 ## [3.23.0] - 2026-11-10
 
 ### Added
