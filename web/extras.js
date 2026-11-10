@@ -3973,6 +3973,7 @@ export function parseChainSpec(spec) {
 export function filterAudit(records, { range = '', outcome = '', plugin = '', q = '', now = Date.now() } = {}) {
   if (!Array.isArray(records)) return [];
   const floorOf = () => {
+    if (range === '1h') return now - 3600e3; // 第二百三十一轮②：最近 1 小时（滚动窗口）
     const d = new Date(now); d.setHours(0, 0, 0, 0);
     if (range === 'today') return d.getTime();
     if (range === '7d' || range === '30d') return d.getTime() - (range === '7d' ? 7 : 30) * 86400e3;
@@ -3996,6 +3997,7 @@ export function filterAudit(records, { range = '', outcome = '', plugin = '', q 
 /** 第一百一十三轮：时间范围档位标签（与 CLI --today/--since 对齐）。 */
 export const AUDIT_RANGES = [
   { id: '', zh: '全部', en: 'All' },
+  { id: '1h', zh: '最近 1 小时', en: 'Last hour' },
   { id: 'today', zh: '今天', en: 'Today' },
   { id: '7d', zh: '最近 7 天', en: 'Last 7 days' },
   { id: '30d', zh: '最近 30 天', en: 'Last 30 days' },

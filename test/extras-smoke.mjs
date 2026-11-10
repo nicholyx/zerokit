@@ -2,7 +2,7 @@
 //
 // 这些函数都在 web/extras.js 里，不碰 DOM / localStorage / fetch，
 // 所以可以直接在 Node 里跑。界面接线另由 webui-smoke 断言。
-import { paramsHint, recencyOrder, coActions, flattenRuns, THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref, OVERFLOW_ROWS, PAGE_ROWS, toAiMarkdown, packContext, toMcpConfig, toLlmJsonl, toCurl, watchTrendMarkdown, TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory, looksLikeTimestamp, humanTs, emptyReason, tocFromMd, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, searchesExport, searchesMerge, drawerSearchMatch, drawerSearchCount, resultCacheKey, resultCacheHit, exportMime, exportFilename, buildZkresult, parseZkresult, ZKRESULT_MAX_BYTES, ZKRESULT_MAX_DEPTH, stripUnsafeKeys } from '../web/extras.js';
+import { paramsHint, recencyOrder, coActions, flattenRuns, THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref, OVERFLOW_ROWS, PAGE_ROWS, toAiMarkdown, packContext, toMcpConfig, toLlmJsonl, toCurl, watchTrendMarkdown, TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory, looksLikeTimestamp, humanTs, emptyReason, tocFromMd, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, searchesExport, searchesMerge, drawerSearchMatch, drawerSearchCount, resultCacheKey, resultCacheHit, exportMime, exportFilename, buildZkresult, parseZkresult, ZKRESULT_MAX_BYTES, ZKRESULT_MAX_DEPTH, stripUnsafeKeys , filterAudit, AUDIT_RANGES} from '../web/extras.js';
 import { romanize, scorePinyin, pinyinFuzzyScore } from '../web/pinyin.js';
 
 const results = [];
@@ -601,6 +601,16 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
   check('224①⑥ exportMime 五类映射 + exportFilename 边界（空 ext→txt/非法字符清洗/时间戳）', (() => {
   check('228⑤ zkresult 往返等价（buildZkresult → parseZkresult 字段一致）', (() => {
   check('229② 大小上限（>8MB 拒绝）', (() => {
+  check('231② 1h 滚动窗口筛选（30 分钟前命中/2 小时前排除）', (() => {
+    const now = Date.now();
+    const recs = [{ ts: new Date(now - 1800e3).toISOString(), decision: 'allow', plugin: 'a', action: 'x' }, { ts: new Date(now - 7200e3).toISOString(), decision: 'deny', plugin: 'b', action: 'y' }];
+    return filterAudit(recs, { range: '1h' }).length === 1 && filterAudit(recs, { range: '' }).length === 2;
+  })());
+  check('231③ 组合正交（1h+deny=0/1h+allow=1）', (() => {
+    const now = Date.now();
+    const recs = [{ ts: new Date(now - 1800e3).toISOString(), decision: 'allow', plugin: 'a', action: 'x' }, { ts: new Date(now - 1800e3).toISOString(), decision: 'deny', plugin: 'b', action: 'y' }];
+    return filterAudit(recs, { range: '1h', outcome: 'deny' }).length === 1 && filterAudit(recs, { range: '1h', outcome: 'allow' }).length === 1 && filterAudit(recs, { range: '1h', outcome: 'error' }).length === 0;
+  })());
     const r = parseZkresult('x'.repeat(9 * 1024 * 1024));
     return !r.ok && r.error.includes('8MB');
   })());
