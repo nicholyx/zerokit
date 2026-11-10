@@ -7015,8 +7015,30 @@ async function showServices() {
         if (!row.classList.contains('hidden')) { row.classList.add('hidden'); return; }
         row.classList.remove('hidden');
         const pre = row.querySelector('pre');
-        const lines = await api(`/api/services/logs?service=${encodeURIComponent(full)}&tail=30`);
-        pre.textContent = lines.hasLog && lines.lines?.length ? lines.lines.join('\n') : t('svcNoLogs');
+        // 第二百三十轮②⑤：tail 选择 + 错误行高亮 + 下载完整日志
+        row.innerHTML = `<div class="svc-log-bar"><select class="svc-log-tail" data-svc-log-tail="${esc(full)}"><option value="30">30 行</option><option value="100">100 行</option><option value="all">全部</option></select><button class="ghost mini" data-svc-log-dl="${esc(full)}">${t('svcLogDl')}</button></div><pre class="svc-log-pre">${t('svcLogsLoading')}</pre>`;
+        const load = async () => {
+          const tailSel = row.querySelector('.svc-log-tail')?.value ?? '30';
+          const lines = await api(`/api/services/logs?service=${encodeURIComponent(full)}&tail=${tailSel}`);
+          const raw = lines.hasLog && lines.lines?.length ? lines.lines : null;
+          pre.innerHTML = raw
+            ? raw.map((l) => /error|fail|✗|exception/i.test(l) ? `<span class="svc-log-err">${esc(l)}</span>` : esc(l)).join('\n')
+            : esc(t('svcNoLogs'));
+        };
+        row.querySelector('.svc-log-tail')?.addEventListener('change', load);
+        row.querySelector('[data-svc-log-dl]')?.addEventListener('click', async () => {
+          const full2 = b.dataset.svcLogs;
+          const all = await api(`/api/services/logs?service=${encodeURIComponent(full2)}&tail=all`);
+          const text = all.hasLog && all.lines?.length ? all.lines.join('\n') : t('svcNoLogs');
+          const blob = new Blob([text], { type: exportMime('txt') });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${full2.replace('.', '-')}.log`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        });
+        await load();
       });
     });
     $('svcBack')?.addEventListener('click', () => { location.hash = '#/'; });

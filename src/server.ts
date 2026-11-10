@@ -1643,7 +1643,9 @@ export function createServer(): http.Server {
         const { serviceLogTail } = await import('./core/services.ts');
         const u = new URL(req.url ?? '', 'http://x');
         const target = String(u.searchParams.get('service') ?? '');
-        const tail = Math.max(1, Math.min(200, Number(u.searchParams.get('tail') ?? 20) || 20));
+        const tailRaw = u.searchParams.get('tail') ?? '20';
+        // 第二百三十轮④：tail=all 机读完整日志（钳到 5000 行防超大响应）
+        const tail = tailRaw === 'all' ? 5000 : Math.max(1, Math.min(200, Number(tailRaw) || 20));
         const i = target.lastIndexOf('.');
         if (!target || i <= 0) { fail(res, 400, 'service 应为 插件.服务 形式'); return; }
         const lines = serviceLogTail(target.slice(0, i), target.slice(i + 1), tail);
