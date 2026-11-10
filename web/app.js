@@ -1086,7 +1086,7 @@ async function runBatch(retryItems) {
   if (retryItems && prog) prog.remove();
   prog = document.createElement('div');
   prog.id = 'batchProgress';
-  prog.className = 'batch-progress';
+  prog.className = 'batch-progress' + (retryItems ? ' batch-retry-run' : '');
   el.listView.insertBefore(prog, el.list);
   const paint = () => {
     const c = batchCounts(states);
@@ -1180,7 +1180,7 @@ async function runBatch(retryItems) {
   sum.id = 'batchSummary';
   sum.className = 'batch-summary';
   sum.innerHTML = `
-    <b>${retryItems ? t('batchRetryDone') : t('batchAllDone')}${t('paren')(conc)}</b>
+    <b class="${retryItems ? 'batch-retry-badge' : ''}">${retryItems ? t('batchRetryDone') : t('batchAllDone')}${t('paren')(conc)}</b>
     <span>${esc(batchSummary(results.map((r) => ({ ok: r.ok })), ordered.length, I18N[pickLang(lang)]))}</span>
     <span class="sub">总耗时 ${formatMs(totalMs)}</span>
     ${failed ? `<ul class="batch-fails">${results.filter((r) => !r.ok).map((r, i) => `
