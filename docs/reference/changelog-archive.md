@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [3.16.0] - 2026-11-10
+
+### Added
+
+- 导出格式规范化：exportMime 五类映射（csv/json/md/txt/zkresult.json，未知兜底 octet-stream）进 extras；全站 15 处下载点字面 MIME 统一接令牌；CSV 全部加 UTF-8 BOM（Excel 中文不乱码）；watch CSV 文件名统一走 exportFilename（时间戳形态）；extras-smoke +1 断言（五类映射+边界）。
+
 ## [3.15.0] - 2026-11-10
 
 ### Added

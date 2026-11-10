@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.28.0] - 2026-11-10
+
+### Added
+
 - doctor 历史趋势线：doctorTrendSparks 纯函数（jsonl → spark 数据，倒序入正序出/坏条目滤除）；doctor 面板走势条（最近 10 次错误红/警告黄/干净绿——复用 watch-spark 形态）；CLI zkit doctor --trend（文本走势）；server /api/doctor-history GET 端点；I18N docSpark 两键 zh/en；extras-smoke +1 / webui +1 断言。
 
 ## [3.27.0] - 2026-11-10
@@ -71,10 +77,4 @@
 ### Added
 
 - CLI 导出与 UI 对齐：audit --export csv 落文件加 UTF-8 BOM（Excel 中文兼容，stdout 保持纯文本供管道）；--out 无扩展名自动补 .csv；cli120-smoke +2 断言（BOM 字节核对/自动扩展名）。
-
-## [3.16.0] - 2026-11-10
-
-### Added
-
-- 导出格式规范化：exportMime 五类映射（csv/json/md/txt/zkresult.json，未知兜底 octet-stream）进 extras；全站 15 处下载点字面 MIME 统一接令牌；CSV 全部加 UTF-8 BOM（Excel 中文不乱码）；watch CSV 文件名统一走 exportFilename（时间戳形态）；extras-smoke +1 断言（五类映射+边界）。
 
