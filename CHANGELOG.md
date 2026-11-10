@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.34.0] - 2026-11-11
+
+### Added
+
 - app.js 拆分第二步——批量域注入式迁出：runBatch/applyBatchImport/syncBatchView/curBatch 四函数迁 web/batch.js（createBatch(ui) 工厂 + __batch() 惰性 getter；batch/entries 是 app 侧 let——经 batchRef()/entriesRef() 闭包引用传入，赋值改为 .length=0/push 形态）；app.js 11049 行（-153）；8 条断言更新为拆分形态（batch98×4/pace177/webui×3）；方案表第 2 步完成标记。
 
 ## [3.33.0] - 2026-11-11
@@ -71,10 +77,4 @@
 ### Added
 
 - 审计面板时间范围筛选补「最近 1 小时」：AUDIT_RANGES 四档→五档（1h 滚动窗口——与 today 的自然日边界不同，排障窗口更贴身）；filterAudit 支持 1h 档；CLI zkit audit --since 既有（1h/30m/3d/2w/45s 五单位）复核打通；extras-smoke +2 断言（1h 命中排除/组合正交）；audit113 四档断言更新为五档。
-
-## [3.22.0] - 2026-11-10
-
-### Added
-
-- 服务面板日志抽屉与下载：行内展开支持 tail 参数选择（30/100/全部）；下载完整日志按钮（.log 文件，exportMime txt）；server /api/services/logs 支持 tail=all（钳 5000 行防超大响应）；错误行高亮（error/fail/✗/exception 标红）；webui +2 断言。
 
