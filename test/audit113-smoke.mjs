@@ -50,7 +50,7 @@ check('④ 组合：today+quick', filterAudit(recs, { range: 'today', plugin: 'q
 check('④ 非数组输入返空', filterAudit(null).length === 0 && filterAudit(undefined).length === 0);
 
 // AUDIT_RANGES 结构
-check('① 四档含空档', AUDIT_RANGES.length === 4 && AUDIT_RANGES[0].id === '' && AUDIT_RANGES.some((r) => r.id === '30d'));
+check('① 五档含空档（231 轮加 1h）', AUDIT_RANGES.length === 5 && AUDIT_RANGES[0].id === '' && AUDIT_RANGES.some((r) => r.id === '30d') && AUDIT_RANGES.some((r) => r.id === '1h'));
 
 // auditLine
 check('⑤ auditLine 含插件.动作与耗时', auditLine(recs[0]).includes('sysinfo.overview') && auditLine(recs[0]).includes('30ms'));

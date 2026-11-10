@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- 审计面板时间范围筛选补「最近 1 小时」：AUDIT_RANGES 四档→五档（1h 滚动窗口——与 today 的自然日边界不同，排障窗口更贴身）；filterAudit 支持 1h 档；CLI zkit audit --since 既有（1h/30m/3d/2w/45s 五单位）复核打通；extras-smoke +2 断言（1h 命中排除/组合正交）；audit113 四档断言更新为五档。
 
 ## [3.22.0] - 2026-11-10
 
