@@ -17,6 +17,12 @@ import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
 import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint, configProgress, validateSettingInput, formCanSave, parseConfigHash, textLines, textStats, fmtElapsed, paceVerdict, paceReassure, copyTextRaw, copyWithNumbers, copyWithTitle, extractUrls, colTooltipStats, shouldFreeze, tableSizeBadge, batchColVis, csvEscape, exportCsv, mdTableVis, exportMeta, shareEnvelope, shareAlive , drawerSearchMatch, drawerSearchCount , exportMime, CSV_BOM , paletteMatchLine, recordZeroHit , suggestFromZeroHits , doctorTrendSparks } from './extras.js';
+import { createKeys } from './keys.js';
+
+// 第二百四十一轮⑤：键盘域拆分（注入式——首次用时创建，避免顶层 TDZ）
+let __keysInst = null;
+const __keys = () => { __keysInst ??= createKeys({ setCount, esc, t, lang }); return __keysInst; };
+
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote, defaultChip, enumHint, actionHealthBadge, descNeedsFold, inQuietHours, notifyThrottle, pushNotifyLog, parseHm } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -944,7 +950,7 @@ document.addEventListener('wheel', (e) => {
 
 // 第九十六轮③：Ctrl+= / Ctrl+- 同一套字号调节
 document.addEventListener('keydown', (e) => {
-  if (keysGateBlocks(e)) return;
+  if (__keys().keysGateBlocks(e)) return;
   if (!(e.ctrlKey || e.metaKey)) return;
   if (e.key === '=' || e.key === '+') {
     const cur = localStorage.getItem('zerokit.font-scale') || 'm';
@@ -3755,24 +3761,8 @@ function showClipSuggest(text) {
 }
 
 /** Ctrl+Shift+V：读剪贴板并弹建议卡（不写搜索框——和 clipBtn 的搜索行为互补）。 */
-/* 第一百七十三轮③⑤：快捷键总闸——off 时除 ?/Esc 外全部短路（一次性 toast 提示） */
-let keysHintShownAt = 0;
-function keysGateBlocks(e) {
-  if (keysGateOn(localStorage.getItem('zerokit.keys.master'))) return false;
-  // 逃生键不拦：? 开手册、Esc 关浮层
-  if (e.key === '?' || e.key === 'Escape') return false;
-  // 纯文本输入场景不拦（用户在输入框里打字撞上 j/k 等）
-  const t = e.target;
-  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return false;
-  if (Date.now() - keysHintShownAt > 8000) {
-    keysHintShownAt = Date.now();
-    try { setCount(keysDisabledHint()); } catch { /* el 尚未就绪 */ }
-  }
-  return true;
-}
-
 document.addEventListener('keydown', (e) => {
-  if (keysGateBlocks(e)) return;
+  if (__keys().keysGateBlocks(e)) return;
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'V' || e.key === 'v')) {
     e.preventDefault();
     el.clipBtn.click();
@@ -9371,49 +9361,6 @@ const watchStopLog = [];   // 第四十八轮⑧：最近 5 条自动停止原�
 let gotoArmedAt = 0;   // 第二十四轮⑤：g 键按下时间（600ms 内按 l/h/s/m 生效）
 
 /** 第二十四轮⑧→第一百七十三轮：键盘手册浮层——KEYMAP 单一数据源渲染（搜索/域 tab/冲突标/Esc/点遮罩关闭） */
-function showHotkeyCheat() {
-  document.getElementById('hotkeyCheat')?.remove();
-  const ov = document.createElement('div');
-  ov.className = 'overlay'; ov.id = 'hotkeyCheat';
-  const gateOff = !keysGateOn(localStorage.getItem('zerokit.keys.master'));
-  const conflicts = new Set(keymapConflicts());
-  const scopeBtns = KEYMAP_SCOPES.map((s) =>
-    `<button class="chip km-scope${s.id === 'all' ? ' on' : ''}" data-kms="${s.id}">${s.label}</button>`).join('');
-  const renderRows = (rows) => rows.map((k) => `
-    <li${conflicts.has(k.keys) ? ' class="km-conflict"' : ''}>
-      <kbd>${k.keys}</kbd> ${k.desc}${conflicts.has(k.keys) ? ' <span class="km-conf-flag" title="同域同键重复">冲突</span>' : ''}
-    </li>`).join('');
-  const renderGroups = (rows) => KEYMAP_SCOPES.filter((s) => s.id !== 'all')
-    .map((s) => {
-      const sub = rows.filter((k) => k.scope === s.id);
-      return sub.length ? `<div><h4>${s.label}</h4><ul>${renderRows(sub)}</ul></div>` : '';
-    }).join('');
-  ov.innerHTML = `
-    <div class="modal cheat-sheet">
-      <h3>键盘手册</h3>
-      <input id="kmQ" class="km-q" placeholder="过滤按键 / 说明…" autocomplete="off" />
-      <div class="km-scopes">${scopeBtns}</div>
-      <div class="cheat-grid" id="kmGrid"></div>
-      <div class="palette-foot">Esc 关闭${gateOff ? ' · 快捷键当前<b>整体关闭</b>（本手册与 Esc 除外）' : ''}</div>
-    </div>`;
-  ov.addEventListener('click', (ev) => { if (ev.target === ov) ov.remove(); });
-  document.body.appendChild(ov);
-  const grid = ov.querySelector('#kmGrid');
-  const qEl = ov.querySelector('#kmQ');
-  let curScope = 'all';
-  const repaint = () => {
-    const rows = filterKeymap(qEl.value, curScope);
-    grid.innerHTML = renderGroups(rows) || '<div class="km-empty">没有匹配的快捷键</div>';
-  };
-  ov.querySelectorAll('.km-scope').forEach((b) => b.addEventListener('click', () => {
-    ov.querySelectorAll('.km-scope').forEach((x) => x.classList.remove('on'));
-    b.classList.add('on'); curScope = b.dataset.kms; repaint();
-  }));
-  qEl.addEventListener('input', repaint);
-  repaint();
-  qEl.focus();
-}
-
 /** 命令面板：一个输入框直达任何动作 / 页面。数据全是本地，不新增接口。 */
 // 第一百三十轮③：命中信号 key → 双语标签
 const WHY_LABEL = { exact: 'whyExact', prefix: 'whyPrefix', substr: 'whySubstr', keyword: 'whyKeyword', pinyin: 'whyPinyin', subseq: 'whySubseq', recent: 'whyRecent' };
@@ -9711,7 +9658,7 @@ function showPalette() {
 // ---------------------------------------------------------------- 键盘
 
 document.addEventListener('keydown', (e) => {
-  if (keysGateBlocks(e)) return;
+  if (__keys().keysGateBlocks(e)) return;
   // Esc 栈：优先关「最上层」的临时浮层（长单元格弹层 > 带 overlay 的面板 > 页面层）。
   // 键盘用户按 Esc 预期关掉眼前那个弹层，而不是让底下的页面先退出。
   if (e.key === 'Escape' && document.getElementById('cellFullPop')) {
@@ -9756,7 +9703,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey
     && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName ?? '')) {
     e.preventDefault();
-    showHotkeyCheat();
+    __keys().showHotkeyCheat();
     return;
   }
   if (mode === 'plugins') {
@@ -11102,23 +11049,6 @@ function showTagPanel(i) {
     }
   });
   panel.querySelector('#tagInput').focus();
-}
-
-/** 第五十二轮⑧：? 键位帮助浮层。 */
-function showKeyHelp() {
-  showHotkeyCheat();
-  return;
-  const rows = keyHelpList(); /* eslint-disable-line no-unreachable */
-  const panel = document.createElement('div');
-  panel.className = 'tag-panel overlay-panel';
-  panel.id = 'keyHelp';
-  panel.innerHTML = `<div class="ps-head"><h3>键盘流</h3><button class="ghost mini" id="khClose">✕</button></div>
-    <table class="kh-table"><tbody>${rows.map((r) => `<tr><td><kbd>${esc(r.key)}</kbd></td><td>${esc(t(r.whatKey))}</td></tr>`).join('')}</tbody></table>`;
-  document.body.appendChild(panel);
-  const close = () => panel.remove();
-  panel.querySelector('#khClose').addEventListener('click', close);
-  panel.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' || ev.key === '?' ) close(); });
-  panel.tabIndex = -1; panel.focus();
 }
 
 // 第六十七轮⑤：Ctrl+. 停止当前在途执行（与按钮同一条 /api/stop 通道）

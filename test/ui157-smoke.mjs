@@ -17,7 +17,7 @@ check('① 密度/排序键进速查', app.includes("{ keys: 'd', desc: '列表�
 check('① 键盘流四键进速查', extras.includes("{ keys: 'F', desc: '收藏/取消收藏'") && extras.includes("{ keys: 'X / M', desc: '结果导出 CSV/Markdown'"));
 check('① 停止/重放/剪贴板进速查', app.includes('Ctrl+.') && app.includes('Ctrl+R') && app.includes('Ctrl+Shift+V'));
 // ③ 当前状态区
-check('③ 速查浮层当前状态区（第一百七十三轮起手册从 KEYMAP 渲染，状态区随旧浮层退役）', extras.includes('KEYMAP') && app.includes('filterKeymap(qEl.value'));
+check('③ 速查浮层当前状态区（241 轮起手册渲染在 web/keys.js）', extras.includes('KEYMAP') && readFileSync(path.join(PKG_ROOT, 'web', 'keys.js'), 'utf8').includes('filterKeymap(qEl.value'));
 // ④ palette 占位提示可搜动作与 ? 键
 check('④ palette 占位升级（191 轮语法统一：键盘提示入占位符）', app.includes('搜索动作、插件、页面或命令…（↑↓ 选择 · Enter 打开 · 1-9 直选）'));
 // ⑥ 滚动记忆：openDetail 存 + backToList 恢复
