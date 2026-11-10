@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.26.0] - 2026-11-10
+
+### Added
+
 - 零命中词消化闭环：suggestFromZeroHits 纯函数（拼音域编辑距离 ≤2——候选 label/py 形态匹配 full 与 initials 各一次，返回原文 top3）；0 命中时命令面板显示「你可能在找」chips（点击即填入重搜；无建议零打扰）；I18N zeroSuggestLabel zh/en；extras-smoke +2 断言（拼音域命中/top3 分档）。
 
 ## [3.25.0] - 2026-11-10
@@ -72,9 +78,3 @@
 
 - guard146 计数同步自动化（根治连续三轮同款事故）：scripts/sync-counts.mjs 从 test-all 实际跑出的数字自动同步 overview/START-HERE 两处基线行；guard146 三条计数 FAIL 报错统一引导「跑 node scripts/sync-counts.mjs 自动修正」；CONTRIBUTING 增维护轮改计数流程。
 
-## [3.14.0] - 2026-11-09
-
-### Added
-
-- 搜索拼音增强：scorePinyin 融合容错档——漏/错一个字母的近似前缀（编辑距离 ≤1，44/36 两档）排在所有精确命中之后；pinyinFuzzyScore 独立导出（可测）；romanize 内建 cache（8000 条）复用确认（⑤ 性能已有）；extras-smoke +1 断言（fuzzy 分档 + 精确不变）。
-- 修复：CI npm ci 显式指定官方 registry——lockfile 里 110 条 resolved URL 是 npmmirror（本机全局 npm config 写入随 lockfile 提交），npmmirror 数据库故障时 CI 安装全挂。显式 --registry 覆盖 lockfile 的 resolved，CI 不再依赖第三方镜像可用性。
