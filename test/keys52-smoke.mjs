@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 /**
  * 第五十二轮：键盘流冒烟。
  */
@@ -27,7 +28,7 @@ const { keyHelpList } = await import(pathToFileURL(path.join(REPO, 'web/extras.j
   ok(app.includes("toggleFavorite(favorites, key)") && app.includes("t('favOn')"), '④F 收藏');
   ok(app.includes('showTagPanel') && app.includes('data-tg'), '⑤T 标签面板');
   ok(app.includes('batchFocus') && app.includes("e.altKey && (e.key === 'ArrowDown'"), '⑥Alt+↑↓ 篮内移位');
-  ok(app.includes('showKeyHelp'), '⑧? 帮助浮层');
+  ok(readFileSync(path.join(REPO, 'web', 'keys.js'), 'utf8').includes('showKeyHelp') && app.includes('__keys().showHotkeyCheat'), '⑧? 帮助浮层（241 轮拆分后：定义在 keys.js、? 键直连 showHotkeyCheat）');
   const css = fs.readFileSync(path.join(REPO, 'web/style.css'), 'utf8');
   ok(css.includes('.kh-table') && css.includes('.tag-panel'), '样式');
 }

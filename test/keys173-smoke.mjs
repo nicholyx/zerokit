@@ -34,11 +34,12 @@ check('③ 默认开', E.keysGateOn(undefined) === true && E.keysGateOn('on') ==
 check('③ off 关', E.keysGateOn('off') === false);
 check('⑤ 提示文案', E.keysDisabledHint().includes('?') && E.keysDisabledHint().includes('设置'));
 // 接线
-check('③ gate 接线三处 dispatcher', (app.match(/keysGateBlocks\(e\)/g) ?? []).length >= 4); // 定义 1 + 挂点 3
+const keys2 = readFileSync(path.join(PKG_ROOT, 'web', 'keys.js'), 'utf8');
+check('③ gate 接线三处 dispatcher（241 轮拆分后：挂点在 app、定义在 keys.js）', (app.match(/__keys\(\)\.keysGateBlocks\(e\)/g) ?? []).length >= 3 && keys2.includes('function keysGateBlocks'));
 check('④ 键 zerokit.keys.master', app.includes("'zerokit.keys.master'"));
 check('④ 备份组归类（外观与设置）', E.classifyKey('zerokit.keys.master') === '外观与设置');
-check('① 手册从 KEYMAP 渲染', app.includes('KEYMAP_SCOPES.map') && app.includes('filterKeymap(qEl.value'));
-check('⑧ 域 tab', app.includes('data-kms') && html.includes('keysMasterRow'));
+check('① 手册从 KEYMAP 渲染（241 轮起在 web/keys.js）', keys2.includes('KEYMAP_SCOPES.map') && keys2.includes('filterKeymap(qEl.value'));
+check('⑧ 域 tab（241 轮起手册域 tab 在 keys.js——data-kh-scope）', keys2.includes('data-kh-scope') && html.includes('keysMasterRow'));
 check('抽屉开关', html.includes('data-keys-master="off"') && app.includes('paintKeysMaster'));
 
 console.log(`\n通过 ${pass} / ${pass + fail}`);
