@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.32.0] - 2026-11-11
+
+### Added
+
 - v3 线总检与 v4 展望（第 240 轮整百里程碑）：docs/guide/maintenance-patterns.md（三类维护轮型判据——功能/盘点锁定/事故修复，选型启发）；docs/guide/v3-incident-index.md（发布链事故全回顾判据索引——网络依赖/Git 工作流/文档护栏/tauri 四组）；docs/guide/v4-outlook.md（六大候选方向议题池+清债优先判据）；docs 导航接入。
 
 ## [3.31.0] - 2026-11-10
@@ -71,10 +77,4 @@
 ### Added
 
 - 导入快照安全边界强化：parseZkresult 三重防线——大小上限 8MB（超限友好报错，先查长度再 JSON.parse 防卡死）、原型污染键剥离（__proto__/constructor/prototype 净化副本）、深嵌套深度钳制（12 层截断防爆栈）；extras-smoke +3 断言（超大/污染键/100 层深嵌套）。
-
-## [3.20.0] - 2026-11-10
-
-### Added
-
-- result 分享页与 zkresult 双向往返：分享页（#/share/<id>）新增「导出 zkresult」按钮（buildZkresult 完整落盘 visCols/rows/at——对方可导入回放）；extras-smoke +1 往返等价断言（buildZkresult → parseZkresult 字段一致）。
 
