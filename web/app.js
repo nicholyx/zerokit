@@ -16,7 +16,7 @@ let batchFocus = -1;   // 第五十二轮⑥：键盘操作批量篮时的焦点
 import { romanize, scorePinyin } from './pinyin.js';
 import { detectContent, matchFires } from './match.js';
 import { qrSvg } from './qrcode.js';
-import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint, configProgress, validateSettingInput, formCanSave, parseConfigHash, textLines, textStats, fmtElapsed, paceVerdict, paceReassure, copyTextRaw, copyWithNumbers, copyWithTitle, extractUrls, colTooltipStats, shouldFreeze, tableSizeBadge, batchColVis, csvEscape, exportCsv, mdTableVis, exportMeta, shareEnvelope, shareAlive , drawerSearchMatch, drawerSearchCount , exportMime, CSV_BOM , paletteMatchLine, recordZeroHit } from './extras.js';
+import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint, configProgress, validateSettingInput, formCanSave, parseConfigHash, textLines, textStats, fmtElapsed, paceVerdict, paceReassure, copyTextRaw, copyWithNumbers, copyWithTitle, extractUrls, colTooltipStats, shouldFreeze, tableSizeBadge, batchColVis, csvEscape, exportCsv, mdTableVis, exportMeta, shareEnvelope, shareAlive , drawerSearchMatch, drawerSearchCount , exportMime, CSV_BOM , paletteMatchLine, recordZeroHit , suggestFromZeroHits } from './extras.js';
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote, defaultChip, enumHint, actionHealthBadge, descNeedsFold, inQuietHours, notifyThrottle, pushNotifyLog, parseHm } from './extras.js';
 import { RESULT_ACTIONS, markdownTable, tsvTable, jsonTreeLines } from './extras.js';
 import { dailyBrief, trimRuns, idleSuggest } from './extras.js';
@@ -9552,6 +9552,13 @@ function showPalette() {
     // 第一百三十轮⑧：空态计数行
     // 第一百三十轮④：最近使用 chips（空查询才显示）
     const chipsBox = overlay.querySelector('#paletteChips');
+    // 第二百三十四轮②：建议区容器（无建议时 hidden——零打扰）
+    if (!overlay.querySelector('#paletteSuggest') && chipsBox) {
+      const sb = document.createElement('div');
+      sb.id = 'paletteSuggest';
+      sb.className = 'chips hidden';
+      chipsBox.after(sb);
+    }
     if (chipsBox) {
       const chips = recentChips(recent, 5);
       if (!needle && chips.length) {
@@ -9567,7 +9574,20 @@ function showPalette() {
       const mlText = lang === 'en' ? ml.en : ml.zh;
       foot.dataset.stats = mlText;
       foot.prepend(Object.assign(document.createElement('span'), { textContent: `${mlText} · `, className: ml.zero ? 'bad' : '' }));
-      if (ml.zero) writeJson('zerokit.paletteZeroHits', recordZeroHit(needle, readJson('zerokit.paletteZeroHits') ?? []));
+      if (ml.zero) {
+        writeJson('zerokit.paletteZeroHits', recordZeroHit(needle, readJson('zerokit.paletteZeroHits') ?? []));
+        // 第二百三十四轮②⑨：零命中时的「你可能在找」——拼音域编辑距离 ≤2 的 top3（无建议则零打扰）
+        const sugg = suggestFromZeroHits(needle, entries.map((e) => ({ label: e.action?.title ?? e.title ?? '', py: e.py?.title ?? e.py?.name })), 3).filter(Boolean);
+        const suggBox = overlay.querySelector('#paletteSuggest');
+        if (suggBox && sugg.length) {
+          suggBox.classList.remove('hidden');
+          suggBox.innerHTML = `<span class="sub">${t('zeroSuggestLabel')}</span>` + sugg.map((x) => `<button class="chip" data-zero-suggest="${esc(x)}">${esc(x)}</button>`).join('');
+          suggBox.querySelectorAll('[data-zero-suggest]').forEach((b) => b.addEventListener('click', () => {
+            const q2 = overlay.querySelector('#paletteQuery');
+            if (q2) { q2.value = b.dataset.zeroSuggest; q2.dispatchEvent(new Event('input', { bubbles: true })); }
+          }));
+        } else if (suggBox) suggBox.classList.add('hidden');
+      }
     }
   };
   /** ①②命令执行：解释 go 标记（hash 直跳 / UI 动作），并记入最近命令 */
