@@ -65,7 +65,7 @@ check('③ 表格列（名称/命令/时间）', app.includes('bmkColName') && a
 check('⑧ 删除带确认', app.includes("confirm(t('unpinConfirm'))"));
 check('④ pinBtn 进详情头', app.includes('id="pinBtn"') && app.includes('data-fav') === false || true);
 check('④ 钉住走 POST /api/bookmarks', app.includes("api('/api/bookmarks', { method: 'POST'"));
-check('⑦ 重跑走 /api/run', app.includes("fetch('/api/run'") && app.includes('#/bookmark-result'));
+check('⑦ 重跑走 /api/run（245 轮起 fetch 在 watchtimers.js，深链仍在 app）', readFileSync(path.join(PKG_ROOT, 'web', 'watchtimers.js'), 'utf8').includes("fetch('/api/run'") && app.includes('#/bookmark-result'));
 check('② 顶栏徽标', idx.includes('id="bmBadge"') && app.includes('bookmarkN'));
 check('⑤ boot 时读书签', app.includes("api('/api/bookmarks')"));
 check('CSS pin 态', css.includes('.star.pin.on'));
