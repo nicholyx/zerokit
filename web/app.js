@@ -6807,7 +6807,7 @@ async function renderLogs() {
       const blob = new Blob([CSV_BOM + csv], { type: exportMime('csv') });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `zerokit-logs-${logsFile}-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `zerokit-logs-${logsFile}${logsRange ? '-' + logsRange : ''}${logsDecision ? '-' + logsDecision : ''}-${new Date().toISOString().slice(0, 10)}.csv`;
       a.click(); URL.revokeObjectURL(a.href);
       setCount(`已导出 ${es.length} 条日志`);
     } catch (err) { setCount(`导出失败：${err.message}`); }
@@ -6826,7 +6826,7 @@ async function renderLogs() {
       const blob = new Blob([JSON.stringify(es, null, 2)], { type: exportMime('json') });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `zerokit-logs-${logsFile}-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `zerokit-logs-${logsFile}${logsRange ? '-' + logsRange : ''}${logsDecision ? '-' + logsDecision : ''}-${new Date().toISOString().slice(0, 10)}.json`;
       a.click(); URL.revokeObjectURL(a.href);
       setCount(`已导出 ${es.length} 条日志（JSON）`);
     } catch (err) { setCount(`导出失败：${err.message}`); }
