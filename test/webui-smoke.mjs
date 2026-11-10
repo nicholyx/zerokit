@@ -550,7 +550,7 @@ close();
   ok('37③MCP配置段：invokeBox 内 toMcpConfig', app.includes('copyMcpCfg') && app.includes('toMcpConfig('));
   ok('37④LLM JSONL：toLlmJsonl 按钮与导出', app.includes('id="llmRes"') && app.includes('toLlmJsonl(res.data)'));
   ok('37⑤命令面板：copy-mcp / copy-ctx 两个命令', extras.includes("go: 'copy-mcp'") && extras.includes("go: 'copy-ctx'") && app.includes("c.go === 'copy-mcp'"));
-  ok('37⑥趋势MD：data-wmd + watchTrendMarkdown', app.includes('data-wmd=') && app.includes('watchTrendMarkdown(w.samples'));
+  ok('37⑥趋势MD：data-wmd + watchTrendMarkdown（245 轮起在 watchtimers.js）', (() => { const w = fs.readFileSync(path.join(PKG_ROOT, 'web', 'watchtimers.js'), 'utf8'); return w.includes('data-wmd=') && w.includes('watchTrendMarkdown(w.samples'); })());
   ok('37⑦curl 按钮：data-curl + toCurl（token 占位符）', app.includes('data-curl=') && extras.includes('<启动器页面里的令牌>'));
   ok('37⑧隐私开关：no-ai class + data-ai-toggle + CSS 隐藏规则', app.includes("ai-assist") && css.includes('body.no-ai [data-ai="1"]'));
   ok('37⑨纯函数可导入：五个新导出都在', ['toAiMarkdown','packContext','toMcpConfig','toLlmJsonl','toCurl','watchTrendMarkdown'].every((n) => extras.includes('export function ' + n)));
@@ -633,7 +633,7 @@ const failed = results.filter(([, ok]) => !ok);
   const js119 = fs.readFileSync(path.join(PKG_ROOT, 'web', 'app.js'), 'utf8');
   const ex119 = fs.readFileSync(path.join(PKG_ROOT, 'web', 'extras.js'), 'utf8');
   for (const k of ['logs','stats','doctor','market','watch','brief','perf','help']) {
-    check(`一一九①面板描述条 ${k}`, js119.includes(`panelDescBar('${k}'`));
+    check(`一一九①面板描述条 ${k}`, k === 'watch' ? fs.readFileSync(path.join(PKG_ROOT, 'web', 'watchtimers.js'), 'utf8').includes(`panelDescBar('watch'`) : js119.includes(`panelDescBar('${k}'`));
   }
   check('一一九②tour 清单渲染', js119.includes('tourProgress(TOUR_STEPS') && js119.includes('data-tour-step'));
   check('一一九②TOUR_STEPS 四步', (ex119.match(/doneKey:/g) || []).length >= 4);
@@ -642,8 +642,8 @@ const failed = results.filter(([, ok]) => !ok);
   for (const k of ['panelDescLogs','panelDescHelp','tourFirstRun','helpSearchPh']) {
     check(`一一九④I18N 双语 ${k}`, i18nSeg.split(`${k}: '`).length >= 3);
   }
-  check('一一九⑤监控空态教一步', js119.includes('点「◎ 监控」选间隔'));
-  check('一一九⑤定时空态教一步', js119.includes('「⏲ 定时」设间隔'));
+  check('一一九⑤监控空态教一步（245 轮起在 watchtimers.js）', fs.readFileSync(path.join(PKG_ROOT, 'web', 'watchtimers.js'), 'utf8').includes('点「◎ 监控」选间隔'));
+  check('一一九⑤定时空态教一步（watchtimers.js）', fs.readFileSync(path.join(PKG_ROOT, 'web', 'watchtimers.js'), 'utf8').includes('「⏲ 定时」设间隔'));
   check('一一九⑥help 搜索接线', js119.includes('data-help-search') && js119.includes('.help-topic') && js119.includes('classList.toggle(\'hidden\''));
   const dt = fs.readFileSync(path.join(PKG_ROOT, 'src', 'core', 'doctor.ts'), 'utf8');
   const pushes = dt.split('problems.push(').slice(1);

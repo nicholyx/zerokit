@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- app.js 拆分第五步——监控/定时域注入式迁出：14 个函数（showWatchPanel/showTimers/renderTimersRows + scheduleWatch/fireTimer/persistWatch 等 7 主 7 支撑）整域迁 web/watchtimers.js（createWatchTimers(ui) 工厂 + __wt() 惰性 getter——整域内聚后注入面最小化）；10 条断言更新（webui×5/pace177/polish95×2/bookmark180——迁出函数改读 watchtimers.js）；app.js 10233 行（五步累计 -1040）。
 
 ## [3.36.0] - 2026-11-11
 
