@@ -2291,3 +2291,9 @@
 ### Added
 
 - 桌面壳与 CLI/启动器一致性巡检：托盘「打开设置」从跳回首页改为真正打开设置抽屉（openDrawer 挂 window 供壳 eval 调用）；热键对照表 docs/reference/desktop-keys.md（全局 Alt+Space 系 vs UI Ctrl 系分层审计原则——两层永不交叉）；Cargo/main.rs 补版本语义注释（壳号即内核号，release-prep 五处同步保证）。
+
+## [3.13.0] - 2026-11-09
+
+### Added
+
+- 总检页深化——历史趋势与导出：/api/health-snapshot GET 落盘 health-history.jsonl（保留 60 条）；/api/health-history GET 端点；UI dashboard 历史趋势区（最近 10 条快照表）；CLI zkit dashboard --history（文本历史）/--export 文件（当前快照 JSON 导出）；I18N dashHist 四键 zh/en。
