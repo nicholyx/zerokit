@@ -2,7 +2,7 @@
 //
 // 这些函数都在 web/extras.js 里，不碰 DOM / localStorage / fetch，
 // 所以可以直接在 Node 里跑。界面接线另由 webui-smoke 断言。
-import { paramsHint, recencyOrder, coActions, flattenRuns, THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref, OVERFLOW_ROWS, PAGE_ROWS, toAiMarkdown, packContext, toMcpConfig, toLlmJsonl, toCurl, watchTrendMarkdown, TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory, looksLikeTimestamp, humanTs, emptyReason, tocFromMd, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, searchesExport, searchesMerge, drawerSearchMatch, drawerSearchCount, resultCacheKey, resultCacheHit, exportMime, exportFilename, buildZkresult, parseZkresult, ZKRESULT_MAX_BYTES, ZKRESULT_MAX_DEPTH, stripUnsafeKeys , filterAudit, AUDIT_RANGES, paletteMatchLine, recordZeroHit} from '../web/extras.js';
+import { paramsHint, recencyOrder, coActions, flattenRuns, THEMES, normalizeTheme, resolveTheme, SHORTCUTS, highlightSegments, highlightHtml, actionKey, toggleFavorite, isFavorite, favoritesFirst, rememberParams, pushRunHistory, pluginHealth, PROMPTS, ACCENTS, normalizeAccent, FILTERS, filterActions, pushSearch, topActions, recentRuns, invocationText, resultMarkdown, classifyKey, profileList, validProfileName, upsertProfile, deleteProfile, renameProfile, HELP_TOPICS, firstRunSeen, markFirstRunDone, emptySearchSuggestions, resultTabTitle, tabEvict, resultQuery, resultCompare, withNoteHeader, COMMAND_LIST, quickRunKey, gotoTarget, cycleTabIndex, pushHistory, chainFill, batchDedup, chunkWindows, parseBatchList, pluginCompare, versionDiff, depTreeLines, filterPluginActions, pluginTags, pluginStatCards, installedList, installCommand, whyLabel, expandSynonyms, highlightSegmentsCaseKept, parseHistoryHash, recencyBoost, SYNONYMS, stripStopwords, I18N, pickLang, validLangPref, OVERFLOW_ROWS, PAGE_ROWS, toAiMarkdown, packContext, toMcpConfig, toLlmJsonl, toCurl, watchTrendMarkdown, TIMER_PRESETS, inWindow, validWindow, nextRunLabel, shouldCatchUp, exportTimers, parseTimersPack, trimHistory, looksLikeTimestamp, humanTs, emptyReason, tocFromMd, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, searchesExport, searchesMerge, drawerSearchMatch, drawerSearchCount, resultCacheKey, resultCacheHit, exportMime, exportFilename, buildZkresult, parseZkresult, ZKRESULT_MAX_BYTES, ZKRESULT_MAX_DEPTH, stripUnsafeKeys , filterAudit, AUDIT_RANGES, paletteMatchLine, recordZeroHit, suggestFromZeroHits} from '../web/extras.js';
 import { romanize, scorePinyin, pinyinFuzzyScore } from '../web/pinyin.js';
 
 const results = [];
@@ -613,6 +613,27 @@ check('工作台建议：四个非空建议', PROMPTS.length === 4 && PROMPTS.ev
     return hit.zh.includes('3 / 55') && zero.zero === true && zero.zh.includes('拼音') && paletteMatchLine(0, 0).zh.includes('0 个候选');
   })());
   check('233④ 零命中词收集（去重保序/上限 30/短词不收）', (() => {
+  check('234③ 拼音域建议（dali/dol 命中、远词零建议）', (() => {
+    const cands = [
+      { label: '代理历史', py: { full: 'daililishi', initials: 'dlls' } },
+      { label: 'doctor 体检', py: { full: 'doctor tijian', initials: 'dtj' } },
+      { label: '运行中', py: { full: 'yunxingzhong', initials: 'yxz' } },
+    ];
+    const a = suggestFromZeroHits('dali', cands);
+    const b = suggestFromZeroHits('dol', cands);
+    const c = suggestFromZeroHits('zzzz', cands);
+    return a.includes('代理历史') && b.length >= 1 && c.length === 0 && suggestFromZeroHits('', cands).length === 0;
+  })());
+  check('234③ top3 上限与编辑距离分档排序', (() => {
+    const cands = [
+      { label: 'aa', py: { full: 'aa', initials: 'aa' } },
+      { label: 'ab', py: { full: 'ab', initials: 'ab' } },
+      { label: 'abc', py: { full: 'abc', initials: 'abc' } },
+      { label: 'abcdef', py: { full: 'abcdef', initials: 'abcdef' } },
+    ];
+    const r = suggestFromZeroHits('aa', cands);
+    return r.length === 3 && r[0] === 'aa';
+  })());
     let list = [];
     list = recordZeroHit('xyz', list);
     list = recordZeroHit('abc', list);

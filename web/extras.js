@@ -730,7 +730,7 @@ helpSearchTitle: '搜索', helpSearchBody: '支持中文关键词、拼音全拼
     logReload: '刷新', logShowDenied: '看被拒记录', logShowAll: '看全部记录', loading: '读取中…',
     doctorTitle: '环境自检', doctorSub: '解释器、插件依赖、必填配置——有问题的直接给修复命令',
     doctorReload: '重新检查', doctorChecking: '检查中…', doctorFailed: (m) => `自检失败：${m}`,
-    scopeRuns: '执行历史', scopeSearches: '搜索历史', scopeSaved: '结果快照', scopeTimers: '定时任务', dashHistTitle: '最近快照', dashHistTs: '时间', dashHistState: '状态', dashHistEmpty: '还没有快照历史——再打开一次总检页就有第一条', dash220Title: '🩺 全景总检', dash220Sub: '四面健康一屏看全——每次打开拉新快照，不缓存', dash220Ver: '版本', dash220Doc: 'doctor 需处理/建议', dash220Svc: '服务在跑/声明', dash220Cache: '缓存命中/未命中', dash220Plug: '插件/动作', dash220GoDoc: '看 doctor 详情', dash220GoSvc: '服务面板', dash220GoCache: '缓存面板', shareZkrBtn: '导出 zkresult', svcPanel: '🔧 服务面板', svcSub: '插件声明的后台服务——状态一目了然，可停可查', svcStopped: '停着', svcStopBtn: '停止', svcColId: '服务', svcColTitle: '说明', svcColState: '状态', svcEmpty: '没有声明服务的插件', svcLogsBtn: '日志', svcLogDl: '下载完整日志', svcNoLogs: '该服务还没有日志。', svcLogsLoading: '读取中…', svcPanel: '🔧 服务面板', svcSub: '插件声明的后台服务——状态一目了然，可停可查', svcStopped: '停着', svcStopBtn: '停止', svcColId: '服务', svcColTitle: '说明', svcColState: '状态', svcEmpty: '没有声明服务的插件', svcLogsBtn: '日志', svcLogDl: '下载完整日志', svcNoLogs: '该服务还没有日志。', svcLogsLoading: '读取中…', cachePanel: '⚡ 缓存面板', cacheSub: (t) => `只读动作结果缓存，TTL ${t}s——同参数秒回，写类永不缓存`, cacheTotal: '缓存条目', cacheHits: '命中', cacheMisses: '未命中', cacheKey: '缓存键（插件.动作?参数）', cacheAge: '条目 age', cacheState: '状态', cacheFresh: '新鲜', cacheExpired: '已过期（下次执行刷新）', cacheEmpty: '缓存为空——跑一个只读动作就有了', cachePruneBtn: '剔除过期', cacheClearBtn: '清空全部', cacheLoadFail: '读不了缓存：', searchesImportTip: '从 searches.json 文件合并搜索历史（与 CLI 同一格式）', searchesMerged: (n) => `✓ 已合并 ${n} 条搜索历史`, searchesReadFail: (m) => `✗ 读不了文件：${m}`,
+    scopeRuns: '执行历史', scopeSearches: '搜索历史', scopeSaved: '结果快照', scopeTimers: '定时任务', dashHistTitle: '最近快照', dashHistTs: '时间', dashHistState: '状态', dashHistEmpty: '还没有快照历史——再打开一次总检页就有第一条', dash220Title: '🩺 全景总检', dash220Sub: '四面健康一屏看全——每次打开拉新快照，不缓存', dash220Ver: '版本', dash220Doc: 'doctor 需处理/建议', dash220Svc: '服务在跑/声明', dash220Cache: '缓存命中/未命中', dash220Plug: '插件/动作', dash220GoDoc: '看 doctor 详情', dash220GoSvc: '服务面板', dash220GoCache: '缓存面板', shareZkrBtn: '导出 zkresult', zeroSuggestLabel: '你可能在找：', svcPanel: '🔧 服务面板', svcSub: '插件声明的后台服务——状态一目了然，可停可查', svcStopped: '停着', svcStopBtn: '停止', svcColId: '服务', svcColTitle: '说明', svcColState: '状态', svcEmpty: '没有声明服务的插件', svcLogsBtn: '日志', svcLogDl: '下载完整日志', svcNoLogs: '该服务还没有日志。', svcLogsLoading: '读取中…', svcPanel: '🔧 服务面板', svcSub: '插件声明的后台服务——状态一目了然，可停可查', svcStopped: '停着', svcStopBtn: '停止', svcColId: '服务', svcColTitle: '说明', svcColState: '状态', svcEmpty: '没有声明服务的插件', svcLogsBtn: '日志', svcLogDl: '下载完整日志', svcNoLogs: '该服务还没有日志。', svcLogsLoading: '读取中…', cachePanel: '⚡ 缓存面板', cacheSub: (t) => `只读动作结果缓存，TTL ${t}s——同参数秒回，写类永不缓存`, cacheTotal: '缓存条目', cacheHits: '命中', cacheMisses: '未命中', cacheKey: '缓存键（插件.动作?参数）', cacheAge: '条目 age', cacheState: '状态', cacheFresh: '新鲜', cacheExpired: '已过期（下次执行刷新）', cacheEmpty: '缓存为空——跑一个只读动作就有了', cachePruneBtn: '剔除过期', cacheClearBtn: '清空全部', cacheLoadFail: '读不了缓存：', searchesImportTip: '从 searches.json 文件合并搜索历史（与 CLI 同一格式）', searchesMerged: (n) => `✓ 已合并 ${n} 条搜索历史`, searchesReadFail: (m) => `✗ 读不了文件：${m}`,
     profileDelConfirm: (n) => `删除配置档「${n}」？该档的外观/收藏/参数记忆将一并删除。`,
     backupExported: (n, b, f) => `已导出 ${n} 个键（${b} 字符）→ ${f}`,
     exportedDone: '已导出', watchCsvDone: (n) => `已导出 ${n} 次采样 CSV`,
@@ -1071,7 +1071,7 @@ helpSearchTitle: 'Search', helpSearchBody: 'Chinese keywords, full pinyin, or pi
     logReload: 'Reload', logShowDenied: 'Show denied', logShowAll: 'Show all', loading: 'Loading…',
     doctorTitle: 'Doctor', doctorSub: 'Interpreters, plugin deps, required settings — with fix commands when broken',
     doctorReload: 'Re-check', doctorChecking: 'Checking…', doctorFailed: (m) => `Doctor failed: ${m}`,
-    scopeRuns: 'Run history', scopeSearches: 'Search history', scopeSaved: 'Saved results', scopeTimers: 'Timers', dashHistTitle: 'Recent snapshots', dashHistTs: 'Time', dashHistState: 'State', dashHistEmpty: 'No snapshot history yet — open the overview again to record the first one', dash220Title: '🩺 Health overview', dash220Sub: 'All four faces at a glance — fresh snapshot on open, never cached', dash220Ver: 'Version', dash220Doc: 'doctor fix/warn', dash220Svc: 'services running/declared', dash220Cache: 'cache hits/misses', dash220Plug: 'plugins/actions', dash220GoDoc: 'doctor details', dash220GoSvc: 'services', dash220GoCache: 'cache', shareZkrBtn: 'Export zkresult', svcPanel: '🔧 Services', svcSub: 'Background services declared by plugins — status at a glance, stoppable', svcStopped: 'stopped', svcStopBtn: 'Stop', svcColId: 'Service', svcColTitle: 'Title', svcColState: 'State', svcEmpty: 'No plugins declare services', svcLogsBtn: 'Logs', svcLogDl: 'Download full log', svcNoLogs: 'No logs yet for this service.', svcLogsLoading: 'Loading…', svcPanel: '🔧 Services', svcSub: 'Background services declared by plugins — status at a glance, stoppable', svcStopped: 'stopped', svcStopBtn: 'Stop', svcColId: 'Service', svcColTitle: 'Title', svcColState: 'State', svcEmpty: 'No plugins declare services', svcLogsBtn: 'Logs', svcLogDl: 'Download full log', svcNoLogs: 'No logs yet for this service.', svcLogsLoading: 'Loading…', cachePanel: '⚡ Result cache', cacheSub: (t) => `Read-only action result cache, TTL ${t}s — same params return instantly, writes never cached`, cacheTotal: 'Entries', cacheHits: 'Hits', cacheMisses: 'Misses', cacheKey: 'Cache key (plugin.action?params)', cacheAge: 'Age', cacheState: 'State', cacheFresh: 'Fresh', cacheExpired: 'Expired (refreshes on next run)', cacheEmpty: 'Cache empty — run a read-only action', cachePruneBtn: 'Prune expired', cacheClearBtn: 'Clear all', cacheLoadFail: 'Cannot load cache:', searchesImportTip: 'Merge search history from a searches.json file (same format as CLI)', searchesMerged: (n) => `Merged ${n} search history entries`, searchesReadFail: (m) => `Cannot read file: ${m}`,
+    scopeRuns: 'Run history', scopeSearches: 'Search history', scopeSaved: 'Saved results', scopeTimers: 'Timers', dashHistTitle: 'Recent snapshots', dashHistTs: 'Time', dashHistState: 'State', dashHistEmpty: 'No snapshot history yet — open the overview again to record the first one', dash220Title: '🩺 Health overview', dash220Sub: 'All four faces at a glance — fresh snapshot on open, never cached', dash220Ver: 'Version', dash220Doc: 'doctor fix/warn', dash220Svc: 'services running/declared', dash220Cache: 'cache hits/misses', dash220Plug: 'plugins/actions', dash220GoDoc: 'doctor details', dash220GoSvc: 'services', dash220GoCache: 'cache', shareZkrBtn: 'Export zkresult', zeroSuggestLabel: 'You may be looking for:', svcPanel: '🔧 Services', svcSub: 'Background services declared by plugins — status at a glance, stoppable', svcStopped: 'stopped', svcStopBtn: 'Stop', svcColId: 'Service', svcColTitle: 'Title', svcColState: 'State', svcEmpty: 'No plugins declare services', svcLogsBtn: 'Logs', svcLogDl: 'Download full log', svcNoLogs: 'No logs yet for this service.', svcLogsLoading: 'Loading…', svcPanel: '🔧 Services', svcSub: 'Background services declared by plugins — status at a glance, stoppable', svcStopped: 'stopped', svcStopBtn: 'Stop', svcColId: 'Service', svcColTitle: 'Title', svcColState: 'State', svcEmpty: 'No plugins declare services', svcLogsBtn: 'Logs', svcLogDl: 'Download full log', svcNoLogs: 'No logs yet for this service.', svcLogsLoading: 'Loading…', cachePanel: '⚡ Result cache', cacheSub: (t) => `Read-only action result cache, TTL ${t}s — same params return instantly, writes never cached`, cacheTotal: 'Entries', cacheHits: 'Hits', cacheMisses: 'Misses', cacheKey: 'Cache key (plugin.action?params)', cacheAge: 'Age', cacheState: 'State', cacheFresh: 'Fresh', cacheExpired: 'Expired (refreshes on next run)', cacheEmpty: 'Cache empty — run a read-only action', cachePruneBtn: 'Prune expired', cacheClearBtn: 'Clear all', cacheLoadFail: 'Cannot load cache:', searchesImportTip: 'Merge search history from a searches.json file (same format as CLI)', searchesMerged: (n) => `Merged ${n} search history entries`, searchesReadFail: (m) => `Cannot read file: ${m}`,
     profileDelConfirm: (n) => `Delete profile "${n}"? Its appearance, favorites and remembered params will be removed too.`,
     backupExported: (n, b, f) => `Exported ${n} keys (${b} chars) → ${f}`,
     exportedDone: 'Exported', watchCsvDone: (n) => `Exported ${n} samples as CSV`,
@@ -1503,6 +1503,36 @@ export function paletteMatchLine(matched, candidates) {
   const t = Math.max(0, Number(candidates) || 0);
   if (!m) return { zh: `无匹配 · 共 ${t} 个候选——试试更短的关键词或拼音首字母`, en: `No match · ${t} candidates — try a shorter keyword or pinyin initials`, zero: true };
   return { zh: `命中 ${m} / ${t} 个候选`, en: `${m} of ${t} candidates matched`, zero: false };
+}
+
+/**
+ * 第二百三十四轮③：零命中词→「你可能在找」。
+ * 候选是 { label, py } 形态（py 由调用方 romanize 好——纯函数不 import）；
+ * 匹配在拼音域做（full/initials 各测一次编辑距离），返回原文 label top3。
+ */
+export function suggestFromZeroHits(zeroTerm, candidates, max = 3) {
+  const q = String(zeroTerm ?? '').trim().toLowerCase();
+  if (!q || q.length < 2 || !Array.isArray(candidates)) return [];
+  const dist = (a, b) => {
+    if (Math.abs(a.length - b.length) > 2) return 9;
+    const dp = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+    for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+    for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    return dp[a.length][b.length];
+  };
+  return candidates
+    .map((c) => {
+      const label = String(c?.label ?? '');
+      const forms = [String(c?.py?.full ?? '').toLowerCase(), String(c?.py?.initials ?? '').toLowerCase(), label.toLowerCase()];
+      const d = Math.min(...forms.map((f) => (f ? dist(q, f) : 9)));
+      return { label, d };
+    })
+    .filter((x) => x.label && x.d <= 2)
+    .sort((a, b) => a.d - b.d)
+    .slice(0, max)
+    .map((x) => x.label);
 }
 
 /** 第二百三十三轮④：高频零命中词收集（本地存储，为后续同义词表做数据）——去重保序上限 30 */
