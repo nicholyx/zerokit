@@ -567,7 +567,7 @@ close();
   assert('菜单项挂 role=menuitem', (appJs.match(/role="menuitem"/g) ?? []).length >= 10);
   assert('更多菜单点外关闭', appJs.includes("closest('#moreWrap')"));
   // ② 视图动效
-  assert('showPanelAnimated 存在', appJs.includes('function showPanelAnimated'));
+  assert('showPanelAnimated 存在（243 轮起在 web/panels.js）', fs.readFileSync(path.join(PKG_ROOT, 'web', 'panels.js'), 'utf8').includes('function showPanelAnimated'));
   assert('view-anim 类', css.includes('.view-anim') && css.includes('zk-view-in'));
   // ③ 浮层动效
   assert('zk-pop-in 动画', css.includes('zk-pop-in') && css.includes('.drawer-pop'));
@@ -714,7 +714,7 @@ const failed = results.filter(([, ok]) => !ok);
   check('198⑨ 总检脚本进 lint（cli-copy/mcp-copy/contrast-audit/i18n-scan 四审计齐）', (() => { const lint = fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'lint.sh'), 'utf8'); return ['cli-copy-audit', 'mcp-copy-audit', 'contrast-audit', 'i18n-scan'].every((n) => lint.includes(n)); })());
   check('198⑨ v2.0.0 总检条目入 CHANGELOG（占位行替换法；241 轮起条目已归档——读 archive）', fs.readFileSync(path.join(PKG_ROOT, 'docs', 'reference', 'changelog-archive.md'), 'utf8').includes('v2.0.0 里程碑总检'));
   check('199①② 治理三件套在（SECURITY/SUPPORT/baseline-v2）', fs.existsSync(path.join(PKG_ROOT, 'SECURITY.md')) && fs.existsSync(path.join(PKG_ROOT, 'SUPPORT.md')) && fs.existsSync(path.join(PKG_ROOT, 'docs', 'reference', 'baseline-v2.md')));
-  check('199⑤⑥ baseline 脚本 + CHANGELOG v2 语义化注记（241 轮起条目已归档——读 archive）', fs.existsSync(path.join(PKG_ROOT, 'scripts', 'baseline-snapshot.mjs')) && fs.readFileSync(path.join(PKG_ROOT, 'docs', 'reference', 'changelog-archive.md'), 'utf8').includes('v2 线语义化承诺'));
+  check('199⑤⑥ baseline 脚本 + CHANGELOG v2 语义化注记（措辞随归档演化——锚定语义化承诺四字）', fs.existsSync(path.join(PKG_ROOT, 'scripts', 'baseline-snapshot.mjs')) && fs.readFileSync(path.join(PKG_ROOT, 'docs', 'reference', 'changelog-archive.md'), 'utf8').includes('语义化承诺'));
   check('200①② 项目故事（story.md）+ 里程里程碑年表 + 导航行', fs.existsSync(path.join(PKG_ROOT, 'docs', 'guide', 'story.md')) && fs.readFileSync(path.join(PKG_ROOT, 'docs', 'guide', 'story.md'), 'utf8').includes('里程碑年表') && fs.readFileSync(path.join(PKG_ROOT, 'docs', 'README.md'), 'utf8').includes('guide/story.md'));
   check('200⑥ README「项目故事」链接 + 四面巡检记录', fs.readFileSync(path.join(PKG_ROOT, 'README.md'), 'utf8').includes('guide/story.md'));
   check('201⑤ 性能防护网进 lint（perf-guard 四预算）', fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'lint.sh'), 'utf8').includes('perf-guard') && fs.readFileSync(path.join(PKG_ROOT, 'scripts', 'perf-guard.mjs'), 'utf8').includes('O(n²) 参照实现'));

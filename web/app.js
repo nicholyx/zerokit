@@ -19,6 +19,7 @@ import { qrSvg } from './qrcode.js';
 import { paletteScoreV2, recentChips, paletteStatsLine, humanCell, numericShare, groupSegments, cellAlign, barShare, paletteGroup, boostRecent, tabComplete, pickLang, validLangPref, makeT , OVERFLOW_ROWS, PAGE_ROWS, paramsHint, recencyOrder, coActions, flattenRuns, clipboardMatch, paramHistory, suggestPlaceholder, isFieldDirty, dashGreeting, dashEmpty, dashStats, LAYOUT_PRESETS, clampListPct, dragPct, nextFontScale , filterAudit, AUDIT_RANGES, auditLine , shouldPauseBatch , PANEL_DESC_KEYS, TOUR_STEPS, tourProgress, helpFilter, jsonFoldSpans, paramSummary, pluginQuickCard, lastRunText, activityStats, slowTier, auditToActivity, jsonPanelRows, jsonExpandChildren, jsonGetByParts, prefixParts, jsonNodeType, KEYMAP, KEYMAP_SCOPES, filterKeymap, keymapConflicts, keysGateOn, keysDisabledHint, configProgress, validateSettingInput, formCanSave, parseConfigHash, textLines, textStats, fmtElapsed, paceVerdict, paceReassure, copyTextRaw, copyWithNumbers, copyWithTitle, extractUrls, colTooltipStats, shouldFreeze, tableSizeBadge, batchColVis, csvEscape, exportCsv, mdTableVis, exportMeta, shareEnvelope, shareAlive , drawerSearchMatch, drawerSearchCount , exportMime, CSV_BOM , paletteMatchLine, recordZeroHit , suggestFromZeroHits , doctorTrendSparks } from './extras.js';
 import { createKeys } from './keys.js';
 import { createBatch } from './batch.js';
+import { createPanels } from './panels.js';
 
 // 第二百四十一轮⑤：键盘域拆分（注入式——首次用时创建，避免顶层 TDZ）
 let __keysInst = null;
@@ -27,6 +28,13 @@ const __keys = () => { __keysInst ??= createKeys({ setCount, esc, t, lang }); re
 // 第二百四十二轮②③：批量域注入式迁出（createBatch + 惰性 getter——batch/entries 是 app 侧 let，经闭包引用传入）
 let __batchInst = null;
 const __batch = () => {
+
+// 第二百四十三轮②③：面板壳域注入式迁出（零状态耦合子集——15 个纯渲染函数）
+let __panelsInst = null;
+const __panels = () => {
+  __panelsInst ??= createPanels({ esc, t, lang, actionKey, actionRiskCard, barsScale, diffResults, formatMs, hotkeyMap, maskSecrets, maskState, openDetail, perfMark, resultCompare, riskText, submit, wbSend, escClose });
+  return __panelsInst;
+};
   __batchInst ??= createBatch({ esc, t, lang, api, TOKEN, el, renderList, openDetail, paramStore, actionKey, entriesRef: () => entries, batchRef: () => batch, setCount });
   return __batchInst;
 };
@@ -189,7 +197,7 @@ function applyPrefsSnapshot(snap) {
   applyAccent();
   applyFontScale();
   savePrefs();
-  renderList();
+  __panels().renderList();
 }
 
 function loadPrefs() {
@@ -577,7 +585,7 @@ function switchProfile(name) {
   applyTheme();
   applyAccent();
   applyFontScale();
-  renderList();
+  __panels().renderList();
   setCount(t('profileSwitched')(target));
 }
 
@@ -976,13 +984,7 @@ function hidePanels() {
     v.classList.remove('view-anim');
   }
 }
-/** 第五十九轮②：显示一个面板并播放入场动效（200ms 淡入上移）。 */
-function showPanelAnimated(v) {
-  v.classList.remove('hidden');
-  // 强制 reflow 重启动画
-  void v.offsetWidth;
-  v.classList.add('view-anim');
-}
+
 
 function rememberSearch(query) {
   // 第五十一轮②：词+筛选 chip 的组合也记忆（「磁盘 [safe]」比裸「磁盘」更有上下文）
@@ -1024,7 +1026,7 @@ function renderListTools(base, q) {
     : '';
   el.listTools.innerHTML = `<div class="chips">${chips}</div>${hist}`;
   el.listTools.querySelectorAll('[data-filter]').forEach((b) => {
-    b.addEventListener('click', () => { listFilter = b.dataset.filter; renderList(); });
+    b.addEventListener('click', () => { listFilter = b.dataset.filter; __panels().renderList(); });
   });
   el.listTools.querySelectorAll('[data-hist]').forEach((b) => {
     b.addEventListener('click', () => {
@@ -1032,7 +1034,7 @@ function renderListTools(base, q) {
       const m = raw.match(/^(.*) \[(\w+)\]$/);   // 组合记忆还原：词 + chip
       if (m && FILTERS.some((f) => f.id === m[2])) { el.q.value = m[1]; listFilter = m[2]; }
       else { el.q.value = raw; listFilter = 'all'; }
-      renderList();
+      __panels().renderList();
       // 第五十五轮⑦：renderList 重画 chips 后焦点不在任何输入上——把焦点还给搜索框，
       // 下一次输入/快捷键不用先点鼠标
       el.q.focus();
@@ -1044,7 +1046,7 @@ function renderListTools(base, q) {
       ev.stopPropagation();
       searchHistory = searchHistory.filter((x) => x !== b.dataset.histX);
       writeJson(PREF.searches, searchHistory);
-      renderList();
+      __panels().renderList();
     });
   });
   // 第二百零九轮③⑦：搜索历史文件导入（data-searches-import → file input → searchesMerge → localStorage）
@@ -1062,7 +1064,7 @@ function renderListTools(base, q) {
         if (!r.ok) { setCount(`✗ ${r.error}`); return; }
         writeJson(PREF.searches, r.list);
         setCount(t('searchesMerged')(r.list.length));
-        renderList();
+        __panels().renderList();
       } catch (e) { setCount(t('searchesReadFail')(e.message ?? '')); }
     });
     el.listTools.querySelectorAll('[data-searches-import]').forEach((b) => {
@@ -1072,20 +1074,11 @@ function renderListTools(base, q) {
   $('clearHist')?.addEventListener('click', () => {
     searchHistory = [];
     writeJson(PREF.searches, searchHistory);
-    renderList();
+    __panels().renderList();
   });
 }
 
-function renderList() {
-  const t0 = performance.now();
-  try {
-    renderListInner();
-  } finally {
-    perfStats.listMs = Math.round((performance.now() - t0) * 10) / 10;
-    perfStats.lastRenderAt = Date.now();
-    perfMark('zk-renderList');
-  }
-}
+
 
 // 第一百一十四轮⑤：批量导入落地（剪贴板与文件共用）——不存在的动作跳过并计数
 function renderListInner() {
@@ -1096,7 +1089,7 @@ function renderListInner() {
     el.list.innerHTML = filtered.map((entry, i) => itemHtml(entry, i, true, '')).join('');
     setCount(`别名「${el.q.value.trim()}」→ ${aliasHit.plugin.name} · ${aliasHit.action.title}`);
     el.empty.classList.add('hidden');
-    renderQuickBar();
+    __panels().renderQuickBar();
     return;
   }
   // 批量篮浮条（有选中才显示）
@@ -1125,7 +1118,7 @@ function renderListInner() {
     el.listView.insertBefore(bar, el.list);
     // 点击监听不能直传 runBatch——Event 会当第一参（retryItems）误入「重跑失败项」路径
     bar.querySelector('#batchRun').addEventListener('click', () => __batch().runBatch());
-    bar.querySelector('#batchClear').addEventListener('click', () => { batch = []; renderList(); });
+    bar.querySelector('#batchClear').addEventListener('click', () => { batch = []; __panels().renderList(); });
   bar.querySelector('#batchExport')?.addEventListener('click', () => {
     const lines = batchToLines(batch.map((e) => ({
       plugin: e.plugin.id, action: e.action.id,
@@ -1139,21 +1132,21 @@ function renderListInner() {
     // ④排序：↑↓ 按钮交换相邻项（destructive 排序仍由 runBatch 兜底）
     bar.querySelectorAll('[data-bup]').forEach((btn2) => btn2.addEventListener('click', () => {
       const i = Number(btn2.dataset.bup);
-      if (i > 0) { [batch[i - 1], batch[i]] = [batch[i], batch[i - 1]]; renderList(); }
+      if (i > 0) { [batch[i - 1], batch[i]] = [batch[i], batch[i - 1]]; __panels().renderList(); }
     }));
     bar.querySelectorAll('[data-bdown]').forEach((btn2) => btn2.addEventListener('click', () => {
       const i = Number(btn2.dataset.bdown);
-      if (i < batch.length - 1) { [batch[i + 1], batch[i]] = [batch[i], batch[i + 1]]; renderList(); }
+      if (i < batch.length - 1) { [batch[i + 1], batch[i]] = [batch[i], batch[i + 1]]; __panels().renderList(); }
     }));
     bar.querySelectorAll('.batch-items li').forEach((li, i) => li.addEventListener('click', () => { batchFocus = i; }));
     bar.querySelectorAll('[data-bdel]').forEach((btn2) => btn2.addEventListener('click', () => {
-      batch.splice(Number(btn2.dataset.bdel), 1); renderList();
+      batch.splice(Number(btn2.dataset.bdel), 1); __panels().renderList();
     }));
     // ⑤一键去重
     bar.querySelector('#batchDedup')?.addEventListener('click', () => {
       const { uniq } = batchDedup(batch.map((b) => ({ pluginId: b.plugin.id, actionId: b.action.id, values: paramStore[actionKey(b.plugin.id, b.action.id)] ?? {}, ref: b })));
       batch = uniq.map((u) => u.ref);
-      renderList();
+      __panels().renderList();
       setCount('已去掉重复项');
     });
     // ⑦导出清单（第一百一十四轮⑥：下载 JSON 之外再复制行格式——可贴可分享可回导）
@@ -1212,8 +1205,8 @@ function renderListInner() {
   el.marketView.classList.add('hidden');
   el.logsView.classList.add('hidden');
   el.doctorView.classList.add('hidden');
-  showPanelAnimated(el.listView);
-  if (detail) showPanelAnimated(el.detailView);
+  __panels().showPanelAnimated(el.listView);
+  if (detail) __panels().showPanelAnimated(el.detailView);
   applySplitLayout();
 
   const tS = performance.now();
@@ -1291,7 +1284,7 @@ function renderListInner() {
     el.empty.classList.remove('hidden');
     el.empty.querySelectorAll('[data-sug]').forEach((b) => b.addEventListener('click', () => {
       const act2 = b.dataset.sug;
-      if (act2 === 'clear') { el.q.value = ''; renderList(); el.q.focus(); }
+      if (act2 === 'clear') { el.q.value = ''; __panels().renderList(); el.q.focus(); }
       else if (act2 === 'market') showMarket();
       else if (act2 === 'doctor') showDoctor();
       else if (act2 === 'wb') showWorkbench(el.q.value.trim());
@@ -1300,7 +1293,7 @@ function renderListInner() {
         const w = b.dataset.word || '';
         const parts = el.q.value.trim().split(/\s+/).filter((x) => x !== w);
         el.q.value = parts.join(' ');
-        renderList(); el.q.focus();
+        __panels().renderList(); el.q.focus();
       }
       else if (act2 === 'go') {
         const key = b.dataset.go || '';
@@ -1344,7 +1337,7 @@ function renderListInner() {
         const set = loadCollapsed();
         set.has(id) ? set.delete(id) : set.add(id);
         saveCollapsed(set);
-        renderList();
+        __panels().renderList();
       });
     });
   } else {
@@ -1375,7 +1368,7 @@ function renderListInner() {
           const set = loadCollapsed();
           set.has(id) ? set.delete(id) : set.add(id);
           saveCollapsed(set);
-          renderList();
+          __panels().renderList();
         });
       });
     } else if (filtered.length > 60) {
@@ -1456,7 +1449,7 @@ function bindListItems(q) {
         const existed = batch.some((x) => actionKey(x.plugin.id, x.action.id) === k);
         if (!existed) { batch.push(entry); batchMap.set(batchCurKey, batch); }
         // 第二十五轮：篮子内容变了就要重渲染浮条
-        renderList();
+        __panels().renderList();
         setCount(existed ? `已在篮子里：${entry.action.title}` : `已加入批量篮：${entry.action.title}（共 ${batch.length} 项）`);
       }
       return;
@@ -1621,7 +1614,7 @@ function openDetail(plugin, action, prefill) {
   const keepList = window.innerWidth > 1080;
   if (!keepList) el.listView.classList.add('hidden');
   el.workbench.classList.add('hidden');
-  showPanelAnimated(el.detailView);
+  __panels().showPanelAnimated(el.detailView);
   applySplitLayout();
 
   const depWarn = plugin.requiresOk ? '' : `
@@ -2478,7 +2471,7 @@ function openDetail(plugin, action, prefill) {
     savePrefs();
     openDetail(plugin, action, prefill);
   });
-  renderRiskCard(plugin, action);
+  __panels().renderRiskCard(plugin, action);
   renderRunHistory(plugin, action);
   el.detailView.querySelectorAll('input, select').forEach((node) => {
     node.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') submit(false); });
@@ -2526,16 +2519,16 @@ function backToList() {
     // history.back 是异步的：同步先把界面切回列表，hashchange 到来时幂等
     el.detailView.classList.add('hidden');
     el.detailView.innerHTML = '';
-    showPanelAnimated(el.listView);
-    renderList();
+    __panels().showPanelAnimated(el.listView);
+    __panels().renderList();
     el.q.focus();
     return;
   }
   history.replaceState(null, '', location.pathname);
   el.detailView.classList.add('hidden');
   el.detailView.innerHTML = '';
-  showPanelAnimated(el.listView);
-  renderList();
+  __panels().showPanelAnimated(el.listView);
+  __panels().renderList();
   el.q.focus();
 }
 
@@ -2598,30 +2591,7 @@ const actionInFlight = new Set();
 /** 第十九轮③：同动作执行时间戳（限速窗口），key 是 actionKey。 */
 const rateWindow = {};
 
-/** 第十九轮②：危险参数黄条——显示哪个字段、命中什么模式、值本身；用户可「仍要执行」或「回去改」。 */
-function showDangerNote(field, why, value) {
-  const host = $('result') ?? document.querySelector('.detail');
-  if (!host) return;
-  const note = document.createElement('div');
-  note.className = 'danger-note';
-  note.innerHTML = `
-    <div class="danger-title">⚠ 参数值命中危险模式：${esc(why)}</div>
-    <div class="danger-field">字段 <code>${esc(field.name)}</code> 的值：</div>
-    <div class="danger-val">${esc(String(value ?? '').slice(0, 200))}</div>
-    <div class="help">递归删除、系统目录、格式化磁盘这类操作不可逆。确认动作与预期一致再继续。</div>
-    <div class="actions">
-      <button class="ghost" id="dangerBack">回去改</button>
-      <button class="warn-btn" id="dangerGo">仍要执行</button>
-    </div>`;
-  host.prepend(note);
-  note.querySelector('#dangerBack').addEventListener('click', () => note.remove());
-  note.querySelector('#dangerGo').addEventListener('click', () => {
-    note.remove();
-    window.__zkDangerAck = true;
-    submit(false);
-  });
-  note.scrollIntoView({ block: 'center' });
-}
+
 
 /** 队列可视化：连续触发执行时明确「排队中」，而不是看起来没反应。 */
 /** 第十轮⑦：集市来源插件的更新检查——只比较版本号提示，绝不自动装。 */
@@ -2697,7 +2667,7 @@ function showTimeline() {
     </div>
     ${tops.length ? `<div class="tl-tops card"><h3>最常跑</h3>${tops.map((x, i) => `<div class="tl-top"><span class="sub">#${i + 1}</span> ${esc(x.label)} <b>${x.count}</b> 次</div>`).join('')}</div>` : ''}
     <div class="tl-days">${dayHtml}</div>`;
-  showPanelAnimated(el.allowView);
+  __panels().showPanelAnimated(el.allowView);
   el.allowView.querySelectorAll('[data-tlday]').forEach((h) => {
     h.addEventListener('click', () => {
       const day = h.dataset.tlday;
@@ -2747,7 +2717,7 @@ async function showConfigWiz(pluginId) {
     el.allowView.querySelectorAll('[data-cfgpl]').forEach((b) => b.addEventListener('click', () => {
       location.hash = `#/config/${b.dataset.cfgpl}`;
     }));
-    showPanelAnimated(el.allowView);
+    __panels().showPanelAnimated(el.allowView);
     return;
   }
 
@@ -2755,7 +2725,7 @@ async function showConfigWiz(pluginId) {
   const target = withSettings.find((x) => x.entry.plugin.id === pluginId);
   if (!target) {
     el.allowView.innerHTML = `<h2 class="ps-title">插件配置</h2><div class="cfg-empty">没有找到插件 ${esc(pluginId)}，或它没有配置项。<a href="#/config">← 回配置列表</a></div>`;
-    showPanelAnimated(el.allowView);
+    __panels().showPanelAnimated(el.allowView);
     return;
   }
   const { entry, settings } = target;
@@ -2809,7 +2779,7 @@ async function showConfigWiz(pluginId) {
         el.allowView.insertAdjacentHTML('afterbegin', `<div class="cfg-warn">⚠ 保存失败：${esc(r?.error || '未知原因')}</div>`);
       }
     });
-    showPanelAnimated(el.allowView);
+    __panels().showPanelAnimated(el.allowView);
   };
   renderForm(initial, false);
 }
@@ -2836,32 +2806,10 @@ function showBrief() {
       <div class="usage-block">${b.top.map(([k, n]) => `
         <div class="run-row"><span class="run-when">${esc(names[k] ?? k)}</span><span class="badge">${n} 次</span></div>`).join('')}
       </div>` : '<div class="ps-empty" role="status">今天还没有执行记录——跑一个动作，这里就会有数据。</div>'}`;
-  showPanelAnimated(el.allowView);
+  __panels().showPanelAnimated(el.allowView);
 }
 
-/** 第十轮④：顶栏快速访问条——前 5 个收藏一键直达。 */
-function renderQuickBar() {
-  let bar = document.getElementById('quickBar');
-  if (!bar) {
-    bar = document.createElement('div');
-    bar.id = 'quickBar';
-    bar.className = 'quick-bar';
-    const searchRow = document.getElementById('searchRow');
-    searchRow?.parentNode?.insertBefore(bar, searchRow);
-  }
-  // favorites 是 key 数组（'插件.动作'）
-  const top = favorites.slice(0, 5);
-  bar.innerHTML = top.length
-    ? top.map((k) => {
-        const e = entries.find((x) => actionKey(x.plugin.id, x.action.id) === k);
-        return e ? `<button class="chip" data-quick="${esc(k)}">${esc(e.action.title)}</button>` : '';
-      }).join('')
-    : '<span class="help">收藏动作后会钉在这里（最多 5 个）</span>';
-  bar.querySelectorAll('[data-quick]').forEach((b) => b.addEventListener('click', () => {
-    const e = entries.find((x) => actionKey(x.plugin.id, x.action.id) === b.dataset.quick);
-    if (e) openDetail(e.plugin, e.action);
-  }));
-}
+
 
 /** 第十轮②：定时任务面板——列出所有在跑的 interval，一键停。 */
 function timerRegistry() {
@@ -3164,11 +3112,7 @@ function renderWatchBar() {
  * 列表项数 / 列表渲染耗时 / 搜索耗时三张卡，外加最近一次渲染时间。
  * 数字来自 perfStats（renderList/search 实测写入），不猜。 */
 
-/** 第一百三十二轮⑥：通知记录小节（最近 10 条环）。 */
-function renderNotifySection() {
-  if (!notifyLog.length) return '<div class="watch-notify"><div class="sub">通知记录：还没有——监控发现变化且通过静默/节流闸后会出现在这里。</div></div>';
-  return `<div class="watch-notify"><div class="sub">通知记录（最近 ${notifyLog.length} 条）：</div>${notifyLog.map((e) => `<div class="watch-notify-row">${new Date(e.ts).toLocaleTimeString()} · ${esc(String(e.key))} · ${esc(String(e.note ?? ''))}（第 ${e.changes ?? '?'} 次变化）</div>`).join('')}</div>`;
-}
+
 
 /** 第一百三十二轮④：静默时段设置小节。 */
 function renderQuietSection() {
@@ -3214,7 +3158,7 @@ function showPerfPanel() {
     <p class="ps-empty" role="status">最近一次渲染：${perfStats.lastRenderAt ? new Date(perfStats.lastRenderAt).toLocaleString() : '尚未渲染'}。
     搜索输入有 150ms 防抖 + 请求动画帧合并；超过 60 项的搜索结果走虚拟滚动。</p>`;
   pane.querySelector('[data-perf-refresh]').addEventListener('click', () => {
-    renderList();
+    __panels().renderList();
     showPerfPanel();
   });
 }
@@ -3252,7 +3196,7 @@ function liveRefreshWatchPanel() {
     const notifyBox = document.querySelector('.watch-notify');
     if (notifyBox) {
       const tmp = document.createElement('div');
-      tmp.innerHTML = renderNotifySection();
+      tmp.innerHTML = __panels().renderNotifySection();
       notifyBox.replaceWith(tmp.firstElementChild ?? notifyBox);
     }
   }, 2000);
@@ -3308,9 +3252,9 @@ function showWatchPanel() {
     <div class="help">界面开着才会跑；翻到别的动作自动停。在只读动作详情页点「监控」添加。</div>
     ${rows || '<div class="ps-empty" role="status">没有在跑的监控——打开任一<b>只读</b>动作详情页点「◎ 监控」选间隔即可开始，跑着的不用守在旁边。</div>'}
     ${stopLog.length ? `<div class="watch-stoplog"><div class="sub">最近自动停止：</div>${stopLog.map((l) => `<div class="watch-stoprow bad">${esc(l)}</div>`).join('')}</div>` : ''}
-    ${renderNotifySection()}
+    ${__panels().renderNotifySection()}
     ${renderQuietSection()}`;
-  showPanelAnimated(el.allowView);
+  __panels().showPanelAnimated(el.allowView);
   // 第一百三十二轮④：静默时段交互
   el.allowView.querySelector('#quietSave')?.addEventListener('click', () => {
     const on = el.allowView.querySelector('#quietOn')?.checked ?? false;
@@ -3405,7 +3349,7 @@ function showHelpPanel() {
       return `<div class="cheat-card" id="pluginCheat"><h3>${esc(t('cheatTitle'))}</h3><ul>${rows.slice(0, 4000)}</ul></div>`;
     })()}
     ${sections}`;
-  showPanelAnimated(el.allowView);
+  __panels().showPanelAnimated(el.allowView);
 
   // 第一百一十九轮⑥：帮助搜索——按关键词过滤主题
   const hs = el.allowView.querySelector('[data-help-search]');
@@ -3427,7 +3371,7 @@ function showHelpPanel() {
       // 首页深链：applyHash 不跑（hash 可能没变），手动回列表
       if (h === '#/' && location.hash === '#/') {
         hidePanels();
-        renderList();
+        __panels().renderList();
       }
     });
   });
@@ -3599,7 +3543,7 @@ function showClipSuggest(text) {
       overlay.remove();
       el.q.value = text.trim().slice(0, 200);
       active = 0;
-      renderList();
+      __panels().renderList();
       el.q.focus();
       return;
     }
@@ -3626,7 +3570,7 @@ function showClipPanel() {
   el.detailView.classList.add('hidden');
   if (location.hash !== '#/clip') history.replaceState(null, '', '#/clip');
   const panel = el.allowView;   // 复用面板容器（与定时任务同款）
-  showPanelAnimated(panel);
+  __panels().showPanelAnimated(panel);
   const rows = clipHist.length
     ? clipHist.map((c, i) => `
       <div class="clip-row" data-i="${i}">
@@ -3686,7 +3630,7 @@ function showTimers() {
       <input type="file" id="timersFile" accept=".json" class="hidden">
     </div>
     <div id="timersRows"></div>`;
-  showPanelAnimated(el.allowView);
+  __panels().showPanelAnimated(el.allowView);
   renderTimersRows();
   // ⑨导出/导入
   el.allowView.querySelector('#timersExport')?.addEventListener('click', async (ev) => {
@@ -3900,7 +3844,7 @@ async function submitInner(remember) {
     for (const f of action.fields ?? []) {
       const why = dangerousPattern(values?.[f.name]);
       if (why && !window.__zkDangerAck) {
-        showDangerNote(f, why, values?.[f.name]);
+        __panels().showDangerNote(f, why, values?.[f.name]);
         return;   // 用户点「仍要执行」后走 __zkDangerAck 通道重进
       }
     }
@@ -3922,7 +3866,7 @@ async function submitInner(remember) {
     lastResult = res;
     renderResult(res);
     if (res.ok === true) pushResultTab(res);   // 第二十三轮①：成功结果进页签工作台
-    if (res.ok === true && action.risk === 'destructive') renderUndoHint(plugin, action);
+    if (res.ok === true && action.risk === 'destructive') __panels().renderUndoHint(plugin, action);
     if (res.ok === true) renderChainNext(plugin, action, res);   // 第二十五轮①②③：链下一步
     // 结果可能很长，直接把卡片顶部带进视野（否则用户以为「点了没反应」）
     if (res.ok === false && !window.__zkRetried) {
@@ -4028,28 +3972,7 @@ function askConfirm(plugin, action, res) {
 
 // ---------------------------------------------------------------- 第十九轮：危险度卡与脱敏
 
-/** ⑥⑨ 危险度提示卡：风险等级横条（红/黄/绿）+ 历史失败率 + 平均耗时 + 为什么危险。 */
-function renderRiskCard(plugin, action) {
-  const box = $('riskCard');
-  if (!box) return;
-  const runs = runStore[actionKey(plugin.id, action.id)] ?? [];
-  const card = actionRiskCard(runs, action.risk);
-  const WHY = {
-    read: '只读动作：只读取信息，不改任何状态。随便跑，跑错了也没损失。',
-    mutate: '会改动：写文件、发请求或起进程。改动可见、可重做，但先确认参数再跑。',
-    destructive: '高风险：改动或删除数据且不可自动撤销。本启动器要求输入动作名才能执行。',
-  };
-  const why = WHY[action.risk] ?? '未知风险等级。';
-  const pct = Math.round(card.failRate * 100);
-  const barColor = card.level === 'destruct' ? 'var(--bad, #e5484d)' : (card.level === 'risky' || card.level === 'mutate') ? 'var(--warn, #e8b13a)' : 'var(--ok, #30a46c)';
-  box.innerHTML = `
-    <div class="risk-bar"><span class="risk-fill" style="width:${action.risk === 'destructive' ? 100 : action.risk === 'mutate' ? 55 : 12}%;background-color:${barColor}"></span></div>
-    <div class="risk-line">
-      <span class="badge ${esc(action.risk)}">${esc(riskText(action.risk))}</span>
-      <span class="sub">${esc(why)}</span>
-    </div>
-    ${card.runs ? `<div class="risk-stats">历史 ${card.runs} 次 · 失败率 ${pct}%${pct >= 40 ? ' ⚠' : ''} · 平均 ${esc(formatMs(card.avgMs))}</div>` : '<div class="risk-stats sub">还没有执行记录——首次执行没有历史可参考。</div>'}`;
-}
+
 
 /** ④ 脱敏开关：默认打码。状态挂在 body data 上，renderResult / 日志渲染都读它。 */
 function maskState() { return document.body.dataset.zkMask !== 'off'; }
@@ -4272,7 +4195,7 @@ function renderRunHistory(plugin, action) {
       : t('picked2')(picks.length);
     if (picks.length === 2) {
       const [ia, ib] = picks;
-      if (list[ia]?.data !== undefined && list[ib]?.data !== undefined) showResultDiff(list[ia].data, list[ib].data, { slotA: ia, slotB: ib });
+      if (list[ia]?.data !== undefined && list[ib]?.data !== undefined) __panels().showResultDiff(list[ia].data, list[ib].data, { slotA: ia, slotB: ib });
       else alert('这两次记录没存结果数据（可能是老记录），重跑一次后再对比。');
       window.__diffPicks = [];
       if (hint) hint.textContent = '';
@@ -4286,7 +4209,7 @@ function renderRunHistory(plugin, action) {
       alert('这两次记录没存结果数据（可能是老记录），重跑一次后再对比。');
       return;
     }
-    showResultDiff(a, older.data);
+    __panels().showResultDiff(a, older.data);
   }));
   // 第十六轮⑤：合并视图——勾两条记录按共同键列拼成一张表（左连接，同名列加 _2 后缀）
   $('mergeHist')?.addEventListener('click', () => {
@@ -4355,24 +4278,7 @@ function bindHotkey(actionKeyStr, title) {
   });
 }
 
-/** 高风险动作执行后的「安心提示」：给出审计日志入口，并提示没有自动回滚 */
-function renderUndoHint(plugin, action) {
-  const box = $('result');
-  if (!box) return;
-  const hint = document.createElement('div');
-  hint.className = 'cmd-box undo-hint';
-  hint.innerHTML = `
-    <div class="cmd-box-head">刚刚执行了高风险动作</div>
-    <div class="help">zerokit 不会猜测怎么撤销——每个插件改的东西不同。如果需要回退：
-      ① 打开<a href="#" id="undoLogs" class="link">审计日志</a>确认刚才实际执行了什么；
-      ② 用对应的恢复手段（备份、插件自带的还原动作、或系统工具）手动处理。
-      ${t('deniedHint')}</div>`;
-  box.prepend(hint);
-  hint.querySelector('#undoLogs').addEventListener('click', (e) => {
-    e.preventDefault();
-    showLogs();
-  });
-}
+
 
 let currentResult = null;
 let lastExport = null;  // 第十七轮④⑥：最近一次导出（文件名/大小/内容），供「外部接力」用
@@ -4387,7 +4293,7 @@ function renderChainNext(plugin, action, res) {
   chainSteps.push({ pluginId: plugin.id, actionId: action.id, title: action.title, res });
   const box = $('result');
   if (!box) return;
-  renderChainSteps(box);
+  __panels().renderChainSteps(box);
   // 候选：只读动作，收藏优先
   const cands = entries.filter((e) => e.action.risk === 'read')
     .sort((a, b) => (favorites.includes(actionKey(b.plugin.id, b.action.id)) ? 1 : 0)
@@ -4429,23 +4335,7 @@ function renderChainNext(plugin, action, res) {
   });
 }
 
-/** ③链步骤条：显示在结果卡上方，点击回看每步结果 */
-function renderChainSteps(box) {
-  if (chainSteps.length < 1) return;
-  let bar = document.getElementById('chainStepsBar');
-  if (!bar) {
-    bar = document.createElement('div');
-    bar.id = 'chainStepsBar';
-    bar.className = 'chain-bar';
-    box.prepend(bar);
-  }
-  bar.innerHTML = `链：${chainSteps.map((s, i) => `
-    <button class="ghost mini chain-step" data-cstep="${i}" title="回看第 ${i + 1} 步结果">${i + 1}. ${esc(s.title)} ✓</button>`).join(' <span class="sub">→</span> ')}`;
-  bar.querySelectorAll('[data-cstep]').forEach((b) => b.addEventListener('click', () => {
-    const s = chainSteps[Number(b.dataset.cstep)];
-    if (s?.res) renderResult(s.res);
-  }));
-}
+
 
 /** ②链占位符注入：提交前把 {result.data.x}/{result.stdout} 换成链上一步的值 */
 function chainFillValues(values) {
@@ -4587,29 +4477,11 @@ function renderTabBar() {
     const cur = tabById(activeTab);
     const other = resultTabs.filter((t) => t.id !== activeTab).at(-1);
     if (!cur || !other) { setCount('对比需要两个页签'); return; }
-    showCompareView(cur, other);
+    __panels().showCompareView(cur, other);
   });
 }
 
-/** ⑦对比视图：两结果键级并排 diff（object 类型才可比） */
-function showCompareView(ta, tb) {
-  const rows = resultCompare(ta.res?.data, tb.res?.data);
-  const box = $('result');
-  if (!box) return;
-  const tr = rows.map((r) => `
-    <tr class="${r.diff ? 'cmp-diff' : ''}">
-      <td>${esc(r.key)}</td>
-      <td>${esc(JSON.stringify(r.a ?? '—'))}</td>
-      <td>${esc(JSON.stringify(r.b ?? '—'))}</td>
-    </tr>`).join('');
-  box.innerHTML = `
-    <div class="result-card">
-      <h4>⇄ 对比：${esc(ta.name)} vs ${esc(tb.name)}</h4>
-      <table class="kv-table cmp-table"><caption class="sr-only">结果对比</caption><thead><tr><th>键</th><th>${esc(ta.name)}</th><th>${esc(tb.name)}</th></tr></thead>
-      <tbody>${tr || '<tr><td colspan="3">无可比数据（两结果都不是对象）</td></tr>'}</tbody></table>
-      <div class="help">黄色行 = 值不同。点任意页签回到结果。</div>
-    </div>`;
-}
+
 
 function refreshResult() {
   if (currentResult) renderResult(currentResult);
@@ -4706,7 +4578,7 @@ document.addEventListener('click', (e) => {
     const runs = runStore[actionKey(detail?.plugin?.id ?? '', detail?.action?.id ?? '')] ?? [];
     const cur = runs.at(-1), prev = runs.at(-2);
     if (!cur || !prev) { setCount('没有两次可对比的结果'); return; }
-    showCompareView({ res: cur }, { res: prev });
+    __panels().showCompareView({ res: cur }, { res: prev });
     return;
   }
   const retryBtn = e.target.closest?.('[data-fail-retry]');
@@ -5449,67 +5321,7 @@ function renderResult(res) {
   });
 }
 
-/** 两次结果逐格对比：只对对象 / 对象数组有意义，标量给一句话 */
-function showResultDiff(a, b, pairMode) {
-  // pairMode：{slotA, slotB} 显式两次（A/B 槽）；缺省为「上一次 → 最新」
-  const diffs = diffResults(a, b);
-  const overlay = document.createElement('div');
-  overlay.className = 'overlay';
-  let onlyChanged = false;
-  overlay.innerHTML = `
-    <div class="modal diff-modal">
-      <h3>结果对比${pairMode ? '（自选两次）' : '（上一次 → 最新）'}</h3>
-      <div class="diff-opts">${diffs.length ? `
-        <label><input type="checkbox" id="diffOnly"> 仅看变化</label>
-        <label><input type="checkbox" id="diffSide"> 并排</label>` : ''}
-      </div>
-      <div id="diffBody">${renderDiffBody(diffs, false, false)}</div>
-      <div class="actions"><button class="primary" id="diffClose">关闭</button>
-        ${diffs.length ? '<button class="ghost" id="diffMd">导出 Markdown</button>' : ''}</div>
-    </div>`;
-  document.body.appendChild(overlay);
-  const body = overlay.querySelector('#diffBody');
-  overlay.querySelector('#diffOnly')?.addEventListener('change', (e) => {
-    onlyChanged = e.target.checked;
-    const side = overlay.querySelector('#diffSide')?.checked ?? false;
-    body.innerHTML = renderDiffBody(diffs, onlyChanged, side);
-  });
-  overlay.querySelector('#diffSide')?.addEventListener('change', (e) => {
-    body.innerHTML = renderDiffBody(diffs, onlyChanged, e.target.checked);
-  });
-/** diff 表体：onlyChanged 只留 from!==to 的行（diffResults 已只产出变化行——
- * 开关留给「全部字段对比」的将来扩展，当前行为=只看变化恒真）；side 时每行上下并排 */
-function renderDiffBody(diffs, onlyChanged, side) {
-  if (diffs.length === 0) return '<div class="help">两次结果完全一致。</div>';
-  if (side) {
-    return diffs.map((d) => `
-      <div class="diff-pair">
-        <code class="diff-path">${esc(d.path)}</code>
-        <div class="diff-side diff-from">− ${esc(d.from)}</div>
-        <div class="diff-side diff-to">+ ${esc(d.to)}</div>
-      </div>`).join('');
-  }
-  return `<table class="grid diff-table"><thead><tr><th>字段</th><th>较早</th><th>最新</th></tr></thead>
-    <tbody>${diffs.map((d) => `<tr>
-      <td><code>${esc(d.path)}</code></td>
-      <td class="diff-from">${esc(d.from)}</td>
-      <td class="diff-to">${esc(d.to)}</td></tr>`).join('')}</tbody></table>`;
-}
 
-  overlay.querySelector('#diffMd')?.addEventListener('click', () => {
-    const md = ['| 字段 | 较早 | 最新 |', '| --- | --- | --- |',
-      ...diffs.map((d) => `| \`${String(d.path).replace(/\|/g, '\\|')}\` | ${String(d.from).replace(/\|/g, '\\|')} | ${String(d.to).replace(/\|/g, '\\|')} |`)].join('\n');
-    const blob = new Blob([md], { type: exportMime('md') });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url; link.download = 'result-diff.md'; link.click();
-    URL.revokeObjectURL(url);
-  });
-  const close = () => overlay.remove();
-  overlay.querySelector('#diffClose').addEventListener('click', close);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  overlay.querySelector('#diffClose').focus();
-}
 
 // ---------------------------------------------------------------- 插件页面桥（宿主侧）
 //
@@ -5716,16 +5528,7 @@ function barsData(data) {
   return null;
 }
 
-function renderBars(rows) {
-  const bars = barsScale(rows);
-  if (!bars.length) return `<div class="help">（没有可画的柱子：需要 [{label, value}]）</div>`;
-  return `<div class="bar-chart" role="img" aria-label="柱状图，${bars.length} 个类别">${bars.map((b) => `
-    <div class="bar-col" title="${esc(b.label)}：${esc(b.display)}">
-      <span class="bar-val">${esc(b.display)}</span>
-      <i class="bar-stick${b.below ? ' below' : ''}" style="height:${Math.max(b.height, 2)}%"></i>
-      <span class="bar-label">${esc(b.label)}</span>
-    </div>`).join('')}</div>`;
-}
+
 
 // 第一百五十四轮⑥：KV↔JSON 树切换的记忆键（按动作记，跨会话保留）
 function detail154Key() {
@@ -5751,14 +5554,14 @@ function jsonPanelHtml(data) {
 function renderData(data, render, tableId = '') {
   if (render === 'bars') {
     const rows = barsData(data);
-    if (rows) return renderBars(rows);
+    if (rows) return __panels().renderBars(rows);
     // 数据形状不对时降级成默认渲染，不把用户晾在空卡片前
   }
   if (Array.isArray(data)) {
     // 第三十九轮⑥：空结果要归因——「查了没有」和「没返回」是两回事
     if (data.length === 0) return `<div class="ps-empty" role="status">${esc(emptyReason(data) ?? '空结果')}</div>`;
     if (typeof data[0] === 'object' && data[0] !== null) return renderTable(data, tableId);
-    return renderPreNumbered(data.join('\n'));
+    return __panels().renderPreNumbered(data.join('\n'));
   }
   if (data && typeof data === 'object') {
     if (render === 'json') {
@@ -5772,7 +5575,7 @@ function renderData(data, render, tableId = '') {
     return `<div class="view-switch" role="tablist" aria-label="结果视图">
         <button class="chip${wantTree ? '' : ' on'}" data-jv="kv" role="tab" aria-selected="${!wantTree}">表格</button>
         <button class="chip${wantTree ? ' on' : ''}" data-jv="tree" role="tab" aria-selected="${wantTree}">JSON 树</button>
-      </div>${wantTree ? jsonPanelHtml(data) : renderKV(data)}`;
+      </div>${wantTree ? jsonPanelHtml(data) : __panels().renderKV(data)}`;
   }
   // 第三十九轮⑥：null/undefined 也不是一句"完成"就完了
   if (data === null || data === undefined) {
@@ -5884,28 +5687,9 @@ function bindTextView(res) {
 }
 function maskSecretsOn(t) { return maskState() ? maskSecrets(String(t ?? '')) : String(t ?? ''); }
 
-function renderPreNumbered(text) {
-  const lines = String(text).split('\n');
-  return `<pre class="out numbered"><code>${lines.map((l) => `<span class="ln">${esc(l)}</span>`).join('')}</code></pre>`;
-}
 
-function renderKV(obj) {
-  const rows = Object.entries(obj).map(([k, v]) => {
-    // 第五十三轮⑧：空值灰 —（不占注意力）
-    if (v === null || v === undefined || v === '') {
-      return `<tr><td>${esc(k)}</td><td class="empty-cell">—</td></tr>`;
-    }
-    // 第十九轮④：字符串值默认脱敏（长 hex / token 形态打码；结构化对象先 JSON 化）
-    const raw = (v && typeof v === 'object') ? JSON.stringify(v) : String(v);
-    const val = (maskState() && typeof v === 'string') ? maskSecrets(raw) : raw;
-    const num = typeof v === 'number' || /^[\d.,\s%]+$/.test(val) ? ' class="num"' : '';
-    // 第五十三轮②：长文本截断 + title 全文 + 点击复制全文
-    const isClip = !num && val.length > 48;
-    // 第十八轮③④：键级锚点（监控 diff 高亮 / sparkline 挂载用）
-    return `<tr><td>${esc(k)}</td><td${num} data-dkv="${esc(k)}"${isClip ? ` class="cell-clip kv-clip" title="点击复制全文" data-full="${esc(val)}"` : ` title="${esc(val)}"`}>${esc(isClip ? `${val.slice(0, 45)}…` : val)}</td></tr>`;
-  }).join('');
-  return `<table class="kv">${rows}</table>`;
-}
+
+
 
 /** 第十八轮④：0–100 归一化序列 → 60×18 的迷你 SVG 折线（结果卡内联，不占行高） */
 function miniSparkSvg(series) {
@@ -6460,7 +6244,7 @@ async function showMarket() {
   el.plugView.classList.add('hidden');
   el.psView.classList.add('hidden');
   el.workbench.classList.add('hidden');
-  showPanelAnimated(el.marketView);
+  __panels().showPanelAnimated(el.marketView);
   if (location.hash !== '#/market') history.replaceState(null, '', '#/market');
   await renderMarket();
 }
@@ -6470,10 +6254,10 @@ function exitMarket() {
   marketPreview = null;
   el.marketView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
-  showPanelAnimated(el.listView);
+  __panels().showPanelAnimated(el.listView);
   el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
-  renderList();
+  __panels().renderList();
   el.q.focus();
 }
 
@@ -6548,7 +6332,7 @@ async function showLogs() {
   el.modeLabel.textContent = t('modeLogs');
   el.searchRow.classList.add('hidden');
   hidePanels();
-  showPanelAnimated(el.logsView);
+  __panels().showPanelAnimated(el.logsView);
   if (location.hash !== '#/logs') history.replaceState(null, '', '#/logs');
   // 第一百九十轮②：骨架屏推广——异步视图加载前统一骨架占位（避免空白一闪）
   el.logsView.innerHTML = skeletonRows(5).map(() => '<div class="skel-row" aria-hidden="true"></div>').join('');
@@ -6559,10 +6343,10 @@ function exitLogs() {
   mode = 'command';
   el.logsView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
-  showPanelAnimated(el.listView);
+  __panels().showPanelAnimated(el.listView);
   el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
-  renderList();
+  __panels().renderList();
   el.q.focus();
 }
 
@@ -6749,7 +6533,7 @@ async function showDashboard() {
   el.modeLabel.textContent = t('dash220Title');
   el.searchRow.classList.add('hidden');
   hidePanels();
-  showPanelAnimated(el.doctorView);
+  __panels().showPanelAnimated(el.doctorView);
   if (location.hash !== '#/dashboard') history.replaceState(null, '', '#/dashboard');
   try {
     const d = await api('/api/health-snapshot');
@@ -6796,7 +6580,7 @@ async function showServices() {
   el.modeLabel.textContent = t('svcPanel');
   el.searchRow.classList.add('hidden');
   hidePanels();
-  showPanelAnimated(el.doctorView);
+  __panels().showPanelAnimated(el.doctorView);
   if (location.hash !== '#/services') history.replaceState(null, '', '#/services');
   try {
     const data = await api('/api/services');
@@ -6904,7 +6688,7 @@ async function showCache() {
   el.modeLabel.textContent = t('cachePanel');
   el.searchRow.classList.add('hidden');
   hidePanels();
-  showPanelAnimated(el.doctorView);
+  __panels().showPanelAnimated(el.doctorView);
   if (location.hash !== '#/cache') history.replaceState(null, '', '#/cache');
   try {
     const data = await api('/api/cache');
@@ -6934,7 +6718,7 @@ async function showDoctor() {
   el.modeLabel.textContent = t('modeDoctor');
   el.searchRow.classList.add('hidden');
   hidePanels();
-  showPanelAnimated(el.doctorView);
+  __panels().showPanelAnimated(el.doctorView);
   if (location.hash !== '#/doctor') history.replaceState(null, '', '#/doctor');
   el.doctorView.innerHTML = skeletonRows(4).map(() => '<div class="skel-row" aria-hidden="true"></div>').join('');
   await renderDoctor();
@@ -6944,10 +6728,10 @@ function exitDoctor() {
   mode = 'command';
   el.doctorView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
-  showPanelAnimated(el.listView);
+  __panels().showPanelAnimated(el.listView);
   el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
-  renderList();
+  __panels().renderList();
   el.q.focus();
 }
 
@@ -7324,10 +7108,10 @@ function exitPlugins() {
   mode = 'command';
   el.plugView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
-  showPanelAnimated(el.listView);
+  __panels().showPanelAnimated(el.listView);
   el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
-  renderList();
+  __panels().renderList();
   el.q.focus();
 }
 
@@ -7340,7 +7124,7 @@ async function showPlugins() {
   el.detailView.classList.add('hidden');
   el.workbench.classList.add('hidden');
   el.psView.classList.add('hidden');
-  showPanelAnimated(el.plugView);
+  __panels().showPanelAnimated(el.plugView);
   if (location.hash !== '#/plugins') history.replaceState(null, '', '#/plugins');
   await renderPlugins();
 }
@@ -7385,7 +7169,7 @@ async function showPluginHome(id) {
   el.workbench.classList.add('hidden');
   el.psView.classList.add('hidden');
   el.marketView.classList.add('hidden');
-  showPanelAnimated(el.plugView);
+  __panels().showPanelAnimated(el.plugView);
   if (location.hash !== `#/plugins/${id}`) history.replaceState(null, '', `#/plugins/${id}`);
 
   let p = plugins.find((x) => x.id === id);
@@ -7485,7 +7269,7 @@ async function showPluginHome(id) {
       // 真缺陷修复：插件主页在 plugView 里，改 hash 只会换面板路由——必须走 exitPlugins 回列表态再搜
       exitPlugins();
       el.q.value = kw;
-      renderList();
+      __panels().renderList();
       el.q.focus();
     });
   });
@@ -8112,7 +7896,7 @@ async function showPs() {
   el.detailView.classList.add('hidden');
   el.workbench.classList.add('hidden');
   el.plugView.classList.add('hidden');
-  showPanelAnimated(el.psView);
+  __panels().showPanelAnimated(el.psView);
   if (location.hash !== '#/ps') history.replaceState(null, '', '#/ps');
 
   await renderPs();
@@ -8127,10 +7911,10 @@ function exitPs() {
   mode = 'command';
   el.psView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
-  showPanelAnimated(el.listView);
+  __panels().showPanelAnimated(el.listView);
   el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
-  renderList();
+  __panels().renderList();
   el.q.focus();
 }
 
@@ -8267,9 +8051,9 @@ function exitWorkbench() {
   el.modeLabel.textContent = t('modeCommand');
   el.modeDot.classList.remove('workbench');
   el.searchRow.classList.remove('hidden');
-  showPanelAnimated(el.listView);
+  __panels().showPanelAnimated(el.listView);
   el.q.value = '';
-  renderList();
+  __panels().renderList();
   el.q.focus();
 }
 
@@ -8329,7 +8113,7 @@ function showWorkbench(question) {
       wb.log.innerHTML = '';
     });
     loadAiInfo();
-    renderPrompts();
+    __panels().renderPrompts();
     restoreWb();
   }
 
@@ -8357,19 +8141,7 @@ async function loadAiInfo() {
   }
 }
 
-/** 空会话时的提问建议：给不会写 prompt 的人一个起点，点一下就直接发 */
-function renderPrompts() {
-  const box = $('wbSuggest');
-  if (!box) return;
-  box.innerHTML = `<span class="suggest-label">试试：</span>${PROMPTS.map((p) =>
-    `<button class="suggest-chip" data-prompt="${esc(p.prompt)}">${esc(p.label)}</button>`).join('')}`;
-  box.querySelectorAll('[data-prompt]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      $('wbQ').value = btn.dataset.prompt;
-      wbSend();
-    });
-  });
-}
+
 
 function wbBubble(kind, text, opts = {}) {
   const node = document.createElement('div');
@@ -8548,7 +8320,7 @@ function showDash() {
   el.modeLabel.textContent = t('modeDash');
   el.searchRow.classList.add('hidden');
   hidePanels();
-  showPanelAnimated(el.dashView);
+  __panels().showPanelAnimated(el.dashView);
   if (location.hash !== '#/dash') history.replaceState(null, '', '#/dash');
   document.title = 'zerokit';
 
@@ -8633,7 +8405,7 @@ function showStats() {
   el.modeLabel.textContent = t('modeStats');
   el.searchRow.classList.add('hidden');
   hidePanels();
-  showPanelAnimated(el.allowView);
+  __panels().showPanelAnimated(el.allowView);
   const view = el.allowView;
   if (location.hash !== '#/stats') history.replaceState(null, '', '#/stats');
 
@@ -8868,10 +8640,10 @@ function exitStats() {
   mode = 'command';
   el.allowView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
-  showPanelAnimated(el.listView);
+  __panels().showPanelAnimated(el.listView);
   el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
-  renderList();
+  __panels().renderList();
   el.q.focus();
 }
 
@@ -9014,10 +8786,10 @@ function exitSaved() {
   mode = 'command';
   el.allowView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
-  showPanelAnimated(el.listView);
+  __panels().showPanelAnimated(el.listView);
   el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
-  renderList();
+  __panels().renderList();
   el.q.focus();
 }
 
@@ -9029,7 +8801,7 @@ async function showMcpAllow() {
   el.modeLabel.textContent = t('modeMcp');
   el.searchRow.classList.add('hidden');
   hidePanels();
-  showPanelAnimated(el.allowView);
+  __panels().showPanelAnimated(el.allowView);
   const view = el.allowView;
   if (location.hash !== '#/mcp') history.replaceState(null, '', '#/mcp');
 
@@ -9082,10 +8854,10 @@ function exitMcpAllow() {
   mode = 'command';
   el.allowView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
-  showPanelAnimated(el.listView);
+  __panels().showPanelAnimated(el.listView);
   el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
-  renderList();
+  __panels().renderList();
   el.q.focus();
 }
 
@@ -9097,7 +8869,7 @@ async function showDevPanel() {
   el.modeLabel.textContent = '开发者';
   el.searchRow.classList.add('hidden');
   hidePanels();
-  showPanelAnimated(el.devView);
+  __panels().showPanelAnimated(el.devView);
   if (location.hash !== '#/dev') history.replaceState(null, '', '#/dev');
   await renderDevPanel();
 }
@@ -9106,10 +8878,10 @@ function exitDevPanel() {
   mode = 'command';
   el.devView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
-  showPanelAnimated(el.listView);
+  __panels().showPanelAnimated(el.listView);
   el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
-  renderList();
+  __panels().renderList();
   el.q.focus();
 }
 
@@ -9531,7 +9303,7 @@ document.addEventListener('keydown', (e) => {
       el.q.value = '';
       listFilter = 'all';
       applyHash();
-      renderList();
+      __panels().renderList();
       setCount('已清空搜索');
     }
   });
@@ -9608,7 +9380,7 @@ document.addEventListener('keydown', (e) => {
         // goto 目标是 hash 路由：先清掉详情态（同步置空 detail，别走 backToList 的
         // history.back 弹栈——那是异步的，会跟下一行 location.hash 赋值竞速，导致
         // 最终落在上一个详情深链而不是目标面板）。
-        if (detail) { detail = null; el.detailView.classList.add('hidden'); showPanelAnimated(el.listView); }
+        if (detail) { detail = null; el.detailView.classList.add('hidden'); __panels().showPanelAnimated(el.listView); }
         location.hash = t;
         return;
       }
@@ -9683,7 +9455,7 @@ document.addEventListener('keydown', (e) => {
           resultTabs.splice(cur, 1);
           const fallback = resultTabs[resultTabs.length - 1];
           activeTab = fallback ? fallback.id : '';
-          if (fallback) renderResult(fallback.res); else hidePanels(), showPanelAnimated(el.listView);
+          if (fallback) renderResult(fallback.res); else hidePanels(), __panels().showPanelAnimated(el.listView);
           renderTabBar();
         }
       }
@@ -9695,7 +9467,7 @@ document.addEventListener('keydown', (e) => {
       if (other && other.id !== activeTab) {
         window.__zkCompareA = resultTabs[cur];
         window.__zkCompareB = other;
-        showCompareView(resultTabs[cur], other);
+        __panels().showCompareView(resultTabs[cur], other);
         renderTabBar();
       }
     }
@@ -9712,7 +9484,7 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     const want = e.key === '[' ? 'has-params' : 'no-params';
     listFilter = listFilter === want ? 'all' : want;
-    renderList();
+    __panels().renderList();
     return;
   }
   // 第六十九轮⑥：列表态 . 键打开当前激活项详情（与详情态 j/k 表格行选一致的习惯延伸）
@@ -9736,7 +9508,7 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     sortMode = sortMode === 'recent' ? 'default' : 'recent';
     localStorage.setItem('zerokit.sortmode', sortMode);
-    renderList();
+    __panels().renderList();
     return;
   }
   if (detail) {
@@ -9764,7 +9536,7 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     const i = batchFocus >= 0 && batchFocus < batch.length ? batchFocus : batch.length - 1;
     const j = e.key === 'ArrowDown' ? Math.min(i + 1, batch.length - 1) : Math.max(i - 1, 0);
-    if (i !== j) { [batch[i], batch[j]] = [batch[j], batch[i]]; batchFocus = j; renderList(); }
+    if (i !== j) { [batch[i], batch[j]] = [batch[j], batch[i]]; batchFocus = j; __panels().renderList(); }
   } else if (e.key === 'ArrowDown') {
     e.preventDefault();
     if (filtered.length) { active = Math.min(active + 1, filtered.length - 1); paintActive(); }
@@ -9797,7 +9569,7 @@ document.addEventListener('keydown', (e) => {
     else openActive();
   } else if (e.key === 'Escape') {
     el.q.value = '';
-    renderList();
+    __panels().renderList();
   } else if (/^Digit[1-9]$/.test(e.code) && e.altKey && filtered.length) {
     // Alt+数字 = 直开第 N 条：搜索结果稳定时比方向键快
     e.preventDefault();
@@ -9857,7 +9629,7 @@ el.clipBtn.addEventListener('click', async () => {
     showClipSuggest(text);
     el.q.value = text.trim();
     active = 0;
-    renderList();
+    __panels().renderList();
     // 剪贴板里的东西往往就是「输入」：有智能匹配时把推荐条目置顶并提示
     if (filteredSmart.size > 0) {
       const firstOrder = filteredSmart.keys().next().value;
@@ -9876,7 +9648,7 @@ el.clipBtn.addEventListener('click', async () => {
 });
 
 // 第二十九轮①：搜索防抖（150ms）+ rAF 合帧。
-// 每键全量重算 search()+renderList() 在大列表下会掉帧；防抖让连续击键只算最后一次，
+// 每键全量重算 search()+__panels().renderList() 在大列表下会掉帧；防抖让连续击键只算最后一次，
 // rAF 保证同帧内多次触发只画一次。搜索计时进 perfStats 供 #/perf 展示。
 // 第一百一十二轮③：stagger 只在「首进/切视图/重载」播放；搜索重排/筛选切换不重放
 let allowListStagger = true;
@@ -9898,7 +9670,7 @@ el.q.addEventListener('input', () => {
   const q = el.q.value;
   // 第五十一轮⑥：清空按钮显隐
   $('qClear')?.classList.toggle('hidden', q.length === 0);
-  if (!qClearBound) { qClearBound = true; $('qClear')?.addEventListener('click', () => { el.q.value = ''; renderList(); el.q.focus(); $('qClear')?.classList.add('hidden'); }); }
+  if (!qClearBound) { qClearBound = true; $('qClear')?.addEventListener('click', () => { el.q.value = ''; __panels().renderList(); el.q.focus(); $('qClear')?.classList.add('hidden'); }); }
   // 输入 ? 即切到工作台，后面的内容当作第一个问题带过去
   if (q.startsWith('?') && mode !== 'workbench') {
     el.q.value = '';
@@ -9912,7 +9684,7 @@ el.q.addEventListener('input', () => {
       searchRaf = 0;
       active = 0;
       allowListStagger = false;   // 搜索重排不重放入场动画
-      renderList();
+      __panels().renderList();
       allowListStagger = true;    // 恢复默认：下次视图切换仍播
     });
   }, 150);
@@ -9924,69 +9696,13 @@ el.marketBtn.addEventListener('click', () => { if (mode === 'market') exitMarket
 
 // ---------------------------------------------------------------- 快捷键速查
 
-function showShortcuts() {
-  const overlay = document.createElement('div');
-  overlay.className = 'overlay';
-  overlay.innerHTML = `
-    <div class="modal help-modal">
-      <h3>快捷键</h3>
-      <div class="keys">
-        ${SHORTCUTS.map((s) => `<div class="key-row">
-          <span class="key-combo">${s.keys.map((k) => `<kbd>${esc(k)}</kbd>`).join('')}</span>
-          <span class="key-what">${esc(t(s.whatKey))}</span>
-        </div>`).join('')}
-      </div>
-      ${(() => {
-        const map = hotkeyMap();
-        const rows = Object.entries(map).map(([k, keyStr]) => {
-          const dot = keyStr.lastIndexOf('.');
-          const entry = entries.find((e) => e.plugin.id === keyStr.slice(0, dot)
-            && e.action.id === keyStr.slice(dot + 1));
-          return { k, name: entry ? `${entry.plugin.name} · ${entry.action.title}` : keyStr };
-        });
-        if (!rows.length) return '';
-        return `<h3>功能键（按一下直达）</h3>
-          <div class="keys">
-            ${rows.map((r) => `<div class="key-row">
-              <span class="key-combo"><kbd>${esc(r.k)}</kbd></span>
-              <span class="key-what">${esc(r.name)}</span>
-            </div>`).join('')}
-          </div>`;
-      })()}
-      <h3>直达页面（深链接，收藏或发给同事都行）</h3>
-      <div class="keys deep-links">
-        ${[
-          ['#/ps', '运行中', '看正在跑的进程与服务'],
-          ['#/plugins', '插件管理', '安装 / 更新 / 卸载 / 配置'],
-          ['#/market', '插件集市', '浏览并一键安装'],
-          ['#/logs', '审计日志', '每次执行、被拒、失败'],
-          ['#/doctor', '环境自检', '解释器 / 依赖 / 配置问题'],
-          ['#/mcp', 'MCP 授权', '允许 AI 调用哪些动作'],
-          ['#/stats', '使用统计', '总执行数 / 成功率 / 近 7 天趋势'],
-          ['#/workbench', 'AI 工作台', '自然语言指挥插件'],
-          ['#/q=关键词', '带词搜索', '打开就搜「关键词」'],
-        ].map(([h, n, d]) => `<div class="key-row"><a class="link" href="${h}">${n}</a>
-          <span class="key-what"><code>${h}</code> — ${d}</span></div>`).join('')}
-      </div>
-      <div class="actions">
-        <button class="primary" id="helpClose">知道了</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-  const close = () => overlay.remove();
-  overlay.querySelector('#helpClose').addEventListener('click', close);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  document.addEventListener('keydown', function escClose(e) {
-    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escClose); }
-  });
-  overlay.querySelector('#helpClose').focus();
-}
+
 
 document.addEventListener('keydown', (e) => {
   const mod = e.ctrlKey || e.metaKey;
   if (mod && e.key === '/') {
     e.preventDefault();
-    showShortcuts();
+    __panels().showShortcuts();
   } else if (mod && (e.key === 'k' || e.key === 'K')) {
     e.preventDefault();
     el.q.focus();
@@ -10052,7 +9768,7 @@ async function load(notify) {
     plugins = data.plugins || [];
     entries = buildEntries(plugins); entriesVersion++;
     if (notify) { active = 0; }
-    renderList();
+    __panels().renderList();
     refreshPsCount();   // 顺手把「运行中」徽标更新一下
     el.plugCount.textContent = String(plugins.length);
     api('/api/markets')
@@ -10064,11 +9780,11 @@ async function load(notify) {
       const st = parseListState(location.hash);
       if (st.q) el.q.value = st.q;
       if (st.filter && FILTERS.some((f) => f.id === st.filter)) listFilter = st.filter;
-      renderList();
+      __panels().renderList();
     }
     // 主页 ?q=词：URL 带查询词直达搜索结果（外部系统/文档里给入口链接用）
     const qParam = new URLSearchParams(location.search).get('q');
-    if (qParam) { el.q.value = qParam; active = 0; renderList(); el.q.focus(); }
+    if (qParam) { el.q.value = qParam; active = 0; __panels().renderList(); el.q.focus(); }
     // 第二十二轮①：首访引导——三步卡片（搜索→执行→看结果），可跳过、不再打扰
     if (!firstRunSeen((k) => localStorage.getItem(k))) showFirstRunGuide();
   } catch (e) {
@@ -10278,7 +9994,7 @@ function applyHash() {
     }
     // 动作不存在（被卸载？）：退回列表并说明
     el.q.value = '';
-    renderList();
+    __panels().renderList();
     setCount(`历史里的 ${hh} 已不存在（插件可能被卸载）`);
     return;
   }
@@ -10288,7 +10004,7 @@ function applyHash() {
   if (qHash) {
     el.q.value = decodeURIComponent(qHash[1]);
     active = 0;
-    renderList();
+    __panels().renderList();
     // 分享链接进来的人可能想常驻这个搜索：给一条可点的提示
     const term = decodeURIComponent(qHash[1]);
     if (term.trim()) {
@@ -10325,7 +10041,7 @@ function applyHash() {
   el.detailView.classList.add('hidden');
   el.detailView.innerHTML = '';
   hidePanels();
-  renderList();
+  __panels().renderList();
   const msg = t('deepLinkGone')(m[1] + (m[2] ? '.' + m[2] : ''));
   setCount(msg);
   // 渲染管线里还有异步重画（骨架屏→数据、面板切换）会覆盖 #count——下一帧再压一次
@@ -10369,10 +10085,10 @@ window.addEventListener('hashchange', () => {
     detail = null;
     el.detailView.classList.add('hidden');
     el.detailView.innerHTML = '';
-    showPanelAnimated(el.listView);
+    __panels().showPanelAnimated(el.listView);
     const st = parseListState(location.hash);
     if (st.q) { el.q.value = st.q; }
-    renderList();
+    __panels().renderList();
     return;
   }
   // 第十八轮⑥补：从面板（#/watch 等）回到当前详情的深链——
@@ -10385,7 +10101,7 @@ window.addEventListener('hashchange', () => {
     mode = 'detail';
     el.modeLabel.textContent = t('modeDetail');
     el.listView.classList.add('hidden');
-    showPanelAnimated(el.detailView);
+    __panels().showPanelAnimated(el.detailView);
     return;
   }
   if (!detail) applyHash();
@@ -10397,7 +10113,7 @@ window.addEventListener('hashchange', () => {
   // applyHash 对列表态是 fallthrough（无分支）——面板不会自己收掉，列表被盖住。
   if (!/#\/[\w.-]+/.test(location.hash || '#/')) {
     hidePanels();
-    renderList();
+    __panels().renderList();
   }
 });
 
@@ -10612,7 +10328,7 @@ function applyLang(rerender = false) {
   if (!rerender) return;
   // 按当前 mode 重渲（第二十八轮清单；面板函数都是幂等重渲）
   switch (mode) {
-    case 'command': renderList(); renderTabBar(); break;
+    case 'command': __panels().renderList(); renderTabBar(); break;
     case 'detail': if (detail) openDetail(detail.plugin, detail.action); renderTabBar(); break;
     case 'market': showMarket(); break;
     case 'logs': showLogs(); break;
@@ -10630,7 +10346,7 @@ function applyLang(rerender = false) {
     case 'help': showHelpPanel(); break;
     case 'brief': showBrief(); break;
     case 'timers': showTimers(); break;
-    default: renderList();
+    default: __panels().renderList();
   }
   // 结果区与页脚等常驻元素
   if (currentResult) renderResult(currentResult);
@@ -10877,7 +10593,7 @@ function showTagPanel(i) {
     at >= 0 ? list.splice(at, 1) : list.push(t);
     if (list.length) actionTags[key] = list; else delete actionTags[key];
     writeJson(PREF.tags, actionTags);
-    renderList(); showTagPanel(i);   // 重开刷新勾选
+    __panels().renderList(); showTagPanel(i);   // 重开刷新勾选
   }));
   panel.querySelector('#tagInput').addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter') {
@@ -10887,7 +10603,7 @@ function showTagPanel(i) {
         (actionTags[key] ??= []).push(t);
       }
       writeJson(PREF.tags, actionTags);
-      renderList(); close();
+      __panels().renderList(); close();
       setCount(`已打标签：${(actionTags[key] ?? []).map((t) => '#' + t).join(' ')}`);
     } else if (ev.key === 'Escape') close();
     else if (/^[1-9]$/.test(ev.key)) {

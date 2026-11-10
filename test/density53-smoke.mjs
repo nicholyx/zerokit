@@ -28,8 +28,9 @@ const { cellDisplay, tableDensity, kvCollapsed } = await import(pathToFileURL(pa
 
 {
   const app = fs.readFileSync(path.join(REPO, 'web/app.js'), 'utf8');
-  ok(app.includes('class="empty-cell"'), '⑧KV 空值 — 接线');
-  ok(app.includes('kv-clip') && app.includes('data-full'), '②KV 截断+复制全文');
+  const panelsjs = fs.readFileSync(path.join(REPO, 'web/panels.js'), 'utf8');
+  ok(panelsjs.includes('class="empty-cell"'), '⑧KV 空值 — 接线（243 轮起在 panels.js）');
+  ok(panelsjs.includes('kv-clip') && panelsjs.includes('data-full'), '②KV 截断+复制全文（panels.js）');
   ok(app.includes("localStorage.getItem('zerokit.tdensity')"), '③密度记忆读');
   ok(app.includes("localStorage.setItem('zerokit.tdensity'"), '③密度记忆写');
   ok(app.includes('data-dens='), '③密度按钮');
