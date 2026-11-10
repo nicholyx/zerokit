@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.22.0] - 2026-11-10
+
+### Added
+
 - 服务面板日志抽屉与下载：行内展开支持 tail 参数选择（30/100/全部）；下载完整日志按钮（.log 文件，exportMime txt）；server /api/services/logs 支持 tail=all（钳 5000 行防超大响应）；错误行高亮（error/fail/✗/exception 标红）；webui +2 断言。
 
 ## [3.21.0] - 2026-11-10
@@ -72,10 +78,4 @@
 ### Added
 
 - 服务日志查看：startService stdout 落 LOG_DIR（bg.插件.服务.log，与 runner 后台动作同约定——日志有源可查）；zkit service logs 插件.服务 [--tail N]；/api/services/logs GET 端点；UI 面板每行「日志」按钮（抽屉展开尾部，再点收起）；无日志服务显示友好提示；I18N 三键 zh/en。
-
-## [3.10.0] - 2026-11-09
-
-### Added
-
-- 服务生命周期安全收口：startService 补 run 命令来源校验（argv[0] 必须是已知工具或插件目录内路径——防越界命令）；/api/services/start 补审计（decision + reason，与 CLI stop 同语言）；UI 面板停止/重启按钮确认守卫；面板 5s 自动刷新运行状态。
 
