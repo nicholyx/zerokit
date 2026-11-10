@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.37.0] - 2026-11-11
+
+### Added
+
 - app.js 拆分第五步——监控/定时域注入式迁出：14 个函数（showWatchPanel/showTimers/renderTimersRows + scheduleWatch/fireTimer/persistWatch 等 7 主 7 支撑）整域迁 web/watchtimers.js（createWatchTimers(ui) 工厂 + __wt() 惰性 getter——整域内聚后注入面最小化）；10 条断言更新（webui×5/pace177/polish95×2/bookmark180——迁出函数改读 watchtimers.js）；app.js 10233 行（五步累计 -1040）。
 
 ## [3.36.0] - 2026-11-11
@@ -71,10 +77,4 @@
 ### Added
 
 - 零命中词消化闭环：suggestFromZeroHits 纯函数（拼音域编辑距离 ≤2——候选 label/py 形态匹配 full 与 initials 各一次，返回原文 top3）；0 命中时命令面板显示「你可能在找」chips（点击即填入重搜；无建议零打扰）；I18N zeroSuggestLabel zh/en；extras-smoke +2 断言（拼音域命中/top3 分档）。
-
-## [3.25.0] - 2026-11-10
-
-### Added
-
-- 命令面板命中率反馈：paletteMatchLine 纯函数（命中数/候选总数——0 命中明示「无匹配」并引导换短词/拼音）；非空查询时 foot 显示命中率行（0 命中标红）；recordZeroHit 高频零命中词本地收集（去重保序上限 30、短词不收——为后续同义词表做数据）；extras-smoke +2 断言。
 
