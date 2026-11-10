@@ -1497,6 +1497,21 @@ export function paletteStatsLine(cmdCount, actionCount) {
   return { zh: `共 ${c} 条命令 · ${a} 个动作`, en: `${c} commands · ${a} actions` };
 }
 
+/** 第二百三十三轮②③：命中率统计行——matched/candidates + 0 命中空态引导 */
+export function paletteMatchLine(matched, candidates) {
+  const m = Math.max(0, Number(matched) || 0);
+  const t = Math.max(0, Number(candidates) || 0);
+  if (!m) return { zh: `无匹配 · 共 ${t} 个候选——试试更短的关键词或拼音首字母`, en: `No match · ${t} candidates — try a shorter keyword or pinyin initials`, zero: true };
+  return { zh: `命中 ${m} / ${t} 个候选`, en: `${m} of ${t} candidates matched`, zero: false };
+}
+
+/** 第二百三十三轮④：高频零命中词收集（本地存储，为后续同义词表做数据）——去重保序上限 30 */
+export function recordZeroHit(term, list = [], max = 30) {
+  const w = String(term ?? '').trim();
+  if (!w || w.length < 2) return list;
+  return [w, ...list.filter((x) => x !== w)].slice(0, max);
+}
+
 /** 历史毫秒列表的 P95：给「慢于平常」徽标用。空列表返回 null。 */
 export function p95Ms(values) {
   const arr = (Array.isArray(values) ? values : [])
