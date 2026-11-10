@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- app.js 拆分第三步——面板壳域注入式迁出（refs=0 子集）：15 个零外部状态耦合的纯渲染函数迁 web/panels.js（createPanels(ui) 工厂 + __panels() 惰性 getter）；迭代验证式提取（每删一个函数立即 node --check——renderTextView 删除伤邻居被自动跳过，renderDiffBody 实为 diffResults 内部物）；app.js 10765 行（累计 -508）；4 条断言更新（webui×2/density53×2）；方案表第 3 步 refs=0 层完成。
 
 ## [3.34.0] - 2026-11-11
 
