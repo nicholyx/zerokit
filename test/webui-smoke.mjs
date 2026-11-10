@@ -741,6 +741,8 @@ const failed = results.filter(([, ok]) => !ok);
   check('230②③⑤ 日志抽屉 tail 选择/下载/错误行高亮', app2.includes('svc-log-tail') && app2.includes('svc-log-err') && app2.includes('svc-log-dl'));
   check('232①② 审计导出与面板同口径（filterAudit + BOM + exportMime）', app2.includes('if (logsRange) d2.entries = filterAudit(d2.entries ?? [], { range: logsRange });') && app2.includes('CSV_BOM + csv') && app2.includes("exportMime('csv')"));
   check('232③ 导出文件名带筛选上下文（range/outcome）', app2.includes("${logsRange ? '-' + logsRange : ''}${logsDecision ? '-' + logsDecision : ''}"));
+  check('235①②③ 开发者面板零命中词查看/单删/清空', app2.includes('zero-hits-panel') && app2.includes('data-zh-del') && app2.includes('zeroHitsClear'));
+  check('235⑤ 空态与确认守卫', app2.includes('zeroHitsEmpty') && app2.includes('zeroHitsConfirm'));
   check('220①②⑥ /api/health-snapshot 端点 + UI dashboard 页 + 命令面板/抽屉入口', (() => { const srv = fs.readFileSync(path.join(PKG_ROOT, 'src', 'server.ts'), 'utf8'); return srv.includes('/api/health-snapshot') && app2.includes('async function showDashboard') && app2.includes("case 'dashboard': showDashboard()") && fs.readFileSync(path.join(PKG_ROOT, 'web', 'index.html'), 'utf8').includes('dlDash'); })());
   check('220④ CLI dashboard 命令 + I18N dash220 键', app2.includes('dash220Title') && fs.readFileSync(path.join(PKG_ROOT, 'src', 'cli.ts'), 'utf8').includes('cmdDashboard'));
   check('221①② 快照落盘 health-history.jsonl + /api/health-history 端点', (() => { const srv = fs.readFileSync(path.join(PKG_ROOT, 'src', 'server.ts'), 'utf8'); return srv.includes('health-history.jsonl') && srv.includes('/api/health-history'); })());
