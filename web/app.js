@@ -9283,7 +9283,34 @@ async function renderDevPanel() {
       <span class="sub">dev 链接插件的清单摘要、文件树、沙箱控制台与变更通知</span></div>
     <div class="log-tools"><button class="ghost" id="devReload">刷新</button>
       <button class="ghost" id="devExit">退出面板</button></div>
-    <div id="devBody"><div class="ps-empty" role="status">读取中…</div></div>`;
+    <div id="devBody"><div class="ps-empty" role="status">读取中…</div></div>
+    <div class="panel zero-hits-panel">
+      <h3>${t('zeroHitsTitle')}</h3>
+      <p class="sub">${t('zeroHitsSub')}</p>
+      <div id="zeroHitsBody" class="chips"></div>
+      <div class="actions"><button class="ghost" id="zeroHitsClear">${t('zeroHitsClear')}</button></div>
+    </div>`;
+  // 第二百三十五轮①②③⑤：零命中词查看/单删/清空
+  const renderZeroHits = () => {
+    const list = readJson('zerokit.paletteZeroHits') ?? [];
+    const box = document.getElementById('zeroHitsBody');
+    if (!box) return;
+    box.innerHTML = list.length
+      ? list.map((w, i) => `<span class="chip">${esc(w)}<button class="chip-x" data-zh-del="${i}" title="${t('zeroHitsDelOne')}">×</button></span>`).join('')
+      : `<span class="sub">${t('zeroHitsEmpty')}</span>`;
+    box.querySelectorAll('[data-zh-del]').forEach((b) => b.addEventListener('click', () => {
+      const list2 = readJson('zerokit.paletteZeroHits') ?? [];
+      list2.splice(Number(b.dataset.zhDel), 1);
+      writeJson('zerokit.paletteZeroHits', list2);
+      renderZeroHits();
+    }));
+  };
+  renderZeroHits();
+  document.getElementById('zeroHitsClear')?.addEventListener('click', () => {
+    if (!window.confirm(t('zeroHitsConfirm'))) return;
+    writeJson('zerokit.paletteZeroHits', []);
+    renderZeroHits();
+  });
   $('devReload').addEventListener('click', renderDevPanel);
   $('devExit').addEventListener('click', exitDevPanel);
   let d;

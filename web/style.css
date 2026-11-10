@@ -2722,3 +2722,8 @@ table.kv td:first-child { width: 34%; font-family: var(--mono); font-size: 12px;
 .svc-log-bar { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
 .svc-log-tail { padding: 3px 6px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--panel); color: var(--fg); font-size: 12px; }
 .svc-log-err { color: var(--bad); }
+
+/* 第二百三十五轮：零命中词 chip 删除钮 */
+.zero-hits-panel .chip { display: inline-flex; align-items: center; gap: 4px; }
+.chip-x { border: none; background: none; color: var(--fg); opacity: .55; cursor: pointer; padding: 0 2px; font-size: 13px; }
+.chip-x:hover { opacity: 1; color: var(--bad); }
