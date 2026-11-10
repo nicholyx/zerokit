@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.23.0] - 2026-11-10
+
+### Added
+
 - 审计面板时间范围筛选补「最近 1 小时」：AUDIT_RANGES 四档→五档（1h 滚动窗口——与 today 的自然日边界不同，排障窗口更贴身）；filterAudit 支持 1h 档；CLI zkit audit --since 既有（1h/30m/3d/2w/45s 五单位）复核打通；extras-smoke +2 断言（1h 命中排除/组合正交）；audit113 四档断言更新为五档。
 
 ## [3.22.0] - 2026-11-10
@@ -72,10 +78,4 @@
 ### Added
 
 - 四面健康总检页（第 220 轮整轮里程碑）：/api/health-snapshot 端点（聚合 doctor/服务/缓存/插件）；UI #/dashboard 全景页（五瓷贴：版本/doctor/服务/缓存/插件，dash-tiles 复用）；CLI zkit dashboard（文本版全景）；命令面板「全景总检」顶置入口 + 抽屉链接；I18N dash220 十一键 zh/en。
-
-## [3.11.0] - 2026-11-09
-
-### Added
-
-- 服务日志查看：startService stdout 落 LOG_DIR（bg.插件.服务.log，与 runner 后台动作同约定——日志有源可查）；zkit service logs 插件.服务 [--tail N]；/api/services/logs GET 端点；UI 面板每行「日志」按钮（抽屉展开尾部，再点收起）；无日志服务显示友好提示；I18N 三键 zh/en。
 
