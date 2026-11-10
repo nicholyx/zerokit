@@ -8,6 +8,9 @@
 | --- | --- | --- |
 | [十分钟上手](guide/quickstart.md) | 从 clone 到跑通第一个动作 | 第一次接触本项目 |
 | [项目故事](guide/story.md) | 为什么做、关键决策、走过的弯路、里程碑年表 | 想理解「为什么是现在这样」 |
+- [维护模式判据](guide/maintenance-patterns.md) —— 三类维护轮型与选型启发
+- [v3 事故全回顾](guide/v3-incident-index.md) —— 发布链事故判据索引
+- [v4 展望](guide/v4-outlook.md) —— 候选方向议题池
 | [术语表](guide/glossary.md) | 内核/插件/动作/风险档/集市……都是什么 | 被名词绕晕时 |
 | [常见问题](guide/faq.md) | 安装/平台/插件排错 | 卡住了先翻这里 |
 

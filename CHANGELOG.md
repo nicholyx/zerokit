@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- v3 线总检与 v4 展望（第 240 轮整百里程碑）：docs/guide/maintenance-patterns.md（三类维护轮型判据——功能/盘点锁定/事故修复，选型启发）；docs/guide/v3-incident-index.md（发布链事故全回顾判据索引——网络依赖/Git 工作流/文档护栏/tauri 四组）；docs/guide/v4-outlook.md（六大候选方向议题池+清债优先判据）；docs 导航接入。
 
 ## [3.31.0] - 2026-11-10
 
