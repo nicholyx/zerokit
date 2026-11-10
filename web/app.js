@@ -3894,7 +3894,13 @@ async function renderTimersRows() {
   let savedRuns = [];
   try { savedRuns = (await api('/api/timer-runs')).runs ?? []; } catch { /* 旁路 */ }
   const runsOf = (k) => savedRuns.filter((r) => r.key === k).slice().reverse();
-  const rows = Object.entries(reg).map(([k, tm]) => {
+  // 第二百三十九轮④：按下次执行时间升序（最近的最上；暂停的排最后）
+  const sortedEntries = Object.entries(reg).sort((a, b) => {
+    const na = a[1].paused ? Infinity : (a[1].nextAt ?? Infinity);
+    const nb = b[1].paused ? Infinity : (b[1].nextAt ?? Infinity);
+    return na - nb;
+  });
+  const rows = sortedEntries.map(([k, tm]) => {
     const hist = tm.history ?? [];
     const last = hist[hist.length - 1];
     const lastTxt = !last ? '还没跑过'
@@ -3906,11 +3912,13 @@ async function renderTimersRows() {
     const lastSaved = saved[0];
     const failDot = lastSaved && lastSaved.ok === false ? '<span class="risk-dot" data-risk="destructive" title="最近一次执行失败"></span>' : '';
     const histN = saved.length;
+    // 第二百三十九轮③：到期高亮——≤5 分钟 warn / 已过期 exp（catch-up 前的视觉态）
+    const dueCls = tm.paused ? '' : (tm.nextAt ?? 0) - Date.now() <= 0 ? ' exp' : (tm.nextAt ?? 0) - Date.now() <= 5 * 60_000 ? ' due-soon' : '';
     return `
     <div class="run-row timer-row" data-tk="${esc(k)}">
       <span class="badge">⏱</span>${failDot}
       <span class="run-when">${esc(tm.title)}（每 ${esc(String(tm.interval))} 秒${tm.win ? ` · 窗口 ${esc(tm.win)}` : ''}${tm.paused ? ' · 已暂停' : ''}）</span>
-      <span class="timer-next" title="下次触发">${tm.paused ? '—' : nextRunLabel(tm.nextAt ?? Date.now())}</span>
+      <span class="timer-next${dueCls}" title="下次触发">${tm.paused ? '—' : nextRunLabel(tm.nextAt ?? Date.now())}</span>
       <span class="timer-last" title="最近一次">${lastTxt}</span>
       <button class="ghost mini" data-trun="${esc(k)}" title="立即跑一次，不影响节奏">现在跑</button>
       <button class="ghost mini" data-tpause="${esc(k)}">${tm.paused ? '恢复' : '暂停'}</button>

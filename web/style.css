@@ -2735,3 +2735,8 @@ table.kv td:first-child { width: 34%; font-family: var(--mono); font-size: 12px;
 /* 第二百三十八轮③：重跑批次视觉标记——区分新结果 vs 保留旧结果 */
 .batch-retry-run { border-left: 3px solid var(--warn, #e6a700); }
 .batch-retry-badge::after { content: '↻'; margin-left: 4px; color: var(--warn, #e6a700); }
+
+/* 第二百三十九轮③：timers 到期高亮 */
+.timer-next.due-soon { color: var(--warn, #e6a700); font-weight: 600; }
+.timer-next.exp { color: var(--fg-dim); text-decoration: line-through; }
+.timer-next.exp::after { content: '（已过期）'; font-size: 11px; text-decoration: none; }
