@@ -44,7 +44,7 @@ console.log('polish95-smoke');
   check('① 定时空态带指引（watchtimers.js）', readFileSync(path.join(PKG_ROOT, 'web', 'watchtimers.js'), 'utf8').includes('「⏲ 定时」设间隔'));
   check('① 收藏空态带指引', app.includes('还没有收藏——跑一次动作，在结果工具条里点「收藏」'));
   check('① 监控空态带指引（watchtimers.js）', readFileSync(path.join(PKG_ROOT, 'web', 'watchtimers.js'), 'utf8').includes('没有在跑的监控'));
-  check('① 日志空态带指引', app.includes('还没有日志——执行一次动作就会写进来'));
+  check('① 日志空态带指引（logs.js）', readFileSync(path.join(PKG_ROOT, 'web', 'logs.js'), 'utf8').includes('还没有日志——执行一次动作就会写进来'));
 }
 
 // ⑥⑦ 账本对齐：overview 行数覆盖到九十四轮、START-HERE 版本号=package.json

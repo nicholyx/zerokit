@@ -97,7 +97,7 @@ run(['run', 'sysinfo', 'overview']);
 {
   const app = readFileSync(path.join(PKG_ROOT, 'web/app.js'), 'utf8');
   const css = readFileSync(path.join(PKG_ROOT, 'web/style.css'), 'utf8');
-  check('⑥ 日志详情 CLI 重放行', app.includes('log-replay') && css.includes('.log-replay'));
+  check('⑥ 日志详情 CLI 重放行（247 轮起 log-replay 在 logs.js）', readFileSync(path.join(PKG_ROOT, 'web', 'logs.js'), 'utf8').includes('log-replay') && css.includes('.log-replay'));
   check('⑧ Ctrl+R 重放接线', app.includes("e.key === 'r' && (e.ctrlKey || e.metaKey)") && app.includes('重放最近一次执行'));
 }
 
