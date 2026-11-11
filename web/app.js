@@ -25,6 +25,7 @@ import { createWatchTimers } from './watchtimers.js';
 import { createMarket } from './market.js';
 import { createLogs } from './logs.js';
 import { createDoctorStats } from './doctorstats.js';
+import { createThemeClip } from './themeclip.js';
 
 // 第二百四十一轮⑤：键盘域拆分（注入式——首次用时创建，避免顶层 TDZ）
 let __keysInst = null;
@@ -71,6 +72,13 @@ const __logs = () => {
 // 第二百四十八轮②③：doctor/统计域注入式迁出
 let __dsInst = null;
 const __ds = () => {
+
+// 第二百四十九轮②③：设置/主题/剪贴板域注入式迁出
+let __tcInst = null;
+const __tc = () => {
+  __tcInst ??= createThemeClip({ esc, t, lang, el, setCount, hidePanels, PREF, loadClipHist, saveClipHist, pushThemeToFrame, __panels });
+  return __tcInst;
+};
   __dsInst ??= createDoctorStats({ esc, t, lang, el, api, TOKEN, setCount, hidePanels, panelDescBar, skeletonRows, actionKey, openDetail, showPluginHome, idleSuggest, renderSnap, persistTag, loadPrefs, applyPrefsSnapshot, collectPrefsSnapshot, applyTheme, applyAccent, applyFontScale, applyLang, __wt });
   return __dsInst;
 };
@@ -247,9 +255,9 @@ function applyPrefsSnapshot(snap) {
   if (typeof snap.ldensity === 'string') localStorage.setItem('zerokit.ldensity', snap.ldensity);
   if (typeof snap.layoutPreset === 'string') localStorage.setItem('zerokit.layout.preset', snap.layoutPreset);
   if (typeof snap.layoutPct === 'string') localStorage.setItem('zerokit.layout.pct', snap.layoutPct);
-  applyTheme();
-  applyAccent();
-  applyFontScale();
+  __tc().applyTheme();
+  __tc().applyAccent();
+  __tc().applyFontScale();
   savePrefs();
   __panels().renderList();
 }
@@ -281,28 +289,11 @@ function loadPrefs() {
   if (typeof aliases !== 'object' || Array.isArray(aliases)) aliases = {};
 }
 
-/** 字体三档（小/中/大）：html[data-font-scale]，CSS 用 rem 级放大 */
-function applyFontScale() {
-  const v = localStorage.getItem('zerokit.font-scale') || 'm';
-  document.documentElement.dataset.fontScale = v;
-  pushThemeToFrame();   // 第一百二十一轮④：字号变化也推给插件页面
-}
 
-function applyAccent() {
-  document.documentElement.dataset.accent = normalizeAccent(accent);
-}
 
-function applyTheme() {  const choice = normalizeTheme(localStorage.getItem(PREF.theme));
-  const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true;
-  const resolved = resolveTheme(choice, prefersDark);
-  document.documentElement.dataset.theme = resolved;
-  // 第一百八十七轮⑥：切换无闪烁——color-scheme 同步原生控件，meta theme-color 同步浏览器框底色
-  document.documentElement.style.colorScheme = resolved;
-  let meta = document.querySelector('meta[name="theme-color"]');
-  if (!meta) { meta = document.createElement('meta'); meta.name = 'theme-color'; document.head.appendChild(meta); }
-  meta.content = resolved === 'light' ? '#f4f6fa' : '#0e1013';
-  // 第四十七轮：主题按钮收进抽屉（openThemePop 渲染时带当前档位），顶栏不再有 themeBtn
-}
+
+
+
 
 /** 面板里展示的档名：落盘档 + 隐式默认档（「默认」没落盘过也要能看见、能切） */
 function panelProfileNames() {
@@ -434,7 +425,7 @@ function openThemePop() {
     pop.querySelectorAll('[data-font]').forEach((b) => {
     b.addEventListener('click', () => {
       localStorage.setItem('zerokit.font-scale', b.dataset.font);
-      applyFontScale();
+      __tc().applyFontScale();
       pop.querySelectorAll('[data-font]').forEach((x) => x.classList.toggle('on', x === b));
     });
   });
@@ -466,7 +457,7 @@ function openThemePop() {
   pop.querySelectorAll('[data-theme-choice]').forEach((b) => {
     b.addEventListener('click', () => {
       try { localStorage.setItem(PREF.theme, b.dataset.themeChoice); } catch { /* 隐私模式 */ }
-      applyTheme();
+      __tc().applyTheme();
       paint();
       pushThemeToFrame();   // 第一百二十一轮④：主题一变就推给插件页面
     });
@@ -475,7 +466,7 @@ function openThemePop() {
     b.addEventListener('click', () => {
       accent = normalizeAccent(b.dataset.accent);
       try { localStorage.setItem(PREF.accent, accent); } catch { /* 隐私模式 */ }
-      applyAccent();
+      __tc().applyAccent();
       paint();
       pushThemeToFrame();   // 第一百二十一轮④：强调色同推
     });
@@ -636,20 +627,14 @@ function switchProfile(name) {
   localStorage.setItem('zerokit.profile.cur', target);
   // 3. 模块级变量重载 + 就地重绘
   loadPrefs();
-  applyTheme();
-  applyAccent();
-  applyFontScale();
+  __tc().applyTheme();
+  __tc().applyAccent();
+  __tc().applyFontScale();
   __panels().renderList();
   setCount(t('profileSwitched')(target));
 }
 
-function cycleTheme() {
-  const order = ['system', 'dark', 'light'];
-  const now = normalizeTheme(localStorage.getItem(PREF.theme));
-  const next = order[(order.indexOf(now) + 1) % order.length];
-  try { localStorage.setItem(PREF.theme, next); } catch { /* 隐私模式 */ }
-  applyTheme();
-}
+
 
 const RISK_TEXT = { read: 'riskRead', mutate: 'riskWrite', destructive: 'riskHigh' };
 function riskText(risk) {
@@ -3276,54 +3261,7 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-/** #/clip 剪贴板历史面板：可回写、单条删、清空。 */
-function showClipPanel() {
-  loadClipHist();   // 打开即重读——别拿模块加载时的旧快照
-  hidePanels();
-  mode = 'clip';
-  el.modeLabel.textContent = '📋 剪贴板';
-  el.listView.classList.add('hidden');
-  el.detailView.classList.add('hidden');
-  if (location.hash !== '#/clip') history.replaceState(null, '', '#/clip');
-  const panel = el.allowView;   // 复用面板容器（与定时任务同款）
-  __panels().showPanelAnimated(panel);
-  const rows = clipHist.length
-    ? clipHist.map((c, i) => `
-      <div class="clip-row" data-i="${i}">
-        <span class="clip-kind">${classifyClip(c.text).kind}</span>
-        <span class="clip-text" title="${esc(c.text.slice(0, 200))}">${esc(c.text.slice(0, 80))}${c.full > 500 ? ` …（${c.full} 字符）` : ''}</span>
-        <span class="clip-at">${new Date(c.at).toLocaleTimeString()}</span>
-        <button class="ghost" data-write="${i}" title="${esc(t('tlWriteBack'))}">↩</button>
-        <button class="ghost" data-del="${i}" title="${esc(t('tlDelItem'))}" aria-label="${esc(t('tlDelItem'))}">✕</button>
-      </div>`).join('')
-    : '<div class="empty" role="status">还没有剪贴板历史——复制点东西再点 📋 按钮</div>';
-  panel.innerHTML = `
-    <div class="panel-head">
-      <h2>📋 剪贴板历史</h2>
-      <div class="panel-tools">
-        <span class="dim">本地保留最近 ${clipHist.length}/20 条 · 不上报</span>
-        <button class="ghost" id="clipClear">清空历史</button>
-        <button class="ghost" id="clipBack">返回</button>
-      </div>
-    </div>
-    <div class="clip-rows">${rows}</div>`;
-  panel.querySelector('#clipBack').addEventListener('click', () => { location.hash = '#/'; });
-  panel.querySelector('#clipClear').addEventListener('click', () => {
-    clipHist = [];
-    saveClipHist();
-    showClipPanel();
-  });
-  panel.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => {
-    clipHist.splice(Number(b.dataset.del), 1);
-    saveClipHist();
-    showClipPanel();
-  }));
-  panel.querySelectorAll('[data-write]').forEach((b) => b.addEventListener('click', async () => {
-    const c = clipHist[Number(b.dataset.write)];
-    try { await navigator.clipboard.writeText(c.text); setCount('已写回剪贴板'); }
-    catch { setCount('写剪贴板被浏览器拒绝'); }
-  }));
-}
+
 
 
 
@@ -7828,9 +7766,9 @@ function showPalette() {
     { icon: '🔧', label: '服务面板', hint: '插件声明的后台服务：状态与停止', key: '', group: 'page', act: () => { location.hash = '#/services'; } },
     { icon: '🧪', label: '开发者面板', hint: 'dev 插件摘要/文件树/沙箱控制台 #/dev', key: '', group: 'page', act: () => { location.hash = '#/dev'; } },
     // 第八十五轮②：操作类命令——切主题/切语言/备份/清历史
-    { icon: '☀', label: '主题：浅色', hint: '切换到浅色主题', key: '', group: 'op', act: () => { exitPalette(); try { localStorage.setItem(PREF.theme, 'light'); } catch { /* 忽略 */ } applyTheme(); } },
-    { icon: '🌙', label: '主题：深色', hint: '切换到深色主题', key: '', group: 'op', act: () => { exitPalette(); try { localStorage.setItem(PREF.theme, 'dark'); } catch { /* 忽略 */ } applyTheme(); } },
-    { icon: '🖨', label: '主题：跟随系统', hint: '按系统偏好自动切换', key: '', group: 'op', act: () => { exitPalette(); try { localStorage.setItem(PREF.theme, 'auto'); } catch { /* 忽略 */ } applyTheme(); } },
+    { icon: '☀', label: '主题：浅色', hint: '切换到浅色主题', key: '', group: 'op', act: () => { exitPalette(); try { localStorage.setItem(PREF.theme, 'light'); } catch { /* 忽略 */ } __tc().applyTheme(); } },
+    { icon: '🌙', label: '主题：深色', hint: '切换到深色主题', key: '', group: 'op', act: () => { exitPalette(); try { localStorage.setItem(PREF.theme, 'dark'); } catch { /* 忽略 */ } __tc().applyTheme(); } },
+    { icon: '🖨', label: '主题：跟随系统', hint: '按系统偏好自动切换', key: '', group: 'op', act: () => { exitPalette(); try { localStorage.setItem(PREF.theme, 'auto'); } catch { /* 忽略 */ } __tc().applyTheme(); } },
     { icon: '🀄', label: '语言：中文', hint: '界面切换到中文', key: '', group: 'op', act: () => { exitPalette(); try { localStorage.setItem('zerokit.lang', 'zh'); } catch { /* 忽略 */ } langPref = 'zh'; lang = pickLang('zh', navigator.language); applyLang(true); } },
     { icon: '🅐', label: '语言：English', hint: 'switch UI to English', key: '', group: 'op', act: () => { exitPalette(); try { localStorage.setItem('zerokit.lang', 'en'); } catch { /* 忽略 */ } langPref = 'en'; lang = pickLang('en', navigator.language); applyLang(true); } },
     { icon: '📤', label: '导出备份', hint: '下载全部个性化数据（JSON）', key: '', group: 'op', act: () => { exitPalette(); exportBackup(); } },
@@ -8656,7 +8594,7 @@ function applyHash() {
   // #/timers 定时任务面板
   if ((location.hash || '') === '#/timers') { __wt().showTimers(); return; }
   // 第六十四轮：#/clip 剪贴板历史面板
-  if ((location.hash || '') === '#/clip') { showClipPanel(); return; }
+  if ((location.hash || '') === '#/clip') { __tc().showClipPanel(); return; }
   // #/watch 监控聚合面板（第十八轮⑥）
   if ((location.hash || '') === '#/watch') { __wt().showWatchPanel(); return; }
   // 第八十六轮：#/dev 开发者面板
@@ -8834,7 +8772,7 @@ window.addEventListener('hashchange', () => {
   // 第三十八轮：#/timers 面板路由（applyHash 有同样分支，hashchange 也要）
   if ((location.hash || '') === '#/timers') { __wt().showTimers(); return; }
   // 第六十四轮：#/clip 剪贴板历史面板
-  if ((location.hash || '') === '#/clip') { showClipPanel(); return; }
+  if ((location.hash || '') === '#/clip') { __tc().showClipPanel(); return; }
   // 第十八轮⑥：#/watch 是面板路由——监控继续跑（面板就是聚合它们的），只切视图
   if ((location.hash || '') === '#/watch') {
     __wt().showWatchPanel();
@@ -9027,7 +8965,7 @@ function toggleLightDark() {
   const next = now === 'light' ? (prev && prev !== 'light' ? prev : 'dark') : 'light';
   if (now !== 'light') writeJson('zerokit.theme-before-fast', now);
   try { localStorage.setItem(PREF.theme, next); } catch { /* 隐私模式 */ }
-  applyTheme();
+  __tc().applyTheme();
   const b = $('themeFast');
   if (b) b.textContent = next === 'light' ? '🌙' : '☀';
 }
@@ -9249,8 +9187,8 @@ document.addEventListener('keydown', (e) => {
 loadPrefs();
 applyAiAssist();
 applyLang();
-applyTheme();
-applyAccent();
+__tc().applyTheme();
+__tc().applyAccent();
 window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
 // 第四十七轮：themeBtn 已收进抽屉（drawerBtn 打开即渲染主题区），此处不再绑定顶栏按钮
 document.addEventListener('click', (e) => {
