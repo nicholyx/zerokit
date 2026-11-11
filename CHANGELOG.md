@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.54.0] - 2026-11-12
+
+### Added
+
 - 服务编排第二步——依赖拓扑排序与批量启动 zkit service up：topoStartOrder 纯函数（沿 requires DFS 后序收集启动链/环边跳过不阻断/本服务排最后）；zkit service up 子命令（拓扑序依次 startService，已在运行幂等跳过「=」，链中失败即停——后面的没有意义）；/api/services/up POST（UI ⛓ 依赖启动按钮对位，汇总 results + cycleSkipped）；环容错修正（path 命中优先于 seen——DFS 已收集的祖先在 seen 里但仍是环边）；svcdeps261 +3 断言（拓扑序/环容错/up 幂等）。
 
 ## [3.53.0] - 2026-11-12
@@ -71,10 +77,4 @@
 ### Added
 
 - 拆分后运行时回归与三层注入缺口修复（第 251 轮）：CDP 干净会话逐面板扫描（12 面板）发现并修复拆分系列的**运行时缺陷层**——静态断言全绿但 CDP 实测暴露 26 处注入缺口（getter 块嵌套坍塌：__batch 工厂体吞掉了后续 7 个 getter 声明；域文件解构与调用点漏配：mode/$/el/readJson/AUDIT_RANGES/exitMarket/exitStats/renderQuietSection/watchStopLog/accent 等）；全部桥接修复后 12 面板 CDP 零 console error、面板路由链完整恢复。**判据**：拆分类重构必须有「真实浏览器逐面板零错误」验收，静态断言不能替代运行时验证。
-
-## [3.42.0] - 2026-11-11
-
-### Added
-
-- app.js 拆分系列收官（第 250 轮整五十里程碑）：renderTextView 补迁 panels.js（243 轮遗留——根因「参数解构的 { 被误当函数体起点」已解：提取器先括号平衡再定位函数体）；方案文档收官章（九步数据表：10 域文件/61 函数/-1852 行/44 条断言改动；三次判据升级：注入式→迭代验证式→整域内聚+状态桥接；明确 app.js 剩余 9421 行不再继续拆）。
 
