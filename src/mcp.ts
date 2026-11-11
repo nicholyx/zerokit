@@ -752,6 +752,78 @@ function cmdSearch(args: string[]): number {
 }
 
 /** 第七十七轮⑧：dry-run——不执行，返回将运行的命令/风险/参数解析结果 */
+/** 第二百五十九轮①②③④⑤：zkit mcp probe——不起 MCP 进程直调工具（255-258 UI 三面的 CLI 对位） */
+async function cmdProbe(args: string[]): Promise<number> {
+  const wantSchema = args.includes('--schema');
+  const asJson = args.includes('--json');
+  const pi = args.indexOf('--params');
+  const rawParams = pi >= 0 ? args[pi + 1] : '{}';
+  const tool = args.find((a) => !a.startsWith('--') && a !== rawParams) ?? '';
+  if (!tool || !tool.includes('__')) {
+    process.stderr.write('用法：zkit mcp probe 插件__动作 [--params \'{}\'] [--schema] [--json]\n');
+    return 2;
+  }
+  const i = tool.indexOf('__');
+  const pluginId = tool.slice(0, i);
+  const actionId = tool.slice(i + 2);
+  const found = collectTools().find(({ plugin, action }) => toolName(plugin.id, action.id) === tool);
+  if (!found) {
+    process.stderr.write(`不认识这个工具：${tool}（先 zkit mcp tools 看清单）\n`);
+    return 1;
+  }
+  const { action, plugin } = found;
+  if (wantSchema) {
+    const { toJsonSchema } = await import('./core/schema.ts');
+    const schema = toJsonSchema(action);
+    if (asJson) process.stdout.write(JSON.stringify({ tool, inputSchema: schema }, null, 2) + '\n');
+    else process.stdout.write(`inputSchema：${tool}\n${JSON.stringify(schema, null, 2)}\n`);
+    return 0;
+  }
+  const allowed = action.risk === 'read' || loadAllowEntries().some((e) => e.key === `${pluginId}.${actionId}`);
+  if (!allowed) {
+    process.stderr.write(`这个动作有副作用，尚未授权给 AI 调用。\nzkit mcp allow ${pluginId}.${actionId} 后重试\n`);
+    return 1;
+  }
+  let argsObj: Record<string, unknown> = {};
+  try { argsObj = JSON.parse(rawParams ?? '{}') as Record<string, unknown>; } catch {
+    process.stderr.write('--params 不是合法 JSON\n');
+    return 2;
+  }
+  const { coerceParam, applyDefaults } = await import('./core/schema.ts');
+  const values: Record<string, unknown> = {};
+  const errors: string[] = [];
+  for (const prm of action.params) {
+    const provided = argsObj[prm.name];
+    if (provided === undefined) continue;
+    const r = coerceParam(prm, provided);
+    if (r.error) errors.push(r.error); else values[prm.name] = r.value;
+  }
+  for (const k of Object.keys(argsObj)) {
+    if (!action.params.some((prm) => prm.name === k)) errors.push(`未知参数 "${k}"`);
+  }
+  const wd = applyDefaults(action, values);
+  errors.push(...wd.errors);
+  if (errors.length) {
+    process.stderr.write(`参数有问题：\n- ${errors.join('\n- ')}\n`);
+    return 1;
+  }
+  const { runAction } = await import('./core/runner.ts');
+  const result = await runAction(plugin, action, { caller: 'mcp-probe', values: wd.values });
+  const safeData = maskSensitive(result.data);
+  const blocks: string[] = [];
+  if (safeData !== undefined) blocks.push(JSON.stringify(safeData, null, 2));
+  else if (result.stdout) blocks.push(result.stdout);
+  if (result.error) blocks.push(`错误：${result.error}`);
+  if (result.stderr.trim() && !result.ok) blocks.push(`stderr：${result.stderr.trim().slice(0, 2000)}`);
+  if (!blocks.length) blocks.push(result.ok ? '（成功，无输出）' : '（失败，无输出）');
+  if (asJson) {
+    process.stdout.write(JSON.stringify({ tool, ok: result.ok, ms: result.ms, data: safeData ?? null, blocks }, null, 2) + '\n');
+  } else {
+    process.stdout.write(`MCP probe → ${tool} ${result.ok ? '✓' : '✗'}（${result.ms ?? '?'}ms）\n${blocks.join('\n')}\n`);
+  }
+  return result.ok ? 0 : 1;
+}
+
 function cmdDryRun(args: string[]): number {
   const target = args[0];
   if (!target || target.startsWith('-')) {
@@ -972,6 +1044,7 @@ export async function cli(args: string[]): Promise<number> {
   if (sub === 'dry-run') return cmdDryRun(args.slice(1));
   // 第一百二十四轮⑦：--dry 别名（进用法表与文档，dry-run 正名保留）
   if (sub === '--dry') return cmdDryRun(args.slice(1));
+  if (sub === 'probe') return cmdProbe(args.slice(1));
   if (sub === 'status') return cmdStatus();
   if (sub === 'revoke') return cmdRevoke(args.slice(1));
   process.stdout.write(`用法：
@@ -983,6 +1056,7 @@ export async function cli(args: string[]): Promise<number> {
                             只读动作默认放行，不需要授权；授权时显示将执行的命令
   zkit mcp search <词>      跨插件搜动作（标题/描述/关键词）
   zkit mcp dry-run <动作>   不执行，看将运行的命令/风险/参数（--params '{}')
+  zkit mcp probe <工具>     不起 MCP 进程直调（插件__动作；--schema 看 inputSchema；--params '{}'）
   zkit mcp status           每个授权的剩余有效期
   zkit mcp revoke <动作>    撤销单个授权
 `);
