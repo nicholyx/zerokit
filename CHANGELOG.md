@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- app.js 拆分第八步——doctor/统计面板域注入式迁出：4 个函数（showDoctor/exitDoctor/renderDoctor + showStats 设置与统计大盘）整域迁 web/doctorstats.js（createDoctorStats(ui) 工厂 + __ds() 惰性 getter）；零断言改动——doctor 面板断言全部锚在 extras 纯函数与 app 壳层（236 轮走势条断言读 extras 的 doctorTrendSparks，不受拆分影响）；app.js 9504 行（八步累计 -1769）。
 
 ## [3.39.0] - 2026-11-11
 
