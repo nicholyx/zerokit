@@ -1603,3 +1603,18 @@ schBtn\.title\ =\ '模型实际看到的\ JSON\ Schema（min/max/pattern/enum\ �
 \}\ catch\ \(e\)\ \{\ setCount\(`调用失败：\$\{e\.message\}`\);\ \}
 const\ text\ =\ r\.error\ \?\ `JSON\-RPC\ 错误\ \$\{r\.error\.code\}：\$\{r\.error\.message\}`\ :\ \(r
 setCount\(`MCP\ 调用失败：\$\{e\.message\}`\);
+'/api/mcp\-resource':\ \{\ get:\ \{\ summary:\ '单资源读取（query:\ uri=zerokit://xxx）',\ se
+'/api/mcp\-resources':\ \{\ get:\ \{\ summary:\ 'MCP\ 资源清单（resources/list\ 同构：7\ 资源）',\ 
+//\ 第二百五十八轮①②：MCP\ 资源清单\ \+\ 单资源读取（140\ 轮\ resources\ 面\ UI\ 化）
+\$\('devBody'\)\.innerHTML\ =\ `<div\ class="ps\-empty"\ role="status">读取失败：\$\{esc\(e\.m
+\{\ uri:\ 'zerokit://audit',\ name:\ '审计流水',\ description:\ '最近\ 30\ 条审计（含\ denied）',\ 
+\{\ uri:\ 'zerokit://health',\ name:\ '健康报告',\ description:\ 'doctor\ 摘要（错误/警告/通过计数，
+\{\ uri:\ 'zerokit://plugins',\ name:\ '插件清单',\ description:\ '已装插件与动作数、风险构成（只读）',\ 
+\{\ uri:\ 'zerokit://runs',\ name:\ '最近执行',\ description:\ '最近\ 20\ 条执行记录（时间/动作/成败/耗时
+\{\ uri:\ 'zerokit://runs/\{key\}',\ name:\ '动作执行史',\ description:\ '指定动作的最近\ 10\ 条',\ m
+\{\ uri:\ 'zerokit://timers',\ name:\ '定时任务',\ description:\ '定时任务与下次触发时间（paused\ 标注
+\{\ uri:\ 'zerokit://watch',\ name:\ '监控注册表',\ description:\ '监控项快照',\ mimeType:\ 'ap
+\}\ catch\ \(e\)\ \{\ pre\.textContent\ =\ `读取失败：\$\{e\.message\}`;\ \}
+box\.innerHTML\ =\ `<div\ class="cmd\-box\-head"\ style="color:var\(\-\-bad\)">读取失败：\$\{e
+box\.innerHTML\ =\ `<div\ class="help"\ style="color:var\(\-\-bad\)">读取失败：\$\{esc\(e\.mes
+fail\(res,\ 404,\ `不认识这个资源：\$\{uri\}`\);
