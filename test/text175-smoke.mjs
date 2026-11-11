@@ -52,7 +52,7 @@ check('① string data 分支', app.includes("typeof res.data === 'string'") && 
 check('② 折叠展开按钮', app.includes('展开全部') && app.includes("data-tv-act=\"expand\""));
 check('③ wrap 持久化', app.includes("zerokit.textview.wrap"));
 check('④ 行选+Enter 复制', app.includes("classList.toggle('sel')") && app.includes('shiftKey') && app.includes('已复制'));
-check('⑤ 统计条', app.includes('tv-stat') && app.includes('最长'));
+check('⑤ 统计条（250 轮起 renderTextView 在 web/panels.js）', readFileSync(path.join(PKG_ROOT, 'web', 'panels.js'), 'utf8').includes('tv-stat') && readFileSync(path.join(PKG_ROOT, 'web', 'panels.js'), 'utf8').includes('最长'));
 check('⑥ 三复制形态', app.includes('copy-raw') && app.includes('copy-num') && app.includes('copy-title'));
 check('⑦ URL 可点', app.includes('linkifyText') && app.includes('target="_blank" rel="noopener noreferrer"'));
 check('⑧ 另存 .txt', app.includes('save-txt') && app.includes("a.download = `zerokit-"));
