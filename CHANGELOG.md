@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.45.0] - 2026-11-11
+
+### Added
+
 - 域文件注入面契约静态断言（251 轮缺口类别的第二道防线）：test/domain-faces-smoke.mjs——括号平衡解析双侧键集（域文件解构键 ⊆ app 注入对象键，9 域全覆盖）+ 跨域引用须有注入依据；契约断言当场抓出一个真实缺口（market 的 exitMarket 解构了但 app 未注入——251 轮手工修复的漏网之鱼）+ 一个命名规范偏差（cdp-regression → cdp-smoke 对齐 -smoke.mjs 统计口径）；全量 134 文件 / 3155 断言。
 
 ## [3.44.0] - 2026-11-11
@@ -71,10 +77,4 @@
 ### Added
 
 - app.js 拆分第二步——批量域注入式迁出：runBatch/applyBatchImport/syncBatchView/curBatch 四函数迁 web/batch.js（createBatch(ui) 工厂 + __batch() 惰性 getter；batch/entries 是 app 侧 let——经 batchRef()/entriesRef() 闭包引用传入，赋值改为 .length=0/push 形态）；app.js 11049 行（-153）；8 条断言更新为拆分形态（batch98×4/pace177/webui×3）；方案表第 2 步完成标记。
-
-## [3.33.0] - 2026-11-11
-
-### Added
-
-- v4 清债第一轮——web/app.js 拆分预检与试点：结构盘点（11273 行/249 顶层函数/29 import）；静态断言依赖面分析（webui-smoke 68 条 app2.includes 落点 Top：showServices 8/showPalette 7/showWatchPanel 6）；docs/debt/app-split-plan.md 五步拆分方案（每步独立 minor/断言同步改指向/3134 底线不降）；第一步试点完成——键盘域拆出 web/keys.js（注入式工厂 createKeys(ui) + app 侧惰性 getter __keys()，避免循环依赖与 TDZ）；4 条过时断言更新为拆分形态。
 

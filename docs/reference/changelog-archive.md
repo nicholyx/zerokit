@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [3.33.0] - 2026-11-11
+
+### Added
+
+- v4 清债第一轮——web/app.js 拆分预检与试点：结构盘点（11273 行/249 顶层函数/29 import）；静态断言依赖面分析（webui-smoke 68 条 app2.includes 落点 Top：showServices 8/showPalette 7/showWatchPanel 6）；docs/debt/app-split-plan.md 五步拆分方案（每步独立 minor/断言同步改指向/3134 底线不降）；第一步试点完成——键盘域拆出 web/keys.js（注入式工厂 createKeys(ui) + app 侧惰性 getter __keys()，避免循环依赖与 TDZ）；4 条过时断言更新为拆分形态。
+
 ## [3.32.0] - 2026-11-11
 
 ### Added
