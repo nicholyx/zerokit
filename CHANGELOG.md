@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.53.0] - 2026-11-12
+
+### Added
+
 - 服务依赖图——[[service]] requires 声明与启动顺序（v4 展望服务编排第一步）：Service 接口加 requires?: string[]（本插件 id 或 插件.服务 跨插件）；serviceDeps() 纯函数（解析/缺失检出/循环检测限深 16）；startService 依赖前检——存在但未运行的依赖拒绝启动并指名（缺失依赖是清单错误归 doctor/面板管，不拦启动）；/api/services 响应带 requires/depMissing/depCycle；UI 面板依赖行（缺依赖 ⚠ / 环 ⟳ 标红）；plugin-spec.md requires 行；svcdeps261-smoke 新文件 4 断言。
 
 ## [3.52.0] - 2026-11-12
@@ -71,10 +77,4 @@
 ### Added
 
 - app.js 拆分系列收官（第 250 轮整五十里程碑）：renderTextView 补迁 panels.js（243 轮遗留——根因「参数解构的 { 被误当函数体起点」已解：提取器先括号平衡再定位函数体）；方案文档收官章（九步数据表：10 域文件/61 函数/-1852 行/44 条断言改动；三次判据升级：注入式→迭代验证式→整域内聚+状态桥接；明确 app.js 剩余 9421 行不再继续拆）。
-
-## [3.41.0] - 2026-11-11
-
-### Added
-
-- app.js 拆分第九步——设置/主题/剪贴板域注入式迁出：5 个函数（applyTheme/applyAccent/applyFontScale/cycleTheme + showClipPanel）整域迁 web/themeclip.js（createThemeClip(ui) 工厂 + __tc() 惰性 getter）；零断言改动（主题断言锚在 extras 的 normalize/resolve 纯函数）；app.js 9442 行（九步累计 -1831）。
 
