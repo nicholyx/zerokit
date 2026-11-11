@@ -1586,3 +1586,14 @@ setCount\(`MCP\ 调用失败：\$\{e\.message\}`\);
 setCount\(isErr\ \?\ '✗\ MCP\ 调用返回错误（详见下方）'\ :\ '✓\ MCP\ 调用成功'\);
 mcpBtn\.title\ =\ '以\ MCP\ tools/call\ 语义直调（进程内探针——验证\ inputSchema\ 与授权策略）';
 const\ text\ =\ r\.error\ \?\ `JSON\-RPC\ 错误\ \$\{r\.error\.code\}：\$\{r\.error\.message\}`\ :\ \(r\.result\?\.content\ \?\?\ \[\]\)\.map\(\(b\)\ =>\ b\.text\ \?\?\ ''\)\.
+'/api/mcp\-probe':\ \{\ get:\ \{\ summary:\ '工具\ inputSchema/annotations\ 机读（query:\ to
+//\ 第二百五十六轮①：工具的\ inputSchema/annotations\ 机读（MCP\ 探针联动——不起\ MCP\ 进程核对\ schema）
+//\ 第二百五十六轮②③：inputSchema\ 预览折叠区（模型实际看到的\ JSON\ Schema）
+\$\('devBody'\)\.innerHTML\ =\ `<div\ class="ps\-empty"\ role="status">读取失败：\$\{esc\(e\.m
+box\.innerHTML\ =\ `<div\ class="cmd\-box\-head"\ style="color:var\(\-\-bad\)">读取失败：\$\{e
+box\.innerHTML\ =\ `<div\ class="help"\ style="color:var\(\-\-bad\)">读取失败：\$\{esc\(e\.mes
+if\ \(!action\)\ \{\ json\(res,\ 200,\ \{\ jsonrpc:\ '2\.0',\ error:\ \{\ code:\ \-32602,\ messa
+if\ \(!found\)\ \{\ json\(res,\ 200,\ \{\ jsonrpc:\ '2\.0',\ error:\ \{\ code:\ \-32602,\ messag
+if\ \(!tool\ \|\|\ i2\ <=\ 0\)\ \{\ fail\(res,\ 400,\ 'tool\ 应为\ 插件__动作\ 形式'\);\ return;\ \}
+if\ \(!tool\ \|\|\ i\ <=\ 0\)\ \{\ fail\(res,\ 400,\ 'tool\ 应为\ 插件__动作\ 形式（MCP\ toolName\ 规范）'\);
+schBtn\.title\ =\ '模型实际看到的\ JSON\ Schema（min/max/pattern/enum\ 透传核对）';

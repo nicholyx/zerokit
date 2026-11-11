@@ -747,6 +747,8 @@ const failed = results.filter(([, ok]) => !ok);
   check('255①④ MCP 探针端点 + OpenAPI（进程内 runner + MCP 信封语义）', (() => { const srv = fs.readFileSync(path.join(PKG_ROOT, 'src', 'server.ts'), 'utf8'); return srv.includes('/api/mcp-probe') && srv.includes("jsonrpc: '2.0'") && srv.includes('mcp-probe: { post:'); })());
   check('255②③ UI「MCP 调用」按钮（tools/call 语义 + _meta 透传）', app2.includes('mcpProbeBtn') && app2.includes('MCP tools/call') && app2.includes('_meta'));
   check('255① Caller 类型扩展（mcp-probe 审计来源）', fs.readFileSync(path.join(PKG_ROOT, 'src', 'core', 'runner.ts'), 'utf8').includes("'mcp-probe'"));
+  check('256①④ /api/mcp-probe GET（inputSchema 机读 + OpenAPI）', (() => { const srv = fs.readFileSync(path.join(PKG_ROOT, 'src', 'server.ts'), 'utf8'); return srv.includes("/api/mcp-probe' && req.method === 'GET'") && srv.includes('inputSchema: toJsonSchema'); })());
+  check('256②③ UI inputSchema 折叠按钮', app2.includes('mcpSchemaBtn') && app2.includes('inputSchema（'));
   check('237①②④⑤ 首列冻结既有接线锁定（sticky/shouldFreeze≥4 阈值/滚动阴影/hover 联动）', (() => { const css = fs.readFileSync(path.join(PKG_ROOT, 'web', 'style.css'), 'utf8'); return app2.includes('shouldFreeze(cols, visCols)') && app2.includes('freeze-col') && css.includes('position: sticky; left: 0') && css.includes('tr:hover td:nth-child(1)') && css.includes('can-r'); })());
   check('238①②④⑤ batch 只重跑失败项既有接线锁定（batchRetry/runBatch(failEntries)/failed=0 隐藏）', app2.includes('id="batchRetry"') && app2.includes('runBatch(failEntries)') && app2.includes('failed ? '));
   check('238③ 重跑批次视觉标记（进度条/汇总卡双标记）', app2.includes('batch-retry-run') && app2.includes('batch-retry-badge'));

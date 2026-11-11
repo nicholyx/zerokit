@@ -2128,6 +2128,29 @@ function openDetail(plugin, action, prefill) {
     mcpBtn.textContent = 'MCP 调用';
     mcpBtn.title = '以 MCP tools/call 语义直调（进程内探针——验证 inputSchema 与授权策略）';
     pb?.after(mcpBtn);
+    // 第二百五十六轮②③：inputSchema 预览折叠区（模型实际看到的 JSON Schema）
+    const schBtn = document.createElement('button');
+    schBtn.className = 'ghost';
+    schBtn.id = 'mcpSchemaBtn';
+    schBtn.textContent = 'inputSchema';
+    schBtn.title = '模型实际看到的 JSON Schema（min/max/pattern/enum 透传核对）';
+    mcpBtn.after(schBtn);
+    schBtn.addEventListener('click', async () => {
+      let box = $('mcpSchemaBox');
+      if (box) { box.remove(); return; }
+      box = document.createElement('div');
+      box.id = 'mcpSchemaBox';
+      box.className = 'cmd-box';
+      box.innerHTML = '<div class="cmd-box-head">读取中…</div>';
+      schBtn.after(box);
+      try {
+        const r = await api(`/api/mcp-probe?tool=${encodeURIComponent(`${plugin.id}__${action.id}`)}`);
+        const schema = r.result?.inputSchema ?? r;
+        box.innerHTML = `<div class="cmd-box-head">inputSchema（${esc(`${plugin.id}__${action.id}`)}）</div><pre>${esc(JSON.stringify(schema, null, 2))}</pre>`;
+      } catch (e) {
+        box.innerHTML = `<div class="cmd-box-head" style="color:var(--bad)">读取失败：${esc(e.message)}</div>`;
+      }
+    });
     mcpBtn.addEventListener('click', async () => {
       $('invokeBox').innerHTML = '';
       const tool = `${plugin.id}__${action.id}`;

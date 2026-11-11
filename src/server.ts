@@ -95,7 +95,7 @@ const API_METHODS: Record<string, string[]> = {
   '/api/health-snapshot': ['GET'],
   '/api/health-history': ['GET'],
   '/api/doctor-history': ['GET'],
-  '/api/mcp-probe': ['POST'],
+  '/api/mcp-probe': ['GET', 'POST'],
   '/api/stop': ['POST'],
   '/api/kill': ['POST'],
   '/api/open': ['POST'],
@@ -149,7 +149,7 @@ const API_SPEC = {
     '/api/health-snapshot': { get: { summary: '四面健康总检快照（doctor/服务/缓存/插件）', security: [{ token: [] }] } },
     '/api/health-history': { get: { summary: '健康快照历史（最近 60 条）', security: [{ token: [] }] } },
     '/api/doctor-history': { get: { summary: 'doctor 体检历史（最近 50 条）', security: [{ token: [] }] } },
-    '/api/mcp-probe': { post: { summary: 'MCP 工具直调探针（body: tool=插件__动作, arguments={}）——UI 调试器/dogfood', security: [{ token: [] }] } },
+    '/api/mcp-probe': { get: { summary: '工具 inputSchema/annotations 机读（query: tool=插件__动作）', security: [{ token: [] }] }, post: { summary: 'MCP 工具直调探针（body: tool=插件__动作, arguments={}）——UI 调试器/dogfood', security: [{ token: [] }] } },
     '/api/stop': { post: { summary: '停止执行（body: key，缺省停全部）' } },
   },
   components: { securitySchemes: { token: { type: 'apiKey', in: 'header', name: 'X-ZeroKit-Token' } } },
@@ -1637,6 +1637,20 @@ export function createServer(): http.Server {
       // 第二百二十一轮②：健康历史机读
       // 第二百三十六轮⑤：doctor 历史机读（面板趋势数据源）
       // 第二百五十五轮①：MCP 工具直调探针（UI 调试器/dogfood——进程内走 runner，MCP 语义响应）
+      // 第二百五十六轮①：工具的 inputSchema/annotations 机读（MCP 探针联动——不起 MCP 进程核对 schema）
+      if (url.pathname === '/api/mcp-probe' && req.method === 'GET') {
+        const u2 = new URL(req.url ?? '', 'http://x');
+        const tool = u2.searchParams.get('tool') ?? '';
+        const i2 = tool.indexOf('__');
+        if (!tool || i2 <= 0) { fail(res, 400, 'tool 应为 插件__动作 形式'); return; }
+        const { collectTools } = await import('./mcp.ts');
+        const { toolName } = await import('./core/manifest.ts');
+        const found = collectTools().find(({ plugin, action }) => toolName(plugin.id, action.id) === tool);
+        if (!found) { json(res, 200, { jsonrpc: '2.0', error: { code: -32602, message: `不认识这个工具：${tool}（tool-not-found）` } }); return; }
+        const { toJsonSchema } = await import('./core/schema.ts');
+        json(res, 200, { jsonrpc: '2.0', result: { tool, inputSchema: toJsonSchema(found.action), plugin: { id: found.plugin.id, name: found.plugin.name, version: found.plugin.version }, action: { id: found.action.id, title: found.action.title, risk: found.action.risk } } });
+        return;
+      }
       if (url.pathname === '/api/mcp-probe' && req.method === 'POST') {
         const body = await readBody(req);
         const tool = String(body['tool'] ?? '');
