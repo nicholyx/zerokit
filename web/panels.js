@@ -3,7 +3,7 @@
 // 注入式：ui 传入 app 侧函数与依赖，本文件不 import app（避免循环依赖）。
 
 export function createPanels(ui) {
-  const { esc, t, lang, actionKey, actionRiskCard, barsScale, diffResults, formatMs, hotkeyMap, maskSecrets, maskState, openDetail, perfMark, resultCompare, riskText, submit, wbSend, escClose } = ui;
+  const { esc, t, lang, actionKey, actionRiskCard, barsScale, diffResults, formatMs, hotkeyMap, maskSecrets, maskState, openDetail, perfMark, resultCompare, riskText, submit, wbSend, notifyLogRef } = ui;
 
 function renderBars(rows) {
   const bars = barsScale(rows);
@@ -65,8 +65,8 @@ function renderList() {
 
 /** 第一百三十二轮⑥：通知记录小节（最近 10 条环）。 */
 function renderNotifySection() {
-  if (!notifyLog.length) return '<div class="watch-notify"><div class="sub">通知记录：还没有——监控发现变化且通过静默/节流闸后会出现在这里。</div></div>';
-  return `<div class="watch-notify"><div class="sub">通知记录（最近 ${notifyLog.length} 条）：</div>${notifyLog.map((e) => `<div class="watch-notify-row">${new Date(e.ts).toLocaleTimeString()} · ${esc(String(e.key))} · ${esc(String(e.note ?? ''))}（第 ${e.changes ?? '?'} 次变化）</div>`).join('')}</div>`;
+  if (!notifyLogRef().length) return '<div class="watch-notify"><div class="sub">通知记录：还没有——监控发现变化且通过静默/节流闸后会出现在这里。</div></div>';
+  return `<div class="watch-notify"><div class="sub">通知记录（最近 ${notifyLogRef().length} 条）：</div>${notifyLogRef().map((e) => `<div class="watch-notify-row">${new Date(e.ts).toLocaleTimeString()} · ${esc(String(e.key))} · ${esc(String(e.note ?? ''))}（第 ${e.changes ?? '?'} 次变化）</div>`).join('')}</div>`;
 }
 
 function renderPreNumbered(text) {

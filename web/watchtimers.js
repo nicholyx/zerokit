@@ -3,7 +3,7 @@
 import { intervalLabel, watchCsv, watchStopCondition, fmtElapsed, exportFilename, exportMime, classifyError, pickLang, nextRunLabel, inWindow, shouldCatchUp, trimHistory, exportTimers, parseTimersPack } from './extras.js';
 
 export function createWatchTimers(ui) {
-  const { esc, t, lang, api, TOKEN, el, setCount, hidePanels, panelDescBar, actionKey, paramStore, submit, openDetail, readJson, writeJson, renderResult, persistWatch: _noop } = ui;
+  const { esc, t, lang, api, TOKEN, el, setCount, hidePanels, panelDescBar, actionKey, paramStore, submit, openDetail, readJson, writeJson, renderResult, persistWatch: _noop, modeRef, watchStopLogRef, panelsRef, renderQuietSection } = ui;
 
 /** 第十轮②：定时任务面板——列出所有在跑的 interval，一键停。 */
 function timerRegistry() {
@@ -100,14 +100,14 @@ function scheduleWatch(key, sec) {
         ? (lastBad ? `（最近失败：${classifyError(lastBad.err ?? '', I18N[pickLang(lang)]).title}）` : '')
         : `（命中停止串「${w.matchStr}」）`;
       w.stopReason = `${stop === 'stop-fail' ? t('watchAutoFail')(w.failStreak) : t('watchAutoMatch')}${why}`;
-      watchStopLog.push(w.stopReason);
+      watchStopLogRef().push(w.stopReason);
       // ⑤ 停止记录持久化（原因+时间），导入导出带着走
       const stops = readJson('zerokit.watch-stops', []);
       stops.push({ ts: Date.now(), key, reason: w.stopReason });
       if (stops.length > 20) stops.shift();
       writeJson('zerokit.watch-stops', stops);
       void persistWatch();
-      if (watchStopLog.length > 5) watchStopLog.shift();
+      if (watchStopLogRef().length > 5) watchStopLogRef().shift();
       setCount(w.stopReason);
       if (mode === 'watch') showWatchPanel();   // 正看着面板就刷新摘要
       return;
@@ -170,13 +170,13 @@ function notifyWatchChange(w, prev, next) {
 /** 第一百三十三轮①②：面板数据区节流自刷新——只替换 runs/changes/上次变化/点阵/通知记录，
  * 不重建整个面板（用户 hover/滚动/焦点不受打扰——⑧）。 */
 function liveRefreshWatchPanel() {
-  if (mode !== 'watch') return;
+  if (modeRef.get() !== 'watch') return;
   const now = Date.now();
   watchPanelDirty = now;
   if (watchPanelTimer) return;
   watchPanelTimer = setTimeout(() => {
     watchPanelTimer = 0;
-    if (mode !== 'watch') return; // 离开了就不再画
+    if (modeRef.get() !== 'watch') return; // 离开了就不再画
     if (Date.now() - watchPanelDirty < 1900) { // 距上次标记不足 2s：再等一会
       watchPanelTimer = setTimeout(liveRefreshWatchPanel, 2000 - (Date.now() - watchPanelDirty));
       return;
@@ -199,7 +199,7 @@ function liveRefreshWatchPanel() {
     const notifyBox = document.querySelector('.watch-notify');
     if (notifyBox) {
       const tmp = document.createElement('div');
-      tmp.innerHTML = __panels().renderNotifySection();
+      tmp.innerHTML = panelsRef().renderNotifySection();
       notifyBox.replaceWith(tmp.firstElementChild ?? notifyBox);
     }
   }, 2000);
@@ -207,7 +207,7 @@ function liveRefreshWatchPanel() {
 
 function showWatchPanel() {
   hidePanels();
-  mode = 'watch';
+  modeRef.set('watch');
   el.modeLabel.textContent = t('modeWatch');
   el.listView.classList.add('hidden');
   el.detailView.classList.add('hidden');
@@ -239,16 +239,16 @@ function showWatchPanel() {
       <button class="ghost mini" data-wmd="${esc(k)}" data-ai="1" title="${esc(t('tlWmd'))}">趋势 MD</button>
     </div>`;
   }).join('');
-  const stopLog = watchStopLog.slice(-5).reverse();
+  const stopLog = watchStopLogRef().slice(-5).reverse();
   el.allowView.innerHTML = `
   ${panelDescBar('watch')}
     <h2 class="ps-title">${esc(t('psWatch'))}</h2>
     <div class="help">界面开着才会跑；翻到别的动作自动停。在只读动作详情页点「监控」添加。</div>
     ${rows || '<div class="ps-empty" role="status">没有在跑的监控——打开任一<b>只读</b>动作详情页点「◎ 监控」选间隔即可开始，跑着的不用守在旁边。</div>'}
     ${stopLog.length ? `<div class="watch-stoplog"><div class="sub">最近自动停止：</div>${stopLog.map((l) => `<div class="watch-stoprow bad">${esc(l)}</div>`).join('')}</div>` : ''}
-    ${__panels().renderNotifySection()}
+    ${panelsRef().renderNotifySection()}
     ${renderQuietSection()}`;
-  __panels().showPanelAnimated(el.allowView);
+  panelsRef().showPanelAnimated(el.allowView);
   // 第一百三十二轮④：静默时段交互
   el.allowView.querySelector('#quietSave')?.addEventListener('click', () => {
     const on = el.allowView.querySelector('#quietOn')?.checked ?? false;
@@ -369,7 +369,7 @@ async function runActionQuiet(plugin, action, values) {
 
 function showTimers() {
   hidePanels();
-  mode = 'timers';
+  modeRef.set('timers');
   el.modeLabel.textContent = t('modeTimers');
   el.listView.classList.add('hidden');
   el.detailView.classList.add('hidden');
@@ -388,7 +388,7 @@ function showTimers() {
       <input type="file" id="timersFile" accept=".json" class="hidden">
     </div>
     <div id="timersRows"></div>`;
-  __panels().showPanelAnimated(el.allowView);
+  panelsRef().showPanelAnimated(el.allowView);
   renderTimersRows();
   // ⑨导出/导入
   el.allowView.querySelector('#timersExport')?.addEventListener('click', async (ev) => {

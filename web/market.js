@@ -1,8 +1,12 @@
 // web/market.js —— 插件市场域（第 246 轮 v4 清债第六步：从 app.js 注入式迁出）
 // 9 个函数整域迁出（showMarket/renderMarket 系列 + 安装三态流）。注入式 + 整域内聚（245 轮模式）。
 
+const $ = (id) => document.getElementById(id);
+
+let __exitMarket = () => {};
 export function createMarket(ui) {
-  const { esc, t, lang, api, setCount, hidePanels, panelDescBar, skeletonRows, marketRiskMix, load, risk } = ui;
+  const { esc, t, lang, el, api, setCount, exitMarket: _exitM = () => {}, hidePanels, panelDescBar, skeletonRows, marketRiskMix, load, modeRef, panelsRef } = ui;
+  __exitMarket = _exitM;
 
 function marketMsg(text, kind = '') {
   const box = $('marketMsg');
@@ -44,7 +48,7 @@ function marketEntryHtml(m, e) {
 
 async function showMarket() {
   hidePanels();
-  mode = 'market';
+  modeRef.set('market');
   el.modeLabel.textContent = t('modeMarket');
   el.searchRow.classList.add('hidden');
   el.listView.classList.add('hidden');
@@ -52,7 +56,7 @@ async function showMarket() {
   el.plugView.classList.add('hidden');
   el.psView.classList.add('hidden');
   el.workbench.classList.add('hidden');
-  __panels().showPanelAnimated(el.marketView);
+  panelsRef().showPanelAnimated(el.marketView);
   if (location.hash !== '#/market') history.replaceState(null, '', '#/market');
   await renderMarket();
 }
@@ -214,7 +218,7 @@ async function renderMarket() {
       <button class="ghost lf-retry" id="marketRetry">↻ 重试</button>
       <button class="ghost" id="marketBack">返回</button></div>`;
     $('marketRetry').addEventListener('click', () => renderMarket());
-    $('marketBack').addEventListener('click', exitMarket);
+    $('marketBack').addEventListener('click', __exitMarket);
     return;
   }
   el.marketCount.textContent = String(marketData.markets.length);
@@ -273,7 +277,7 @@ async function renderMarket() {
       });
     });
   }
-  $('marketBack').addEventListener('click', exitMarket);
+  $('marketBack').addEventListener('click', __exitMarket);
   el.marketView.querySelectorAll('.market-card').forEach((card) => {
     card.querySelector('[data-op="refresh"]').addEventListener('click', () => doMarketOp('refresh', card.dataset.market));
     card.querySelector('[data-op="remove"]').addEventListener('click', () => doMarketOp('remove', card.dataset.market));

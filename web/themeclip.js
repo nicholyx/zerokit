@@ -3,7 +3,7 @@
 import { normalizeTheme, resolveTheme, normalizeAccent, classifyClip } from './extras.js';
 
 export function createThemeClip(ui) {
-  const { esc, t, lang, el, setCount, hidePanels, PREF, loadClipHist, saveClipHist, pushThemeToFrame, __panels } = ui;
+  const { esc, t, lang, el, setCount, hidePanels, PREF, loadClipHist, saveClipHist, pushThemeToFrame, __panels, accentRef } = ui;
 
 /** 字体三档（小/中/大）：html[data-font-scale]，CSS 用 rem 级放大 */
 function applyFontScale() {
@@ -13,7 +13,7 @@ function applyFontScale() {
 }
 
 function applyAccent() {
-  document.documentElement.dataset.accent = normalizeAccent(accent);
+  document.documentElement.dataset.accent = normalizeAccent(accentRef());
 }
 
 function applyTheme() {  const choice = normalizeTheme(localStorage.getItem(PREF.theme));

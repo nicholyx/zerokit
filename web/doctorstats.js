@@ -2,28 +2,32 @@
 // 4 个函数整域迁出（showDoctor/exitDoctor/renderDoctor + showStats 设置与统计大盘）。注入式 + 整域内聚。
 import { doctorTrendSparks, dailyTrend, dailyReport, hourlyHeat, msHistogram, weekCompare, exportMime } from './extras.js';
 
+const $ = (id) => document.getElementById(id);
+
+let __exitStats = () => {};
 export function createDoctorStats(ui) {
-  const { esc, t, lang, el, api, TOKEN, setCount, hidePanels, panelDescBar, skeletonRows, actionKey, openDetail, showPluginHome, idleSuggest, renderSnap, persistTag, loadPrefs, applyPrefsSnapshot, collectPrefsSnapshot, applyTheme, applyAccent, applyFontScale, applyLang, __wt } = ui;
+  const { esc, t, lang, el, api, TOKEN, setCount, hidePanels, panelDescBar, skeletonRows, actionKey, openDetail, showPluginHome, idleSuggest, loadPrefs, applyPrefsSnapshot, collectPrefsSnapshot, applyTheme, applyAccent, applyFontScale, applyLang, __wt, modeRef, panelsRef, runStoreRef, exitStats: _exitS = () => {}, readJson } = ui;
+  __exitStats = _exitS;
 
 async function showDoctor() {
-  mode = 'doctor';
+  modeRef.set('doctor');
   el.modeLabel.textContent = t('modeDoctor');
   el.searchRow.classList.add('hidden');
   hidePanels();
-  __panels().showPanelAnimated(el.doctorView);
+  panelsRef().showPanelAnimated(el.doctorView);
   if (location.hash !== '#/doctor') history.replaceState(null, '', '#/doctor');
   el.doctorView.innerHTML = skeletonRows(4).map(() => '<div class="skel-row" aria-hidden="true"></div>').join('');
   await renderDoctor();
 }
 
 function exitDoctor() {
-  mode = 'command';
+  modeRef.set('command');
   el.doctorView.classList.add('hidden');
   el.searchRow.classList.remove('hidden');
-  __panels().showPanelAnimated(el.listView);
+  panelsRef().showPanelAnimated(el.listView);
   el.modeLabel.textContent = t('modeCommand');
   history.replaceState(null, '', location.pathname);
-  __panels().renderList();
+  panelsRef().renderList();
   el.q.focus();
 }
 
@@ -99,19 +103,19 @@ async function renderDoctor() {
     <h3 class="plug-home-h">插件</h3>${pluginRows || '<div class="ps-empty" role="status">还没装插件</div>'}`;
 }
 
-/** 全局统计：总执行数 / 成功率 / 最活跃插件 / 近 7 天趋势。数据全部来自本机 runStore。 */
+/** 全局统计：总执行数 / 成功率 / 最活跃插件 / 近 7 天趋势。数据全部来自本机 runStoreRef()。 */
 function showStats() {
-  mode = 'stats';
+  modeRef.set('stats');
   el.modeLabel.textContent = t('modeStats');
   el.searchRow.classList.add('hidden');
   hidePanels();
-  __panels().showPanelAnimated(el.allowView);
+  panelsRef().showPanelAnimated(el.allowView);
   const view = el.allowView;
   if (location.hash !== '#/stats') history.replaceState(null, '', '#/stats');
 
   // 扁平化全部执行记录
   const runs = [];
-  for (const [key, list] of Object.entries(runStore)) {
+  for (const [key, list] of Object.entries(runStoreRef())) {
     for (const r of list ?? []) runs.push({ key, ts: r.ts, ok: r.ok, ms: r.ms });
   }
   runs.sort((a, b) => b.ts - a.ts);
@@ -221,7 +225,7 @@ function showStats() {
       <button class="ghost" id="statsBack">返回</button>
       ${total ? '<button class="primary" id="dailyReportBtn">生成今天的日报</button>' : ''}
     </div>`;
-  $('statsBack').addEventListener('click', exitStats);
+  $('statsBack').addEventListener('click', __exitStats);
   view.querySelectorAll('.stat-top-plugin').forEach((row) => row.addEventListener('click', () => {
     showPluginHome(row.dataset.plugin);
   }));
@@ -310,7 +314,7 @@ function showStats() {
       msg.textContent = `✓ 已导入 ${n} 项，刷新后生效`;
       // 第十轮⑨：空闲推荐（只提示一次；点开即执行该动作详情）
 setTimeout(() => {
-  const sug = idleSuggest(runStore, Date.now());
+  const sug = idleSuggest(runStoreRef(), Date.now());
   if (!sug) return;
   const e = entries.find((x) => actionKey(x.plugin.id, x.action.id) === sug.key);
   if (!e) return;
