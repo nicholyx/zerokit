@@ -91,6 +91,7 @@ const API_METHODS: Record<string, string[]> = {
   '/api/cache': ['GET', 'DELETE'],
   '/api/services': ['GET'],
   '/api/services/start': ['POST'],
+  '/api/services/up': ['POST'],
   '/api/services/logs': ['GET'],
   '/api/health-snapshot': ['GET'],
   '/api/health-history': ['GET'],
@@ -148,6 +149,7 @@ const API_SPEC = {
     '/api/cache': { get: { summary: '缓存面板（条目+命中统计）', security: [{ token: [] }] }, delete: { summary: '清空缓存', security: [{ token: [] }] } },
     '/api/services': { get: { summary: '声明服务的清单与状态', security: [{ token: [] }] } },
     '/api/services/start': { post: { summary: '启动声明服务（body: service=插件.服务）', security: [{ token: [] }] } },
+    '/api/services/up': { post: { summary: '依赖拓扑启动（按 requires 序连起全链；body: service=插件.服务）', security: [{ token: [] }] } },
     '/api/services/logs': { get: { summary: '服务日志尾部（query: service=插件.服务&tail=N）', security: [{ token: [] }] } },
     '/api/health-snapshot': { get: { summary: '四面健康总检快照（doctor/服务/缓存/插件）', security: [{ token: [] }] } },
     '/api/health-history': { get: { summary: '健康快照历史（最近 60 条）', security: [{ token: [] }] } },
@@ -1824,6 +1826,24 @@ export function createServer(): http.Server {
         if (!target || i <= 0) { fail(res, 400, 'service 应为 插件.服务 形式'); return; }
         const lines = serviceLogTail(target.slice(0, i), target.slice(i + 1), tail);
         json(res, 200, { lines: lines ?? null, hasLog: lines !== null });
+        return;
+      }
+      // 第二百六十二轮④：依赖拓扑启动端点（UI「依赖启动」对位）
+      if (url.pathname === '/api/services/up' && req.method === 'POST') {
+        const body = await readBody(req);
+        const target = String(body['service'] ?? '');
+        const i = target.lastIndexOf('.');
+        if (!target || i <= 0) { fail(res, 400, 'service 应为 插件.服务 形式'); return; }
+        const { topoStartOrder, startService } = await import('./core/services.ts');
+        const { order, cycleSkipped } = topoStartOrder(target.slice(0, i), target.slice(i + 1));
+        const results: Array<{ target: string; ok: boolean; message: string }> = [];
+        for (const key of order) {
+          const j = key.lastIndexOf('.');
+          const r = await startService(key.slice(0, j), key.slice(j + 1), 'ui');
+          audit({ ts: new Date().toISOString(), caller: 'ui', plugin: key.slice(0, j), action: `service-up:${key.slice(j + 1)}`, tool: 'service', risk: 'mutate', decision: r.ok ? 'allow' : 'deny', reason: r.message });
+          results.push({ target: key, ok: r.ok || r.message.includes('不重复启动'), message: r.message });
+        }
+        json(res, 200, { ok: results.every((r) => r.ok), results, cycleSkipped });
         return;
       }
       if (url.pathname === '/api/services/start' && req.method === 'POST') {
