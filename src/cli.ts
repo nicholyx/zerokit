@@ -573,6 +573,32 @@ async function cmdService(args: string[]): Promise<number> {
     }
     return 0;
   }
+  if (sub === 'up') {
+    // 第二百六十二轮②：依赖拓扑启动——一声令下按序起全链
+    const target = args[1] ?? '';
+    if (!target || !target.includes('.')) { process.stderr.write('用法：zkit service up 插件.服务\n'); return 2; }
+    const i = target.lastIndexOf('.');
+    const { topoStartOrder, startService } = await import('./core/services.ts');
+    const { order, cycleSkipped } = topoStartOrder(target.slice(0, i), target.slice(i + 1));
+    if (cycleSkipped.length > 0) {
+      process.stdout.write(c.yellow(`⚠ 环依赖跳过：${cycleSkipped.join('、')}\n`));
+    }
+    let failed = 0;
+    for (const key of order) {
+      const j = key.lastIndexOf('.');
+      const r = await startService(key.slice(0, j), key.slice(j + 1));
+      audit({ ts: new Date().toISOString(), caller: 'cli', plugin: key.slice(0, j), action: `service-up:${key.slice(j + 1)}`, tool: 'service', risk: 'mutate', decision: r.ok ? 'allow' : 'deny', reason: r.message });
+      if (r.ok) process.stdout.write(`✓ ${key} ${r.message}\n`);
+      else {
+        // 已在运行不算失败（幂等）
+        if (r.message.includes('不重复启动')) { process.stdout.write(`= ${key} 已在运行，跳过\n`); continue; }
+        process.stderr.write(`✗ ${key} ${r.message}\n`);
+        failed += 1;
+        break;  // 链式启动：前面的失败后面没有意义
+      }
+    }
+    return failed > 0 ? 1 : 0;
+  }
   if (sub === 'start') {
     const target = args[1] ?? '';
     if (!target || !target.includes('.')) { process.stderr.write('用法：zkit service start 插件.服务\n'); return 2; }

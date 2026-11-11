@@ -209,6 +209,34 @@ export function serviceDeps(): Array<{ key: string; requires: string[]; missing:
   return out;
 }
 
+/**
+ * 第二百六十二轮①③：服务启动拓扑序——沿 requires DFS 收集「需先启动」的服务链。
+ * 环容错：已在路径上的键跳过（不阻断可用部分）；结果去重；本服务排最后。
+ */
+export function topoStartOrder(pluginId: string, serviceId: string): { order: string[]; cycleSkipped: string[] } {
+  const byPlugin = new Map<string, import('./manifest.ts').Plugin>();
+  for (const e of listPlugins()) {
+    if (e.plugin) byPlugin.set(e.plugin.id, e.plugin);
+  }
+  const self = `${pluginId}.${serviceId}`;
+  const order: string[] = [];
+  const seen = new Set<string>();
+  const cycleSkipped: string[] = [];
+  const visit = (key: string, path: string[]) => {
+    if (path.includes(key)) { cycleSkipped.push(key); return; }  // 环边优先（path 命中即环——seen 只表示已收集）
+    if (seen.has(key)) return;
+    seen.add(key);
+    const [pid = '', sid = ''] = key.includes('.') ? key.split('.', 2) : [key, ''];
+    const svc = byPlugin.get(pid)?.services.find((x) => x.id === sid);
+    for (const r of svc?.requires ?? []) {
+      visit(r.includes('.') ? r : `${pid}.${r}`, [...path, key]);
+    }
+    order.push(key);  // 后序：依赖在前
+  };
+  visit(self, []);
+  return { order: order.filter((k) => k !== self).concat(self), cycleSkipped };
+}
+
 export function findService(pluginId: string, serviceId: string): ServiceStatus | undefined {
   return listServices().find((s) => s.pluginId === pluginId && s.id === serviceId);
 }

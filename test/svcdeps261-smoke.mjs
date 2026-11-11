@@ -58,6 +58,49 @@ check('③ 缺运行依赖拒绝启动（消息含「依赖未就绪」）', r.o
 // 同进程内「beta 起→等→alpha 过检」的链路无法稳定复现。③ 的放行路径由 217 轮
 // service start 已验（端口监听检测）；这里仅断言拦截路径正确即可。
 check('③ 依赖链路语义（未运行拦 / 拦截消息指名依赖）', r.message.includes('depdemo.beta'), r.message.slice(0, 80));
+// ---- 第二百六十二轮：拓扑排序 / 环容错 / up 幂等语义 ----
+const { topoStartOrder } = await import(pathToFileURL(path.join(ROOT, 'src/core/services.ts')).href);
+// 拓扑序：beta（alpha 的依赖）在前，alpha 最后
+const topo = topoStartOrder('depdemo', 'alpha');
+const bi = topo.order.indexOf('depdemo.beta');
+const ai = topo.order.indexOf('depdemo.alpha');
+check('262① 拓扑序（beta 在 alpha 前、self 最后）', bi >= 0 && ai === topo.order.length - 1 && bi < ai, JSON.stringify(topo.order));
+// 环容错：自建 a→b→a 环
+const dir2 = path.join(home, 'plug', 'cyc');
+fs.mkdirSync(dir2, { recursive: true });
+fs.writeFileSync(path.join(dir2, 'plugin.toml'), `[plugin]
+id = "cyc"
+name = "环"
+version = "0.1.0"
+summary = "环检测"
+[[action]]
+id = "hi"
+title = "hi"
+description = "hi"
+run = ["{node}", "-e", "console.log(1)"]
+risk = "read"
+[[service]]
+id = "a"
+title = "A"
+description = "环 a"
+port = 39181
+requires = ["cyc.b"]
+run = ["{node}", "-e", "require('http').createServer((q,r)=>r.end('ok')).listen(39181)"]
+[[service]]
+id = "b"
+title = "B"
+description = "环 b"
+port = 39182
+requires = ["a"]
+run = ["{node}", "-e", "require('http').createServer((q,r)=>r.end('ok')).listen(39182)"]
+`);
+spawnSync(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'plugin', 'add', dir2], { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
+const topo2 = topoStartOrder('cyc', 'a');
+check('262③ 环容错（不炸、cycleSkipped 非空）', Array.isArray(topo2.order) && topo2.cycleSkipped.length > 0, JSON.stringify({ order: topo2.order, skipped: topo2.cycleSkipped }));
+// up 幂等：对 clipboard.watcher（无依赖）跑 up——已在运行时 = 跳过（261 环境约束下用未运行服务验首启）
+const upR = spawnSync(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'service', 'up', 'clipboard.watcher'], { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
+check('262② service up 汇总语义（✓ 或 = 跳过）', (upR.stdout + '').match(/^[✓=]/m) !== null, (upR.stdout + upR.stderr).slice(0, 80));
+
 // 清理
 spawnSync(process.execPath, ['src/cli.ts', 'service', 'stop', 'depdemo.alpha'], { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
 spawnSync(process.execPath, ['src/cli.ts', 'service', 'stop', 'depdemo.beta'], { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });

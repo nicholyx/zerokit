@@ -6041,6 +6041,9 @@ async function showServices() {
         ? `<span class="sub svc-deps ${depMissing || depCycle ? 'bad' : ''}" title="依赖服务">依赖 ${(sv.requires ?? []).join('、')}${depMissing ? ` ⚠ 缺：${(sv.depMissing ?? []).join('、')}` : ''}${depCycle ? ' ⟳ 环依赖' : ''}</span>` : '';
       const restartBtn = sv.running
         ? `<button class="ghost svc-restart" data-svc-restart="${full}">${t('svcRestartBtn')}</button>` : '';
+      // 第二百六十二轮⑤：依赖启动按钮（topo 序连起全链）
+      const upBtn = (sv.requires ?? []).length > 0
+        ? `<button class="ghost svc-up" data-svc-up="${full}" title="${t('svcUpTip')}">⛓ ${t('svcUpBtn')}</button>` : '';
       // 第二百一十九轮③：日志按钮（展开尾部）
       const logBtn = `<button class="ghost svc-logs" data-svc-logs="${full}">${t('svcLogsBtn')}</button>`;
       return `<tr><td>${mark} <b>${esc(sv.pluginName)}</b> · ${esc(sv.id)}</td><td>${esc(sv.title)}</td><td>${pid}${port}${depBadges ? `<br>${depBadges}` : ''}</td><td>${logBtn}${startBtn}${stopBtn}${restartBtn}</td></tr><tr class="svc-log-row hidden" data-svc-log-row="${full}"><td colspan="4"><pre class="svc-log-pre">${t('svcLogsLoading')}</pre></td></tr>`;
@@ -6062,6 +6065,13 @@ async function showServices() {
         showServices();
       });
     });
+    el.doctorView.querySelectorAll('[data-svc-up]').forEach((b) => b.addEventListener('click', async () => {
+      const full = b.dataset.svcUp;
+      const r = await api('/api/services/up', { method: 'POST', body: { service: full } });
+      const okCount = (r.results ?? []).filter((x) => x.ok).length;
+      setCount(r.ok ? `✓ 依赖链启动完成（${okCount}/${r.results?.length ?? 0}）` : `⚠ ${okCount}/${r.results?.length ?? 0} 启动——${r.results?.filter((x) => !x.ok).map((x) => x.target + '：' + x.message.slice(0, 40)).join('；')}`);
+      showServices();
+    }));
     el.doctorView.querySelectorAll('[data-svc-start]').forEach((b) => {
       b.addEventListener('click', async () => {
         const id = b.dataset.svcStart;
