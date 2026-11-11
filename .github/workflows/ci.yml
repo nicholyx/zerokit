@@ -229,8 +229,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq xclip xvfb
+          # 第二百五十八轮：同前一步——apt 源 DNS 瞬态降级继续
+          if sudo apt-get update -qq && sudo apt-get install -y -qq xclip xvfb; then
+            echo "装了：$(xclip -version 2>&1 | head -1)"
+          else
+            echo "::warning::xclip 安装失败（apt 源瞬态）——clipboard 真实路径用例将走缺工具分支"
+          fi
 
       - name: 环境自检
         shell: bash
