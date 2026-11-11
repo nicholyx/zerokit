@@ -14,7 +14,14 @@ const PANELS = ['#/doctor', '#/watch', '#/timers', '#/market', '#/logs', '#/stat
 const CHROME_CANDIDATES = process.platform === 'darwin'
   ? ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', '/Applications/Chromium.app/Contents/MacOS/Chromium']
   : ['/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser'];
-const CHROME = CHROME_CANDIDATES.find((p) => { try { fs.accessSync(p); return true; } catch { return false; } });
+let CHROME = null;
+for (const p of CHROME_CANDIDATES) {
+  try {
+    fs.accessSync(p);
+    const v = spawnSync(p, ['--version'], { encoding: 'utf8', timeout: 15000, windowsHide: true });
+    if (v.status === 0) { CHROME = p; break; }
+  } catch { /* try next */ }
+}
 
 let pass = 0, fail = 0;
 const check = (name, ok, detail = '') => { if (ok) { pass++; console.log(`  ✓ ${name}`); } else { fail++; console.error(`FAIL  ${name}  <- cdp ${detail}`); } };
