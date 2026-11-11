@@ -44,9 +44,9 @@ run(['market', 'add', PKG_ROOT]);
 }
 
 // ⑤ 安装 toast 深链
-check('⑤ marketMsg 第三参深链', (() => {
-  const app = readFileSync(path.join(PKG_ROOT, 'web', 'app.js'), 'utf8');
-  return app.includes('查看插件主页') && app.includes('#/plugins/');
+check('⑤ marketMsg 第三参深链（246 轮拆分：marketMsg 在 market.js、深链在 app）', (() => {
+  const mk = readFileSync(path.join(PKG_ROOT, 'web', 'market.js'), 'utf8');
+  return mk.includes('查看插件主页') && readFileSync(path.join(PKG_ROOT, 'web', 'app.js'), 'utf8').includes('#/plugins/');
 })());
 
 // ⑥ 来源带集市 URL
@@ -70,21 +70,21 @@ check('⑤ marketMsg 第三参深链', (() => {
 // ⑧ 空登记表引导
 {
   const app = readFileSync(path.join(PKG_ROOT, 'web', 'app.js'), 'utf8');
-  check('⑧ 空态教一步', app.includes('第一步：把本仓库当集市') && app.includes('market.json 就是一个集市'));
+  check('⑧ 空态教一步（246 轮起在 market.js）', readFileSync(path.join(PKG_ROOT, 'web', 'market.js'), 'utf8').includes('第一步：把本仓库当集市') && readFileSync(path.join(PKG_ROOT, 'web', 'market.js'), 'utf8').includes('market.json 就是一个集市'));
 }
 
 // ⑨ 前端渲染：卡片头部结构（静态断言）
 {
   const app = readFileSync(path.join(PKG_ROOT, 'web', 'app.js'), 'utf8');
-  check('② entry 渲染风险徽标组', app.includes('market-risk-mix') && app.includes('marketRiskMix(e)'));
-  check('② entry 显示动作数', app.includes('e.actionCount'));
-  check('③ 预览 diff 既有', app.includes('renderMarketPreviewBox') && app.includes('marketPreview'));
+  check('② entry 渲染风险徽标组（246 轮起在 market.js）', (() => { const mk = readFileSync(path.join(PKG_ROOT, 'web', 'market.js'), 'utf8'); return mk.includes('market-risk-mix') && mk.includes('marketRiskMix(e)'); })());
+  check('② entry 显示动作数（market.js）', readFileSync(path.join(PKG_ROOT, 'web', 'market.js'), 'utf8').includes('e.actionCount'));
+  check('③ 预览 diff 既有（market.js）', readFileSync(path.join(PKG_ROOT, 'web', 'market.js'), 'utf8').includes('renderMarketPreviewBox') && readFileSync(path.join(PKG_ROOT, 'web', 'market.js'), 'utf8').includes('marketPreview'));
 }
 
 // ① UI 搜索既有（marketQ input 绑定）
 {
   const app = readFileSync(path.join(PKG_ROOT, 'web', 'app.js'), 'utf8');
-  check('① UI 搜索框既有', app.includes("id=\"marketQ\"") && app.includes('marketQuery'));
+  check('① UI 搜索框既有（market.js）', (() => { const mk = readFileSync(path.join(PKG_ROOT, 'web', 'market.js'), 'utf8'); return mk.includes('id="marketQ"') && mk.includes('marketQuery'); })());
 }
 
 rmSync(home, { recursive: true, force: true });
