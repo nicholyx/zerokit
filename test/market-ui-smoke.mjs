@@ -3,6 +3,7 @@
 // 自包含：临时 ZEROKIT_HOME + 本地集市目录（只读本地文件，不联网、不克隆）。
 // 集市本身就是一个 git 仓库 + market.json，这里只造目录，走 path: 来源分支。
 import fs from 'node:fs';
+import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -152,9 +153,10 @@ try {
   const indexHtml = await (await fetch(BASE + '/')).text();
   const appJs = await (await fetch(BASE + '/app.js')).text();
   check('启动器顶部有「集市」入口', /id="marketBtn"/.test(indexHtml));
-  check('前端有集市面板与会话令牌调用',
-    /function showMarket/.test(appJs) && /api\/market\/preview/.test(appJs)
-      && /id="marketPreview"/.test(appJs));
+  const mkJs = fs.readFileSync(new URL('../web/market.js', import.meta.url), 'utf8');
+  check('前端有集市面板与会话令牌调用（246 轮起在 web/market.js）',
+    /function showMarket/.test(mkJs) && /api\/market\/preview/.test(mkJs)
+      && /id="marketPreview"/.test(mkJs));
 } catch (e) {
   check('异常：' + e.message, false);
 } finally {
