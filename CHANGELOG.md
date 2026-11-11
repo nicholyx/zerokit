@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.55.0] - 2026-11-12
+
+### Added
+
 - 服务健康探针声明与状态页集成（服务编排第三步）：Service.healthCheck?: { http?; tcp? }（http 期望 2xx、tcp 期望可连——fetch/AbortSignal + net.connect 短超时 2.5s）；probeHealth 纯函数（探针异常/超时/拒绝全算未通过）；/api/services 对声明探针的服务真实探测（running 细分 healthy/unhealthy/stopped）；UI 三态徽标（✓ healthy / ⚠ unhealthy）；doctor 集成 healthCheck 声明校验（http/tcp 二选一、URL 形态、host:port 形态——warning 级）；plugin-spec healthCheck 行；svcdeps261 +3 断言。
 
 ## [3.54.0] - 2026-11-12
@@ -71,10 +77,4 @@
 ### Added
 
 - CDP 面板回归进 CI（251 轮判据常态化）：test/cdp-regression.mjs——自管 server + headless Chrome 生命周期（端口自避）、12 面板逐个打开断言渲染、console/异常 = 0 硬断言；无 Chrome 环境优雅 skip（exit 0）；CI ubuntu 加 chromium 安装步；进 test-all（全量 133 文件 / 3137 断言含 CDP 3 条）。从此每个 PR 都做运行时验证。
-
-## [3.43.0] - 2026-11-11
-
-### Added
-
-- 拆分后运行时回归与三层注入缺口修复（第 251 轮）：CDP 干净会话逐面板扫描（12 面板）发现并修复拆分系列的**运行时缺陷层**——静态断言全绿但 CDP 实测暴露 26 处注入缺口（getter 块嵌套坍塌：__batch 工厂体吞掉了后续 7 个 getter 声明；域文件解构与调用点漏配：mode/$/el/readJson/AUDIT_RANGES/exitMarket/exitStats/renderQuietSection/watchStopLog/accent 等）；全部桥接修复后 12 面板 CDP 零 console error、面板路由链完整恢复。**判据**：拆分类重构必须有「真实浏览器逐面板零错误」验收，静态断言不能替代运行时验证。
 
