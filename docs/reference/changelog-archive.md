@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [3.39.0] - 2026-11-11
+
+### Added
+
+- app.js 拆分第七步——日志/审计面板域注入式迁出：4 个函数（showLogs/renderLogs + logRowHtml/logDetailHtml）整域迁 web/logs.js（createLogs(ui) 工厂 + __logs() 惰性 getter）；**面板 let 状态桥接模式**（8 个 logs* let 变量经 logsState().get/set 注入——245 轮 batchRef 判据推广到多变量场景）；5 条断言更新（hist49/hist92/polish95/runs129）；app.js 9819 行（七步累计 -1454）。
+
 ## [3.38.0] - 2026-11-11
 
 ### Added
