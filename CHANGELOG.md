@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.48.0] - 2026-11-11
+
+### Added
+
 - MCP 探针工具清单联动——inputSchema 预览（MCP 深化第二步）：/api/mcp-probe GET（tool=插件__动作 → inputSchema/插件元数据/动作风险机读——toJsonSchema 复用）；UI 动作详情页「inputSchema」折叠按钮（模型实际看到的 JSON Schema——min/max/pattern/enum 透传核对，215 轮字段一屏可见）；未知工具 -32602 透传；OpenAPI 登记；webui +2 断言。
 
 ## [3.47.0] - 2026-11-11
@@ -71,10 +77,4 @@
 ### Added
 
 - app.js 拆分第五步——监控/定时域注入式迁出：14 个函数（showWatchPanel/showTimers/renderTimersRows + scheduleWatch/fireTimer/persistWatch 等 7 主 7 支撑）整域迁 web/watchtimers.js（createWatchTimers(ui) 工厂 + __wt() 惰性 getter——整域内聚后注入面最小化）；10 条断言更新（webui×5/pace177/polish95×2/bookmark180——迁出函数改读 watchtimers.js）；app.js 10233 行（五步累计 -1040）。
-
-## [3.36.0] - 2026-11-11
-
-### Added
-
-- app.js 拆分第四步——导出/分享域注入式迁出：showShareView/showShareImport 迁 web/share.js（createShare(ui) 工厂 + __share() 惰性 getter；window 导出改 wrapper）；残留声明手工清除（调用点替换引擎误替换声明——迭代验证式提取 node --check 立即抓到）；5 条断言更新（table179×2/webshare169 拆分形态）；app.js 10698 行（四步累计 -575）。
 
