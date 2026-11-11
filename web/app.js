@@ -5906,12 +5906,48 @@ async function showMcpTools() {
       </tr><tr class="hidden mcp-tool-detail" data-mcp-detail="${esc(tool.name)}"><td colspan="4"><pre class="svc-log-pre">${esc(JSON.stringify(tool.inputSchema, null, 2).slice(0, 2500))}</pre>
         <button class="ghost mini" data-mcp-call="${esc(tool.name)}">${t('mcpCallBtn')}</button></td></tr>`;
     }).join('');
+    // 第二百五十八轮③：工具/资源双 tab（资源=zerokit:// 七个只读快照）
     el.doctorView.innerHTML = `<div class="panel">
       <h2>${t('mcpPanelTitle')} <span class="aid">${d.count ?? 0} tools</span></h2>
       <p class="sub">${t('mcpPanelSub')}</p>
-      <table class="grid"><thead><tr><th>${t('mcpColName')}</th><th>${t('mcpColTitle')}</th><th>${t('mcpColRisk')}</th><th>${t('mcpColHints')}</th></tr></thead><tbody>${rows || `<tr><td colspan="4">${t('mcpEmpty')}</td></tr>`}</tbody></table>
+      <div class="chips" id="mcpTabs">
+        <button class="chip on" data-mcp-tab="tools">${t('mcpTabTools')}</button>
+        <button class="chip" data-mcp-tab="resources">${t('mcpTabResources')}</button>
+      </div>
+      <div id="mcpToolsTab"><table class="grid"><thead><tr><th>${t('mcpColName')}</th><th>${t('mcpColTitle')}</th><th>${t('mcpColRisk')}</th><th>${t('mcpColHints')}</th></tr></thead><tbody>${rows || `<tr><td colspan="4">${t('mcpEmpty')}</td></tr>`}</tbody></table></div>
+      <div id="mcpResourcesTab" class="hidden"></div>
       <div class="actions"><button class="ghost" id="mcpBack">${t('backToList')}</button></div>
     </div>`;
+    // tab 切换
+    const loadResources = async () => {
+      const box = el.doctorView.querySelector('#mcpResourcesTab');
+      if (box.dataset.loaded) return;
+      try {
+        const rd = await api('/api/mcp-resources');
+        box.innerHTML = `<table class="grid"><thead><tr><th>${t('mcpResUri')}</th><th>${t('mcpResDesc')}</th></tr></thead><tbody>${(rd.resources ?? []).map((r2) => `<tr class="mcp-res-row" data-mcp-res="${esc(r2.uri)}"><td><code>${esc(r2.uri)}</code></td><td>${esc(r2.description)}</td></tr><tr class="hidden" data-mcp-res-detail="${esc(r2.uri)}"><td colspan="2"><pre class="svc-log-pre">${t('svcLogsLoading')}</pre></td></tr>`).join('')}</tbody></table>`;
+        box.dataset.loaded = '1';
+        box.querySelectorAll('[data-mcp-res]').forEach((tr) => tr.addEventListener('click', async () => {
+          const uri = tr.dataset.mcpRes;
+          const detail = box.querySelector(`[data-mcp-res-detail="${cssEscape(uri)}"]`);
+          if (!detail) return;
+          if (!detail.classList.contains('hidden')) { detail.classList.add('hidden'); return; }
+          detail.classList.remove('hidden');
+          const pre = detail.querySelector('pre');
+          try {
+            const r3 = await api(`/api/mcp-resource?uri=${encodeURIComponent(uri.replace('{key}', 'quick.b64'))}`);
+            pre.textContent = (r3.text ?? '').slice(0, 3000);
+          } catch (e) { pre.textContent = `读取失败：${e.message}`; }
+        }));
+      } catch (e) { box.innerHTML = `<div class="ps-empty" role="status">${esc(e.message)}</div>`; }
+    };
+    const cssEscape = (v) => (window.CSS && CSS.escape) ? CSS.escape(v) : v.replace(/["\\]/g, '\\$&');
+    el.doctorView.querySelectorAll('[data-mcp-tab]').forEach((b) => b.addEventListener('click', () => {
+      el.doctorView.querySelectorAll('[data-mcp-tab]').forEach((x) => x.classList.toggle('on', x === b));
+      const isRes = b.dataset.mcpTab === 'resources';
+      el.doctorView.querySelector('#mcpToolsTab')?.classList.toggle('hidden', isRes);
+      el.doctorView.querySelector('#mcpResourcesTab')?.classList.toggle('hidden', !isRes);
+      if (isRes) loadResources();
+    }));
     el.doctorView.querySelectorAll('[data-mcp-tool]').forEach((tr) => tr.addEventListener('click', () => {
       const detail = el.doctorView.querySelector(`[data-mcp-detail="${tr.dataset.mcpTool}"]`);
       detail?.classList.toggle('hidden');

@@ -751,6 +751,8 @@ const failed = results.filter(([, ok]) => !ok);
   check('256②③ UI inputSchema 折叠按钮', app2.includes('mcpSchemaBtn') && app2.includes('inputSchema（'));
   check('257①⑤ /api/mcp-tools 端点 + OpenAPI（tools/list 同构）', (() => { const srv = fs.readFileSync(path.join(PKG_ROOT, 'src', 'server.ts'), 'utf8'); return srv.includes('/api/mcp-tools') && srv.includes('annotations: {') && srv.includes('readOnlyHint: action.risk'); })());
   check('257②③④ #/mcp 面板 + 行展开 + 直调串接 + 命令面板入口', app2.includes('showMcpTools') && app2.includes('data-mcp-detail') && app2.includes('data-mcp-call') && app2.includes('#/mcp'));
+  check('258①②⑤ 资源清单/读取端点 + OpenAPI', (() => { const srv = fs.readFileSync(path.join(PKG_ROOT, 'src', 'server.ts'), 'utf8'); return srv.includes('/api/mcp-resources') && srv.includes('/api/mcp-resource?') || srv.includes("'/api/mcp-resource'") && srv.includes('zerokit://plugins'); })());
+  check('258③④ 面板资源 tab + 行展开读取', app2.includes('data-mcp-tab="resources"') && app2.includes('data-mcp-res-detail') && app2.includes('loadResources'));
   check('237①②④⑤ 首列冻结既有接线锁定（sticky/shouldFreeze≥4 阈值/滚动阴影/hover 联动）', (() => { const css = fs.readFileSync(path.join(PKG_ROOT, 'web', 'style.css'), 'utf8'); return app2.includes('shouldFreeze(cols, visCols)') && app2.includes('freeze-col') && css.includes('position: sticky; left: 0') && css.includes('tr:hover td:nth-child(1)') && css.includes('can-r'); })());
   check('238①②④⑤ batch 只重跑失败项既有接线锁定（batchRetry/runBatch(failEntries)/failed=0 隐藏）', app2.includes('id="batchRetry"') && app2.includes('runBatch(failEntries)') && app2.includes('failed ? '));
   check('238③ 重跑批次视觉标记（进度条/汇总卡双标记）', app2.includes('batch-retry-run') && app2.includes('batch-retry-badge'));

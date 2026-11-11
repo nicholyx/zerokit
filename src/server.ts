@@ -97,6 +97,8 @@ const API_METHODS: Record<string, string[]> = {
   '/api/doctor-history': ['GET'],
   '/api/mcp-probe': ['GET', 'POST'],
   '/api/mcp-tools': ['GET'],
+  '/api/mcp-resources': ['GET'],
+  '/api/mcp-resource': ['GET'],
   '/api/stop': ['POST'],
   '/api/kill': ['POST'],
   '/api/open': ['POST'],
@@ -152,6 +154,8 @@ const API_SPEC = {
     '/api/doctor-history': { get: { summary: 'doctor 体检历史（最近 50 条）', security: [{ token: [] }] } },
     '/api/mcp-probe': { get: { summary: '工具 inputSchema/annotations 机读（query: tool=插件__动作）', security: [{ token: [] }] }, post: { summary: 'MCP 工具直调探针（body: tool=插件__动作, arguments={}）——UI 调试器/dogfood', security: [{ token: [] }] } },
     '/api/mcp-tools': { get: { summary: 'MCP 工具清单（tools/list 同构：name/inputSchema/annotations）', security: [{ token: [] }] } },
+    '/api/mcp-resources': { get: { summary: 'MCP 资源清单（resources/list 同构：7 资源）', security: [{ token: [] }] } },
+    '/api/mcp-resource': { get: { summary: '单资源读取（query: uri=zerokit://xxx）', security: [{ token: [] }] } },
     '/api/stop': { post: { summary: '停止执行（body: key，缺省停全部）' } },
   },
   components: { securitySchemes: { token: { type: 'apiKey', in: 'header', name: 'X-ZeroKit-Token' } } },
@@ -1601,6 +1605,73 @@ export function createServer(): http.Server {
       // 第二百一十九轮②：服务日志尾部端点
       // 第二百二十轮②：四面健康快照（聚合 doctor/服务/缓存/插件，不缓存）
       // 第二百五十七轮①：MCP 工具清单（tools/list 同构——不起 MCP 进程核对暴露面）
+      // 第二百五十八轮①②：MCP 资源清单 + 单资源读取（140 轮 resources 面 UI 化）
+      if (url.pathname === '/api/mcp-resources' && req.method === 'GET') {
+        const resources = [
+          { uri: 'zerokit://plugins', name: '插件清单', description: '已装插件与动作数、风险构成（只读）', mimeType: 'application/json' },
+          { uri: 'zerokit://health', name: '健康报告', description: 'doctor 摘要（错误/警告/通过计数，只读）', mimeType: 'application/json' },
+          { uri: 'zerokit://runs', name: '最近执行', description: '最近 20 条执行记录（时间/动作/成败/耗时），时间倒序', mimeType: 'application/json' },
+          { uri: 'zerokit://runs/{key}', name: '动作执行史', description: '指定动作的最近 10 条', mimeType: 'application/json' },
+          { uri: 'zerokit://audit', name: '审计流水', description: '最近 30 条审计（含 denied）', mimeType: 'application/json' },
+          { uri: 'zerokit://watch', name: '监控注册表', description: '监控项快照', mimeType: 'application/json' },
+          { uri: 'zerokit://timers', name: '定时任务', description: '定时任务与下次触发时间（paused 标注）', mimeType: 'application/json' },
+        ];
+        json(res, 200, { resources, count: resources.length });
+        return;
+      }
+      if (url.pathname === '/api/mcp-resource' && req.method === 'GET') {
+        const u3 = new URL(req.url ?? '', 'http://x');
+        const uri = u3.searchParams.get('uri') ?? '';
+        // 数据构造复用既有纯函数/接口（与 140 轮 handler 同口径）
+        if (uri === 'zerokit://plugins') {
+          const entries = listPlugins();
+          const body = entries.reduce<Record<string, { actions: number; risks: Record<string, number> }>>((acc, e) => {
+            if (!e.plugin) return acc;
+            const v = acc[e.plugin.id] ?? { actions: 0, risks: {} };
+            for (const a of e.plugin.actions) {
+              v.actions += 1;
+              v.risks[a.risk] = (v.risks[a.risk] ?? 0) + 1;
+            }
+            acc[e.plugin.id] = v;
+            return acc;
+          }, {});
+          json(res, 200, { uri, mimeType: 'application/json', text: JSON.stringify(body, null, 2) });
+          return;
+        }
+        if (uri === 'zerokit://health') {
+          const { buildDoctorReport } = await import('./core/doctor.ts');
+          const r = await buildDoctorReport();
+          const errors = r.plugins.filter((p) => !p.ok).length + r.tools.filter((t) => !t.ok).length;
+          const warnings = r.plugins.reduce((acc, p) => acc + p.problems.filter((x) => x.level === 'warning').length, 0);
+          json(res, 200, { uri, mimeType: 'application/json', text: JSON.stringify({ errors, warnings, passed: r.plugins.filter((p) => p.ok).length + r.tools.filter((t) => t.ok).length }, null, 2) });
+          return;
+        }
+        if (uri === 'zerokit://runs') {
+          const { readHistory } = await import('./core/cliX.ts');
+          const history = readHistory().slice(-20).reverse();
+          json(res, 200, { uri, mimeType: 'application/json', text: JSON.stringify(history, null, 2) });
+          return;
+        }
+        if (uri === 'zerokit://audit') {
+          const { readAudit } = await import('./core/ops.ts');
+          const { readDenied } = await import('./core/audit.ts');
+          const merged = [...readAudit(), ...readDenied().records].sort((a, b) => (a.ts < b.ts ? 1 : -1)).slice(0, 30);
+          json(res, 200, { uri, mimeType: 'application/json', text: JSON.stringify(merged, null, 2) });
+          return;
+        }
+        if (uri === 'zerokit://watch' || uri === 'zerokit://timers') {
+          const file = uri.endsWith('timers') ? 'timers.json' : 'watch.json';
+          try {
+            const raw = fs.readFileSync(path.join(DATA_DIR, file), 'utf8');
+            json(res, 200, { uri, mimeType: 'application/json', text: raw });
+          } catch {
+            json(res, 200, { uri, mimeType: 'application/json', text: '{\"empty\": true}' });
+          }
+          return;
+        }
+        fail(res, 404, `不认识这个资源：${uri}`);
+        return;
+      }
       if (url.pathname === '/api/mcp-tools' && req.method === 'GET') {
         const { collectTools, toolName } = await Promise.all([import('./mcp.ts'), import('./core/manifest.ts')]).then(([a, b]) => ({ collectTools: a.collectTools, toolName: b.toolName }));
         const tools = collectTools().map(({ plugin, action }) => ({
