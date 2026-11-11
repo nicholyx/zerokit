@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -45,7 +46,7 @@ run = ["{node}", "-e", "require('http').createServer((q,r)=>r.end('ok')).listen(
 // 先装插件再算依赖（serviceDeps 读已装清单）
 const addR = spawnSync(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'plugin', 'add', dir], { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
 if (addR.status !== 0) console.error('plugin add 失败:', (addR.stdout + addR.stderr).slice(0, 200));
-const { serviceDeps, startService } = await import(path.join(ROOT, 'src/core/services.ts'));
+const { serviceDeps, startService } = await import(pathToFileURL(path.join(ROOT, 'src/core/services.ts')).href);
 const deps = serviceDeps();
 const alpha = deps.find((d) => d.key === 'depdemo.alpha');
 check('① requires 解析（同插件 id → 全局键）', alpha?.requires.includes('depdemo.beta') === true, JSON.stringify(alpha));
