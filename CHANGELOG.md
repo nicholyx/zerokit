@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.47.0] - 2026-11-11
+
+### Added
+
 - MCP 工具直调探针（v4 展望 MCP 深化第一步）：server /api/mcp-probe POST——进程内走 runner、MCP 信封语义响应（jsonrpc 2.0/content blocks/_meta/isError；错误透传 tool-not-found/bad-params/not-authorized 三态）；UI 动作详情页「MCP 调用」按钮（tools/call 语义直调、结果含 _meta 元数据）；授权策略同款（只读放行、副作用须 mcp allow）；Caller 类型扩展 mcp-probe 审计来源；OpenAPI 登记；webui +3 断言。
 
 ## [3.46.0] - 2026-11-11
@@ -71,10 +77,4 @@
 ### Added
 
 - app.js 拆分第四步——导出/分享域注入式迁出：showShareView/showShareImport 迁 web/share.js（createShare(ui) 工厂 + __share() 惰性 getter；window 导出改 wrapper）；残留声明手工清除（调用点替换引擎误替换声明——迭代验证式提取 node --check 立即抓到）；5 条断言更新（table179×2/webshare169 拆分形态）；app.js 10698 行（四步累计 -575）。
-
-## [3.35.0] - 2026-11-11
-
-### Added
-
-- app.js 拆分第三步——面板壳域注入式迁出（refs=0 子集）：15 个零外部状态耦合的纯渲染函数迁 web/panels.js（createPanels(ui) 工厂 + __panels() 惰性 getter）；迭代验证式提取（每删一个函数立即 node --check——renderTextView 删除伤邻居被自动跳过，renderDiffBody 实为 diffResults 内部物）；app.js 10765 行（累计 -508）；4 条断言更新（webui×2/density53×2）；方案表第 3 步 refs=0 层完成。
 
