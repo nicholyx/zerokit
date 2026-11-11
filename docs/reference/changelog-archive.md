@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [3.34.0] - 2026-11-11
+
+### Added
+
+- app.js 拆分第二步——批量域注入式迁出：runBatch/applyBatchImport/syncBatchView/curBatch 四函数迁 web/batch.js（createBatch(ui) 工厂 + __batch() 惰性 getter；batch/entries 是 app 侧 let——经 batchRef()/entriesRef() 闭包引用传入，赋值改为 .length=0/push 形态）；app.js 11049 行（-153）；8 条断言更新为拆分形态（batch98×4/pace177/webui×3）；方案表第 2 步完成标记。
+
 ## [3.33.0] - 2026-11-11
 
 ### Added

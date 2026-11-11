@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.46.0] - 2026-11-11
+
+### Added
+
 - 三层防线文档化（拆分系列最终判据汇编）：app-split-plan 补篇——职责矩阵（L1 静态断言查文本 / L2 注入面契约查结构 / L3 CDP 运行时查行为，各层天然漏什么、为什么需要下一层）；各层抓出的真缺陷记录（L3 抓 26 处含九轮潜伏、L2 抓 251 轮漏网之鱼、L1 三行秒级回归不可替代）；通用化模板（双侧约定→L2、组合爆炸→L3、其余 L1）；一句话判据「存在性断言永远不能证明可达性」。v4 及后续大型重构的验收模板。
 
 ## [3.45.0] - 2026-11-11
@@ -71,10 +77,4 @@
 ### Added
 
 - app.js 拆分第三步——面板壳域注入式迁出（refs=0 子集）：15 个零外部状态耦合的纯渲染函数迁 web/panels.js（createPanels(ui) 工厂 + __panels() 惰性 getter）；迭代验证式提取（每删一个函数立即 node --check——renderTextView 删除伤邻居被自动跳过，renderDiffBody 实为 diffResults 内部物）；app.js 10765 行（累计 -508）；4 条断言更新（webui×2/density53×2）；方案表第 3 步 refs=0 层完成。
-
-## [3.34.0] - 2026-11-11
-
-### Added
-
-- app.js 拆分第二步——批量域注入式迁出：runBatch/applyBatchImport/syncBatchView/curBatch 四函数迁 web/batch.js（createBatch(ui) 工厂 + __batch() 惰性 getter；batch/entries 是 app 侧 let——经 batchRef()/entriesRef() 闭包引用传入，赋值改为 .length=0/push 形态）；app.js 11049 行（-153）；8 条断言更新为拆分形态（batch98×4/pace177/webui×3）；方案表第 2 步完成标记。
 
