@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.40.0] - 2026-11-11
+
+### Added
+
 - app.js 拆分第八步——doctor/统计面板域注入式迁出：4 个函数（showDoctor/exitDoctor/renderDoctor + showStats 设置与统计大盘）整域迁 web/doctorstats.js（createDoctorStats(ui) 工厂 + __ds() 惰性 getter）；零断言改动——doctor 面板断言全部锚在 extras 纯函数与 app 壳层（236 轮走势条断言读 extras 的 doctorTrendSparks，不受拆分影响）；app.js 9504 行（八步累计 -1769）。
 
 ## [3.39.0] - 2026-11-11
@@ -71,10 +77,4 @@
 ### Added
 
 - 结果表格首列冻结体验复核锁定：39/143/176/195 轮已实现首列 sticky、shouldFreeze ≥4 列阈值、can-r/can-l 滚动阴影、行 hover 贯穿冻结列——webui +1 断言锁定既有接线防回归；sysinfo top 宽表实测（4 列 true/3 列 false 阈值复核）。
-
-## [3.28.0] - 2026-11-10
-
-### Added
-
-- doctor 历史趋势线：doctorTrendSparks 纯函数（jsonl → spark 数据，倒序入正序出/坏条目滤除）；doctor 面板走势条（最近 10 次错误红/警告黄/干净绿——复用 watch-spark 形态）；CLI zkit doctor --trend（文本走势）；server /api/doctor-history GET 端点；I18N docSpark 两键 zh/en；extras-smoke +1 / webui +1 断言。
 
