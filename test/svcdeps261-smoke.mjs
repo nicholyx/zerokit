@@ -104,6 +104,6 @@ check('262② service up 汇总语义（✓ 或 = 跳过）', (upR.stdout + '').
 // 清理
 spawnSync(process.execPath, ['src/cli.ts', 'service', 'stop', 'depdemo.alpha'], { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
 spawnSync(process.execPath, ['src/cli.ts', 'service', 'stop', 'depdemo.beta'], { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
-fs.rmSync(home, { recursive: true, force: true });
+try { fs.rmSync(home, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }); } catch { /* Windows EBUSY：clipboard 插件进程句柄释放滞后——清理失败不影响断言结论 */ }
 console.log(`\n${'='.repeat(60)}\n通过 ${pass} / ${pass + fail}`);
 process.exit(fail > 0 ? 1 : 0);
