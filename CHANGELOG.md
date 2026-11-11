@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.56.0] - 2026-11-12
+
+### Added
+
 - 服务编排第四步——批量停止与依赖关停顺序 zkit service down：topoStopOrder（topoStart 的逆——本服务最先停、依赖最后）；globalStopOrder（全服务图入度剥离——无依赖先停、被依赖最多的最后；环残余收敛尾部）；zkit service down [插件.服务|--all]（逆序依次 stopService，未运行幂等跳过「=」）；/api/services/down POST（UI ⛓ 依赖关停按钮对位，confirm 守卫）；svcdeps261 +3 断言（逆序/幂等/全局序）。
 
 ## [3.55.0] - 2026-11-12
@@ -71,10 +77,4 @@
 ### Added
 
 - 域文件注入面契约静态断言（251 轮缺口类别的第二道防线）：test/domain-faces-smoke.mjs——括号平衡解析双侧键集（域文件解构键 ⊆ app 注入对象键，9 域全覆盖）+ 跨域引用须有注入依据；契约断言当场抓出一个真实缺口（market 的 exitMarket 解构了但 app 未注入——251 轮手工修复的漏网之鱼）+ 一个命名规范偏差（cdp-regression → cdp-smoke 对齐 -smoke.mjs 统计口径）；全量 134 文件 / 3155 断言。
-
-## [3.44.0] - 2026-11-11
-
-### Added
-
-- CDP 面板回归进 CI（251 轮判据常态化）：test/cdp-regression.mjs——自管 server + headless Chrome 生命周期（端口自避）、12 面板逐个打开断言渲染、console/异常 = 0 硬断言；无 Chrome 环境优雅 skip（exit 0）；CI ubuntu 加 chromium 安装步；进 test-all（全量 133 文件 / 3137 断言含 CDP 3 条）。从此每个 PR 都做运行时验证。
 
