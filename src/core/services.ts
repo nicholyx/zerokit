@@ -165,6 +165,50 @@ export function listServices(): ServiceStatus[] {
   return out;
 }
 
+/**
+ * 第二百六十一轮②：服务依赖解析——把 requires（本插件 id 或 插件.服务）展开成全局键，
+ * 检查存在性；检出直接循环（A→B→A）。返回每个服务的依赖状态。
+ */
+export function serviceDeps(): Array<{ key: string; requires: string[]; missing: string[]; cycle: boolean }> {
+  const byPlugin = new Map<string, import('./manifest.ts').Plugin>();
+  for (const e of listPlugins()) {
+    if (e.plugin) byPlugin.set(e.plugin.id, e.plugin);
+  }
+  const out: Array<{ key: string; requires: string[]; missing: string[]; cycle: boolean }> = [];
+  for (const [, plugin] of byPlugin) {
+    for (const svc of plugin.services) {
+      if (!svc.requires || svc.requires.length === 0) continue;
+      const resolved: string[] = [];
+      const missing: string[] = [];
+      for (const r of svc.requires) {
+        // 本插件内 id → 插件.id；带点 → 跨插件原样
+        const full = r.includes('.') ? r : `${plugin.id}.${r}`;
+        const [pid = '', sid = ''] = full.includes('.') ? full.split('.', 2) : [full, ''];
+        const depPlugin = byPlugin.get(pid);
+        const depExists = depPlugin?.services.some((x) => x.id === sid);
+        if (depExists) resolved.push(full); else missing.push(full);
+      }
+      // 循环检测：从本服务沿 resolved 走，回到自己即环（限深 16 防炸）
+      let cycle = false;
+      const seen = new Set([`${plugin.id}.${svc.id}`]);
+      let frontier = [...resolved];
+      for (let depth = 0; depth < 16 && frontier.length > 0 && !cycle; depth++) {
+        const next: string[] = [];
+        for (const key of frontier) {
+          if (seen.has(key)) { if (key === `${plugin.id}.${svc.id}`) { cycle = true; break; } continue; }
+          seen.add(key);
+          const [p2 = '', s2 = ''] = key.includes('.') ? key.split('.', 2) : [key, ''];
+          const dep = byPlugin.get(p2)?.services.find((x) => x.id === s2);
+          for (const r2 of dep?.requires ?? []) next.push(r2.includes('.') ? r2 : `${p2}.${r2}`);
+        }
+        frontier = next;
+      }
+      out.push({ key: `${plugin.id}.${svc.id}`, requires: resolved, missing, cycle });
+    }
+  }
+  return out;
+}
+
 export function findService(pluginId: string, serviceId: string): ServiceStatus | undefined {
   return listServices().find((s) => s.pluginId === pluginId && s.id === serviceId);
 }
@@ -199,6 +243,22 @@ export async function startService(pluginId: string, serviceId: string, caller =
   if (!svc.run || svc.run.length === 0) return { ok: false, message: `服务 ${pluginId}.${serviceId} 没有声明 run 启动命令` };
   const status = serviceOf(entry.plugin, svc);
   if (status.running) return { ok: false, message: `服务已在运行（PID ${status.pid}），不重复启动` };
+  // 第二百六十一轮③：依赖前检——required 依赖未运行则拒绝启动（列出缺哪些）
+  if (svc.requires && svc.requires.length > 0) {
+    const depStatuses: string[] = [];
+    for (const r of svc.requires) {
+      const full = r.includes('.') ? r : `${pluginId}.${r}`;
+      const [p2 = '', s2 = ''] = full.includes('.') ? full.split('.', 2) : [full, ''];
+      const depEntry = listPlugins().find((e) => e.plugin?.id === p2);
+      const depSvc = depEntry?.plugin?.services.find((x) => x.id === s2);
+      if (!depSvc) continue;  // 不存在的依赖是清单错误——doctor/面板 depMissing 管；启动检查只拦「存在但未运行」
+      const depRunning = serviceOf(depEntry!.plugin!, depSvc).running;
+      if (!depRunning) depStatuses.push(`${full}（未运行）`);
+    }
+    if (depStatuses.length > 0) {
+      return { ok: false, message: `依赖未就绪：${depStatuses.join('、')}——先启动依赖（zkit service start <依赖>）` };
+    }
+  }
   // 第二百一十八轮②：run 命令来源校验——argv[0] 占位符解析后必须是已知工具或落在插件目录内（防越界命令）
   // 直接 spawn：占位符解析复用 previewCommand 的 vars 逻辑
   const toolNames = ['node', 'python', 'git', 'kit', process.execPath];
