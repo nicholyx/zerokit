@@ -37,6 +37,8 @@ export interface ServiceStatus {
   canStop: boolean;
   /** 第二百一十七轮⑤：是否声明了 run 启动命令（面板据此显示「启动」按钮） */
   canStart: boolean;
+  /** 第二百六十三轮③：健康态——healthy（运行且探针过）/ unhealthy（运行但探针败）/ stopped / undefined（无探针声明，仅 running） */
+  health?: 'healthy' | 'unhealthy' | 'stopped';
 }
 
 /**
@@ -235,6 +237,36 @@ export function topoStartOrder(pluginId: string, serviceId: string): { order: st
   };
   visit(self, []);
   return { order: order.filter((k) => k !== self).concat(self), cycleSkipped };
+}
+
+/**
+ * 第二百六十三轮②：健康探针——http 期望 2xx（fetch 短超时）；tcp 期望可连（net.connect 短超时）。
+ * 纯异步函数：探测失败/超时/连接拒绝都算探针未通过。
+ */
+export async function probeHealth(check: { http?: string; tcp?: string }): Promise<boolean> {
+  const timeout = (ms: number) => new Promise<never>((_, rej) => setTimeout(() => rej(new Error('probe-timeout')), ms));
+  try {
+    if (check.http) {
+      const res = await Promise.race([fetch(check.http, { signal: AbortSignal.timeout(2500) }), timeout(3000)]);
+      return res.status >= 200 && res.status < 300;
+    }
+    if (check.tcp) {
+      const { host, port } = (() => {
+        const [h = '', prt = ''] = check.tcp?.split(':') ?? [];
+        return { host: h, port: Number(prt) || 80 };
+      })();
+      const net = await import('node:net');
+      const ok = await Promise.race([
+        new Promise<boolean>((resolve, reject) => {
+          const sock = net.connect({ host, port }, () => { sock.destroy(); resolve(true); });
+          sock.on('error', reject);
+        }),
+        timeout(2500),
+      ]);
+      return ok === true;
+    }
+  } catch { /* 探针异常=未通过 */ }
+  return false;
 }
 
 export function findService(pluginId: string, serviceId: string): ServiceStatus | undefined {

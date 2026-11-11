@@ -1859,12 +1859,21 @@ export function createServer(): http.Server {
         return;
       }
       if (url.pathname === '/api/services' && req.method === 'GET') {
-        const { listServices, serviceDeps } = await import('./core/services.ts');
+        const { listServices, serviceDeps, probeHealth } = await import('./core/services.ts');
         const deps = serviceDeps();
-        json(res, 200, { services: listServices().map((sv) => {
+        // 第二百六十三轮③：声明了 healthCheck 的服务做真实探测（running 细分 healthy/unhealthy）
+        const svcModules = await Promise.all([import('./core/registry.ts'), import('./core/manifest.ts')]).then(([r, mn]) => ({ registry: r, manifest: mn }));
+        const services = await Promise.all(listServices().map(async (sv) => {
           const dep = deps.find((d) => d.key === `${sv.pluginId}.${sv.id}`);
-          return { ...sv, requires: dep?.requires ?? [], depMissing: dep?.missing ?? [], depCycle: dep?.cycle ?? false };
-        }) });
+          let health: string | undefined;
+          const entry = svcModules.registry.listPlugins().find((e) => e.plugin?.id === sv.pluginId);
+          const svc = entry?.plugin?.services.find((x) => x.id === sv.id);
+          if (svc?.healthCheck) {
+            health = sv.running ? (await probeHealth(svc.healthCheck) ? 'healthy' : 'unhealthy') : 'stopped';
+          }
+          return { ...sv, requires: dep?.requires ?? [], depMissing: dep?.missing ?? [], depCycle: dep?.cycle ?? false, health };
+        }));
+        json(res, 200, { services });
         return;
       }
       if (url.pathname === '/api/cache' && req.method === 'GET') {

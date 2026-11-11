@@ -6025,6 +6025,8 @@ async function showServices() {
     const data = await api('/api/services');
     const rows = data.services.map((sv) => {
       const mark = sv.running ? '●' : '○';
+      // 第二百六十三轮④：健康三态（声明探针的服务）——✓ healthy / ⚠ unhealthy / ○ stopped
+      const healthBadge = sv.health ? (sv.health === 'healthy' ? ' <span class="badge read">✓ healthy</span>' : sv.health === 'unhealthy' ? ' <span class="badge bad">⚠ unhealthy</span>' : '') : '';
       const pid = sv.pid ? `PID ${sv.pid}` : t('svcStopped');
       const port = sv.port ? ` :${sv.port}` : '';
       const full = `${esc(sv.pluginId)}.${esc(sv.id)}`;
@@ -6046,7 +6048,7 @@ async function showServices() {
         ? `<button class="ghost svc-up" data-svc-up="${full}" title="${t('svcUpTip')}">⛓ ${t('svcUpBtn')}</button>` : '';
       // 第二百一十九轮③：日志按钮（展开尾部）
       const logBtn = `<button class="ghost svc-logs" data-svc-logs="${full}">${t('svcLogsBtn')}</button>`;
-      return `<tr><td>${mark} <b>${esc(sv.pluginName)}</b> · ${esc(sv.id)}</td><td>${esc(sv.title)}</td><td>${pid}${port}${depBadges ? `<br>${depBadges}` : ''}</td><td>${logBtn}${startBtn}${stopBtn}${restartBtn}</td></tr><tr class="svc-log-row hidden" data-svc-log-row="${full}"><td colspan="4"><pre class="svc-log-pre">${t('svcLogsLoading')}</pre></td></tr>`;
+      return `<tr><td>${mark} <b>${esc(sv.pluginName)}</b> · ${esc(sv.id)}${healthBadge}</td><td>${esc(sv.title)}</td><td>${pid}${port}${depBadges ? `<br>${depBadges}` : ''}</td><td>${logBtn}${startBtn}${stopBtn}${restartBtn}</td></tr><tr class="svc-log-row hidden" data-svc-log-row="${full}"><td colspan="4"><pre class="svc-log-pre">${t('svcLogsLoading')}</pre></td></tr>`;
     }).join('');
     el.doctorView.innerHTML = `
       <div class="panel">

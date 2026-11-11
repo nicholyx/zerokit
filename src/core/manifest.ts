@@ -209,6 +209,8 @@ export interface Service {
   run?: string[];
   /** 第二百六十一轮①：依赖的服务（本插件内 id 或 插件.服务）——启动前检查 */
   requires?: string[];
+  /** 第二百六十三轮①：健康探针（http=URL 期望 2xx；tcp=host:port 期望可连）——声明后 running 细分为 healthy/unhealthy */
+  healthCheck?: { http?: string; tcp?: string };
   cwd?: string;
   env: Record<string, string>;
 }
@@ -679,6 +681,17 @@ function parseServices(raw: unknown, errors: string[]): Service[] {
     // 第二百六十一轮①：requires（依赖服务）解析——本插件 id 或 插件.服务 跨插件
     const reqList = asStringArray(s['requires']);
     if (reqList.length > 0) service.requires = reqList;
+    // 第二百六十三轮①：healthCheck 解析（[service.healthCheck] http= / tcp=）
+    const hcRaw = s['healthCheck'];
+    if (hcRaw && typeof hcRaw === 'object') {
+      const hc = hcRaw as Record<string, unknown>;
+      const out: { http?: string; tcp?: string } = {};
+      const http = typeof hc['http'] === 'string' ? hc['http'] : undefined;
+      const tcp = typeof hc['tcp'] === 'string' ? hc['tcp'] : undefined;
+      if (http) out.http = http;
+      if (tcp) out.tcp = tcp;
+      if (Object.keys(out).length > 0) service.healthCheck = out;
+    }
     const cwd = asString(s['cwd']);
     if (cwd) service.cwd = cwd;
     out.push(service);

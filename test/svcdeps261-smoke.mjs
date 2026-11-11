@@ -105,5 +105,15 @@ check('262② service up 汇总语义（✓ 或 = 跳过）', (upR.stdout + '').
 spawnSync(process.execPath, ['src/cli.ts', 'service', 'stop', 'depdemo.alpha'], { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
 spawnSync(process.execPath, ['src/cli.ts', 'service', 'stop', 'depdemo.beta'], { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
 try { fs.rmSync(home, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }); } catch { /* Windows EBUSY：clipboard 插件进程句柄释放滞后——清理失败不影响断言结论 */ }
+
+// ---- 第二百六十三轮：健康探针三态 / 死端口 / doctor 声明校验 ----
+const { probeHealth } = await import(pathToFileURL(path.join(ROOT, 'src/core/services.ts')).href);
+const deadHttp = await probeHealth({ http: 'http://127.0.0.1:1/nope' });
+check('263② 死端口 http 探针 false', deadHttp === false, String(deadHttp));
+const deadTcp = await probeHealth({ tcp: '127.0.0.1:1' });
+check('263② 死端口 tcp 探针 false', deadTcp === false, String(deadTcp));
+// 三态映射语义：stopped→无探测；running+pass→healthy；running+fail→unhealthy（由 /api/services 组合——这里用纯函数验探针极性即可，组合在 webui 断言）
+check('263③④ UI 健康徽标接线（badge 注入源码断言）', (() => { const appSrc = fs.readFileSync(path.join(ROOT, 'web', 'app.js'), 'utf8'); return appSrc.includes('healthBadge') && appSrc.includes('⚠ unhealthy') && appSrc.includes('✓ healthy'); })());
+
 console.log(`\n${'='.repeat(60)}\n通过 ${pass} / ${pass + fail}`);
 process.exit(fail > 0 ? 1 : 0);

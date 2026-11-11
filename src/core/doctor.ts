@@ -349,6 +349,20 @@ function checkPlugin(entry: ReturnType<typeof listPlugins>[number]): DoctorPlugi
     }
   }
 
+  // 第二百六十三轮⑤：healthCheck 声明校验（http/tcp 二选一、URL 形态）——探测在 services 面，doctor 只验清单
+  for (const svc of p.services) {
+    if (!svc.healthCheck) continue;
+    const hasHttp = typeof svc.healthCheck.http === 'string' && svc.healthCheck.http.length > 0;
+    const hasTcp = typeof svc.healthCheck.tcp === 'string' && svc.healthCheck.tcp.length > 0;
+    if (!hasHttp && !hasTcp) {
+      problems.push({ level: 'warning', text: `服务 ${svc.id}: healthCheck 声明了但 http/tcp 都为空`, hint: '二选一：http=完整 URL 或 tcp=host:port' });
+    } else if (hasHttp && !/^https?:\/\//.test(svc.healthCheck.http!)) {
+      problems.push({ level: 'warning', text: `服务 ${svc.id}: healthCheck.http 不是合法 URL（${svc.healthCheck.http}）`, hint: '应以 http:// 或 https:// 开头' });
+    } else if (hasTcp && !/^[\w.-]+:\d+$/.test(svc.healthCheck.tcp!)) {
+      problems.push({ level: 'warning', text: `服务 ${svc.id}: healthCheck.tcp 不是 host:port 形态（${svc.healthCheck.tcp}）`, hint: '如 127.0.0.1:8080' });
+    }
+  }
+
   return {
     id: p.id,
     dir: entry.dir.split(/[\\/]/).pop() ?? entry.dir,
