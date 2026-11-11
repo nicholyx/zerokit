@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.50.0] - 2026-11-11
+
+### Added
+
 - MCP 资源面板——zerokit:// 七资源 UI 化（MCP 深化第四步）：/api/mcp-resources GET（resources/list 同构清单）+ /api/mcp-resource?uri= 单资源读取（plugins/health/runs/audit/watch/timers 六实现，{key} 模板示例填充）；UI #/mcp 面板加「资源」tab（行点击展开 JSON——模型可读快照一屏核对）；OpenAPI 登记；I18N 四键；webui +2 断言；顺手修一个 ps-empty 漏 role=status 的 a11y 回归。
 
 ## [3.49.0] - 2026-11-11
@@ -71,10 +77,4 @@
 ### Added
 
 - app.js 拆分第七步——日志/审计面板域注入式迁出：4 个函数（showLogs/renderLogs + logRowHtml/logDetailHtml）整域迁 web/logs.js（createLogs(ui) 工厂 + __logs() 惰性 getter）；**面板 let 状态桥接模式**（8 个 logs* let 变量经 logsState().get/set 注入——245 轮 batchRef 判据推广到多变量场景）；5 条断言更新（hist49/hist92/polish95/runs129）；app.js 9819 行（七步累计 -1454）。
-
-## [3.38.0] - 2026-11-11
-
-### Added
-
-- app.js 拆分第六步——插件市场域注入式迁出：9 个函数（showMarket/renderMarket 系列 + 安装三态流 marketMsg/doMarketInstall/doMarketOp 等）整域迁 web/market.js（createMarket(ui) 工厂 + __market() 惰性 getter——整域内聚模式）；7 条断言更新（market-ui/market122——迁出符号改读 market.js）；app.js 9978 行（六步累计 -1295）。
 
