@@ -95,6 +95,7 @@ const API_METHODS: Record<string, string[]> = {
   '/api/health-snapshot': ['GET'],
   '/api/health-history': ['GET'],
   '/api/doctor-history': ['GET'],
+  '/api/mcp-probe': ['POST'],
   '/api/stop': ['POST'],
   '/api/kill': ['POST'],
   '/api/open': ['POST'],
@@ -148,6 +149,7 @@ const API_SPEC = {
     '/api/health-snapshot': { get: { summary: '四面健康总检快照（doctor/服务/缓存/插件）', security: [{ token: [] }] } },
     '/api/health-history': { get: { summary: '健康快照历史（最近 60 条）', security: [{ token: [] }] } },
     '/api/doctor-history': { get: { summary: 'doctor 体检历史（最近 50 条）', security: [{ token: [] }] } },
+    '/api/mcp-probe': { post: { summary: 'MCP 工具直调探针（body: tool=插件__动作, arguments={}）——UI 调试器/dogfood', security: [{ token: [] }] } },
     '/api/stop': { post: { summary: '停止执行（body: key，缺省停全部）' } },
   },
   components: { securitySchemes: { token: { type: 'apiKey', in: 'header', name: 'X-ZeroKit-Token' } } },
@@ -1634,6 +1636,64 @@ export function createServer(): http.Server {
       }
       // 第二百二十一轮②：健康历史机读
       // 第二百三十六轮⑤：doctor 历史机读（面板趋势数据源）
+      // 第二百五十五轮①：MCP 工具直调探针（UI 调试器/dogfood——进程内走 runner，MCP 语义响应）
+      if (url.pathname === '/api/mcp-probe' && req.method === 'POST') {
+        const body = await readBody(req);
+        const tool = String(body['tool'] ?? '');
+        const args2 = (body['arguments'] ?? {}) as Record<string, unknown>;
+        // tool 名形如 plugin__action（MCP toolName 规范：id 双下划线连接）
+        const i = tool.indexOf('__');
+        if (!tool || i <= 0) { fail(res, 400, 'tool 应为 插件__动作 形式（MCP toolName 规范）'); return; }
+        const pluginId = tool.slice(0, i);
+        const actionId = tool.slice(i + 2);
+        const entry = listPlugins().find((e) => e.plugin?.id === pluginId);
+        const action = entry?.plugin?.actions.find((a) => a.id === actionId);
+        if (!action) { json(res, 200, { jsonrpc: '2.0', error: { code: -32602, message: `不认识这个工具：${tool}（tool-not-found）` } }); return; }
+        // MCP 面的授权策略同款：只读放行，有副作用须 mcp allow
+        const { loadAllowEntries } = await import('./mcp.ts');
+        const allowed = action.risk === 'read' || loadAllowEntries().some((e) => e.key === `${pluginId}.${actionId}`);
+        if (!allowed) {
+          json(res, 200, { jsonrpc: '2.0', result: { content: [{ type: 'text', text: `这个动作有副作用，尚未授权给 AI 调用。\n请让用户在终端执行一次：zkit mcp allow ${pluginId}.${actionId}` }], isError: true, structuredContent: { error: 'not-authorized' } } });
+          return;
+        }
+        // 参数校验复用 coerceParam/applyDefaults（与 MCP callTool 同规则）
+        const { coerceParam, applyDefaults } = await import('./core/schema.ts');
+        const values: Record<string, unknown> = {};
+        const errors: string[] = [];
+        for (const prm of action.params) {
+          const provided = args2[prm.name];
+          if (provided === undefined) continue;
+          const r = coerceParam(prm, provided);
+          if (r.error) errors.push(r.error); else values[prm.name] = r.value;
+        }
+        for (const k of Object.keys(args2)) {
+          if (!action.params.some((prm) => prm.name === k)) errors.push(`未知参数 "${k}"`);
+        }
+        const wd = applyDefaults(action, values);
+        errors.push(...wd.errors);
+        if (errors.length > 0) {
+          json(res, 200, { jsonrpc: '2.0', result: { content: [{ type: 'text', text: `参数有问题：\n- ${errors.join('\n- ')}` }], isError: true, structuredContent: { error: 'bad-params' } } });
+          return;
+        }
+        // 执行（audit caller=mcp-probe）
+        const result = await runAction(entry!.plugin!, action, { caller: 'mcp-probe', values: wd.values });
+        const { maskSensitive, summarizeJson } = await import('./mcp.ts');
+        const safeData = maskSensitive(result.data);
+        const blocks: Array<Record<string, unknown>> = [];
+        if (safeData !== undefined) blocks.push({ type: 'text', text: summarizeJson(safeData).text });
+        else if (result.stdout) blocks.push({ type: 'text', text: result.stdout });
+        if (result.error) blocks.push({ type: 'text', text: `错误：${result.error}` });
+        if (result.stderr.trim() && !result.ok) blocks.push({ type: 'text', text: `stderr：${result.stderr.trim().slice(0, 4000)}` });
+        if (!blocks.length) blocks.push({ type: 'text', text: result.ok ? '（成功，无输出）' : '（失败，无输出）' });
+        const resp: Record<string, unknown> = { content: blocks };
+        if (safeData !== undefined && typeof safeData === 'object' && !Array.isArray(safeData)) {
+          (safeData as Record<string, unknown>)['_meta' as string] = { risk: action.risk, ms: result.ms, plugin: `${pluginId}@${entry!.plugin!.version ?? '?'}` };
+          resp['structuredContent'] = safeData;
+        }
+        if (!result.ok) resp['isError'] = true;
+        json(res, 200, { jsonrpc: '2.0', result: resp });
+        return;
+      }
       if (url.pathname === '/api/doctor-history' && req.method === 'GET') {
         const { readDoctorHistory } = await import('./core/doctor.ts');
         json(res, 200, { history: readDoctorHistory().slice(0, 50) });
