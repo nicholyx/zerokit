@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [3.28.0] - 2026-11-10
+
+### Added
+
+- doctor 历史趋势线：doctorTrendSparks 纯函数（jsonl → spark 数据，倒序入正序出/坏条目滤除）；doctor 面板走势条（最近 10 次错误红/警告黄/干净绿——复用 watch-spark 形态）；CLI zkit doctor --trend（文本走势）；server /api/doctor-history GET 端点；I18N docSpark 两键 zh/en；extras-smoke +1 / webui +1 断言。
+
 ## [3.27.0] - 2026-11-10
 
 ### Added
