@@ -573,6 +573,34 @@ async function cmdService(args: string[]): Promise<number> {
     }
     return 0;
   }
+  if (sub === 'down') {
+    // 第二百六十四轮②③：依赖关停——逆拓扑序（被依赖的最后停）；--all 全局序
+    const wantAll = args.includes('--all');
+    const { topoStopOrder, globalStopOrder, stopService } = await import('./core/services.ts');
+    let keys: string[] = [];
+    let cycleSkipped: string[] = [];
+    if (wantAll) {
+      keys = globalStopOrder();
+    } else {
+      const target = args[1] ?? '';
+      if (!target || !target.includes('.')) { process.stderr.write('用法：zkit service down 插件.服务 [--all]\n'); return 2; }
+      const i = target.lastIndexOf('.');
+      const topo = topoStopOrder(target.slice(0, i), target.slice(i + 1));
+      keys = topo.order;
+      cycleSkipped = topo.cycleSkipped;
+    }
+    if (cycleSkipped.length > 0) process.stdout.write(c.yellow(`⚠ 环依赖跳过：${cycleSkipped.join('、')}\n`));
+    let failed = 0;
+    for (const key of keys) {
+      const j = key.lastIndexOf('.');
+      const r = await stopService(key.slice(0, j), key.slice(j + 1));
+      audit({ ts: new Date().toISOString(), caller: 'cli', plugin: key.slice(0, j), action: `service-down:${key.slice(j + 1)}`, tool: 'service', risk: 'mutate', decision: r.ok ? 'allow' : 'deny', reason: r.message });
+      if (r.ok) process.stdout.write(`✓ 已停止 ${key}\n`);
+      else if (r.message.includes('不在运行') || r.message.includes('没有')) { process.stdout.write(`= ${key} 未运行，跳过\n`); continue; }
+      else { process.stderr.write(`✗ ${key} ${r.message}\n`); failed += 1; }
+    }
+    return failed > 0 ? 1 : 0;
+  }
   if (sub === 'up') {
     // 第二百六十二轮②：依赖拓扑启动——一声令下按序起全链
     const target = args[1] ?? '';

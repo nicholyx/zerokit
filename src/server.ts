@@ -92,6 +92,7 @@ const API_METHODS: Record<string, string[]> = {
   '/api/services': ['GET'],
   '/api/services/start': ['POST'],
   '/api/services/up': ['POST'],
+  '/api/services/down': ['POST'],
   '/api/services/logs': ['GET'],
   '/api/health-snapshot': ['GET'],
   '/api/health-history': ['GET'],
@@ -150,6 +151,7 @@ const API_SPEC = {
     '/api/services': { get: { summary: '声明服务的清单与状态', security: [{ token: [] }] } },
     '/api/services/start': { post: { summary: '启动声明服务（body: service=插件.服务）', security: [{ token: [] }] } },
     '/api/services/up': { post: { summary: '依赖拓扑启动（按 requires 序连起全链；body: service=插件.服务）', security: [{ token: [] }] } },
+    '/api/services/down': { post: { summary: '依赖关停（逆拓扑序；body: service=插件.服务 或 all=true）', security: [{ token: [] }] } },
     '/api/services/logs': { get: { summary: '服务日志尾部（query: service=插件.服务&tail=N）', security: [{ token: [] }] } },
     '/api/health-snapshot': { get: { summary: '四面健康总检快照（doctor/服务/缓存/插件）', security: [{ token: [] }] } },
     '/api/health-history': { get: { summary: '健康快照历史（最近 60 条）', security: [{ token: [] }] } },
@@ -1829,6 +1831,30 @@ export function createServer(): http.Server {
         return;
       }
       // 第二百六十二轮④：依赖拓扑启动端点（UI「依赖启动」对位）
+      // 第二百六十四轮④：依赖关停端点（UI ⛓ 对位）
+      if (url.pathname === '/api/services/down' && req.method === 'POST') {
+        const body = await readBody(req);
+        const target = String(body['service'] ?? '');
+        const all = body['all'] === true;
+        const { topoStopOrder, globalStopOrder, stopService } = await import('./core/services.ts');
+        let keys: string[] = [];
+        if (all) {
+          keys = globalStopOrder();
+        } else {
+          const i = target.lastIndexOf('.');
+          if (!target || i <= 0) { fail(res, 400, 'service 应为 插件.服务 形式'); return; }
+          keys = topoStopOrder(target.slice(0, i), target.slice(i + 1)).order;
+        }
+        const results: Array<{ target: string; ok: boolean; message: string }> = [];
+        for (const key of keys) {
+          const j = key.lastIndexOf('.');
+          const r = await stopService(key.slice(0, j), key.slice(j + 1));
+          audit({ ts: new Date().toISOString(), caller: 'ui', plugin: key.slice(0, j), action: `service-down:${key.slice(j + 1)}`, tool: 'service', risk: 'mutate', decision: r.ok ? 'allow' : 'deny', reason: r.message });
+          results.push({ target: key, ok: r.ok || r.message.includes('不在运行'), message: r.message });
+        }
+        json(res, 200, { ok: results.every((r) => r.ok), results });
+        return;
+      }
       if (url.pathname === '/api/services/up' && req.method === 'POST') {
         const body = await readBody(req);
         const target = String(body['service'] ?? '');

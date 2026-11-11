@@ -269,6 +269,39 @@ export async function probeHealth(check: { http?: string; tcp?: string }): Promi
   return false;
 }
 
+/**
+ * 第二百六十四轮①：关停拓扑序——启动序的逆（本服务最先停、其依赖最后）。
+ * 与 topoStartOrder 同源遍历，输出 reverse；环容错同款。
+ */
+export function topoStopOrder(pluginId: string, serviceId: string): { order: string[]; cycleSkipped: string[] } {
+  const start = topoStartOrder(pluginId, serviceId);
+  return { order: [...start.order].reverse(), cycleSkipped: start.cycleSkipped };
+}
+
+/** 第二百六十四轮③：全局关停序——所有声明服务按「被依赖最多者最后停」排（入度近似：先停无依赖的）。 */
+export function globalStopOrder(): string[] {
+  const deps = serviceDeps();
+  // 全部有 requires 的服务键（含缺失解析后的存在部分）
+  const keys = new Set<string>();
+  for (const d of deps) { keys.add(d.key); for (const r of d.requires) keys.add(r); }
+  // 入度（被依赖次数）：从各服务的 requires 指向依赖——被依赖越多越后停
+  const indeg = new Map<string, number>();
+  for (const k of keys) indeg.set(k, 0);
+  for (const d of deps) for (const r of d.requires) indeg.set(r, (indeg.get(r) ?? 0) + 1);
+  // 拓扑：入度 0 先停，逐层剥
+  const out: string[] = [];
+  const remaining = new Set(keys);
+  while (remaining.size > 0) {
+    const layer = [...remaining].filter((k) => (indeg.get(k) ?? 0) === 0);
+    if (layer.length === 0) { out.push(...remaining); break; }  // 环残余：顺序无解，全放尾部
+    for (const k of layer) { out.push(k); remaining.delete(k); }
+    for (const d of deps) for (const r of d.requires) {
+      if (remaining.has(r)) indeg.set(r, (indeg.get(r) ?? 1) - 1);
+    }
+  }
+  return out;
+}
+
 export function findService(pluginId: string, serviceId: string): ServiceStatus | undefined {
   return listServices().find((s) => s.pluginId === pluginId && s.id === serviceId);
 }

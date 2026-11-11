@@ -101,6 +101,22 @@ check('262③ 环容错（不炸、cycleSkipped 非空）', Array.isArray(topo2.
 const upR = spawnSync(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'service', 'up', 'clipboard.watcher'], { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
 check('262② service up 汇总语义（✓ 或 = 跳过）', (upR.stdout + '').match(/^[✓=]/m) !== null, (upR.stdout + upR.stderr).slice(0, 80));
 
+
+// ---- 第二百六十四轮：关停逆序 / 幂等 / --all 语义 ----
+const { topoStopOrder, globalStopOrder } = await import(pathToFileURL(path.join(ROOT, 'src/core/services.ts')).href);
+const stop = topoStopOrder('depdemo', 'alpha');
+const sbi = stop.order.indexOf('depdemo.beta');
+const sai = stop.order.indexOf('depdemo.alpha');
+check('264① 关停逆序（alpha 最先、beta 其后）', sai === 0 && sbi > sai, JSON.stringify(stop.order));
+// 幂等：对未运行服务 down——应「= 跳过」不失败
+const downR = spawnSync(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'service', 'down', 'depdemo.alpha'], { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
+check('264② down 幂等（未运行 = 跳过、exit 0）', downR.status === 0 && (downR.stdout + '').includes('='), (downR.stdout + downR.stderr).slice(0, 80));
+// --all：全局关停序——depdemo（requires 声明者）应在其内，且 alpha（无入度）在 beta（被依赖）前
+const allKeys = globalStopOrder();
+const ai2 = allKeys.indexOf('depdemo.alpha');
+const bi2 = allKeys.indexOf('depdemo.beta');
+check('264③ globalStopOrder（含 alpha，无入度者先停）', ai2 >= 0 && (bi2 < 0 || ai2 < bi2), JSON.stringify(allKeys).slice(0, 140));
+
 // 清理
 spawnSync(process.execPath, ['src/cli.ts', 'service', 'stop', 'depdemo.alpha'], { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
 spawnSync(process.execPath, ['src/cli.ts', 'service', 'stop', 'depdemo.beta'], { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
@@ -114,6 +130,7 @@ const deadTcp = await probeHealth({ tcp: '127.0.0.1:1' });
 check('263② 死端口 tcp 探针 false', deadTcp === false, String(deadTcp));
 // 三态映射语义：stopped→无探测；running+pass→healthy；running+fail→unhealthy（由 /api/services 组合——这里用纯函数验探针极性即可，组合在 webui 断言）
 check('263③④ UI 健康徽标接线（badge 注入源码断言）', (() => { const appSrc = fs.readFileSync(path.join(ROOT, 'web', 'app.js'), 'utf8'); return appSrc.includes('healthBadge') && appSrc.includes('⚠ unhealthy') && appSrc.includes('✓ healthy'); })());
+
 
 console.log(`\n${'='.repeat(60)}\n通过 ${pass} / ${pass + fail}`);
 process.exit(fail > 0 ? 1 : 0);
