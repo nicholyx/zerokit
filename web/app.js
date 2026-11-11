@@ -63,7 +63,7 @@ const __wt = () => {
 // 第二百四十六轮②③：插件市场域注入式迁出（9 函数整域）
 let __marketInst = null;
 const __market = () => {
-  __marketInst ??= createMarket({ esc, t, lang, el, api, $, setCount, hidePanels, panelDescBar, skeletonRows, marketRiskMix, load, modeRef: { get: () => mode, set: (v) => { mode = v; } }, panelsRef: () => __panels() });
+  __marketInst ??= createMarket({ esc, t, lang, el, api, $, setCount, exitMarket, hidePanels, panelDescBar, skeletonRows, marketRiskMix, load, modeRef: { get: () => mode, set: (v) => { mode = v; } }, panelsRef: () => __panels() });
   return __marketInst;
 };
 

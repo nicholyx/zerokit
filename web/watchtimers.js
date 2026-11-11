@@ -3,7 +3,7 @@
 import { intervalLabel, watchCsv, watchStopCondition, fmtElapsed, exportFilename, exportMime, classifyError, pickLang, nextRunLabel, inWindow, shouldCatchUp, trimHistory, exportTimers, parseTimersPack } from './extras.js';
 
 export function createWatchTimers(ui) {
-  const { esc, t, lang, api, TOKEN, el, setCount, hidePanels, panelDescBar, actionKey, paramStore, submit, openDetail, readJson, writeJson, renderResult, persistWatch: _noop, modeRef, watchStopLogRef, panelsRef, renderQuietSection } = ui;
+  const { esc, t, lang, api, TOKEN, el, setCount, hidePanels, panelDescBar, actionKey, paramStore, submit, openDetail, readJson, writeJson, renderResult, modeRef, watchStopLogRef, panelsRef, renderQuietSection } = ui;
 
 /** 第十轮②：定时任务面板——列出所有在跑的 interval，一键停。 */
 function timerRegistry() {
