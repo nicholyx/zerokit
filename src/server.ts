@@ -96,6 +96,7 @@ const API_METHODS: Record<string, string[]> = {
   '/api/health-history': ['GET'],
   '/api/doctor-history': ['GET'],
   '/api/mcp-probe': ['GET', 'POST'],
+  '/api/mcp-tools': ['GET'],
   '/api/stop': ['POST'],
   '/api/kill': ['POST'],
   '/api/open': ['POST'],
@@ -150,6 +151,7 @@ const API_SPEC = {
     '/api/health-history': { get: { summary: '健康快照历史（最近 60 条）', security: [{ token: [] }] } },
     '/api/doctor-history': { get: { summary: 'doctor 体检历史（最近 50 条）', security: [{ token: [] }] } },
     '/api/mcp-probe': { get: { summary: '工具 inputSchema/annotations 机读（query: tool=插件__动作）', security: [{ token: [] }] }, post: { summary: 'MCP 工具直调探针（body: tool=插件__动作, arguments={}）——UI 调试器/dogfood', security: [{ token: [] }] } },
+    '/api/mcp-tools': { get: { summary: 'MCP 工具清单（tools/list 同构：name/inputSchema/annotations）', security: [{ token: [] }] } },
     '/api/stop': { post: { summary: '停止执行（body: key，缺省停全部）' } },
   },
   components: { securitySchemes: { token: { type: 'apiKey', in: 'header', name: 'X-ZeroKit-Token' } } },
@@ -1598,6 +1600,25 @@ export function createServer(): http.Server {
       // 第二百一十七轮④：服务启动端点（UI 启动按钮对位）
       // 第二百一十九轮②：服务日志尾部端点
       // 第二百二十轮②：四面健康快照（聚合 doctor/服务/缓存/插件，不缓存）
+      // 第二百五十七轮①：MCP 工具清单（tools/list 同构——不起 MCP 进程核对暴露面）
+      if (url.pathname === '/api/mcp-tools' && req.method === 'GET') {
+        const { collectTools, toolName } = await Promise.all([import('./mcp.ts'), import('./core/manifest.ts')]).then(([a, b]) => ({ collectTools: a.collectTools, toolName: b.toolName }));
+        const tools = collectTools().map(({ plugin, action }) => ({
+          name: toolName(plugin.id, action.id),
+          title: `${plugin.name} · ${action.title}`,
+          description: action.description,
+          risk: action.risk,
+          inputSchema: toJsonSchema(action),
+          annotations: {
+            readOnlyHint: action.risk === 'read',
+            destructiveHint: action.risk === 'destructive',
+            idempotentHint: action.risk === 'read',
+            openWorldHint: false,
+          },
+        }));
+        json(res, 200, { tools, count: tools.length });
+        return;
+      }
       if (url.pathname === '/api/health-snapshot' && req.method === 'GET') {
         const [doctorMod, servicesMod, cliXCache] = await Promise.all([
           import('./core/doctor.ts'), import('./core/services.ts'), import('./core/cliX.ts'),

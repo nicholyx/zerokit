@@ -5885,6 +5885,52 @@ function exitLogs() {
 
 
 // ---------------------------------------------------------------- 环境自检
+// 第二百五十七轮②③：#/mcp 工具清单面板（tools/list 同构——核对暴露面）
+async function showMcpTools() {
+  mode = 'mcp';
+  el.modeLabel.textContent = t('mcpPanelTitle');
+  el.searchRow.classList.add('hidden');
+  hidePanels();
+  showPanelAnimated(el.doctorView);
+  if (location.hash !== '#/mcp') history.replaceState(null, '', '#/mcp');
+  el.doctorView.innerHTML = skeletonRows(4).map(() => '<div class="skel-row" aria-hidden="true"></div>').join('');
+  try {
+    const d = await api('/api/mcp-tools');
+    const rows = (d.tools ?? []).map((tool, i) => {
+      const risk = tool.risk === 'read' ? 'read' : tool.risk === 'destructive' ? 'destructive' : 'warn';
+      return `<tr class="mcp-tool-row" data-mcp-tool="${esc(tool.name)}" data-mcp-i="${i}">
+        <td><b>${esc(tool.name)}</b></td>
+        <td>${esc(tool.title)}</td>
+        <td><span class="badge ${risk}">${esc(tool.risk)}</span></td>
+        <td>${tool.annotations?.readOnlyHint ? '✓' : '—'} / ${tool.annotations?.destructiveHint ? '✓' : '—'}</td>
+      </tr><tr class="hidden mcp-tool-detail" data-mcp-detail="${esc(tool.name)}"><td colspan="4"><pre class="svc-log-pre">${esc(JSON.stringify(tool.inputSchema, null, 2).slice(0, 2500))}</pre>
+        <button class="ghost mini" data-mcp-call="${esc(tool.name)}">${t('mcpCallBtn')}</button></td></tr>`;
+    }).join('');
+    el.doctorView.innerHTML = `<div class="panel">
+      <h2>${t('mcpPanelTitle')} <span class="aid">${d.count ?? 0} tools</span></h2>
+      <p class="sub">${t('mcpPanelSub')}</p>
+      <table class="grid"><thead><tr><th>${t('mcpColName')}</th><th>${t('mcpColTitle')}</th><th>${t('mcpColRisk')}</th><th>${t('mcpColHints')}</th></tr></thead><tbody>${rows || `<tr><td colspan="4">${t('mcpEmpty')}</td></tr>`}</tbody></table>
+      <div class="actions"><button class="ghost" id="mcpBack">${t('backToList')}</button></div>
+    </div>`;
+    el.doctorView.querySelectorAll('[data-mcp-tool]').forEach((tr) => tr.addEventListener('click', () => {
+      const detail = el.doctorView.querySelector(`[data-mcp-detail="${tr.dataset.mcpTool}"]`);
+      detail?.classList.toggle('hidden');
+    }));
+    el.doctorView.querySelectorAll('[data-mcp-call]').forEach((b) => b.addEventListener('click', async (ev) => {
+      ev.stopPropagation();
+      const tool = b.dataset.mcpCall;
+      try {
+        const r = await api('/api/mcp-probe', { method: 'POST', body: { tool, arguments: {} } });
+        const text = r.error ? `JSON-RPC 错误 ${r.error.code}：${r.error.message}` : (r.result?.content ?? []).map((x) => x.text ?? '').join('\n').slice(0, 800);
+        setCount(r.error || r.result?.isError ? `✗ ${text.slice(0, 100)}` : `✓ ${text.slice(0, 100)}`);
+      } catch (e) { setCount(`调用失败：${e.message}`); }
+    }));
+    $('mcpBack')?.addEventListener('click', () => { location.hash = '#/'; });
+  } catch (e) {
+    el.doctorView.innerHTML = `<div class="ps-empty" role="status">${t('cacheLoadFail')}${esc(e.message)}</div>`;
+  }
+}
+
 async function showDashboard() {
   mode = 'dashboard';
   el.modeLabel.textContent = t('dash220Title');
@@ -7795,6 +7841,7 @@ function showPalette() {
     { icon: '☰', label: '设置抽屉', hint: '主题/语言/配置档/备份统一入口', key: '', group: 'page', act: () => openDrawer() },
     { icon: '🩺', label: '全景总检', hint: '四面健康一屏看全：doctor/服务/缓存/插件', key: '', group: 'page', act: () => { location.hash = '#/dashboard'; } },
     { icon: '⚡', label: '缓存面板', hint: '只读动作缓存条目与命中统计', key: '', group: 'page', act: () => { location.hash = '#/cache'; } },
+    { icon: '🔌', label: 'MCP 工具清单', hint: 'tools/list 同构——暴露面核对', key: '', group: 'page', act: () => { location.hash = '#/mcp'; } },
     { icon: '🔧', label: '服务面板', hint: '插件声明的后台服务：状态与停止', key: '', group: 'page', act: () => { location.hash = '#/services'; } },
     { icon: '🧪', label: '开发者面板', hint: 'dev 插件摘要/文件树/沙箱控制台 #/dev', key: '', group: 'page', act: () => { location.hash = '#/dev'; } },
     // 第八十五轮②：操作类命令——切主题/切语言/备份/清历史
@@ -8639,6 +8686,7 @@ function applyHash() {
   // 第二百一十六轮④：#/services 服务面板
   if ((location.hash || '') === '#/dashboard') { showDashboard(); return; }
   if ((location.hash || '') === '#/services') { showServices(); return; }
+  if ((location.hash || '') === '#/mcp') { showMcpTools(); return; }
   // #/cache 缓存面板（213 轮走 case 分支，这里补直达）
   if ((location.hash || '') === '#/cache') { showCache(); return; }
   // #/ps  直接打开「运行中」
