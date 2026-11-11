@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.49.0] - 2026-11-11
+
+### Added
+
 - MCP 工具清单面板——tools/list UI 化（MCP 深化第三步）：/api/mcp-tools GET（name/title/inputSchema/annotations 全量——与 MCP tools/list 同构，52 工具实测）；UI #/mcp 面板（工具表：名称/插件·动作/风险/readOnly-destructive hints）；行点击展开 inputSchema + 「直调」按钮（串起 255/256 两轮——面板内完成看 schema→调→核 _meta 全链路）；命令面板「🔌 MCP 工具清单」入口；I18N 九键 zh/en；OpenAPI 登记；webui +2 断言。
 
 ## [3.48.0] - 2026-11-11
@@ -71,10 +77,4 @@
 ### Added
 
 - app.js 拆分第六步——插件市场域注入式迁出：9 个函数（showMarket/renderMarket 系列 + 安装三态流 marketMsg/doMarketInstall/doMarketOp 等）整域迁 web/market.js（createMarket(ui) 工厂 + __market() 惰性 getter——整域内聚模式）；7 条断言更新（market-ui/market122——迁出符号改读 market.js）；app.js 9978 行（六步累计 -1295）。
-
-## [3.37.0] - 2026-11-11
-
-### Added
-
-- app.js 拆分第五步——监控/定时域注入式迁出：14 个函数（showWatchPanel/showTimers/renderTimersRows + scheduleWatch/fireTimer/persistWatch 等 7 主 7 支撑）整域迁 web/watchtimers.js（createWatchTimers(ui) 工厂 + __wt() 惰性 getter——整域内聚后注入面最小化）；10 条断言更新（webui×5/pace177/polish95×2/bookmark180——迁出函数改读 watchtimers.js）；app.js 10233 行（五步累计 -1040）。
 
