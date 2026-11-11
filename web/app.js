@@ -6046,6 +6046,9 @@ async function showServices() {
       // 第二百六十二轮⑤：依赖启动按钮（topo 序连起全链）
       const upBtn = (sv.requires ?? []).length > 0
         ? `<button class="ghost svc-up" data-svc-up="${full}" title="${t('svcUpTip')}">⛓ ${t('svcUpBtn')}</button>` : '';
+      // 第二百六十四轮⑤：依赖关停按钮（逆拓扑序）
+      const downBtn = (sv.requires ?? []).length > 0 && sv.running
+        ? `<button class="ghost svc-down" data-svc-down="${full}" title="${t('svcDownTip')}">⛓ ${t('svcDownBtn')}</button>` : '';
       // 第二百一十九轮③：日志按钮（展开尾部）
       const logBtn = `<button class="ghost svc-logs" data-svc-logs="${full}">${t('svcLogsBtn')}</button>`;
       return `<tr><td>${mark} <b>${esc(sv.pluginName)}</b> · ${esc(sv.id)}${healthBadge}</td><td>${esc(sv.title)}</td><td>${pid}${port}${depBadges ? `<br>${depBadges}` : ''}</td><td>${logBtn}${startBtn}${stopBtn}${restartBtn}</td></tr><tr class="svc-log-row hidden" data-svc-log-row="${full}"><td colspan="4"><pre class="svc-log-pre">${t('svcLogsLoading')}</pre></td></tr>`;
@@ -6067,6 +6070,14 @@ async function showServices() {
         showServices();
       });
     });
+    el.doctorView.querySelectorAll('[data-svc-down]').forEach((b) => b.addEventListener('click', async () => {
+      const full = b.dataset.svcDown;
+      if (!window.confirm(`${t('svcDownConfirm')} ${full}？`)) return;
+      const r = await api('/api/services/down', { method: 'POST', body: { service: full } });
+      const okN = (r.results ?? []).filter((x) => x.ok).length;
+      setCount(r.ok ? `✓ 依赖链关停完成（${okN}/${r.results?.length ?? 0}）` : `⚠ ${okN}/${r.results?.length ?? 0} 关停`);
+      showServices();
+    }));
     el.doctorView.querySelectorAll('[data-svc-up]').forEach((b) => b.addEventListener('click', async () => {
       const full = b.dataset.svcUp;
       const r = await api('/api/services/up', { method: 'POST', body: { service: full } });

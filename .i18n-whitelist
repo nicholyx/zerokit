@@ -1625,3 +1625,6 @@ if\ \(!depRunning\)\ depStatuses\.push\(`\$\{full\}（未运行）`\);
 if\ \(!depSvc\)\ continue;\ \ //\ 不存在的依赖是清单错误——doctor/面板\ depMissing\ 管；启动检查只拦「存在但未运行
 return\ \{\ ok:\ false,\ message:\ `依赖未就绪：\$\{depStatuses\.join\('、'\)\}——先启动依赖（zkit\ ser
 setCount\(r\.ok\ \?\ `✓\ 依赖链启动完成（\$\{okCount\}/\$\{r\.results\?\.length\ \?\?\ 0\}）`\ :\ `⚠\ \$\{okC
+/\*\*\ 第二百六十四轮③：全局关停序——所有声明服务按「被依赖最多者最后停」排（入度近似：先停无依赖的）。\ \*/
+\*\ 第二百六十四轮①：关停拓扑序——启动序的逆（本服务最先停、其依赖最后）。
+setCount\(r\.ok\ \?\ `✓\ 依赖链关停完成（\$\{okN\}/\$\{r\.results\?\.length\ \?\?\ 0\}）`\ :\ `⚠\ \$\{okN\}/\$\{
