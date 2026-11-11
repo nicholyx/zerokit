@@ -129,14 +129,16 @@ jobs:
           sudo apt-get install -y -qq xclip xvfb
           echo "装了：$(xclip -version 2>&1 | head -1)"
 
-      # 第二百五十二轮④：CDP 面板回归需要真实 Chrome（ubuntu 无预装）
+      # 第二百五十二轮④（255 轮修正）：CDP 面板回归需要真实 Chrome。
+      # ubuntu-24.04 的 chromium-browser 是 snap 转包——拉 snapcraft 源常超时；改用 Google 官方 .deb 稳定直链。
       - name: 装 Chrome（CDP 面板回归用）
         if: runner.os == 'Linux'
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get install -y -qq chromium-browser || sudo apt-get install -y -qq chromium
-          echo "装了：$(chromium --version 2>/dev/null || chromium-browser --version 2>/dev/null)"
+          wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo apt-get install -y -qq /tmp/chrome.deb
+          echo "装了：$(google-chrome --version)"
 
       - name: 环境自检
         shell: bash

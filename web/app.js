@@ -2120,6 +2120,35 @@ function openDetail(plugin, action, prefill) {
       box.innerHTML = `<div class="help" style="color:var(--bad)">预览失败：${esc(e.message)}</div>`;
     }
   });
+  // 第二百五十五轮②③：MCP 调用按钮——以 MCP 协议语义直调本动作（UI 调试器/dogfood）
+  {
+    const mcpBtn = document.createElement('button');
+    mcpBtn.className = 'ghost';
+    mcpBtn.id = 'mcpProbeBtn';
+    mcpBtn.textContent = 'MCP 调用';
+    mcpBtn.title = '以 MCP tools/call 语义直调（进程内探针——验证 inputSchema 与授权策略）';
+    pb?.after(mcpBtn);
+    mcpBtn.addEventListener('click', async () => {
+      $('invokeBox').innerHTML = '';
+      const tool = `${plugin.id}__${action.id}`;
+      mcpBtn.disabled = true; mcpBtn.textContent = '调用中…';
+      try {
+        const r = await api('/api/mcp-probe', { method: 'POST', body: { tool, arguments: collectValues(action) } });
+        const isErr = r.result?.isError === true || r.error;
+        const text = r.error ? `JSON-RPC 错误 ${r.error.code}：${r.error.message}` : (r.result?.content ?? []).map((b) => b.text ?? '').join('\n');
+        const meta = r.result?.structuredContent?._meta ? `\n\n_meta：${JSON.stringify(r.result.structuredContent._meta)}` : '';
+        $('invokeBox').innerHTML = `<div class="cmd-box">
+          <div class="cmd-box-head">MCP tools/call → ${esc(tool)}${isErr ? '（isError）' : ''}</div>
+          <pre>${esc(text.slice(0, 4000))}${meta}</pre>
+        </div>`;
+        setCount(isErr ? '✗ MCP 调用返回错误（详见下方）' : '✓ MCP 调用成功');
+      } catch (e) {
+        setCount(`MCP 调用失败：${e.message}`);
+      } finally {
+        mcpBtn.disabled = false; mcpBtn.textContent = 'MCP 调用';
+      }
+    });
+  }
   // chain 试走：纯前端推演。真实执行才有真实值——这里只回答「每步的输入从哪来」。
   $('chainDryBtn')?.addEventListener('click', () => {
     const out = $('chainDryOut');

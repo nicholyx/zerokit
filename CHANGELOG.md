@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- MCP 工具直调探针（v4 展望 MCP 深化第一步）：server /api/mcp-probe POST——进程内走 runner、MCP 信封语义响应（jsonrpc 2.0/content blocks/_meta/isError；错误透传 tool-not-found/bad-params/not-authorized 三态）；UI 动作详情页「MCP 调用」按钮（tools/call 语义直调、结果含 _meta 元数据）；授权策略同款（只读放行、副作用须 mcp allow）；Caller 类型扩展 mcp-probe 审计来源；OpenAPI 登记；webui +3 断言。
 
 ## [3.46.0] - 2026-11-11
 

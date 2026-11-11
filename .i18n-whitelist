@@ -1574,3 +1574,15 @@ if\ \(!sec\)\ \{\ setCount\('间隔需要\ 5–3600\ 秒'\);\ return;\ \}
 export\ function\ paletteMatchLine\(matched,\ candidates\)\ \{
 \ \ \ \ //\ 第二百三十九轮③：到期高亮——≤5\ 分钟\ warn\ /\ 已过期\ exp（catch\-up\ 前的视觉态）
 <span\ class="timer\-next\$\{dueCls\}"\ title="下次触发">
+'/api/mcp\-probe':\ \{\ post:\ \{\ summary:\ 'MCP\ 工具直调探针（body:\ tool=插件__动作,\ argument
+//\ 执行（audit\ caller=mcp\-probe）
+//\ 第二百五十五轮②③：MCP\ 调用按钮——以\ MCP\ 协议语义直调本动作（UI\ 调试器/dogfood）
+if\ \(!action\)\ \{\ json\(res,\ 200,\ \{\ jsonrpc:\ '2\.0',\ error:\ \{\ code:\ \-32602,\ messa
+json\(res,\ 200,\ \{\ jsonrpc:\ '2\.0',\ result:\ \{\ content:\ \[\{\ type:\ 'text',\ text:\ `
+mcpBtn\.disabled\ =\ false;\ mcpBtn\.textContent\ =\ 'MCP\ 调用';
+mcpBtn\.disabled\ =\ true;\ mcpBtn\.textContent\ =\ '调用中…';
+mcpBtn\.textContent\ =\ 'MCP\ 调用';
+setCount\(`MCP\ 调用失败：\$\{e\.message\}`\);
+setCount\(isErr\ \?\ '✗\ MCP\ 调用返回错误（详见下方）'\ :\ '✓\ MCP\ 调用成功'\);
+mcpBtn\.title\ =\ '以\ MCP\ tools/call\ 语义直调（进程内探针——验证\ inputSchema\ 与授权策略）';
+const\ text\ =\ r\.error\ \?\ `JSON\-RPC\ 错误\ \$\{r\.error\.code\}：\$\{r\.error\.message\}`\ :\ \(r\.result\?\.content\ \?\?\ \[\]\)\.map\(\(b\)\ =>\ b\.text\ \?\?\ ''\)\.
