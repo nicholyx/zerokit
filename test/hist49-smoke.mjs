@@ -42,7 +42,7 @@ const { runTrend, failureRate, durationStats } = await import(pathToFileURL(path
   ok(app.includes('runTrend(') && app.includes('failureRate(') && app.includes('durationStats('), '详情页三函数接线');
   ok(app.includes('#cmpLast') && app.includes('showCompareView({ res: cur }, { res: prev })'), '与上次对比按钮');
   ok(app.includes('data-sel') && app.includes('收藏对比'), '收藏两结果对比');
-  ok(app.includes('logCsv') && app.includes('zerokit-logs-'), '日志 CSV 导出');
+  ok(fs.readFileSync(path.join(REPO, 'web', 'logs.js'), 'utf8').includes('logCsv') && fs.readFileSync(path.join(REPO, 'web', 'logs.js'), 'utf8').includes('zerokit-logs-'), '日志 CSV 导出（247 轮起在 logs.js）');
   const css = fs.readFileSync(path.join(REPO, 'web/style.css'), 'utf8');
   ok(css.includes('.hist-panel') && css.includes('.trend-chip'), '历史卡样式');
 }
