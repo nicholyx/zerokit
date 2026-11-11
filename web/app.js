@@ -6034,11 +6034,16 @@ async function showServices() {
       const canStart = sv.canStart !== false;
       const startBtn = !sv.running && canStart
         ? `<button class="ghost svc-start" data-svc-start="${full}">${t('svcStartBtn')}</button>` : '';
+      // 第二百六十一轮⑤：依赖行（缺依赖 ⚠ / 环依赖标红）
+      const depMissing = (sv.depMissing ?? []).length > 0;
+      const depCycle = sv.depCycle === true;
+      const depBadges = (sv.requires ?? []).length > 0 || depMissing || depCycle
+        ? `<span class="sub svc-deps ${depMissing || depCycle ? 'bad' : ''}" title="依赖服务">依赖 ${(sv.requires ?? []).join('、')}${depMissing ? ` ⚠ 缺：${(sv.depMissing ?? []).join('、')}` : ''}${depCycle ? ' ⟳ 环依赖' : ''}</span>` : '';
       const restartBtn = sv.running
         ? `<button class="ghost svc-restart" data-svc-restart="${full}">${t('svcRestartBtn')}</button>` : '';
       // 第二百一十九轮③：日志按钮（展开尾部）
       const logBtn = `<button class="ghost svc-logs" data-svc-logs="${full}">${t('svcLogsBtn')}</button>`;
-      return `<tr><td>${mark} <b>${esc(sv.pluginName)}</b> · ${esc(sv.id)}</td><td>${esc(sv.title)}</td><td>${pid}${port}</td><td>${logBtn}${startBtn}${stopBtn}${restartBtn}</td></tr><tr class="svc-log-row hidden" data-svc-log-row="${full}"><td colspan="4"><pre class="svc-log-pre">${t('svcLogsLoading')}</pre></td></tr>`;
+      return `<tr><td>${mark} <b>${esc(sv.pluginName)}</b> · ${esc(sv.id)}</td><td>${esc(sv.title)}</td><td>${pid}${port}${depBadges ? `<br>${depBadges}` : ''}</td><td>${logBtn}${startBtn}${stopBtn}${restartBtn}</td></tr><tr class="svc-log-row hidden" data-svc-log-row="${full}"><td colspan="4"><pre class="svc-log-pre">${t('svcLogsLoading')}</pre></td></tr>`;
     }).join('');
     el.doctorView.innerHTML = `
       <div class="panel">

@@ -1839,8 +1839,12 @@ export function createServer(): http.Server {
         return;
       }
       if (url.pathname === '/api/services' && req.method === 'GET') {
-        const { listServices } = await import('./core/services.ts');
-        json(res, 200, { services: listServices() });
+        const { listServices, serviceDeps } = await import('./core/services.ts');
+        const deps = serviceDeps();
+        json(res, 200, { services: listServices().map((sv) => {
+          const dep = deps.find((d) => d.key === `${sv.pluginId}.${sv.id}`);
+          return { ...sv, requires: dep?.requires ?? [], depMissing: dep?.missing ?? [], depCycle: dep?.cycle ?? false };
+        }) });
         return;
       }
       if (url.pathname === '/api/cache' && req.method === 'GET') {

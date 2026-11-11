@@ -1618,3 +1618,9 @@ setCount\(`MCP\ 调用失败：\$\{e\.message\}`\);
 box\.innerHTML\ =\ `<div\ class="cmd\-box\-head"\ style="color:var\(\-\-bad\)">读取失败：\$\{e
 box\.innerHTML\ =\ `<div\ class="help"\ style="color:var\(\-\-bad\)">读取失败：\$\{esc\(e\.mes
 fail\(res,\ 404,\ `不认识这个资源：\$\{uri\}`\);
+//\ 第二百六十一轮③：依赖前检——required\ 依赖未运行则拒绝启动（列出缺哪些）
+//\ 第二百六十一轮⑤：依赖行（缺依赖\ ⚠\ /\ 环依赖标红）
+\?\ `<span\ class="sub\ svc\-deps\ \$\{depMissing\ \|\|\ depCycle\ \?\ 'bad'\ :\ ''\}"\ title="
+if\ \(!depRunning\)\ depStatuses\.push\(`\$\{full\}（未运行）`\);
+if\ \(!depSvc\)\ continue;\ \ //\ 不存在的依赖是清单错误——doctor/面板\ depMissing\ 管；启动检查只拦「存在但未运行
+return\ \{\ ok:\ false,\ message:\ `依赖未就绪：\$\{depStatuses\.join\('、'\)\}——先启动依赖（zkit\ ser

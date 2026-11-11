@@ -207,6 +207,8 @@ export interface Service {
   stop?: string[];
   /** 第二百一十七轮②：启动命令（argv 数组，占位符 {plugin_dir}/{node} 同 stop）——没有则无法从面板启动 */
   run?: string[];
+  /** 第二百六十一轮①：依赖的服务（本插件内 id 或 插件.服务）——启动前检查 */
+  requires?: string[];
   cwd?: string;
   env: Record<string, string>;
 }
@@ -674,6 +676,9 @@ function parseServices(raw: unknown, errors: string[]): Service[] {
     // 第二百一十七轮②：run（启动命令）解析
     const runCmd = asStringArray(s['run']);
     if (runCmd.length > 0) service.run = runCmd;
+    // 第二百六十一轮①：requires（依赖服务）解析——本插件 id 或 插件.服务 跨插件
+    const reqList = asStringArray(s['requires']);
+    if (reqList.length > 0) service.requires = reqList;
     const cwd = asString(s['cwd']);
     if (cwd) service.cwd = cwd;
     out.push(service);
