@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [3.26.0] - 2026-11-10
+
+### Added
+
+- 零命中词消化闭环：suggestFromZeroHits 纯函数（拼音域编辑距离 ≤2——候选 label/py 形态匹配 full 与 initials 各一次，返回原文 top3）；0 命中时命令面板显示「你可能在找」chips（点击即填入重搜；无建议零打扰）；I18N zeroSuggestLabel zh/en；extras-smoke +2 断言（拼音域命中/top3 分档）。
+
 ## [3.25.0] - 2026-11-10
 
 ### Added

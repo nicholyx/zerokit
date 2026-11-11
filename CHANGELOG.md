@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.38.0] - 2026-11-11
+
+### Added
+
 - app.js 拆分第六步——插件市场域注入式迁出：9 个函数（showMarket/renderMarket 系列 + 安装三态流 marketMsg/doMarketInstall/doMarketOp 等）整域迁 web/market.js（createMarket(ui) 工厂 + __market() 惰性 getter——整域内聚模式）；7 条断言更新（market-ui/market122——迁出符号改读 market.js）；app.js 9978 行（六步累计 -1295）。
 
 ## [3.37.0] - 2026-11-11
@@ -71,10 +77,4 @@
 ### Added
 
 - 零命中词查看面与同义词表培育：开发者面板新增零命中词管理区（列表/单条删除 chip×/一键清空确认/空态友好提示）；副文案引导高频词进 SYNONYMS（web/extras.js）——零命中数据从收集→利用→可管理可培育；I18N zeroHits 七键 zh/en；webui +2 断言。
-
-## [3.26.0] - 2026-11-10
-
-### Added
-
-- 零命中词消化闭环：suggestFromZeroHits 纯函数（拼音域编辑距离 ≤2——候选 label/py 形态匹配 full 与 initials 各一次，返回原文 top3）；0 命中时命令面板显示「你可能在找」chips（点击即填入重搜；无建议零打扰）；I18N zeroSuggestLabel zh/en；extras-smoke +2 断言（拼音域命中/top3 分档）。
 
