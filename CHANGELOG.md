@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.39.0] - 2026-11-11
+
+### Added
+
 - app.js 拆分第七步——日志/审计面板域注入式迁出：4 个函数（showLogs/renderLogs + logRowHtml/logDetailHtml）整域迁 web/logs.js（createLogs(ui) 工厂 + __logs() 惰性 getter）；**面板 let 状态桥接模式**（8 个 logs* let 变量经 logsState().get/set 注入——245 轮 batchRef 判据推广到多变量场景）；5 条断言更新（hist49/hist92/polish95/runs129）；app.js 9819 行（七步累计 -1454）。
 
 ## [3.38.0] - 2026-11-11
@@ -71,10 +77,4 @@
 ### Added
 
 - doctor 历史趋势线：doctorTrendSparks 纯函数（jsonl → spark 数据，倒序入正序出/坏条目滤除）；doctor 面板走势条（最近 10 次错误红/警告黄/干净绿——复用 watch-spark 形态）；CLI zkit doctor --trend（文本走势）；server /api/doctor-history GET 端点；I18N docSpark 两键 zh/en；extras-smoke +1 / webui +1 断言。
-
-## [3.27.0] - 2026-11-10
-
-### Added
-
-- 零命中词查看面与同义词表培育：开发者面板新增零命中词管理区（列表/单条删除 chip×/一键清空确认/空态友好提示）；副文案引导高频词进 SYNONYMS（web/extras.js）——零命中数据从收集→利用→可管理可培育；I18N zeroHits 七键 zh/en；webui +2 断言。
 
