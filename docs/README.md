@@ -31,6 +31,7 @@
 | [依赖清单](reference/dependencies.md) | 每个依赖一行「为什么需要」+ 依赖规则 | 评审新依赖 / 供应链巡检 |
 | [桌面壳热键对照](reference/desktop-keys.md) | 全局热键 vs UI 快捷键分层表 + 审计原则 | 改热键/排冲突前必读 |
 | [可复现构建](reference/reproducibility.md) | lockfile/engines/Cargo.lock 审计记录 + 已知差距 | 构建问题排查 |
+- [MCP 探针体系](reference/mcp-probe.md) —— 四入口核对工具面：不拉起 MCP server
 | [Cookbook](reference/cookbook.md) | 十篇实战配方 | 照抄解决常见任务 |
 | [项目账本](reference/overview.md) | 已完成/待办/已知差距 | 想知道项目现状 |
 

@@ -10,10 +10,11 @@
 - 插件签名与校验链（供应链信任）
 - plugin new 脚手架→一键发布 market 的通道
 
-### 2. MCP 深化（优先级高）
-- MCP 工具与 UI 动作的单向数据回流（MCP 调用进审计时间线）
-- 远程 MCP（SSE/streamable-http）宿主支持
-- zerokit 作为 MCP server 的资源订阅（变更推送而非轮询）
+### 2. MCP 深化（优先级高）✅ 探针体系已完成（255-259 轮，v3.47–v3.51）
+- ~~MCP 工具与 UI 动作的单向数据回流（MCP 调用进审计时间线）~~ ✅ 探针执行记审计 caller=mcp-probe
+- ~~核对工具面需要拉起 MCP server~~ ✅ 四入口（Web 直调/schema、#/mcp 面板、CLI probe）全部不拉起——见 [MCP 探针体系](../reference/mcp-probe.md)
+- 远程 MCP（SSE/streamable-http）宿主支持（未做）
+- zerokit 作为 MCP server 的资源订阅（变更推送而非轮询）（未做）
 
 ### 3. 服务编排（中）
 - [[service]] 依赖图（proxy 挂了 watcher 也不该瞎跑）
