@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.41.0] - 2026-11-11
+
+### Added
+
 - app.js 拆分第九步——设置/主题/剪贴板域注入式迁出：5 个函数（applyTheme/applyAccent/applyFontScale/cycleTheme + showClipPanel）整域迁 web/themeclip.js（createThemeClip(ui) 工厂 + __tc() 惰性 getter）；零断言改动（主题断言锚在 extras 的 normalize/resolve 纯函数）；app.js 9442 行（九步累计 -1831）。
 
 ## [3.40.0] - 2026-11-11
@@ -71,10 +77,4 @@
 ### Added
 
 - batch 失败重跑体验补全：盘点确认「只重跑失败」25 轮已有（batchRetry 按钮/runBatch(failEntries) 重入/无失败隐藏）——webui 断言锁定既有接线；补重跑批次视觉标记（进度条左缘警示条 + 汇总卡 ↻ 徽标——区分新结果 vs 保留旧结果）。
-
-## [3.29.0] - 2026-11-10
-
-### Added
-
-- 结果表格首列冻结体验复核锁定：39/143/176/195 轮已实现首列 sticky、shouldFreeze ≥4 列阈值、can-r/can-l 滚动阴影、行 hover 贯穿冻结列——webui +1 断言锁定既有接线防回归；sysinfo top 宽表实测（4 列 true/3 列 false 阈值复核）。
 

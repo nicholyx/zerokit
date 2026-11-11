@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [3.29.0] - 2026-11-10
+
+### Added
+
+- 结果表格首列冻结体验复核锁定：39/143/176/195 轮已实现首列 sticky、shouldFreeze ≥4 列阈值、can-r/can-l 滚动阴影、行 hover 贯穿冻结列——webui +1 断言锁定既有接线防回归；sysinfo top 宽表实测（4 列 true/3 列 false 阈值复核）。
+
 ## [3.28.0] - 2026-11-10
 
 ### Added
