@@ -31,25 +31,41 @@ import { createThemeClip } from './themeclip.js';
 let __keysInst = null;
 const __keys = () => { __keysInst ??= createKeys({ setCount, esc, t, lang }); return __keysInst; };
 
-// 第二百四十二轮②③：批量域注入式迁出（createBatch + 惰性 getter——batch/entries 是 app 侧 let，经闭包引用传入）
+// 第二百四十二轮②③：批量域注入式迁出（batch/entries 是 app 侧 let——经闭包引用传入）
 let __batchInst = null;
 const __batch = () => {
+  __batchInst ??= createBatch({ esc, t, lang, api, TOKEN, el, renderList, openDetail, paramStore, actionKey, entriesRef: () => entries, batchRef: () => batch, setCount });
+  return __batchInst;
+};
 
-// 第二百四十三轮②③：面板壳域注入式迁出（零状态耦合子集——15 个纯渲染函数）
+// 第二百四十三轮②③：面板壳域注入式迁出（零状态耦合子集——16 个纯渲染函数）
 let __panelsInst = null;
 const __panels = () => {
+  __panelsInst ??= createPanels({ esc, t, lang, actionKey, actionRiskCard, barsScale, diffResults, formatMs, hotkeyMap, maskSecrets, maskState, openDetail, perfMark, resultCompare, riskText, submit, wbSend, notifyLogRef: () => notifyLog });
+  return __panelsInst;
+};
 
 // 第二百四十四轮②③：导出/分享域注入式迁出
 let __shareInst = null;
 const __share = () => {
+  __shareInst ??= createShare({ esc, t, lang, api, setCount, closeDrawer, alert, hidePanels, isNumericColumn, mdTableVis, replayPolicyWeb, replayShareInWeb, webFingerprint, webValidateSharePack });
+  return __shareInst;
+};
+
 
 // 第二百四十五轮②③：监控/定时域注入式迁出（14 函数整域）
 let __wtInst = null;
 const __wt = () => {
+  __wtInst ??= createWatchTimers({ esc, t, lang, api, TOKEN, el, setCount, hidePanels, panelDescBar, actionKey, paramStore, submit, openDetail, readJson, writeJson, renderResult, modeRef: { get: () => mode, set: (v) => { mode = v; } }, watchStopLogRef: () => (watchStopLog ?? []), panelsRef: () => __panels(), renderQuietSection });
+  return __wtInst;
+};
 
 // 第二百四十六轮②③：插件市场域注入式迁出（9 函数整域）
 let __marketInst = null;
 const __market = () => {
+  __marketInst ??= createMarket({ esc, t, lang, el, api, $, setCount, hidePanels, panelDescBar, skeletonRows, marketRiskMix, load, modeRef: { get: () => mode, set: (v) => { mode = v; } }, panelsRef: () => __panels() });
+  return __marketInst;
+};
 
 // 第二百四十七轮②③：日志/审计域注入式迁出（let 状态经 logsState getter/setter 注入——245 轮判据推广）
 let __logsInst = null;
@@ -68,37 +84,22 @@ const __logsState = () => {
   return { get, set };
 };
 const __logs = () => {
+  __logsInst ??= createLogs({ esc, t, lang, el, api, TOKEN, setCount, hidePanels, panelDescBar, skeletonRows, maskSecrets, maskState, exportMime, exportFilename, filterAudit, logsState: __logsState, modeRef: { get: () => mode, set: (v) => { mode = v; } }, panelsRef: () => __panels() });
+  return __logsInst;
+};
 
 // 第二百四十八轮②③：doctor/统计域注入式迁出
 let __dsInst = null;
 const __ds = () => {
+  __dsInst ??= createDoctorStats({ esc, t, lang, el, api, TOKEN, setCount, hidePanels, panelDescBar, skeletonRows, actionKey, openDetail, showPluginHome, idleSuggest, loadPrefs, applyPrefsSnapshot, collectPrefsSnapshot, applyTheme: () => __tc().applyTheme(), applyAccent: () => __tc().applyAccent(), applyFontScale: () => __tc().applyFontScale(), applyLang, __wt, modeRef: { get: () => mode, set: (v) => { mode = v; } }, panelsRef: () => __panels(), runStoreRef: () => runStore, exitStats, readJson });
+  return __dsInst;
+};
 
 // 第二百四十九轮②③：设置/主题/剪贴板域注入式迁出
 let __tcInst = null;
 const __tc = () => {
-  __tcInst ??= createThemeClip({ esc, t, lang, el, setCount, hidePanels, PREF, loadClipHist, saveClipHist, pushThemeToFrame, __panels });
+  __tcInst ??= createThemeClip({ esc, t, lang, el, setCount, hidePanels, PREF, loadClipHist, saveClipHist, pushThemeToFrame, __panels, accentRef: () => accent });
   return __tcInst;
-};
-  __dsInst ??= createDoctorStats({ esc, t, lang, el, api, TOKEN, setCount, hidePanels, panelDescBar, skeletonRows, actionKey, openDetail, showPluginHome, idleSuggest, renderSnap, persistTag, loadPrefs, applyPrefsSnapshot, collectPrefsSnapshot, applyTheme, applyAccent, applyFontScale, applyLang, __wt });
-  return __dsInst;
-};
-  __logsInst ??= createLogs({ esc, t, lang, el, api, TOKEN, setCount, hidePanels, panelDescBar, skeletonRows, maskSecrets, maskState, exportMime, exportFilename, filterAudit, logsState: __logsState });
-  return __logsInst;
-};
-  __marketInst ??= createMarket({ esc, t, lang, api, setCount, hidePanels, panelDescBar, skeletonRows, marketRiskMix, load, risk });
-  return __marketInst;
-};
-  __wtInst ??= createWatchTimers({ esc, t, lang, api, TOKEN, el, setCount, hidePanels, panelDescBar, actionKey, paramStore, submit, openDetail, readJson, writeJson, renderResult });
-  return __wtInst;
-};
-  __shareInst ??= createShare({ esc, t, lang, api, setCount, closeDrawer, alert, hidePanels, isNumericColumn, mdTableVis, replayPolicyWeb, replayShareInWeb, webFingerprint, webValidateSharePack });
-  return __shareInst;
-};
-  __panelsInst ??= createPanels({ esc, t, lang, actionKey, actionRiskCard, barsScale, diffResults, formatMs, hotkeyMap, maskSecrets, maskState, openDetail, perfMark, resultCompare, riskText, submit, wbSend, escClose });
-  return __panelsInst;
-};
-  __batchInst ??= createBatch({ esc, t, lang, api, TOKEN, el, renderList, openDetail, paramStore, actionKey, entriesRef: () => entries, batchRef: () => batch, setCount });
-  return __batchInst;
 };
 
 import { pageJump, explainScore, planBatch, msHistogram, validateFields, dirtyFields, deepLinkParams, recentParamSets, whyLabel, expandSynonyms, stripStopwords, parseHistoryHash, recencyBoost, encodeDeepLink, buildZkresult, parseZkresult, commandWithNote, favNote, defaultChip, enumHint, actionHealthBadge, descNeedsFold, inQuietHours, notifyThrottle, pushNotifyLog, parseHm } from './extras.js';
@@ -8889,7 +8890,7 @@ window.__zerokit = {
 
   // 第六十四轮：剪贴板工作流（截图脚本与自动化验证用）
   __zerokitShowClipSuggest: showClipSuggest,
-  __zerokitShowClipPanel: showClipPanel,
+  __zerokitShowClipPanel: () => __tc().showClipPanel(),
   // 第三十九轮：结果区直渲（截图脚本与自动化验证用）
   __zerokitRenderResult: (res) => renderResult(res),
   // 第二十一轮：配置档（截图脚本与深度自动化用）
@@ -8904,7 +8905,7 @@ window.__zerokit = {
   __zerokitShowFirstRun: showFirstRunGuide,
   // 第二十四轮：命令与快捷键
   __zerokitShowPalette: showPalette,
-  __zerokitShowHotkeyCheat: showHotkeyCheat,
+  __zerokitShowHotkeyCheat: () => __keys().showHotkeyCheat(),
   __zerokitCommandList: COMMAND_LIST,
   __zerokitGotoArmedAt: () => gotoArmedAt,
   __zerokitRenameProfile(from, to) {
@@ -8925,13 +8926,13 @@ window.__zerokit = {
   get entries() { return entries; },
   get filtered() { return filtered; },
   get mode() { return mode; },
-  scoreEntry, search, romanize, scorePinyin, renderList,
+  scoreEntry, search, romanize, scorePinyin, renderList: (...a) => __panels().renderList(...a),
   get favorites() { return favorites; },
   get theme() { return document.documentElement.dataset.theme; },
   get health() { return pluginHealth(plugins); },
-  cycleTheme, showShortcuts, showPluginHome, renderPrompts, showLogs, showDoctor,
+  cycleTheme: () => __tc().cycleTheme(), showShortcuts: (...a) => __panels().showShortcuts(...a), showPluginHome, renderPrompts: (...a) => __panels().renderPrompts(...a), showLogs: (...a) => __logs().showLogs(...a), showDoctor: (...a) => __ds().showDoctor(),
   openDetail, submit, backToList, renderResult,
-  showPalette, runBatch: (...a) => __batch().runBatch(...a), showMarket, showPlugins,
+  showPalette, runBatch: (...a) => __batch().runBatch(...a), showMarket: (...a) => __market().showMarket(...a), showPlugins,
   collectBackup, parseBackup, mergeBackup, classifyKey, backupFilename, exportBackup, openImportDialog,
   get batch() { return batch; },
   get logsPage() { return logsPage; },
@@ -9168,7 +9169,7 @@ applyAiAssist();
 applyLang();
 __tc().applyTheme();
 __tc().applyAccent();
-window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
+window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => __tc().applyTheme());
 // 第四十七轮：themeBtn 已收进抽屉（drawerBtn 打开即渲染主题区），此处不再绑定顶栏按钮
 document.addEventListener('click', (e) => {
   const pop = $('themePop');
@@ -9176,11 +9177,11 @@ document.addEventListener('click', (e) => {
   if (pop.contains(e.target) || e.target.closest('#drawerBtn') || e.target.closest('#drawer')) return;
   pop.classList.add('hidden');
 });
-$('logsBtn')?.addEventListener('click', showLogs);
+$('logsBtn')?.addEventListener('click', () => __logs().showLogs());
 $('savedBtn')?.addEventListener('click', () => { if (mode === 'saved') exitSaved(); else showSaved(); });
-$('doctorBtn')?.addEventListener('click', showDoctor);
+$('doctorBtn')?.addEventListener('click', () => __ds().showDoctor());
 // 第二十二轮②⑤：页脚「快捷键」保留原速查表；旁边加「使用指南」进 #/help
-$('helpBtn')?.addEventListener('click', showShortcuts);
+$('helpBtn')?.addEventListener('click', () => __panels().showShortcuts());
 $('guideBtn')?.addEventListener('click', () => { location.hash = '#/help'; });
 
 // 第十九轮⑤：启动时算一遍审计日志超期条目（只统计并亮提示；物理清理由内核侧做）

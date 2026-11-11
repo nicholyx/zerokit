@@ -1,17 +1,19 @@
 // web/logs.js —— 日志/审计面板域（第 247 轮 v4 清债第七步：从 app.js 注入式迁出）
 // 4 个函数整域迁出（showLogs/renderLogs + 行渲染 logRowHtml/logDetailHtml）。注入式 + 整域内聚。
-import { pageSlice } from './extras.js';
+import { pageSlice, AUDIT_RANGES } from './extras.js';
+
+const $ = (id) => document.getElementById(id);
 
 export function createLogs(ui) {
-  const { esc, t, lang, el, api, TOKEN, setCount, hidePanels, panelDescBar, skeletonRows, maskSecrets, maskState, exportMime, exportFilename, filterAudit, logsState } = ui;
+  const { esc, t, lang, el, api, TOKEN, setCount, hidePanels, panelDescBar, skeletonRows, maskSecrets, maskState, exportMime, exportFilename, filterAudit, logsState, modeRef, panelsRef } = ui;
   // logsState() 返回 app 侧 let 状态的实时快照（{ logsFile, logsPage, logsDecision, logsQuery, logsRange, logsPlugin, logsPlugins }）
 
 async function showLogs() {
-  mode = 'logs';
+  modeRef.set('logs');
   el.modeLabel.textContent = t('modeLogs');
   el.searchRow.classList.add('hidden');
   hidePanels();
-  __panels().showPanelAnimated(el.logsView);
+  panelsRef().showPanelAnimated(el.logsView);
   if (location.hash !== '#/logs') history.replaceState(null, '', '#/logs');
   // 第一百九十轮②：骨架屏推广——异步视图加载前统一骨架占位（避免空白一闪）
   el.logsView.innerHTML = skeletonRows(5).map(() => '<div class="skel-row" aria-hidden="true"></div>').join('');
