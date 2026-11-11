@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.44.0] - 2026-11-11
+
+### Added
+
 - CDP 面板回归进 CI（251 轮判据常态化）：test/cdp-regression.mjs——自管 server + headless Chrome 生命周期（端口自避）、12 面板逐个打开断言渲染、console/异常 = 0 硬断言；无 Chrome 环境优雅 skip（exit 0）；CI ubuntu 加 chromium 安装步；进 test-all（全量 133 文件 / 3137 断言含 CDP 3 条）。从此每个 PR 都做运行时验证。
 
 ## [3.43.0] - 2026-11-11
@@ -71,10 +77,4 @@
 ### Added
 
 - v4 清债第一轮——web/app.js 拆分预检与试点：结构盘点（11273 行/249 顶层函数/29 import）；静态断言依赖面分析（webui-smoke 68 条 app2.includes 落点 Top：showServices 8/showPalette 7/showWatchPanel 6）；docs/debt/app-split-plan.md 五步拆分方案（每步独立 minor/断言同步改指向/3134 底线不降）；第一步试点完成——键盘域拆出 web/keys.js（注入式工厂 createKeys(ui) + app 侧惰性 getter __keys()，避免循环依赖与 TDZ）；4 条过时断言更新为拆分形态。
-
-## [3.32.0] - 2026-11-11
-
-### Added
-
-- v3 线总检与 v4 展望（第 240 轮整百里程碑）：docs/guide/maintenance-patterns.md（三类维护轮型判据——功能/盘点锁定/事故修复，选型启发）；docs/guide/v3-incident-index.md（发布链事故全回顾判据索引——网络依赖/Git 工作流/文档护栏/tauri 四组）；docs/guide/v4-outlook.md（六大候选方向议题池+清债优先判据）；docs 导航接入。
 
