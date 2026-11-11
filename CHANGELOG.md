@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.52.0] - 2026-11-12
+
+### Added
+
 - MCP 探针体系收官文档（255-259 五轮体系单一参考）：docs/reference/mcp-probe.md——四入口清单（Web 直调/schema、#/mcp 面板、CLI probe）/五支撑端点/三使用场景（插件作者核对 schema、集成排障、CI 验证）/与 dry-run 边界表（probe 执行 vs dry-run 只看）/审计来源/三层防线 MCP 特化；v4-outlook MCP 深化条目销项（已完成探针体系+审计回流，剩余远程 MCP 与资源订阅）；docs 导航接入。
 
 ## [3.51.0] - 2026-11-12
@@ -71,10 +77,4 @@
 ### Added
 
 - app.js 拆分第九步——设置/主题/剪贴板域注入式迁出：5 个函数（applyTheme/applyAccent/applyFontScale/cycleTheme + showClipPanel）整域迁 web/themeclip.js（createThemeClip(ui) 工厂 + __tc() 惰性 getter）；零断言改动（主题断言锚在 extras 的 normalize/resolve 纯函数）；app.js 9442 行（九步累计 -1831）。
-
-## [3.40.0] - 2026-11-11
-
-### Added
-
-- app.js 拆分第八步——doctor/统计面板域注入式迁出：4 个函数（showDoctor/exitDoctor/renderDoctor + showStats 设置与统计大盘）整域迁 web/doctorstats.js（createDoctorStats(ui) 工厂 + __ds() 惰性 getter）；零断言改动——doctor 面板断言全部锚在 extras 纯函数与 app 壳层（236 轮走势条断言读 extras 的 doctorTrendSparks，不受拆分影响）；app.js 9504 行（八步累计 -1769）。
 
