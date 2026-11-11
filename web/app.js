@@ -4253,7 +4253,7 @@ function renderResult(res) {
     // 第一百七十五轮：文本工具视图（顶层 string data 与 stdout 同路）——
     // 行号列可关 / >200 行默认折叠 / 换行开关持久化 / 选中行复制 / 统计条 / URL 可点 / 另存 .txt
     const rawText = res.data !== undefined && typeof res.data === 'string' ? res.data : res.stdout;
-    body += renderTextView(rawText, { masked });
+    body += __panels().renderTextView(rawText, { masked });
   }
   if (res.truncated && res.artifactPath) {
     body += `<div class="cmd-line">输出过长已截断，完整内容：${esc(res.artifactPath)}</div>`;
@@ -5101,7 +5101,7 @@ function renderData(data, render, tableId = '') {
     return `<div class="ps-empty" role="status">${esc(emptyReason(data))}</div>`;
   }
   // 第一百七十五轮：顶层 string 走文本工具视图（行号/折叠/行选/URL 可点）
-  if (typeof data === 'string') return renderTextView(data, { masked: maskSecretsOn });
+  if (typeof data === 'string') return __panels().renderTextView(data, { masked: maskSecretsOn });
   return `<pre class="out">${esc(String(data))}</pre>`;
 }
 
@@ -5114,28 +5114,7 @@ function linkifyText(text) {
   return escd.replace(/https?:\/\/[^\s"'&lt;&gt;）】」』]+/g, (u) =>
     `<a href="${u}" target="_blank" rel="noopener noreferrer" class="tv-url">${u}</a>`);
 }
-function renderTextView(rawText, { masked = (x) => x } = {}) {
-  const text = String(rawText ?? '');
-  const st = textStats(text);
-  const tv = textLines(text);      // ①② >200 行折叠到 50
-  const wrap = textViewWrapOn();
-  const tid = `tv${++resultSeq}`;
-  const rowsHtml = tv.rows.map((r) =>
-    `<div class="tv-row" data-no="${r.no}"><span class="tv-no">${r.no}</span><span class="tv-line">${linkifyText(masked(r.text)) || '&nbsp;'}</span></div>`).join('');
-  return `<div class="text-view" id="${tid}" data-tvraw="${esc(text).replace(/"/g, '&quot;').slice(0, 0) || ''}">
-    <div class="tv-bar">
-      <span class="tv-stat">${st.chars} 字符 · ${st.lines} 行 · 最长 ${st.longest}</span>
-      <button class="ghost mini" data-tv-act="numbers">行号</button>
-      <button class="ghost mini" data-tv-act="wrap">${wrap ? '换行：开' : '换行：关'}</button>
-      <button class="ghost mini" data-tv-act="copy-raw">复制原文</button>
-      <button class="ghost mini" data-tv-act="copy-num">带行号复制</button>
-      <button class="ghost mini" data-tv-act="copy-title">首行做标题</button>
-      <button class="ghost mini" data-tv-act="save-txt">另存 .txt</button>
-    </div>
-    <div class="tv-body${wrap ? '' : ' nowrap'}${tv.collapsed ? ' collapsed' : ''}">${rowsHtml}</div>
-    ${tv.collapsed ? `<button class="fold-btn" data-tv-act="expand">展开全部 ${tv.total} 行（还有 ${tv.hidden} 行收起）</button>` : ''}
-  </div>`;
-}
+
 /* 文本视图交互：行选/Shift 范围/Enter 复制/开关。在 renderResult 末尾调用。 */
 function bindTextView(res) {
   const root = document.querySelector('.text-view');

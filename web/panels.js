@@ -287,7 +287,7 @@ function showShortcuts() {
           const dot = keyStr.lastIndexOf('.');
           const entry = entries.find((e) => e.plugin.id === keyStr.slice(0, dot)
             && e.action.id === keyStr.slice(dot + 1));
-          return { k, name: entry ? `${entry.plugin.name} · ${entry.action.title}` : keyStr };
+          return { renderTextView, k, name: entry ? `${entry.plugin.name} · ${entry.action.title}` : keyStr };
         });
         if (!rows.length) return '';
         return `<h3>功能键（按一下直达）</h3>
@@ -325,6 +325,28 @@ function showShortcuts() {
     if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escClose); }
   });
   overlay.querySelector('#helpClose').focus();
+}
+function renderTextView(rawText, { masked = (x) => x } = {}) {
+  const text = String(rawText ?? '');
+  const st = textStats(text);
+  const tv = textLines(text);      // ①② >200 行折叠到 50
+  const wrap = textViewWrapOn();
+  const tid = `tv${++resultSeq}`;
+  const rowsHtml = tv.rows.map((r) =>
+    `<div class="tv-row" data-no="${r.no}"><span class="tv-no">${r.no}</span><span class="tv-line">${linkifyText(masked(r.text)) || '&nbsp;'}</span></div>`).join('');
+  return `<div class="text-view" id="${tid}" data-tvraw="${esc(text).replace(/"/g, '&quot;').slice(0, 0) || ''}">
+    <div class="tv-bar">
+      <span class="tv-stat">${st.chars} 字符 · ${st.lines} 行 · 最长 ${st.longest}</span>
+      <button class="ghost mini" data-tv-act="numbers">行号</button>
+      <button class="ghost mini" data-tv-act="wrap">${wrap ? '换行：开' : '换行：关'}</button>
+      <button class="ghost mini" data-tv-act="copy-raw">复制原文</button>
+      <button class="ghost mini" data-tv-act="copy-num">带行号复制</button>
+      <button class="ghost mini" data-tv-act="copy-title">首行做标题</button>
+      <button class="ghost mini" data-tv-act="save-txt">另存 .txt</button>
+    </div>
+    <div class="tv-body${wrap ? '' : ' nowrap'}${tv.collapsed ? ' collapsed' : ''}">${rowsHtml}</div>
+    ${tv.collapsed ? `<button class="fold-btn" data-tv-act="expand">展开全部 ${tv.total} 行（还有 ${tv.hidden} 行收起）</button>` : ''}
+  </div>`;
 }
   return { renderBars, renderChainSteps, renderKV, renderList, renderNotifySection, renderPreNumbered, renderPrompts, renderQuickBar, renderRiskCard, renderUndoHint, showCompareView, showDangerNote, showPanelAnimated, showResultDiff, showShortcuts };
 }
