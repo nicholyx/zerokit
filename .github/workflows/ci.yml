@@ -129,6 +129,15 @@ jobs:
           sudo apt-get install -y -qq xclip xvfb
           echo "装了：$(xclip -version 2>&1 | head -1)"
 
+      # 第二百五十二轮④：CDP 面板回归需要真实 Chrome（ubuntu 无预装）
+      - name: 装 Chrome（CDP 面板回归用）
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y -qq chromium-browser || sudo apt-get install -y -qq chromium
+          echo "装了：$(chromium --version 2>/dev/null || chromium-browser --version 2>/dev/null)"
+
       - name: 环境自检
         shell: bash
         run: |
