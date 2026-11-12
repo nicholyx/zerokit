@@ -6058,6 +6058,7 @@ async function showServices() {
         <h2>${t('svcPanel')}</h2>
         <p class="sub">${t('svcSub')}</p>
         <table class="grid" id="svcListTab"><thead><tr><th>${t('svcColId')}</th><th>${t('svcColTitle')}</th><th>${t('svcColState')}</th><th></th></tr></thead><tbody>${rows || `<tr><td colspan="4">${t('svcEmpty')}</td></tr>`}</tbody></table>
+        <div id="svcWatchBox" class="cmd-box" style="margin-top:10px"><div class="cmd-box-head">${t('svcWatchLoading')}</div></div>
         <div class="chips" id="svcTabs" style="margin-top:10px">
           <button class="chip on" data-svc-tab="list">${t('svcTabList')}</button>
           <button class="chip" data-svc-tab="topo">${t('svcTabTopo')}</button>
@@ -6065,6 +6066,22 @@ async function showServices() {
         <div id="svcTopoTab" class="hidden"></div>
         <div class="actions"><button class="ghost" id="svcBack">${t('backToList')}</button></div>
       </div>`;
+    // 第二百六十七轮④：守护区（watch 状态 + 最近动作）
+    {
+      const box = el.doctorView.querySelector('#svcWatchBox');
+      if (box) {
+        api('/api/services/watch').then((w) => {
+          if (!w.running) {
+            box.innerHTML = `<div class="cmd-box-head">${t('svcWatchIdle')}</div><div class="sub">${t('svcWatchIdleSub')}</div>`;
+            return;
+          }
+          const dur = Math.max(1, Math.round((Date.now() - new Date(w.startedAt).getTime()) / 1000));
+          const durText = dur >= 3600 ? `${Math.floor(dur / 3600)}h${Math.floor((dur % 3600) / 60)}m` : dur >= 60 ? `${Math.floor(dur / 60)}m${dur % 60}s` : `${dur}s`;
+          const acts = (w.actions ?? []).map((a) => `<div>${esc(a.ts.slice(11, 19))} ⟳ ${esc(a.key)} ×${a.streak} ${a.ok ? '✓' : '✗'} +${Math.round(a.backoffMs / 1000)}s</div>`).join('');
+          box.innerHTML = `<div class="cmd-box-head">👁 ${t('svcWatchOn')} <span class="badge read">PID ${w.pid} · ${durText}</span></div>${acts || `<div class="sub">${t('svcWatchNoActions')}</div>`}`;
+        }).catch(() => { box.innerHTML = `<div class="cmd-box-head">${t('svcWatchIdle')}</div>`; });
+      }
+    }
     // 第二百六十五轮②③④：拓扑 tab——依赖树渲染（孤立分组 / 环标红）
     const renderTopo = () => {
       const box = el.doctorView.querySelector('#svcTopoTab');

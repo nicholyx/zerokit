@@ -93,6 +93,7 @@ const API_METHODS: Record<string, string[]> = {
   '/api/services/start': ['POST'],
   '/api/services/up': ['POST'],
   '/api/services/down': ['POST'],
+  '/api/services/watch': ['GET'],
   '/api/services/logs': ['GET'],
   '/api/health-snapshot': ['GET'],
   '/api/health-history': ['GET'],
@@ -152,6 +153,7 @@ const API_SPEC = {
     '/api/services/start': { post: { summary: '启动声明服务（body: service=插件.服务）', security: [{ token: [] }] } },
     '/api/services/up': { post: { summary: '依赖拓扑启动（按 requires 序连起全链；body: service=插件.服务）', security: [{ token: [] }] } },
     '/api/services/down': { post: { summary: '依赖关停（逆拓扑序；body: service=插件.服务 或 all=true）', security: [{ token: [] }] } },
+    '/api/services/watch': { get: { summary: '守护状态（running/pid/最近动作）——zkit service watch 的 UI 可视化', security: [{ token: [] }] } },
     '/api/services/logs': { get: { summary: '服务日志尾部（query: service=插件.服务&tail=N）', security: [{ token: [] }] } },
     '/api/health-snapshot': { get: { summary: '四面健康总检快照（doctor/服务/缓存/插件）', security: [{ token: [] }] } },
     '/api/health-history': { get: { summary: '健康快照历史（最近 60 条）', security: [{ token: [] }] } },
@@ -1832,6 +1834,17 @@ export function createServer(): http.Server {
       }
       // 第二百六十二轮④：依赖拓扑启动端点（UI「依赖启动」对位）
       // 第二百六十四轮④：依赖关停端点（UI ⛓ 对位）
+      // 第二百六十七轮③：守护状态读取（UI「守护」区数据源）
+      if (url.pathname === '/api/services/watch' && req.method === 'GET') {
+        const { readWatchState } = await import('./core/services.ts');
+        const st = readWatchState();
+        if (!st) { json(res, 200, { running: false }); return; }
+        // pid 存活校验（残留文件不算在跑）
+        let alive = false;
+        try { process.kill(st.pid, 0); alive = true; } catch { alive = false; }
+        json(res, 200, { running: alive, pid: st.pid, startedAt: st.startedAt, actions: st.actions.slice(-5).reverse() });
+        return;
+      }
       if (url.pathname === '/api/services/down' && req.method === 'POST') {
         const body = await readBody(req);
         const target = String(body['service'] ?? '');

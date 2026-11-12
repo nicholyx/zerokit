@@ -348,6 +348,38 @@ export async function watchCycle(opts: { threshold: number }): Promise<Array<{ k
 /** 守护循环的跨轮状态：key → unhealthy 连续次数（模块级，watch 进程独占语义） */
 const watchStreaks = new Map<string, number>();
 
+/** 第二百六十七轮①：守护状态文件（~/.zerokit/service-watch.json）——环形动作日志（最近 50 条） */
+export interface WatchState {
+  pid: number;
+  startedAt: string;
+  actions: Array<{ ts: string; key: string; streak: number; backoffMs: number; ok: boolean }>;
+}
+
+export function watchStatePath(): string {
+  return path.join(HOME, 'service-watch.json');
+}
+
+export function readWatchState(): WatchState | null {
+  try {
+    const raw = JSON.parse(fs.readFileSync(watchStatePath(), 'utf8')) as WatchState;
+    if (typeof raw.pid === 'number' && Array.isArray(raw.actions)) return raw;
+  } catch { /* 无文件/坏 JSON = 未跑 */ }
+  return null;
+}
+
+export function writeWatchAction(action: WatchState['actions'][number]): void {
+  let st: WatchState = { pid: process.pid, startedAt: new Date().toISOString(), actions: [] };
+  const prev = readWatchState();
+  if (prev && prev.pid === process.pid) st = prev;  // 同进程续写；异进程（旧守护残留）覆盖
+  st.actions.push(action);
+  if (st.actions.length > 50) st.actions = st.actions.slice(-50);
+  try { ensureDirs(); fs.writeFileSync(watchStatePath(), JSON.stringify(st, null, 2), 'utf8'); } catch { /* 状态文件写失败不阻断守护 */ }
+}
+
+export function initWatchState(): void {
+  try { ensureDirs(); fs.writeFileSync(watchStatePath(), JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString(), actions: [] }, null, 2), 'utf8'); } catch { /* 同上 */ }
+}
+
 export function findService(pluginId: string, serviceId: string): ServiceStatus | undefined {
   return listServices().find((s) => s.pluginId === pluginId && s.id === serviceId);
 }

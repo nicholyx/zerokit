@@ -591,7 +591,8 @@ async function cmdService(args: string[]): Promise<number> {
     const intervalMs = Math.max(5_000, parseDur(readOpt('--interval', '30s')));
     const threshold = Math.max(1, Number(readOpt('--threshold', '3')) || 3);
     const backoffBaseMs = Math.max(1_000, parseDur(readOpt('--backoff-base', '30s')));
-    const { watchCycle, watchBackoffMs, topoStartOrder, startService } = await import('./core/services.ts');
+    const { watchCycle, watchBackoffMs, topoStartOrder, startService, initWatchState, writeWatchAction } = await import('./core/services.ts');
+    initWatchState();
     const restartStreak = new Map<string, number>();
     process.stdout.write(`守护中：每 ${Math.round(intervalMs / 1000)}s 探测，连续 ${threshold} 次 unhealthy 重启（退避基数 ${Math.round(backoffBaseMs / 1000)}s）——Ctrl+C 退出（不杀服务）\n`);
     let stopped = false;
@@ -619,6 +620,7 @@ async function cmdService(args: string[]): Promise<number> {
           const streak = (restartStreak.get(a.key) ?? 0) + (ok ? 1 : 1);
           restartStreak.set(a.key, streak);
           const backoff = watchBackoffMs(streak, backoffBaseMs);
+          writeWatchAction({ ts: now, key: a.key, streak: a.unhealthyStreak, backoffMs: backoff, ok });
           process.stdout.write(`${now} ⟳ ${a.key} unhealthy×${a.unhealthyStreak} → 重启${ok ? '' : '（链中失败）'}；退避 ${Math.round(backoff / 1000)}s\n`);
           await new Promise((r) => setTimeout(r, Math.min(backoff, 10 * 60 * 1000)));
         } else if (a.unhealthyStreak > 0) {
