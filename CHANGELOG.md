@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.62.0] - 2026-11-12
+
+### Added
+
 - 插件脚手架增强——服务示例节与 MCP probe 指引（插件生态起步）：zkit plugin new --with-service（ScaffoldOptions.withService → [[service]] demo 节含 healthCheck 示范 261-263 轮体系，port 39410）；脚手架 README 开发码块与清单注释各补一行 zkit mcp probe <id>__hello（255 轮探针——新作者第一次就接触 MCP 面验证法）；用法表更新；svcdeps261 +3 断言。
 
 ## [3.61.0] - 2026-11-12
@@ -71,10 +77,4 @@
 ### Added
 
 - MCP 探针 CLI 面——zkit mcp probe（255-258 UI 三面的 CLI 对位）：不起 MCP 进程直调工具（插件__动作；--params '{}' 传参；--json 机读）；--schema 打印 inputSchema（256 轮 GET 的 CLI 对位）；错误三态同款（not-found/bad-params/not-authorized）；审计 caller=mcp-probe；用法表登记。MCP 深化五步弧线完成（255-259）：UI 直调→schema 预览→工具面板→资源面板→CLI probe——四面（CLI/启动器/MCP/桌面壳）现在都能不拉起 MCP server 核对工具面。
-
-## [3.50.0] - 2026-11-11
-
-### Added
-
-- MCP 资源面板——zerokit:// 七资源 UI 化（MCP 深化第四步）：/api/mcp-resources GET（resources/list 同构清单）+ /api/mcp-resource?uri= 单资源读取（plugins/health/runs/audit/watch/timers 六实现，{key} 模板示例填充）；UI #/mcp 面板加「资源」tab（行点击展开 JSON——模型可读快照一屏核对）；OpenAPI 登记；I18N 四键；webui +2 断言；顺手修一个 ps-empty 漏 role=status 的 a11y 回归。
 
