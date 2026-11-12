@@ -2034,6 +2034,12 @@ function printDepTree(nodes: ReturnType<typeof depTree>, indent: string): void {
 
 async function cmdPlugin(args: string[]): Promise<number> {
   const sub = args[0];
+  if (sub === 'schema') {
+    // 第二百七十四轮③：打印清单 schema 路径 + 编辑器接线说明
+    const schemaPath = path.join(path.resolve(import.meta.dirname, '..'), 'docs', 'schema', 'plugin-manifest.schema.json');
+    process.stdout.write(`清单 JSON Schema（编辑器补全/校验用）：\n  ${schemaPath}\n\n编辑器接线：\n  VS Code（Even Better TOML）——settings.json：\n    "evenBetterToml.schema.associations": {\n      "**/plugins/*/plugin.toml": "file://${schemaPath}"\n    }\n  或项目级 .vscode/settings.json 同款。taplo CLI 校验：\n    taplo lint --schema ${schemaPath} plugins/quick/plugin.toml\n`);
+    return 0;
+  }
   if (sub === 'new') {
     const rest = args.slice(1);
     const id = rest.find((a) => !a.startsWith('--'));
