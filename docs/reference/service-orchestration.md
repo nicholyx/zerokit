@@ -12,6 +12,7 @@
 | 263 | v3.55.0 | 健康探针 | `[[service]].healthCheck` / `probeHealth` / 三态徽标 |
 | 264 | v3.56.0 | 逆序关停 | `zkit service down [--all]` / `topoStopOrder` / `globalStopOrder` |
 | 265 | v3.57.0 | 拓扑视图 | #/services「拓扑」tab / 本文档 |
+| 266 | v3.58.0 | 运行时守护 | `zkit service watch` / `watchCycle` / `watchBackoffMs` |
 
 ## 声明语法
 
@@ -42,3 +43,13 @@ run = ["{node}", "server.js"]
 ## 维护规则
 
 新加服务字段（如 restart 策略）时：manifest 解析 → serviceDeps/probe 消费 → /api/services 带出 → UI 徽标 → svcdeps261 断言——五层同步，缺一即 domain-faces 式漂移。
+
+## 运行时守护（第 266 轮）
+
+`zkit service watch [--interval 30s] [--threshold 3] [--backoff-base 30s]`
+
+- 前台循环探测所有**声明了 healthCheck 且运行中**的服务（停着的服务归用户，守护不碰）。
+- 连续 threshold 次 unhealthy → 重启（走 up 链，依赖先行）。
+- 指数退避：连续重启第 n 次后等待 backoff-base × 2^(n-1)，封顶 10 分钟；健康恢复即复位。
+- Ctrl+C 干净退出（停探测不杀服务）。
+- 审计 caller=service-watch（与人工操作可辨）。

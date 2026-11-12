@@ -28,7 +28,7 @@ import type { SettingsView } from './pluginConfig.ts';
  *   3. 所有调用落审计；被拒/失败单独落一份，便于快速排查
  */
 
-export type Caller = 'cli' | 'mcp' | 'ui' | 'api' | 'dev' | 'mcp-probe';  // dev=开发模式执行（第八十六轮⑧：审计标 source dev）；mcp-probe=UI 的 MCP 工具直调探针（第二百五十五轮①）
+export type Caller = 'cli' | 'mcp' | 'ui' | 'api' | 'dev' | 'mcp-probe' | 'service-watch';  // dev=开发模式执行（第八十六轮⑧：审计标 source dev）；mcp-probe=UI 的 MCP 工具直调探针（第二百五十五轮①）
 
 const MAX_OUTPUT = 1 << 20; // 1 MiB，超出部分落盘
 const BUILTIN_NAMES: readonly string[] = BUILTIN_VARS;

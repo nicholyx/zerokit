@@ -573,6 +573,62 @@ async function cmdService(args: string[]): Promise<number> {
     }
     return 0;
   }
+  // 第二百六十六轮①：时长参数解析（"30s"/"5m"/"2h"/"90" 裸数=秒）
+  const parseDur = (v: string | undefined): number => {
+    const m = /^(\d+)(ms|s|m|h)?$/.exec((v ?? '30s').trim());
+    if (!v || !m) return 30_000;
+    const n = Number(m[1]);
+    const unit = m[2] ?? 's';
+    return unit === 'ms' ? n : unit === 's' ? n * 1000 : unit === 'm' ? n * 60_000 : n * 3_600_000;
+  };
+  if (sub === 'watch') {
+    // 第二百六十六轮①②④⑤：服务守护——周期探测 unhealthy 自动重启（退避防抖）
+    const rest = args.slice(1);
+    const readOpt = (name: string, def: string) => {
+      const i = rest.indexOf(name);
+      return i >= 0 && rest[i + 1] ? rest[i + 1] : def;
+    };
+    const intervalMs = Math.max(5_000, parseDur(readOpt('--interval', '30s')));
+    const threshold = Math.max(1, Number(readOpt('--threshold', '3')) || 3);
+    const backoffBaseMs = Math.max(1_000, parseDur(readOpt('--backoff-base', '30s')));
+    const { watchCycle, watchBackoffMs, topoStartOrder, startService } = await import('./core/services.ts');
+    const restartStreak = new Map<string, number>();
+    process.stdout.write(`守护中：每 ${Math.round(intervalMs / 1000)}s 探测，连续 ${threshold} 次 unhealthy 重启（退避基数 ${Math.round(backoffBaseMs / 1000)}s）——Ctrl+C 退出（不杀服务）\n`);
+    let stopped = false;
+    const onInt = () => { stopped = true; process.stdout.write('\n守护停止（服务保持原状态）\n'); process.removeListener('SIGINT', onInt); };
+    process.on('SIGINT', onInt);
+    while (!stopped) {
+      const actions = await watchCycle({ threshold });
+      const now = new Date().toISOString();
+      for (const a of actions) {
+        if (a.action === 'restart') {
+          const i = a.key.lastIndexOf('.');
+          const pid = a.key.slice(0, i);
+          const sid = a.key.slice(i + 1);
+          // 重启走 up 链（依赖先行）——先 stop 再 up；up 自身按拓扑序起
+          const { stopService } = await import('./core/services.ts');
+          await stopService(pid, sid);
+          const order = topoStartOrder(pid, sid).order;
+          let ok = true;
+          for (const k of order) {
+            const j = k.lastIndexOf('.');
+            const r = await startService(k.slice(0, j), k.slice(j + 1));
+            audit({ ts: now, caller: 'service-watch', plugin: k.slice(0, j), action: `service-watch-restart:${k.slice(j + 1)}`, tool: 'service', risk: 'mutate', decision: r.ok ? 'allow' : 'deny', reason: `unhealthy x${a.unhealthyStreak}: ${r.message}` });
+            if (!r.ok && !r.message.includes('不重复启动')) { ok = false; break; }
+          }
+          const streak = (restartStreak.get(a.key) ?? 0) + (ok ? 1 : 1);
+          restartStreak.set(a.key, streak);
+          const backoff = watchBackoffMs(streak, backoffBaseMs);
+          process.stdout.write(`${now} ⟳ ${a.key} unhealthy×${a.unhealthyStreak} → 重启${ok ? '' : '（链中失败）'}；退避 ${Math.round(backoff / 1000)}s\n`);
+          await new Promise((r) => setTimeout(r, Math.min(backoff, 10 * 60 * 1000)));
+        } else if (a.unhealthyStreak > 0) {
+          process.stdout.write(`${now} ⚠ ${a.key} unhealthy×${a.unhealthyStreak}/${threshold}\n`);
+        }
+      }
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+    return 0;
+  }
   if (sub === 'down') {
     // 第二百六十四轮②③：依赖关停——逆拓扑序（被依赖的最后停）；--all 全局序
     const wantAll = args.includes('--all');

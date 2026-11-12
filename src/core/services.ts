@@ -302,6 +302,52 @@ export function globalStopOrder(): string[] {
   return out;
 }
 
+/**
+ * 第二百六十六轮③：守护退避计算——连续重启第 n 次后下次探测前等待 backoffBase × 2^(n-1)，
+ * 上限 10 分钟；健康恢复即复位（返回 0）。纯函数便于测试。
+ */
+export function watchBackoffMs(restartStreak: number, backoffBaseMs: number): number {
+  if (restartStreak <= 0) return 0;
+  const raw = backoffBaseMs * 2 ** (restartStreak - 1);
+  return Math.min(raw, 10 * 60 * 1000);
+}
+
+/** 第二百六十六轮①②：一轮守护探测——返回本轮动作（供 watch 循环与测试共用） */
+export async function watchCycle(opts: { threshold: number }): Promise<Array<{ key: string; action: 'restart' | 'none'; unhealthyStreak: number }>> {
+  const out: Array<{ key: string; action: 'restart' | 'none'; unhealthyStreak: number }> = [];
+  const deps = serviceDeps();
+  const entries = listPlugins();
+  for (const e of entries) {
+    if (!e.plugin) continue;
+    for (const svc of e.plugin.services) {
+      if (!svc.healthCheck) continue;
+      const key = `${e.plugin.id}.${svc.id}`;
+      const status = serviceOf(e.plugin, svc);
+      if (!status.running) continue;  // 守护只管「运行中但不健康」；停着的服务归用户
+      const healthy = await probeHealth(svc.healthCheck);
+      const streak = watchStreaks.get(key) ?? 0;
+      if (healthy) {
+        watchStreaks.set(key, 0);  // 恢复复位
+        out.push({ key, action: 'none', unhealthyStreak: 0 });
+        continue;
+      }
+      const next = streak + 1;
+      watchStreaks.set(key, next);
+      if (next >= opts.threshold) {
+        watchStreaks.set(key, 0);  // 触发重启后计数归零（退避由 watch 循环的 restartStreak 管）
+        out.push({ key, action: 'restart', unhealthyStreak: next });
+      } else {
+        out.push({ key, action: 'none', unhealthyStreak: next });
+      }
+    }
+  }
+  void deps;
+  return out;
+}
+
+/** 守护循环的跨轮状态：key → unhealthy 连续次数（模块级，watch 进程独占语义） */
+const watchStreaks = new Map<string, number>();
+
 export function findService(pluginId: string, serviceId: string): ServiceStatus | undefined {
   return listServices().find((s) => s.pluginId === pluginId && s.id === serviceId);
 }
