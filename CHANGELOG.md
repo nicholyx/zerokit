@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- watch 采样窗口聚合（结果数据分析方向起步，272 轮对账 S 第一条）：src/core/watchStats.ts 纯函数——aggregateWindow（min/max/avg/count/first/last；数值提取 numericOf：裸数值/对象首数值字段，失败与非数值跳过）+ windowStats 多窗分组 + DEFAULT_WINDOWS（5m/1h/24h）；zkit watch stats <插件.动作>（不抢顶层 stats——那是历史统计 46/92/120 轮，最初误抢致 cli120/cli46/hist92/ops 四文件 10 断言红，守住后改 watch 子命令族）；zerokit://watch 资源每监控附 stats（MCP 面同步受益）；空样本/全非数值全 null 不抛；watchstats273-smoke 7 断言；基线自动抬升 3198→3205。
 
 ## [3.64.0] - 2026-11-13
 

@@ -415,6 +415,15 @@ export async function serve(): Promise<number> {
         const raw = fs.readFileSync(path.join(HOME, 'watch.json'), 'utf8');
         body = JSON.parse(raw);
       } catch { /* 无监控文件 = 空注册表 */ }
+      // 第二百七十三轮④：每个监控附窗口统计（5m/1h/24h——MCP 面同步受益）
+      try {
+        const { windowStats, DEFAULT_WINDOWS } = await import('./core/watchStats.ts');
+        const enriched = body as { watches?: Array<Record<string, unknown>> };
+        for (const w of enriched.watches ?? []) {
+          const samples = Array.isArray(w.samples) ? (w.samples as Array<{ ts?: number; ok?: boolean; data?: unknown }>) : [];
+          (w as { stats?: unknown }).stats = windowStats(samples, DEFAULT_WINDOWS);
+        }
+      } catch { /* 聚合失败不影响基础快照 */ }
       return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(body, null, 2) }] };
     }
     if (uri === 'zerokit://timers') {

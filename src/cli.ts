@@ -4660,6 +4660,37 @@ function humanDuration(ms: number): string {
  * 格式与第二十轮 collectBackup 信封兼容（app/version/exportedAt/keys），
  * watch 配置作为单独分区塞进 meta——导入时可选 --no-watch 跳过。 */
 /** 第一百三十二轮⑦：zkit watch list——读 watch.json（浏览器写的监控状态），机读字段。 */
+/** 第二百七十三轮③：zkit watch stats <插件.动作>——采样窗口聚合（5m/1h/24h） */
+async function cmdWatchStats(rest: string[]): Promise<number> {
+  const key = rest.find((a) => !a.startsWith('--'));
+  const watchPath = path.join(HOME_PATH(), 'watch.json');
+  let file: { watches?: Array<Record<string, unknown>> } = {};
+  try { file = JSON.parse(fs.readFileSync(watchPath, 'utf8')) as { watches?: Array<Record<string, unknown>> }; } catch { /* 无监控 */ }
+  const all = file.watches ?? [];
+  if (!key) {
+    if (all.length === 0) { console.log('没有监控记录（watch.json 不存在或为空）。'); return 0; }
+    console.log(`监控 ${all.length} 个——指定 key 看窗口统计：`);
+    for (const w of all) console.log(`  ${String(w.key)}`);
+    return 0;
+  }
+  const w = all.find((x) => String(x.key) === key);
+  if (!w) { console.error(`没有这个监控：${key}`); return 1; }
+  const samples = Array.isArray(w.samples) ? (w.samples as Array<{ ts?: number; ok?: boolean; data?: unknown; err?: string }>) : [];
+  const { windowStats, DEFAULT_WINDOWS } = await import('./core/watchStats.ts');
+  const stats = windowStats(samples, DEFAULT_WINDOWS);
+  if (rest.includes('--json')) { console.log(JSON.stringify({ key, stats }, null, 2)); return 0; }
+  console.log(`监控 ${key} · 样本 ${samples.length} 个（环形 30）`);
+  for (const st of stats) {
+    if (st.count === 0) { console.log(`  ${st.window.padEnd(4)} 无数值样本`); continue; }
+    console.log(`  ${st.window.padEnd(4)} n=${st.count}  min=${round4(st.min)}  avg=${round4(st.avg)}  max=${round4(st.max)}  first→last ${round4(st.first)}→${round4(st.last)}`);
+  }
+  return 0;
+}
+
+function round4(v: number | null): string {
+  return v === null ? '-' : String(Math.round(v * 10000) / 10000);
+}
+
 async function cmdWatchList(rest: string[]): Promise<number> {
   const watchPath = path.join(HOME_PATH(), 'watch.json');
   let file: { watches?: Array<Record<string, unknown>> } = {};
@@ -5529,8 +5560,13 @@ async function main(): Promise<number> {
       return await cmdBackup(rest); // 第一百三十六轮⑧：与 UI 同一信封
     case 'restore':
       return await cmdRestore(rest);
-    case 'watch':
-      return await cmdWatchList(rest); // 第一百三十二轮⑦：zkit watch list（读 watch.json 机读视图）
+    case 'watch': {
+      // 第一百三十二轮⑦：zkit watch list（读 watch.json 机读视图）
+      // 第二百七十三轮③：zkit watch stats <key>（采样窗口聚合）——顶层 stats 是历史统计（46/92/120 轮），不抢
+      const wsub = rest[0];
+      if (wsub === 'stats') return await cmdWatchStats(rest.slice(1));
+      return await cmdWatchList(rest);
+    }
     case 'timers':
       return await cmdTimers(rest);
     case 'market':
