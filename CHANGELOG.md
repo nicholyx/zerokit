@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- 守护面板操作化——UI 启停 daemon（267 看 + 268 CLI 管后的「UI 动」）：startWatchDaemon/stopWatchDaemon 助手抽到 services.ts（CLI 与 /api 同源防漂移）；/api/services/watch POST {action: start|stop}（start=daemon 同款活 pid 拒绝；stop=SIGTERM 4s→SIGKILL 幂等）；启动参数固定面板缺省（30s/3/30s——一键不做表单）；UI 守护区「▶ 启动守护」/「■ 停止」（confirm 守卫）+ 操作后 showServices 即时刷新；审计 caller=ui；webui +2 断言。端到端实测：start pid=30839 → 状态 running:true → 重复启动拒绝「已在运行」→ stop ✓。
 
 ## [3.60.0] - 2026-11-12
 

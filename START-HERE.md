@@ -199,7 +199,7 @@ PowerShell 用 `$env:https_proxy="http://127.0.0.1:<端口>"`（其余两个同�
 ## 七、这个项目现在是什么状态
 
 内核、四个面、插件集市、原生壳、uTools 插件兼容层都已跑通，各有测试
-（`node scripts/test-all.mjs`，135 个文件，3189 项断言，不联网、不花钱）。<!-- zk-version -->当前版本 v3.60.0<!-- /zk-version -->
+（`node scripts/test-all.mjs`，135 个文件，3191 项断言，不联网、不花钱）。<!-- zk-version -->当前版本 v3.60.0<!-- /zk-version -->
 
 已知的缺口和明确不做的事，都列在 `docs/reference/overview.md` 的「待办」和「已知差距」两节里——
 那份是诚实的账本，建议看一眼再判断这个项目值不值得用。

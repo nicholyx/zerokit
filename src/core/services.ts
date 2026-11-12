@@ -2,7 +2,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Plugin, Service } from './manifest.ts';
-import { HOME, LOG_DIR, ensureDirs } from './paths.ts';
+import { HOME, LOG_DIR, PKG_ROOT, ensureDirs } from './paths.ts';
 import { listPlugins } from './registry.ts';
 import { resolveTool } from './resolve.ts';
 import { isAlive } from './runtime.ts';
@@ -378,6 +378,42 @@ export function writeWatchAction(action: WatchState['actions'][number]): void {
 
 export function initWatchState(): void {
   try { ensureDirs(); fs.writeFileSync(watchStatePath(), JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString(), actions: [] }, null, 2), 'utf8'); } catch { /* 同上 */ }
+}
+
+/**
+ * 第二百六十九轮①：守护启停助手——CLI 与 /api 共用（防两处漂移）。
+ * startWatchDaemon：spawn detached 前台循环（日志落 logs/service-watch.log）；活 pid 拒绝。
+ * stopWatchDaemon：SIGTERM 等 4s → SIGKILL；未运行幂等。
+ */
+export async function startWatchDaemon(): Promise<{ ok: boolean; pid?: number; message: string }> {
+  const prev = readWatchState();
+  if (prev) {
+    try { process.kill(prev.pid, 0); return { ok: false, message: `守护已在运行（pid=${prev.pid}）` }; } catch { /* 残留覆盖 */ }
+  }
+  const { spawn } = await import('node:child_process');
+  const { mkdirSync, openSync } = await import('node:fs');
+  mkdirSync(path.join(HOME, 'logs'), { recursive: true });
+  const logFd = openSync(path.join(HOME, 'logs', 'service-watch.log'), 'a');
+  // 从 cli.ts 入口重入（与 CLI --daemon 同一路径）
+  const entry = path.join(PKG_ROOT, 'src', 'cli.ts');
+  const child = spawn(process.execPath, [entry, 'service', 'watch', '--interval', '30s', '--threshold', '3', '--backoff-base', '30s'], {
+    detached: true, stdio: ['ignore', logFd, logFd], env: { ...process.env },
+  });
+  child.unref();
+  return { ok: true, pid: child.pid, message: `守护已后台启动（pid=${child.pid}）` };
+}
+
+export async function stopWatchDaemon(): Promise<{ ok: boolean; message: string }> {
+  const st = readWatchState();
+  if (!st) return { ok: true, message: '守护未运行（无状态文件）——无需停止' };
+  try { process.kill(st.pid, 0); } catch { return { ok: true, message: `守护未运行（残留 pid=${st.pid}）——无需停止` }; }
+  process.kill(st.pid, 'SIGTERM');
+  for (let i = 0; i < 20; i++) {
+    await new Promise((r) => setTimeout(r, 200));
+    try { process.kill(st.pid, 0); } catch { return { ok: true, message: `守护已停止（pid=${st.pid}）` }; }
+  }
+  process.kill(st.pid, 'SIGKILL');
+  return { ok: true, message: `守护已强制停止（pid=${st.pid}）` };
 }
 
 export function findService(pluginId: string, serviceId: string): ServiceStatus | undefined {

@@ -6073,12 +6073,33 @@ async function showServices() {
         api('/api/services/watch').then((w) => {
           if (!w.running) {
             box.innerHTML = `<div class="cmd-box-head">${t('svcWatchIdle')}</div><div class="sub">${t('svcWatchIdleSub')}</div>`;
+            const startBtn = document.createElement('button');
+            startBtn.className = 'ghost mini';
+            startBtn.textContent = t('svcWatchStartBtn');
+            startBtn.style.marginTop = '6px';
+            startBtn.addEventListener('click', async () => {
+              const r = await api('/api/services/watch', { method: 'POST', body: { action: 'start' } });
+              setCount(r.ok ? `✓ ${r.message}` : `✗ ${r.message}`);
+              showServices();
+            });
+            box.appendChild(startBtn);
             return;
           }
           const dur = Math.max(1, Math.round((Date.now() - new Date(w.startedAt).getTime()) / 1000));
           const durText = dur >= 3600 ? `${Math.floor(dur / 3600)}h${Math.floor((dur % 3600) / 60)}m` : dur >= 60 ? `${Math.floor(dur / 60)}m${dur % 60}s` : `${dur}s`;
           const acts = (w.actions ?? []).map((a) => `<div>${esc(a.ts.slice(11, 19))} ⟳ ${esc(a.key)} ×${a.streak} ${a.ok ? '✓' : '✗'} +${Math.round(a.backoffMs / 1000)}s</div>`).join('');
           box.innerHTML = `<div class="cmd-box-head">👁 ${t('svcWatchOn')} <span class="badge read">PID ${w.pid} · ${durText}</span></div>${acts || `<div class="sub">${t('svcWatchNoActions')}</div>`}`;
+          const stopBtn = document.createElement('button');
+          stopBtn.className = 'ghost mini';
+          stopBtn.textContent = t('svcWatchStopBtn');
+          stopBtn.style.marginTop = '6px';
+          stopBtn.addEventListener('click', async () => {
+            if (!window.confirm(t('svcWatchStopConfirm'))) return;
+            const r = await api('/api/services/watch', { method: 'POST', body: { action: 'stop' } });
+            setCount(r.ok ? `✓ ${r.message}` : `✗ ${r.message}`);
+            showServices();
+          });
+          box.querySelector('.cmd-box-head')?.after(stopBtn);
         }).catch(() => { box.innerHTML = `<div class="cmd-box-head">${t('svcWatchIdle')}</div>`; });
       }
     }
