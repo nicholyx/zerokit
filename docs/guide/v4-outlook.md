@@ -65,7 +65,7 @@ v4 启动前应先做一轮「v3 负债清点」：技术债（如 web/app.js �
 | 1. market 安装源协议公开化 | M | 无 | market.json 格式已稳定，公开化=文档+校验放宽 |
 | 1. 插件签名与校验链 | L | 密钥分发方案 | 供应链信任，先做 ed25519 最小链 |
 | 1. 脚手架→一键发布通道 | M | 1 的公开化 | pack 已有（.toolpack），补 publish 流程 |
-| 2. 远程 MCP（SSE/streamable-http） | L | SDK 支持 | @modelcontextprotocol/sdk 版本跟进 |
+| 2. 远程 MCP（SSE/streamable-http） | **M**（spike 后降级） | ~~SDK 支持~~ ✅ 1.32.2 已带 streamable-http（276 轮 spike 三步全通） | 见 [mcp-remote-spike.md](../debt/mcp-remote-spike.md) |
 | 2. 资源订阅（变更推送） | M | 2 的远程化 | 订阅语义设计先行 |
 | 4. watch 本地聚合窗口函数 | S | 无 | 纯函数可测，最易起步 |
 | 4. 结果历史结构化 diff | M | 无 | 对齐 129 轮文本 diff 的结构版 |
@@ -81,7 +81,7 @@ v4 启动前应先做一轮「v3 负债清点」：技术债（如 web/app.js �
 
 1. **S 条目先清**（4 条：watch 聚合 / toml Schema / 审计投递 / ——全是低风险纯增量，一轮一个）。
 2. **插件生态续推**（方向 1 剩两条 M/L）：market 公开化是签名链的前置，签名链又是桌面自动更新的前置——这条链最长，宜早启动。
-3. **MCP 远程化立项讨论**：SDK 依赖升级是外部节奏，先做 spike 轮探水深。
+3. ~~**MCP 远程化立项讨论**~~ ✅ 276 轮 spike 完成：SDK 就绪、GO、工作量 L→M——正式轮可排。
 4. 方向 4/5 的 M 条目按「用户可见价值」排序：结构化 diff > OpenAPI 契约测试 > parquet。
 5. 方向 6 冻结到桌面用户出现真实诉求。
 
