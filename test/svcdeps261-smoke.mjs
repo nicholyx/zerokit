@@ -142,5 +142,17 @@ check('266③ 退避指数（n=1 基数、n=3 ×4、封顶 10min）', b1 === 30_
 check('266③ 恢复复位（streak<=0 → 0ms）', watchBackoffMs(0, 30_000) === 0 && watchBackoffMs(-2, 30_000) === 0, 'nonpositive');
 check('266⑤ Caller 扩展 service-watch（审计来源可辨）', fs.readFileSync(path.join(ROOT, 'src', 'core', 'runner.ts'), 'utf8').includes("'service-watch'"));
 
+
+// ---- 第二百六十七轮：守护状态文件 / 端点 / UI 接线 ----
+const { readWatchState, writeWatchAction, watchStatePath } = await import(pathToFileURL(path.join(ROOT, 'src/core/services.ts')).href);
+writeWatchAction({ ts: new Date().toISOString(), key: 't.a', streak: 2, backoffMs: 60000, ok: true });
+const ws = readWatchState();
+check('267①② 状态文件写读（pid=本进程、actions 1 条）', ws?.pid === process.pid && ws?.actions?.length === 1 && ws.actions[0].key === 't.a', JSON.stringify(ws).slice(0, 100));
+writeWatchAction({ ts: new Date().toISOString(), key: 't.b', streak: 3, backoffMs: 120000, ok: false });
+const ws2 = readWatchState();
+check('267① 环形追加（同进程续写 2 条）', ws2?.actions?.length === 2 && ws2.actions[1].key === 't.b', String(ws2?.actions?.length));
+try { fs.rmSync(watchStatePath(), { force: true }); } catch {}
+check('267③④ 守护端点 + UI 区接线（源码断言）', (() => { const srv = fs.readFileSync(path.join(ROOT, 'src', 'server.ts'), 'utf8'); const appSrc = fs.readFileSync(path.join(ROOT, 'web', 'app.js'), 'utf8'); return srv.includes('/api/services/watch') && appSrc.includes('svcWatchBox') && appSrc.includes('svcWatchOn'); })());
+
 console.log(`\n${'='.repeat(60)}\n通过 ${pass} / ${pass + fail}`);
 process.exit(fail > 0 ? 1 : 0);
