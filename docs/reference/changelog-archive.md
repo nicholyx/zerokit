@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [3.56.0] - 2026-11-12
+
+### Added
+
+- 服务编排第四步——批量停止与依赖关停顺序 zkit service down：topoStopOrder（topoStart 的逆——本服务最先停、依赖最后）；globalStopOrder（全服务图入度剥离——无依赖先停、被依赖最多的最后；环残余收敛尾部）；zkit service down [插件.服务|--all]（逆序依次 stopService，未运行幂等跳过「=」）；/api/services/down POST（UI ⛓ 依赖关停按钮对位，confirm 守卫）；svcdeps261 +3 断言（逆序/幂等/全局序）。
+
 ## [3.55.0] - 2026-11-12
 
 ### Added

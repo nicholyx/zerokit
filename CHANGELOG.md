@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.68.0] - 2026-11-13
+
+### Added
+
 - MCP 远程化 spike（272 对账建议第 3 条落地，探水深不做接入）：**结论 GO、工作量 L→M**——SDK 1.32.2（当前 latest）已带 StreamableHTTPServerTransport，零包升级；spike 实测三步全通（initialize 200 拿 session-id / tools/list 含 echo / tools/call 返回结果）；**关键坑：transport 会话复用**（每请求新建实例丢会话态报 Server not initialized——按 mcp-session-id 头复用后全通）；docs/debt/mcp-remote-spike.md（传输支持面三行表/serve() 拆分点/破坏面为零/防火墙与 token 鉴权注意/复现要点）；v4-outlook 条目更新（L→M + spike 互链）；mcpspike276 4 断言；基线 3218→3222。
 
 ## [3.67.0] - 2026-11-13
@@ -71,10 +77,4 @@
 ### Added
 
 - 服务编排收官——拓扑视图与体系文档（261-265 五轮弧线）：#/services 面板「拓扑」tab（依赖树缩进渲染 + 健康/缺失/环徽标；孤立服务单独分组；环组标红）；docs/reference/service-orchestration.md（四步弧线对照表/声明语法/语义边界七条/三层防线/维护规则五层同步）；v4-outlook 服务编排销项（三项核心全完成）；docs 导航接入；webui +2 断言。
-
-## [3.56.0] - 2026-11-12
-
-### Added
-
-- 服务编排第四步——批量停止与依赖关停顺序 zkit service down：topoStopOrder（topoStart 的逆——本服务最先停、依赖最后）；globalStopOrder（全服务图入度剥离——无依赖先停、被依赖最多的最后；环残余收敛尾部）；zkit service down [插件.服务|--all]（逆序依次 stopService，未运行幂等跳过「=」）；/api/services/down POST（UI ⛓ 依赖关停按钮对位，confirm 守卫）；svcdeps261 +3 断言（逆序/幂等/全局序）。
 
