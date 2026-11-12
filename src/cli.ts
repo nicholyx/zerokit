@@ -583,7 +583,59 @@ async function cmdService(args: string[]): Promise<number> {
   };
   if (sub === 'watch') {
     // 第二百六十六轮①②④⑤：服务守护——周期探测 unhealthy 自动重启（退避防抖）
+    // 第二百六十八轮①②③④：--daemon 后台化 / --status 查询 / --stop 停止
     const rest = args.slice(1);
+    if (rest.includes('--status')) {
+      const { readWatchState } = await import('./core/services.ts');
+      const st = readWatchState();
+      if (!st) { process.stdout.write('守护未运行（无状态文件）\n'); return 0; }
+      let alive = false;
+      try { process.kill(st.pid, 0); alive = true; } catch { alive = false; }
+      if (!alive) { process.stdout.write(`守护未运行（状态文件残留 pid=${st.pid}）\n`); return 0; }
+      const dur = Math.max(1, Math.round((Date.now() - new Date(st.startedAt).getTime()) / 1000));
+      process.stdout.write(`守护运行中：pid=${st.pid} 已跑 ${Math.floor(dur / 60)}m${dur % 60}s，动作 ${st.actions.length} 条\n`);
+      for (const a of st.actions.slice(-5).reverse()) process.stdout.write(`  ${a.ts.slice(11, 19)} ⟳ ${a.key} ×${a.streak} ${a.ok ? '✓' : '✗'} +${Math.round(a.backoffMs / 1000)}s\n`);
+      return 0;
+    }
+    if (rest.includes('--stop')) {
+      const { readWatchState } = await import('./core/services.ts');
+      const st = readWatchState();
+      if (!st) { process.stdout.write('守护未运行（无状态文件）——无需停止\n'); return 0; }
+      let alive = false;
+      try { process.kill(st.pid, 0); alive = true; } catch { alive = false; }
+      if (!alive) { process.stdout.write(`守护未运行（状态文件残留 pid=${st.pid}）——无需停止\n`); return 0; }
+      process.kill(st.pid, 'SIGTERM');
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 200));
+        try { process.kill(st.pid, 0); } catch { process.stdout.write(`✓ 守护已停止（pid=${st.pid}）\n`); return 0; }
+      }
+      process.kill(st.pid, 'SIGKILL');
+      process.stdout.write(`✓ 守护已强制停止（pid=${st.pid}，SIGTERM 超时 4s 后 SIGKILL）\n`);
+      return 0;
+    }
+    const isDaemon = rest.includes('--daemon');
+    if (isDaemon) {
+      // 已有活守护则拒绝重复启动
+      const { readWatchState } = await import('./core/services.ts');
+      const st = readWatchState();
+      if (st) {
+        let alive = false;
+        try { process.kill(st.pid, 0); alive = true; } catch { alive = false; }
+        if (alive) { process.stderr.write(`守护已在运行（pid=${st.pid}）——zkit service watch --status 查看，--stop 停止\n`); return 1; }
+      }
+      // detached 自我重入（同参去掉 --daemon，进前台循环；日志落盘）
+      const { spawn } = await import('node:child_process');
+      const { HOME: ZK_HOME } = await import('./core/paths.ts');
+      const { mkdirSync, openSync } = await import('node:fs');
+      mkdirSync(path.join(ZK_HOME, 'logs'), { recursive: true });
+      const logFd = openSync(path.join(ZK_HOME, 'logs', 'service-watch.log'), 'a');
+      const child = spawn(process.execPath, [fileURLToPath(import.meta.url), 'service', 'watch', ...rest.filter((x) => x !== '--daemon')], {
+        detached: true, stdio: ['ignore', logFd, logFd], env: { ...process.env },
+      });
+      child.unref();
+      process.stdout.write(`✓ 守护已后台启动（pid=${child.pid}，日志 ~/.zerokit/logs/service-watch.log）\n`);
+      return 0;
+    }
     const readOpt = (name: string, def: string) => {
       const i = rest.indexOf(name);
       return i >= 0 && rest[i + 1] ? rest[i + 1] : def;

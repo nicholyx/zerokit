@@ -154,5 +154,19 @@ check('267① 环形追加（同进程续写 2 条）', ws2?.actions?.length ===
 try { fs.rmSync(watchStatePath(), { force: true }); } catch {}
 check('267③④ 守护端点 + UI 区接线（源码断言）', (() => { const srv = fs.readFileSync(path.join(ROOT, 'src', 'server.ts'), 'utf8'); const appSrc = fs.readFileSync(path.join(ROOT, 'web', 'app.js'), 'utf8'); return srv.includes('/api/services/watch') && appSrc.includes('svcWatchBox') && appSrc.includes('svcWatchOn'); })());
 
+
+// ---- 第二百六十八轮：daemon 拒绝重复 / status 语义 / stop 幂等 ----
+const WATCH = (extra) => [process.execPath, path.join(ROOT, 'src/cli.ts'), 'service', 'watch', ...extra];
+const d1 = spawnSync(WATCH(['--daemon', '--interval', '5s'])[0], WATCH(['--daemon', '--interval', '5s']).slice(1), { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
+check('268① daemon 启动（pid 报告）', d1.status === 0 && /pid=\d+/.test(d1.stdout), (d1.stdout + d1.stderr).slice(0, 80));
+const d2 = spawnSync(WATCH(['--daemon'])[0], WATCH(['--daemon']).slice(1), { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
+check('268② 重复启动拒绝（exit 1 + 已在运行）', d2.status === 1 && (d2.stderr + '').includes('已在运行'), (d2.stdout + d2.stderr).slice(0, 80));
+const d3 = spawnSync(WATCH(['--status'])[0], WATCH(['--status']).slice(1), { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
+check('268③ status 语义（pid + 已跑时长）', d3.status === 0 && /守护运行中：pid=\d+/.test(d3.stdout), (d3.stdout + '').slice(0, 80));
+const d4 = spawnSync(WATCH(['--stop'])[0], WATCH(['--stop']).slice(1), { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
+const d5 = spawnSync(WATCH(['--stop'])[0], WATCH(['--stop']).slice(1), { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
+check('268④ stop 干净 + 幂等（第二次无需停止）', d4.status === 0 && /已停止/.test(d4.stdout) && /无需停止/.test(d5.stdout), (d5.stdout + '').slice(0, 60));
+try { fs.rmSync(path.join(home, 'service-watch.json'), { force: true }); } catch {}
+
 console.log(`\n${'='.repeat(60)}\n通过 ${pass} / ${pass + fail}`);
 process.exit(fail > 0 ? 1 : 0);

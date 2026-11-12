@@ -13,6 +13,8 @@
 | 264 | v3.56.0 | 逆序关停 | `zkit service down [--all]` / `topoStopOrder` / `globalStopOrder` |
 | 265 | v3.57.0 | 拓扑视图 | #/services「拓扑」tab / 本文档 |
 | 266 | v3.58.0 | 运行时守护 | `zkit service watch` / `watchCycle` / `watchBackoffMs` |
+| 267 | v3.59.0 | 守护可视化 | service-watch.json / `#/services` 守护区 |
+| 268 | v3.60.0 | 守护后台化 | `--daemon` / `--status` / `--stop` |
 
 ## 声明语法
 
@@ -53,3 +55,13 @@ run = ["{node}", "server.js"]
 - 指数退避：连续重启第 n 次后等待 backoff-base × 2^(n-1)，封顶 10 分钟；健康恢复即复位。
 - Ctrl+C 干净退出（停探测不杀服务）。
 - 审计 caller=service-watch（与人工操作可辨）。
+
+## 守护后台化（第 268 轮）
+
+`zkit service watch --daemon`——脱离终端常驻：
+
+- detached 自我重入（同参去掉 --daemon 进前台循环），日志 `~/.zerokit/logs/service-watch.log`。
+- 重复启动拒绝：init 前检查状态文件 pid 存活。
+- `--status`：读状态文件 + pid 存活判定（残留文件显示「未运行（残留 pid=N）」）。
+- `--stop`：SIGTERM 等 4s，超时 SIGKILL；对未运行幂等（「无需停止」）。
+- 前台模式（266 轮行为）不变——Ctrl+C 只停探测不杀服务。
