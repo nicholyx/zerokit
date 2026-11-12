@@ -236,6 +236,17 @@ jobs:
             echo "::warning::xclip 安装失败（apt 源瞬态）——clipboard 真实路径用例将走缺工具分支"
           fi
 
+      # 第二百六十五轮：主矩阵有 Chrome 步而本 job 漏了——cdp-smoke 计入 test-all 后在此暴露（0/2 cdp=false）
+      - name: 装 Chrome（CDP 面板回归用）
+        shell: bash
+        run: |
+          set -euo pipefail
+          if wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb             && sudo apt-get install -y -qq /tmp/chrome.deb; then
+            echo "装了：$(google-chrome --version)"
+          else
+            echo "::warning::Chrome 安装失败——cdp-smoke 将走 skip 分支"
+          fi
+
       - name: 环境自检
         shell: bash
         run: |
