@@ -755,6 +755,8 @@ const failed = results.filter(([, ok]) => !ok);
   check('258③④ 面板资源 tab + 行展开读取', app2.includes('data-mcp-tab="resources"') && app2.includes('data-mcp-res-detail') && app2.includes('loadResources'));
   check('265②③④ services 拓扑 tab（依赖树/孤立分组/环标红）', app2.includes('svcTopoTab') && app2.includes('svcTopoLinked') && app2.includes('svcTopoLone') && app2.includes('⟳ 环'));
   check('265⑤⑥ 服务编排体系文档 + v4 展望销项', (() => { return fs.existsSync(path.join(PKG_ROOT, 'docs', 'reference', 'service-orchestration.md')) && fs.readFileSync(path.join(PKG_ROOT, 'docs', 'guide', 'v4-outlook.md'), 'utf8').includes('service-orchestration.md'); })());
+  check('269①⑤ 守护启停端点（POST action=start|stop + 审计）', (() => { const srv = fs.readFileSync(path.join(PKG_ROOT, 'src', 'server.ts'), 'utf8'); return srv.includes("/api/services/watch' && req.method === 'POST'") && srv.includes('watch-${action}'); })());
+  check('269③④ UI 守护启停按钮 + 操作后刷新', app2.includes('svcWatchStartBtn') && app2.includes('svcWatchStopBtn') && app2.includes("action: 'stop'") && app2.includes("action: 'start'"));
   check('237①②④⑤ 首列冻结既有接线锁定（sticky/shouldFreeze≥4 阈值/滚动阴影/hover 联动）', (() => { const css = fs.readFileSync(path.join(PKG_ROOT, 'web', 'style.css'), 'utf8'); return app2.includes('shouldFreeze(cols, visCols)') && app2.includes('freeze-col') && css.includes('position: sticky; left: 0') && css.includes('tr:hover td:nth-child(1)') && css.includes('can-r'); })());
   check('238①②④⑤ batch 只重跑失败项既有接线锁定（batchRetry/runBatch(failEntries)/failed=0 隐藏）', app2.includes('id="batchRetry"') && app2.includes('runBatch(failEntries)') && app2.includes('failed ? '));
   check('238③ 重跑批次视觉标记（进度条/汇总卡双标记）', app2.includes('batch-retry-run') && app2.includes('batch-retry-badge'));
