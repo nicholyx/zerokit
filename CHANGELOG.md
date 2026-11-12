@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.63.0] - 2026-11-13
+
+### Added
+
 - 断言数回归护栏——270 轮险情判据进 CI：scripts/assertion-baseline.json 基线入库（3198）；test-all 末尾守卫（总数 < 基线且全绿 → exit 1 + 事故型提示「全绿但计数降 = 结构性丢失，参考 270 轮重写吞分支」——skip 不 fail 只有计数会说话）；sync-counts 三路径（计数上升自动抬基线 / 下降不自动提示「删测试须 --force」/ --force 显式降）；assertbaseline271-smoke 守卫自证 4 断言；maintenance-patterns 事故判据条目。修复 sync 写基线时 string 类型泄漏（JSON 数字断言被写成 "3197"——Number() 包一层，守卫 Number.isFinite 拦住）。
 
 ## [3.62.0] - 2026-11-12
@@ -71,10 +77,4 @@
 ### Added
 
 - MCP 探针体系收官文档（255-259 五轮体系单一参考）：docs/reference/mcp-probe.md——四入口清单（Web 直调/schema、#/mcp 面板、CLI probe）/五支撑端点/三使用场景（插件作者核对 schema、集成排障、CI 验证）/与 dry-run 边界表（probe 执行 vs dry-run 只看）/审计来源/三层防线 MCP 特化；v4-outlook MCP 深化条目销项（已完成探针体系+审计回流，剩余远程 MCP 与资源订阅）；docs 导航接入。
-
-## [3.51.0] - 2026-11-12
-
-### Added
-
-- MCP 探针 CLI 面——zkit mcp probe（255-258 UI 三面的 CLI 对位）：不起 MCP 进程直调工具（插件__动作；--params '{}' 传参；--json 机读）；--schema 打印 inputSchema（256 轮 GET 的 CLI 对位）；错误三态同款（not-found/bad-params/not-authorized）；审计 caller=mcp-probe；用法表登记。MCP 深化五步弧线完成（255-259）：UI 直调→schema 预览→工具面板→资源面板→CLI probe——四面（CLI/启动器/MCP/桌面壳）现在都能不拉起 MCP server 核对工具面。
 
