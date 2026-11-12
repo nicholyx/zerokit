@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.58.0] - 2026-11-12
+
+### Added
+
 - 服务运行时守护——unhealthy 自动重启与退避（服务编排体系续）：zkit service watch [--interval 30s] [--threshold 3] [--backoff-base 30s] 前台循环；只守护「声明 healthCheck 且运行中」的服务（停着的归用户）；连续 threshold 次 unhealthy → 重启走 up 链（依赖先行）；watchCycle/watchBackoffMs 纯函数（指数退避 base×2^(n-1) 封顶 10min，恢复即复位）；Ctrl+C 干净退出（停探测不杀服务）；审计 caller=service-watch；svcdeps261 +3 断言；service-orchestration.md 守护节。
 
 ## [3.57.0] - 2026-11-12
@@ -71,10 +77,4 @@
 ### Added
 
 - MCP 工具直调探针（v4 展望 MCP 深化第一步）：server /api/mcp-probe POST——进程内走 runner、MCP 信封语义响应（jsonrpc 2.0/content blocks/_meta/isError；错误透传 tool-not-found/bad-params/not-authorized 三态）；UI 动作详情页「MCP 调用」按钮（tools/call 语义直调、结果含 _meta 元数据）；授权策略同款（只读放行、副作用须 mcp allow）；Caller 类型扩展 mcp-probe 审计来源；OpenAPI 登记；webui +3 断言。
-
-## [3.46.0] - 2026-11-11
-
-### Added
-
-- 三层防线文档化（拆分系列最终判据汇编）：app-split-plan 补篇——职责矩阵（L1 静态断言查文本 / L2 注入面契约查结构 / L3 CDP 运行时查行为，各层天然漏什么、为什么需要下一层）；各层抓出的真缺陷记录（L3 抓 26 处含九轮潜伏、L2 抓 251 轮漏网之鱼、L1 三行秒级回归不可替代）；通用化模板（双侧约定→L2、组合爆炸→L3、其余 L1）；一句话判据「存在性断言永远不能证明可达性」。v4 及后续大型重构的验收模板。
 
