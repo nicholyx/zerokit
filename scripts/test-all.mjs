@@ -158,6 +158,23 @@ for (const file of files) {
 
 console.log('\n' + '='.repeat(56));
 console.log(`${files.length} 个测试文件，断言通过 ${passed} / ${passed + failed}`);
+// 第二百七十一轮②：断言数基线守卫——总数较基线下降 = 条件断言静默跳过型结构丢失
+// （270 轮事故：整块重写吞掉子命令分支，全绿但 -34）。skip 不 fail，只有计数会说话。
+{
+  const baselineFile = path.join(ROOT, 'scripts', 'assertion-baseline.json');
+  try {
+    const baseline = JSON.parse(fs.readFileSync(baselineFile, 'utf8'));
+    if (Number.isFinite(baseline.assertions) && passed < baseline.assertions && failed === 0) {
+      console.error(`⛔ 断言数回归：${passed} < 基线 ${baseline.assertions}（差 ${baseline.assertions - passed}）`);
+      console.error('   全绿但计数降 = 测试被静默跳过型结构丢失（参考 270 轮事故：重写吞分支）。');
+      console.error('   排查：git stash 后对照基线跑一遍；恢复后若确认要删测试，--force 降基线。');
+      process.exit(1);
+    }
+  } catch (e) {
+    const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : '';
+    if (code !== 'ENOENT') console.error(`（基线文件读取失败，跳过守卫：${e instanceof Error ? e.message : String(e)}）`);
+  }
+}
 // 第五十七轮⑧：耗时 top5——帮定位慢用例（有 spawn 真进程的测试天然慢，只横向比）
 if (timings.length > 1) {
   const top = [...timings].sort((a, b) => b[1] - a[1]).slice(0, 5);
