@@ -4139,6 +4139,16 @@ function cmdHealth(): number {
 
 /** ⑤zkit audit --last N：最近 N 条审计记录表格式输出。 */
 async function cmdAudit(args: string[]): Promise<number> {
+  // 第二百七十五轮④：webhook 投递失败环形缓冲视图
+  if (args.includes('--failures')) {
+    const { auditDeliveryFailures } = await import('./core/auditHook.ts');
+    const fs2 = auditDeliveryFailures();
+    if (fs2.length === 0) { process.stdout.write('没有投递失败记录（环形缓冲空——未配置 webhook 或全部成功）。\n'); return 0; }
+    if (args.includes('--json')) { process.stdout.write(JSON.stringify({ failures: fs2 }, null, 2) + '\n'); return 0; }
+    process.stdout.write(`webhook 投递失败（最近 ${fs2.length} 条，内存环形缓冲）：\n`);
+    for (const f of fs2) process.stdout.write(`  ${f.ts} ${String(f.status)} ${f.message.slice(0, 80)} → ${f.url.slice(0, 60)}\n`);
+    return 0;
+  }
   // ③拒绝记录视图
   if (args.includes('--denied')) {
     const { records: denied, badLines } = auditNs.readDenied();
@@ -5683,7 +5693,11 @@ async function main(): Promise<number> {
   }
 }
 
-main().then((code) => process.exit(code)).catch((err) => {
+main().then(async (code) => {
+  // 第二百七十五轮②：CLI 退出前排空在途审计投递（webhook fire-and-forget 的兜底，上限 2.5s）
+  try { const { auditDrain } = await import('./core/auditHook.ts'); await auditDrain(); } catch { /* 投递是旁路 */ }
+  process.exit(code);
+}).catch((err) => {
   process.stderr.write(c.red(`✗ ${err?.stack ?? err}`) + '\n');
   process.exit(1);
 });

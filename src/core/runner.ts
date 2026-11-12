@@ -310,6 +310,8 @@ export function audit(record: AuditRecord): void {
       // 审计是旁路，不是主流程。
     }
   }
+  // 第二百七十五轮②：外部投递（webhook）——fire-and-forget，无配置零行为
+  import('./auditHook.ts').then(({ deliverAudit }) => deliverAudit(record)).catch(() => { /* 投递是旁路 */ });
 }
 
 interface ExecOutcome {
