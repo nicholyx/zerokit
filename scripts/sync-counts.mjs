@@ -59,5 +59,23 @@ writeFileSync(ovPath, ov);
 writeFileSync(stPath, st);
 
 console.log(`✓ 已同步（${files} 文件 / ${asserts} 断言）`);
+// 第二百七十一轮③④：断言基线同步——常规只升不降；降基线必须 --force 显式确认
+{
+  const blPath = path.join(ROOT, 'scripts', 'assertion-baseline.json');
+  try {
+    const bl = JSON.parse(readFileSync(blPath, 'utf8'));
+    if (asserts > (bl.assertions ?? 0)) {
+      bl.assertions = Number(asserts); bl.files = Number(files); bl.updatedAt = new Date().toISOString().slice(0, 10);
+      writeFileSync(blPath, JSON.stringify(bl, null, 2) + '\n');
+      console.log(`  基线抬升：${asserts}（assertion-baseline.json）`);
+    } else if (asserts < (bl.assertions ?? 0) && process.argv.includes('--force')) {
+      bl.assertions = Number(asserts); bl.files = Number(files); bl.updatedAt = new Date().toISOString().slice(0, 10);
+      writeFileSync(blPath, JSON.stringify(bl, null, 2) + '\n');
+      console.log(`  基线下调（--force 显式确认）：${asserts}`);
+    } else if (asserts < (bl.assertions ?? 0)) {
+      console.log(`  ⚠ 基线保持 ${bl.assertions}（计数下降不自动同步——删测试须 --force 显式降基线）`);
+    }
+  } catch { /* 无基线文件 = 老仓库兼容，不阻断 */ }
+}
 console.log(`  overview:  ${ovBefore} → ${files} 个文件、${asserts} 项断言`);
 console.log(`  START-HERE: ${stBefore} → ${files} 个文件，${asserts} 项断言`);
