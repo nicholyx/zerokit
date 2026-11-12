@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [3.53.0] - 2026-11-12
+
+### Added
+
+- 服务依赖图——[[service]] requires 声明与启动顺序（v4 展望服务编排第一步）：Service 接口加 requires?: string[]（本插件 id 或 插件.服务 跨插件）；serviceDeps() 纯函数（解析/缺失检出/循环检测限深 16）；startService 依赖前检——存在但未运行的依赖拒绝启动并指名（缺失依赖是清单错误归 doctor/面板管，不拦启动）；/api/services 响应带 requires/depMissing/depCycle；UI 面板依赖行（缺依赖 ⚠ / 环 ⟳ 标红）；plugin-spec.md requires 行；svcdeps261-smoke 新文件 4 断言。
+
 ## [3.52.0] - 2026-11-12
 
 ### Added

@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.65.0] - 2026-11-13
+
+### Added
+
 - watch 采样窗口聚合（结果数据分析方向起步，272 轮对账 S 第一条）：src/core/watchStats.ts 纯函数——aggregateWindow（min/max/avg/count/first/last；数值提取 numericOf：裸数值/对象首数值字段，失败与非数值跳过）+ windowStats 多窗分组 + DEFAULT_WINDOWS（5m/1h/24h）；zkit watch stats <插件.动作>（不抢顶层 stats——那是历史统计 46/92/120 轮，最初误抢致 cli120/cli46/hist92/ops 四文件 10 断言红，守住后改 watch 子命令族）；zerokit://watch 资源每监控附 stats（MCP 面同步受益）；空样本/全非数值全 null 不抛；watchstats273-smoke 7 断言；基线自动抬升 3198→3205。
 
 ## [3.64.0] - 2026-11-13
@@ -71,10 +77,4 @@
 ### Added
 
 - 服务编排第二步——依赖拓扑排序与批量启动 zkit service up：topoStartOrder 纯函数（沿 requires DFS 后序收集启动链/环边跳过不阻断/本服务排最后）；zkit service up 子命令（拓扑序依次 startService，已在运行幂等跳过「=」，链中失败即停——后面的没有意义）；/api/services/up POST（UI ⛓ 依赖启动按钮对位，汇总 results + cycleSkipped）；环容错修正（path 命中优先于 seen——DFS 已收集的祖先在 seen 里但仍是环边）；svcdeps261 +3 断言（拓扑序/环容错/up 幂等）。
-
-## [3.53.0] - 2026-11-12
-
-### Added
-
-- 服务依赖图——[[service]] requires 声明与启动顺序（v4 展望服务编排第一步）：Service 接口加 requires?: string[]（本插件 id 或 插件.服务 跨插件）；serviceDeps() 纯函数（解析/缺失检出/循环检测限深 16）；startService 依赖前检——存在但未运行的依赖拒绝启动并指名（缺失依赖是清单错误归 doctor/面板管，不拦启动）；/api/services 响应带 requires/depMissing/depCycle；UI 面板依赖行（缺依赖 ⚠ / 环 ⟳ 标红）；plugin-spec.md requires 行；svcdeps261-smoke 新文件 4 断言。
 
