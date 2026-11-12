@@ -1,0 +1,359 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://zerokit.dev/schema/plugin-manifest.schema.json",
+  "title": "zerokit plugin.toml",
+  "description": "zerokit 插件清单 schema——单一事实来源的机器可校验形态（第二百七十四轮）。字段语义详见 docs/reference/plugin-spec.md。",
+  "type": "object",
+  "required": [
+    "plugin"
+  ],
+  "properties": {
+    "plugin": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "description": "插件 id：目录名/CLI 名/MCP 工具名前缀"
+        },
+        "name": {
+          "type": "string",
+          "description": "显示名（可中文）"
+        },
+        "version": {
+          "type": "string",
+          "default": "0.0.0"
+        },
+        "summary": {
+          "type": "string",
+          "description": "一句话说明（搜索与模型路由用，建议写）"
+        },
+        "description": {
+          "type": "string"
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "author": {
+          "type": "string"
+        },
+        "homepage": {
+          "type": "string"
+        },
+        "license": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "spawn",
+            "worker",
+            "host"
+          ],
+          "description": "默认 spawn"
+        }
+      },
+      "additionalProperties": true
+    },
+    "action": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "risk"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "description": "写给人和模型——模型判断何时用它的唯一依据"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "exec",
+              "http",
+              "chain"
+            ],
+            "default": "exec"
+          },
+          "run": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "argv 数组（exec 必填）"
+          },
+          "shell": {
+            "type": "boolean",
+            "default": false,
+            "description": "开了会强制 destructive"
+          },
+          "url": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "DELETE",
+              "PATCH",
+              "HEAD"
+            ]
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "body": {
+            "type": "string"
+          },
+          "output": {
+            "type": "string",
+            "enum": [
+              "text",
+              "json",
+              "markdown",
+              "table",
+              "file",
+              "html"
+            ]
+          },
+          "render": {
+            "type": "string",
+            "description": "各端渲染提示（web = 插件 web/index.html）"
+          },
+          "risk": {
+            "type": "string",
+            "enum": [
+              "read",
+              "mutate",
+              "destructive"
+            ]
+          },
+          "timeout": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 60
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "env": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "encoding": {
+            "type": "string",
+            "enum": [
+              "utf8",
+              "gbk",
+              "gb2312",
+              "big5",
+              "shift_jis",
+              "latin1"
+            ],
+            "description": "子进程输出编码"
+          },
+          "background": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "param": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "string",
+              "integer",
+              "number",
+              "boolean",
+              "path",
+              "enum"
+            ]
+          },
+          "min": {
+            "type": "number"
+          },
+          "max": {
+            "type": "number"
+          },
+          "pattern": {
+            "type": "string"
+          },
+          "default": {},
+          "enum": {
+            "type": "array",
+            "items": {}
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string",
+            "description": "进 MCP inputSchema.description"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "service": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535,
+            "description": "与 pidFile 二选一（运行检测依据）"
+          },
+          "pidFile": {
+            "type": "string"
+          },
+          "run": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "启动命令"
+          },
+          "stop": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "停止命令（不给按 PID 结束）"
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "env": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "requires": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "依赖服务（本插件 id 或 插件.服务）——261 轮"
+          },
+          "healthCheck": {
+            "type": "object",
+            "properties": {
+              "http": {
+                "type": "string",
+                "pattern": "^https?://"
+              },
+              "tcp": {
+                "type": "string",
+                "pattern": "^[\\w.-]+:\\d+$"
+              }
+            },
+            "additionalProperties": false,
+            "description": "健康探针（http/tcp 二选一）——263 轮"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "setting": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "string",
+              "integer",
+              "number",
+              "boolean",
+              "path",
+              "enum",
+              "secret"
+            ]
+          },
+          "default": {},
+          "description": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "requires": {
+      "type": "object",
+      "properties": {
+        "plugins": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "插件间依赖"
+    }
+  }
+}

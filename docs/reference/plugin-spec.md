@@ -1,5 +1,8 @@
 # 插件清单规范（plugin.toml）
 
+> 机器可校验形态：[plugin-manifest.schema.json](../schema/plugin-manifest.schema.json)（编辑器补全接线：`zkit plugin schema`）。
+
+
 一份 `plugin.toml` 同时定义四件事：**人看到的界面、终端敲的命令、AI 客户端看到的工具、
 以及 Web 表单**。加一个参数，四个面同时多出来。
 
