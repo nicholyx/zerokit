@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.67.0] - 2026-11-13
+
+### Added
+
 - 审计日志外部投递 webhook（272 对账 S 第三条）：src/core/auditHook.ts——auditWebhookConfig（config.toml [audit] webhook/headers 最小 TOML 节解析；坏配置静默关）；deliverAudit fire-and-forget POST（2s 超时 AbortController，失败不抛不重试）；auditDrain（CLI 退出前排空在途投递上限 2.5s——33 轮「审计后立刻 exit」教训的异步版，CLI 短命进程 fetch 会被带走，手动验证三次空收件后定位）；失败环形缓冲（内存最近 20 条）；zkit audit --failures 视图；audit() 单入口挂钩（无配置零行为）；auditwebhook275 6 断言（含端到端 receiver 实收）；基线 3212→3218。
 
 ## [3.66.0] - 2026-11-13
@@ -71,10 +77,4 @@
 ### Added
 
 - 服务编排第四步——批量停止与依赖关停顺序 zkit service down：topoStopOrder（topoStart 的逆——本服务最先停、依赖最后）；globalStopOrder（全服务图入度剥离——无依赖先停、被依赖最多的最后；环残余收敛尾部）；zkit service down [插件.服务|--all]（逆序依次 stopService，未运行幂等跳过「=」）；/api/services/down POST（UI ⛓ 依赖关停按钮对位，confirm 守卫）；svcdeps261 +3 断言（逆序/幂等/全局序）。
-
-## [3.55.0] - 2026-11-12
-
-### Added
-
-- 服务健康探针声明与状态页集成（服务编排第三步）：Service.healthCheck?: { http?; tcp? }（http 期望 2xx、tcp 期望可连——fetch/AbortSignal + net.connect 短超时 2.5s）；probeHealth 纯函数（探针异常/超时/拒绝全算未通过）；/api/services 对声明探针的服务真实探测（running 细分 healthy/unhealthy/stopped）；UI 三态徽标（✓ healthy / ⚠ unhealthy）；doctor 集成 healthCheck 声明校验（http/tcp 二选一、URL 形态、host:port 形态——warning 级）；plugin-spec healthCheck 行；svcdeps261 +3 断言。
 
