@@ -16,10 +16,11 @@
 - 远程 MCP（SSE/streamable-http）宿主支持（未做）
 - zerokit 作为 MCP server 的资源订阅（变更推送而非轮询）（未做）
 
-### 3. 服务编排（中）
-- [[service]] 依赖图（proxy 挂了 watcher 也不该瞎跑）
-- 服务健康检查探针（HTTP/TCP 声明式）
-- 跨插件服务拓扑视图
+### 3. 服务编排（中）✅ 核心已完成（261-265 轮，v3.53–v3.57）
+- ~~[[service]] 依赖图~~ ✅ requires 声明 + 拓扑启动/关停
+- ~~服务健康检查探针~~ ✅ healthCheck（http/tcp）+ 三态徽标
+- ~~跨插件服务拓扑视图~~ ✅ #/services「拓扑」tab
+- 见 [服务编排体系](../reference/service-orchestration.md)
 
 ### 4. 结果数据分析（中）
 - watch 采样的本地聚合（min/avg/max 窗口函数）

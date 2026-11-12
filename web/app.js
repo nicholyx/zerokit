@@ -6057,9 +6057,62 @@ async function showServices() {
       <div class="panel">
         <h2>${t('svcPanel')}</h2>
         <p class="sub">${t('svcSub')}</p>
-        <table class="grid"><thead><tr><th>${t('svcColId')}</th><th>${t('svcColTitle')}</th><th>${t('svcColState')}</th><th></th></tr></thead><tbody>${rows || `<tr><td colspan="4">${t('svcEmpty')}</td></tr>`}</tbody></table>
+        <table class="grid" id="svcListTab"><thead><tr><th>${t('svcColId')}</th><th>${t('svcColTitle')}</th><th>${t('svcColState')}</th><th></th></tr></thead><tbody>${rows || `<tr><td colspan="4">${t('svcEmpty')}</td></tr>`}</tbody></table>
+        <div class="chips" id="svcTabs" style="margin-top:10px">
+          <button class="chip on" data-svc-tab="list">${t('svcTabList')}</button>
+          <button class="chip" data-svc-tab="topo">${t('svcTabTopo')}</button>
+        </div>
+        <div id="svcTopoTab" class="hidden"></div>
         <div class="actions"><button class="ghost" id="svcBack">${t('backToList')}</button></div>
       </div>`;
+    // 第二百六十五轮②③④：拓扑 tab——依赖树渲染（孤立分组 / 环标红）
+    const renderTopo = () => {
+      const box = el.doctorView.querySelector('#svcTopoTab');
+      if (!box || box.dataset.loaded) return;
+      const hasDeps = (sv.requires ?? []).length > 0 || svDependedBy.has(`${sv.pluginId}.${sv.id}`);
+      // 树形：每个「根」（无人依赖它）为起点，缩进列 requires
+      const byKey = new Map(data.services.map((x) => [`${x.pluginId}.${x.id}`, x]));
+      const roots = data.services.filter((x) => !svDependedBy.has(`${x.pluginId}.${x.id}`));
+      const lone = roots.filter((x) => (x.requires ?? []).length === 0);
+      const linked = roots.filter((x) => (x.requires ?? []).length > 0);
+      const line = (x, depth) => {
+        const key = `${x.pluginId}.${x.id}`;
+        const bad = (x.depMissing ?? []).length > 0 || x.depCycle;
+        const h = x.health === 'healthy' ? ' <span class="badge read">✓</span>' : x.health === 'unhealthy' ? ' <span class="badge bad">⚠</span>' : '';
+        const miss = (x.depMissing ?? []).length ? ` <span class="badge bad">缺 ${(x.depMissing ?? []).join('、')}</span>` : '';
+        const cyc = x.depCycle ? ' <span class="badge bad">⟳ 环</span>' : '';
+        return `${'&nbsp;'.repeat(depth * 4)}${x.running ? '●' : '○'} <b>${esc(key)}</b>${h}${miss}${cyc}<br>`;
+      };
+      const walk = (x, depth, seen) => {
+        if (seen.has(`${x.pluginId}.${x.id}`)) return line({ ...x, depCycle: true }, depth);
+        seen.add(`${x.pluginId}.${x.id}`);
+        let html2 = line(x, depth);
+        for (const r of x.requires ?? []) {
+          const d = byKey.get(r);
+          if (d) html2 += walk(d, depth + 1, seen);
+          else html2 += `${'&nbsp;'.repeat((depth + 1) * 4)}✗ <span class="badge bad">${esc(r)}（缺失）</span><br>`;
+        }
+        return html2;
+      };
+      box.innerHTML = `<div class="panel" style="margin:0">
+        <h3>${t('svcTopoLinked')}</h3>${linked.map((x) => walk(x, 0, new Set())).join('<hr style="border-color:var(--line)">') || `<span class="sub">${t('svcTopoNoLinked')}</span>`}
+        <h3 style="margin-top:12px">${t('svcTopoLone')}</h3>${lone.map((x) => line(x, 0)).join('')}
+      </div>`;
+      box.dataset.loaded = '1';
+    };
+    const svDependedBy = new Map();
+    {
+      const counts = new Map();
+      for (const x of data.services) for (const r of x.requires ?? []) counts.set(r, (counts.get(r) ?? 0) + 1);
+      for (const [k, v] of counts) svDependedBy.set(k, v);
+    }
+    el.doctorView.querySelectorAll('[data-svc-tab]').forEach((b) => b.addEventListener('click', () => {
+      el.doctorView.querySelectorAll('[data-svc-tab]').forEach((x) => x.classList.toggle('on', x === b));
+      const isTopo = b.dataset.svcTab === 'topo';
+      el.doctorView.querySelector('#svcListTab')?.classList.toggle('hidden', isTopo);
+      el.doctorView.querySelector('#svcTopoTab')?.classList.toggle('hidden', !isTopo);
+      if (isTopo) renderTopo();
+    }));
     el.doctorView.querySelectorAll('[data-svc-stop]').forEach((b) => {
       b.addEventListener('click', async () => {
         const id = b.dataset.svcStop;
