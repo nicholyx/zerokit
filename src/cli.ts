@@ -2038,7 +2038,7 @@ async function cmdPlugin(args: string[]): Promise<number> {
     const rest = args.slice(1);
     const id = rest.find((a) => !a.startsWith('--'));
     if (!id) {
-      process.stderr.write('用法：zkit plugin new <id> [--name 名字] [--author 作者] [--description 一句话简介] [--runtime node|python] [--web] [--dir 目录] [--example chain|setting|http]\n');
+      process.stderr.write('用法：zkit plugin new <id> [--name 名字] [--author 作者] [--description 一句话简介] [--runtime node|python] [--web] [--dir 目录] [--example chain|setting|http] [--with-service]\n');
       return 2;
     }
     const flag = (name: string): string | undefined => {
@@ -2081,6 +2081,8 @@ async function cmdPlugin(args: string[]): Promise<number> {
       web: rest.includes('--web'),
       dir: flag('dir'),
       example: exampleFlag as ScaffoldExample | undefined,
+      // 第二百七十轮④：--with-service 附服务示例节
+      withService: rest.includes('--with-service'),
     });
     if (!r.ok || !r.dir || !r.load?.plugin) {
       process.stderr.write(c.red(`✗ ${r.message}\n`));

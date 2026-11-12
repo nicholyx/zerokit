@@ -32,6 +32,8 @@ export interface ScaffoldOptions {
   dir?: string;
   /** 专题模板（chain/setting/http）：manifestTmpl 让位给 EXAMPLE_MANIFESTS */
   example?: ScaffoldExample;
+  /** 第二百七十轮④：附带 [[service]] 服务示例节（requires/healthCheck 示范 261-263 轮体系） */
+  withService?: boolean;
 }
 
 export interface ScaffoldResult {
@@ -59,7 +61,7 @@ function entryFiles(runtime: ScaffoldRuntime, web: boolean): Record<string, stri
   };
 }
 
-function manifestTmpl(id: string, name: string, runtime: ScaffoldRuntime, web: boolean, opts: { author?: string; summary?: string } = {}): string {
+function manifestTmpl(id: string, name: string, runtime: ScaffoldRuntime, web: boolean, opts: { author?: string; summary?: string; withService?: boolean } = {}): string {
   const requires = runtime === 'python'
     ? '# python 解释器要在（运行前 zerokit 会检查并给出安装指引）\n[requires]\npython = ">=3.8"\n'
     : '# node 在（写插件的你在用 zerokit，基本都有；声明出来 doctor 能提前发现问题）\n[requires]\nnode = ">=22"\n';
@@ -73,7 +75,7 @@ function manifestTmpl(id: string, name: string, runtime: ScaffoldRuntime, web: b
 #
 # 开发方式（改完即生效，不用反复装卸）：
 #   zkit plugin dev ${id}        # 以链接方式装进插件目录
-#   zkit run ${id} hello         # 跑起来看看
+#   zkit run ${id} hello         # 跑起来看看\n#   zkit mcp probe ${id}__hello  # MCP 语义直调（255 轮探针）
 #   zkit plugin validate .       # 随手校验清单
 #   zkit plugin add .            # 满意后转成正式副本
 #
@@ -116,7 +118,7 @@ ${web ? '# render = "web"：结果交给本插件 web/index.html 渲染（富交
   type  = "text"
   fills = "name"
   label = "名字"
-`;
+${opts.withService ? `\n[[service]]\nid = "demo"\ntitle = "示例服务"\ndescription = "服务示例（--with-service 生成；requires/healthCheck 见 docs/reference/plugin-spec.md）"\nport = 39410\nrun = ["{node}", "-e", "require('http').createServer((q,r)=>{r.end('ok')}).listen(process.env.ZK_DEMO_PORT || 39410)"]\nhealthCheck = { http = "http://127.0.0.1:39410/" }\n` : ''}`;
 }
 
 const NODE_MAIN = `// 动作实现：zerokit 把参数作为 argv 元素直接传进来（见 plugin.toml 的 run），
@@ -268,7 +270,7 @@ export function scaffoldPlugin(id: string, opts: ScaffoldOptions = {}): Scaffold
   const name = opts.name || id;
   const manifestBase = opts.example
     ? EXAMPLE_MANIFESTS[opts.example].manifest(id, name)
-    : manifestTmpl(id, name, runtime, opts.web ?? false, { author: opts.author, summary: opts.summary });
+    : manifestTmpl(id, name, runtime, opts.web ?? false, { author: opts.author, summary: opts.summary, withService: opts.withService });
   // 第六十八轮⑧：--author/--description 注入（summary 占位替换 + 头部作者注释行）
   let manifest = manifestBase;
   if (opts.summary) manifest = manifest.replace('__SUMMARY__', opts.summary);
@@ -287,7 +289,7 @@ export function scaffoldPlugin(id: string, opts: ScaffoldOptions = {}): Scaffold
     : {
     'plugin.toml': manifest,
     ...entryFiles(runtime, opts.web ?? false),
-    'README.md': `# ${name}\n\n由 \`zkit plugin new\` 生成的 zerokit 插件骨架。\n\n## 开发\n\n\`\`\`bash\nzkit plugin dev .      # 进入开发模式（改文件即生效）\nzkit run ${id} hello   # 跑起来\nzkit plugin validate . # 校验清单\n\`\`\`\n\n## 发布\n\n\`\`\`bash\nzkit plugin add .          # 转成正式副本\nzkit plugin export ${id}   # 打包成 .toolpack 单文件\n\`\`\`\n\n完整规范见 zerokit 仓库的 docs/plugin-spec.md。\n\n> 开发模式会在本目录写 \`.zerokit-source.json\`（zerokit 的来源记录），建议加进 .gitignore。\n`,
+    'README.md': `# ${name}\n\n由 \`zkit plugin new\` 生成的 zerokit 插件骨架。\n\n## 开发\n\n\`\`\`bash\nzkit plugin dev .      # 进入开发模式（改文件即生效）\nzkit run ${id} hello   # 跑起来\nzkit mcp probe ${id}__hello  # MCP 语义直调（255 轮探针，不起 MCP server）\nzkit plugin validate . # 校验清单\n\`\`\`\n\n## 发布\n\n\`\`\`bash\nzkit plugin add .          # 转成正式副本\nzkit plugin export ${id}   # 打包成 .toolpack 单文件\n\`\`\`\n\n完整规范见 zerokit 仓库的 docs/plugin-spec.md。\n\n> 开发模式会在本目录写 \`.zerokit-source.json\`（zerokit 的来源记录），建议加进 .gitignore。\n`,
     };
   try {
     for (const [rel, content] of Object.entries(files)) {

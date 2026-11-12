@@ -117,10 +117,6 @@ const ai2 = allKeys.indexOf('depdemo.alpha');
 const bi2 = allKeys.indexOf('depdemo.beta');
 check('264③ globalStopOrder（含 alpha，无入度者先停）', ai2 >= 0 && (bi2 < 0 || ai2 < bi2), JSON.stringify(allKeys).slice(0, 140));
 
-// 清理
-spawnSync(process.execPath, ['src/cli.ts', 'service', 'stop', 'depdemo.alpha'], { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
-spawnSync(process.execPath, ['src/cli.ts', 'service', 'stop', 'depdemo.beta'], { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
-try { fs.rmSync(home, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }); } catch { /* Windows EBUSY：clipboard 插件进程句柄释放滞后——清理失败不影响断言结论 */ }
 
 // ---- 第二百六十三轮：健康探针三态 / 死端口 / doctor 声明校验 ----
 const { probeHealth } = await import(pathToFileURL(path.join(ROOT, 'src/core/services.ts')).href);
@@ -168,6 +164,26 @@ const d4 = spawnSync(WATCH(['--stop'])[0], WATCH(['--stop']).slice(1), { cwd: RO
 const d5 = spawnSync(WATCH(['--stop'])[0], WATCH(['--stop']).slice(1), { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
 check('268④ stop 干净 + 幂等（第二次无需停止）', d4.status === 0 && /已停止/.test(d4.stdout) && /无需停止/.test(d5.stdout), (d5.stdout + '').slice(0, 60));
 try { fs.rmSync(path.join(home, 'service-watch.json'), { force: true }); } catch {}
+
+
+// ---- 第二百七十轮：插件脚手架 ----
+const newParent = path.join(home, 'plug');
+const newDir = path.join(newParent, 'scaffold-demo');  // scaffold 语义：--dir 是父目录，id 再嵌一层
+const n1 = spawnSync(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'plugin', 'new', 'scaffold-demo', '--dir', newParent, '--with-service'], { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
+const tomlOk = fs.existsSync(path.join(newDir, 'plugin.toml'));
+const readmeOk = fs.existsSync(path.join(newDir, 'README.md'));
+check('270①⑤ 生成清单+README（hello 动作 + mcp probe 示例）', n1.status === 0 && tomlOk && readmeOk && fs.readFileSync(path.join(newDir, 'README.md'), 'utf8').includes('mcp probe'), (n1.stdout + n1.stderr).slice(0, 60));
+const addS = spawnSync(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'plugin', 'add', newDir], { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
+const runS = spawnSync(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'run', 'scaffold-demo.hello'], { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
+check('270③④ 装入即用 + with-service（hello 出问候 + [[service]] 节）', addS.status === 0 && runS.status === 0 && fs.readFileSync(path.join(newDir, 'plugin.toml'), 'utf8').includes('[[service]]'), (runS.stdout + runS.stderr).slice(0, 60));
+const n2 = spawnSync(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'plugin', 'new', 'scaffold-demo', '--dir', newParent], { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
+const before = fs.readFileSync(path.join(newDir, 'plugin.toml'), 'utf8');
+check('270① 覆盖保护（重跑不破坏既有内容）', fs.readFileSync(path.join(newDir, 'plugin.toml'), 'utf8') === before, (n2.stdout + n2.stderr).slice(0, 60));
+
+// 清理
+spawnSync(process.execPath, ['src/cli.ts', 'service', 'stop', 'depdemo.alpha'], { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
+spawnSync(process.execPath, ['src/cli.ts', 'service', 'stop', 'depdemo.beta'], { cwd: ROOT, env, encoding: 'utf8', timeout: 60000 });
+try { fs.rmSync(home, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }); } catch { /* Windows EBUSY：clipboard 插件进程句柄释放滞后——清理失败不影响断言结论 */ }
 
 console.log(`\n${'='.repeat(60)}\n通过 ${pass} / ${pass + fail}`);
 process.exit(fail > 0 ? 1 : 0);
