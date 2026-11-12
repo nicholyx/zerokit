@@ -132,5 +132,15 @@ check('263② 死端口 tcp 探针 false', deadTcp === false, String(deadTcp));
 check('263③④ UI 健康徽标接线（badge 注入源码断言）', (() => { const appSrc = fs.readFileSync(path.join(ROOT, 'web', 'app.js'), 'utf8'); return appSrc.includes('healthBadge') && appSrc.includes('⚠ unhealthy') && appSrc.includes('✓ healthy'); })());
 
 
+
+// ---- 第二百六十六轮：守护退避纯函数 / 阈值语义 / 复位 ----
+const { watchBackoffMs } = await import(pathToFileURL(path.join(ROOT, 'src/core/services.ts')).href);
+const b1 = watchBackoffMs(1, 30_000);
+const b3 = watchBackoffMs(3, 30_000);
+const bCap = watchBackoffMs(99, 30_000);
+check('266③ 退避指数（n=1 基数、n=3 ×4、封顶 10min）', b1 === 30_000 && b3 === 120_000 && bCap === 600_000, `${b1}/${b3}/${bCap}`);
+check('266③ 恢复复位（streak<=0 → 0ms）', watchBackoffMs(0, 30_000) === 0 && watchBackoffMs(-2, 30_000) === 0, 'nonpositive');
+check('266⑤ Caller 扩展 service-watch（审计来源可辨）', fs.readFileSync(path.join(ROOT, 'src', 'core', 'runner.ts'), 'utf8').includes("'service-watch'"));
+
 console.log(`\n${'='.repeat(60)}\n通过 ${pass} / ${pass + fail}`);
 process.exit(fail > 0 ? 1 : 0);
