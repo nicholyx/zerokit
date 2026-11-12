@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [3.48.0] - 2026-11-11
+
+### Added
+
+- MCP 探针工具清单联动——inputSchema 预览（MCP 深化第二步）：/api/mcp-probe GET（tool=插件__动作 → inputSchema/插件元数据/动作风险机读——toJsonSchema 复用）；UI 动作详情页「inputSchema」折叠按钮（模型实际看到的 JSON Schema——min/max/pattern/enum 透传核对，215 轮字段一屏可见）；未知工具 -32602 透传；OpenAPI 登记；webui +2 断言。
+
 ## [3.47.0] - 2026-11-11
 
 ### Added

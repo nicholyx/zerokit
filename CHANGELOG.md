@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.60.0] - 2026-11-12
+
+### Added
+
 - 守护后台化——zkit service watch --daemon（266-267 守护体系的「终端一关守护就没」补全）：--daemon 脱离终端常驻（detached 自我重入同参去 --daemon，日志 ~/.zerokit/logs/service-watch.log）；重复启动拒绝（init 前状态文件 pid 存活校验）；--status 查询（pid+时长+最近动作；残留文件显示「未运行（残留 pid=N）」）；--stop 干净停（SIGTERM 等 4s 超时 SIGKILL；未运行幂等「无需停止」）；前台模式 Ctrl+C 语义不变（266 轮行为保留）；svcdeps261 +4 断言（daemon 启动/拒绝重复/status/stop 幂等）；service-orchestration.md 后台化节。
 
 ## [3.59.0] - 2026-11-12
@@ -71,10 +77,4 @@
 ### Added
 
 - MCP 工具清单面板——tools/list UI 化（MCP 深化第三步）：/api/mcp-tools GET（name/title/inputSchema/annotations 全量——与 MCP tools/list 同构，52 工具实测）；UI #/mcp 面板（工具表：名称/插件·动作/风险/readOnly-destructive hints）；行点击展开 inputSchema + 「直调」按钮（串起 255/256 两轮——面板内完成看 schema→调→核 _meta 全链路）；命令面板「🔌 MCP 工具清单」入口；I18N 九键 zh/en；OpenAPI 登记；webui +2 断言。
-
-## [3.48.0] - 2026-11-11
-
-### Added
-
-- MCP 探针工具清单联动——inputSchema 预览（MCP 深化第二步）：/api/mcp-probe GET（tool=插件__动作 → inputSchema/插件元数据/动作风险机读——toJsonSchema 复用）；UI 动作详情页「inputSchema」折叠按钮（模型实际看到的 JSON Schema——min/max/pattern/enum 透传核对，215 轮字段一屏可见）；未知工具 -32602 透传；OpenAPI 登记；webui +2 断言。
 
