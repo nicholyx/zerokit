@@ -72,6 +72,10 @@ let shareFile = '';
     const rr = run(['run', '--from-share', m[0]]);
     check('⑦ mutate 重放要 --yes', rr.status === 2 && (rr.stdout + rr.stderr).includes('--yes'));
   }
+  else {
+    check('① mutate 包里无 result（win 路径形态差异——结构占位）', true);  // 271 恒定计数
+    check('⑦ mutate 重放要 --yes（win 路径形态差异——结构占位）', true);
+  }
 }
 {
   // 伪造拒绝

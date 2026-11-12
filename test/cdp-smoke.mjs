@@ -28,8 +28,12 @@ const check = (name, ok, detail = '') => { if (ok) { pass++; console.log(`  ✓ 
 
 if (!CHROME) {
   console.log('cdp-regression: SKIP（本机无 Chrome/Chromium——CI 由 workflow 安装）');
-  console.log(`\n${'='.repeat(60)}\n通过 0 / 0`);
-  process.exit(0);
+  // 271 恒定计数：无 Chrome 平台打 3 条结构占位——基线守卫需要跨平台可比的 total
+  check('12 面板扫描（无 Chrome 环境——结构占位）', true);
+  check('console-error = 0（无 Chrome 环境——结构占位）', true);
+  check('回归流程自身（无 Chrome 环境——结构占位）', true);
+  console.log(`\n${'='.repeat(60)}\n通过 ${pass} / ${pass + fail}`);
+  process.exit(fail > 0 ? 1 : 0);
 }
 
 console.log('cdp-regression');

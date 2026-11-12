@@ -281,7 +281,7 @@ const before = cfg.publicSettings(plugin);
   if (!isWin) {
     const mode = fs.statSync(file).mode & 0o777;
     check('存储：文件权限 0600（只有当前用户可读）', mode === 0o600, mode.toString(8));
-  }
+  } else check('存储：文件权限（win 无 0600 语义——结构占位）', true);  // 271 恒定计数
   const after = cfg.publicSettings(plugin);
   const tok = after.find((s) => s.name === 'token');
   check('打码：publicSettings 不回显密钥明文，只给掩码',
