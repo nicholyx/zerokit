@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.64.0] - 2026-11-13
+
+### Added
+
 - v4 展望全条目对账（第 272 轮盘点）：完成度统计表（六方向：服务编排 100% / MCP 深化 50% / 插件生态 33% / 数据分析·契约·桌面 0%——高中优先级合计 46%）；未动条目评估（14 条各标 S/M/L 工作量+依赖关系——4 条 S 可即起步：watch 聚合/plugin.toml JSON Schema/审计 webhook 投递）；「下一阶段建议」五条（S 先清、生态链最长宜早启、MCP 远程化 spike、M 条目按用户可见价值排序、桌面冻结）；docs/README 对账锚点。
 
 ## [3.63.0] - 2026-11-13
@@ -71,10 +77,4 @@
 ### Added
 
 - 服务依赖图——[[service]] requires 声明与启动顺序（v4 展望服务编排第一步）：Service 接口加 requires?: string[]（本插件 id 或 插件.服务 跨插件）；serviceDeps() 纯函数（解析/缺失检出/循环检测限深 16）；startService 依赖前检——存在但未运行的依赖拒绝启动并指名（缺失依赖是清单错误归 doctor/面板管，不拦启动）；/api/services 响应带 requires/depMissing/depCycle；UI 面板依赖行（缺依赖 ⚠ / 环 ⟳ 标红）；plugin-spec.md requires 行；svcdeps261-smoke 新文件 4 断言。
-
-## [3.52.0] - 2026-11-12
-
-### Added
-
-- MCP 探针体系收官文档（255-259 五轮体系单一参考）：docs/reference/mcp-probe.md——四入口清单（Web 直调/schema、#/mcp 面板、CLI probe）/五支撑端点/三使用场景（插件作者核对 schema、集成排障、CI 验证）/与 dry-run 边界表（probe 执行 vs dry-run 只看）/审计来源/三层防线 MCP 特化；v4-outlook MCP 深化条目销项（已完成探针体系+审计回流，剩余远程 MCP 与资源订阅）；docs 导航接入。
 
