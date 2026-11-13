@@ -75,3 +75,30 @@ description = "读 stdin 数字符（pipe 下游示例）"
 run     = ["{node}", "-e", "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.stringify({count:d.length})))"]
 output  = "json"
 risk    = "read"
+
+# 第二百九十二轮⑤：pipe-export 示例——数据工作流闭环（取数 → pipe 变换 → zerocol 落盘）。
+# 最后一步 use = "builtin.zerocol-export"：file 落 data_dir；columns 从前步结果按 from 路径取值。
+[[action]]
+id      = "pipe-export"
+title   = "管道导出"
+description = "闭环演示：gen 产数 → pipe 计数 → zerocol 列式落盘。数据工作流的最小完整链。"
+type    = "chain"
+risk    = "read"
+template = "{saved}"
+
+[[action.step]]
+use = "self.gen"
+as  = "first"
+
+[[action.step]]
+use    = "self.count-stdin"
+as     = "counted"
+pipe   = true
+
+[[action.step]]
+use = "builtin.zerocol-export"
+as  = "saved"
+params = { file = "pipe-export-demo", columns = [
+  { name = "value", type = "int", from = "first.data.value" },
+  { name = "chars", type = "int", from = "counted.data.count" },
+] }
