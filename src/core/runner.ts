@@ -1120,6 +1120,11 @@ async function runChainAction(
     const pluginRef = step.use.slice(0, dot);
     const actionRef = step.use.slice(dot + 1);
 
+    // 292①：内建导出步——伪引用，不需要目标插件/动作
+    if (step.use === 'builtin.zerocol-export') {
+      plan.push({ step, plugin, action });
+      continue;
+    }
     let targetPlugin: Plugin | undefined;
     if (pluginRef === 'self') {
       targetPlugin = plugin;
@@ -1175,6 +1180,44 @@ async function runChainAction(
     const remaining = budgetMs - (Date.now() - started);
     if (remaining <= 0) {
       return fail('chain-timeout', `${label} 之前，整条链路 ${action.timeout} 秒的总预算已经用完`);
+    }
+
+    // 292②③④：内建 zerocol 导出步——从上一步结果取值落列式文件
+    if (item.step.use === 'builtin.zerocol-export') {
+      const file = typeof item.step.params['file'] === 'string' ? String(item.step.params['file']) : '';
+      const colsRaw = Array.isArray(item.step.params['columns']) ? item.step.params['columns'] as Array<Record<string, unknown>> : [];
+      if (!file || colsRaw.length === 0) {
+        return fail('chain-export-bad-params', `${label} 需要 file（文件名）与 columns（列声明 name/type/from）`);
+      }
+      const { exportZeroCol } = await import('./arrowIpc.ts');
+      const pathModule = await import('node:path');
+      const { DATA_DIR, ensureDirs } = await import('./paths.ts');
+      const srcMap: Record<string, unknown> = Object.fromEntries([...results.entries()].map(([alias, r]) => [alias, { data: r.data, stdout: r.stdout }]));
+      const cols = colsRaw.map((c) => {
+        const name = String(c['name'] ?? '');
+        const type = c['type'] === 'int' || c['type'] === 'double' ? c['type'] as 'int' | 'double' : 'string';
+        const from = String(c['from'] ?? '');
+        const src = from.split('.').reduce<unknown>((acc, key) => {
+          if (acc && typeof acc === 'object') return (acc as Record<string, unknown>)[key];
+          return undefined;
+        }, srcMap);
+        return { name, type, values: [src] } as { name: string; type: 'int' | 'double' | 'string'; values: unknown[] };
+      });
+      const zc = exportZeroCol(cols);
+      ensureDirs();
+      const outPath = pathModule.join(DATA_DIR, file.endsWith('.zerocol.json') ? file : `${file}.zerocol.json`);
+      const fsMod = await import('node:fs');
+      fsMod.writeFileSync(outPath, JSON.stringify(zc, null, 2));
+      const rowCount = cols[0]?.values.length ?? 0;
+      const exportResult: RunResult = {
+        ok: true, exitCode: 0, stdout: `已导出 ${outPath}（${rowCount} 行，${cols.length} 列）`, stderr: '',
+        ms: Date.now() - started, truncated: false, data: { path: outPath, rows: rowCount, columns: cols.length },
+        argv: [], command: `zerocol-export → ${outPath}`,
+      };
+      results.set(item.step.as, exportResult);
+      outputs.push({ alias: item.step.as, result: exportResult });
+      prev = exportResult;
+      continue;
     }
 
     const ctx: ChainContext = { values: ctxValues, builtins, results, ...(prev ? { prev } : {}) };

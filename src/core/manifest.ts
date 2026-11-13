@@ -456,6 +456,7 @@ function parsePluginDeps(
       const dot = step.use.lastIndexOf('.');
       const dep = step.use.slice(0, dot);
       if (dep === 'self') continue;
+      if (dep === 'builtin') continue;  // 292：内建伪引用（zerocol-export 等）不是插件依赖
       add(dep, `动作 ${action.id} 的第 ${action.steps.indexOf(step) + 1} 步引用了它`);
     }
   }

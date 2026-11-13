@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- zerocol 导出 chain step 化（v4 数据工作流第二步——管道末端原语）：内建伪引用 use = "builtin.zerocol-export"（无需真实插件动作；plan 静态校验放行 + 执行循环特判）；params file（落 data_dir）+ columns（name/type/from 取值路径——dots 寻址到前步 alias.data.字段 或 alias.stdout）；导出结果回报路径与行列数（data: path/rows/columns）；**修依赖收集真缺陷**：builtin 伪引用曾被当插件依赖致 doctor 报「缺少插件依赖：builtin」——collectDeps 跳过 builtin.*；demochain pipe-export 示例（gen 21 → pipe 计数 → zerocol 落盘 2 列）；plugin-spec 导出步行；zerocolstep292 6 断言；基线 3305→3311。数据工作流闭环成形：取数→pipe 变换→zerocol 落盘。
 
 ## [4.3.0] - 2026-11-14
 

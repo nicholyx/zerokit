@@ -290,6 +290,7 @@ env_pass = ["HTTP_PROXY"]  # 环境变量白名单：声明后宿主机其余变
 | `requires` | string[] | 服务依赖（本插件内服务 id 或 插件.服务）——启动前检查依赖运行状态，缺依赖拒绝启动（261 轮） |
 | `healthCheck` | table | 健康探针（`http = "URL"` 或 `tcp = "host:port"` 二选一）——声明后 running 细分 healthy/unhealthy（263 轮） |
 | `pipe` | bool | chain step 专用：`pipe = true` 时上一步 stdout 作为本步骤 stdin（数据工作流原语——291 轮） |
+| `builtin.zerocol-export` | 内建步 | chain step 的 `use` 可写此伪引用（无需真实动作）：params 给 `file`（落 data_dir）与 `columns`（name/type/from 取值路径——292 轮） |
 | `description` | | 会进 MCP 的 `inputSchema.description`，是模型判断传什么的依据 |
 | `required` | | 默认 `false` |
 | `default` | | 默认值 |
