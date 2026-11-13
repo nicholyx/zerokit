@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.6.0] - 2026-11-14
+
+### Added
+
 - zerocol 读回 chain step（v4 数据工作流第三步——读取端闭环）：内建伪引用 use = "builtin.zerocol-read"（plan 放行 + 执行特判）；params file（data_dir 下的 zerocol 文件）；importZeroCol 读回 → data 带全列首行捷径（{alias.data.value} 直接取）+ _rows/_columns/_all/_file 元数据；错误两态明确（chain-read-missing 提示先跑 export 生成 / chain-read-bad-format 含 JSON 与列解码两层）；demochain pipe-roundtrip 示例（read → export 回写，**往返 checksum 全等实测**——开发中发现并修正 from 路径漏 .data 层）；plugin-spec 读回步行；zerocolread294 4 断言；基线 3316→3320。数据跨 run 流转成形：昨天的导出今天的管道源。
 
 ## [4.5.0] - 2026-11-14
@@ -71,10 +77,4 @@
 ### Added
 
 - 脚手架→发布通道（生态链第三步，281+282 后继）：zkit plugin publish-check <目录>——发布前组合检查（清单可加载【loadPlugin 全解析】/动作 risk/版本语义化/签名密钥存在/market index 干跑 buildIndex 不落盘）+ 汇总行（硬伤 exit 1 + 修复指引）；publish-ready 通过后打印「发布通道三步」指引（签名密钥状态——有 ✓ 无提示 keygen；zkit market index 生成命令含目录；zkit plugin export；market.json 提交 git → 用户 market add）；market-protocol.md 发布通道节（new→publish-check→add→publish-ready→keygen→index→export 七命令一条龙）；publish283 3 断言；基线 3268→3271。
-
-## [3.74.0] - 2026-11-13
-
-### Added
-
-- 插件签名链起步——ed25519 最小实现（生态链第二步，281 公开化后继）：src/core/pluginSign.ts（零依赖 Node 内置 crypto）——keygen（密钥对落 ~/.zerokit/keys/ 0600；keyId=SPKI DER sha256 前 16hex 指纹）；canonicalJson 规范串（键排序无空格——签验两侧一致）；signPayload/verifyPayload；.toolpack export 自动签名（有私钥时 sig 段：algo/keyId/sig，不入被签 payload 防自指）；import 强校验（包带 sig 且本机 keys/ 有对应公钥→篡改拒绝；无 sig/无公钥=原行为兼容）；zkit keygen 命令；market-protocol.md 签名节；pluginsign282 8 断言（keygen/纯函数签验/篡改 false/端到端 export 带签/篡改拒/无 sig 兼容）；基线 3260→3268。
 
