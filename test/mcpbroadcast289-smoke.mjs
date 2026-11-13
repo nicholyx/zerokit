@@ -18,8 +18,8 @@ spawnSync(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'plugin', 'bundled']
 const src = fs.readFileSync(path.join(ROOT, 'src', 'mcp.ts'), 'utf8');
 check('① 会话表（SessionEntry 元数据 clientId/connectedAt）', src.includes('interface SessionEntry') && src.includes('clientId') && src.includes('connectedAt'), '');
 check('④ --broadcast 开关默认关（broadcastEnabled 才 notifyOthers）', src.includes('broadcastEnabled') && src.includes('if (!broadcastEnabled) return;'), '');
-check('⑤ DELETE 断连清出（close + transports.delete）', src.includes('entry.transport.close(); transports.delete'), '');
-check('③ 广播风暴防护（单次调用单通知——hook 单点注册）', src.includes('broadcastHook') && (src.match(/broadcastHook\('/g) ?? []).length === 1, '');
+check('⑤ DELETE 断连清出（close + transports.delete——290 轮离开广播插入后仍在）', src.includes('entry.transport.close();') && src.includes('transports.delete(sid as string)'), '');
+check('③ 广播风暴防护（hook 调用点=3：工具广播 1 + presence 加入/离开 2）', (src.match(/broadcastHook\('notifications\/message'/g) ?? []).length === 3, '');
 check('④ CLI flag（--broadcast 进 serveHttp）', src.includes("process.argv.push('--broadcast')"), '');
 
 // 活体：双客户端（--broadcast 开）——B 收到 A 的 tool-call 通知

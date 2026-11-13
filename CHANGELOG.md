@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- 协作状态同步 presence（v4 协作面第二步）：会话加入广播（initialize 成功后其余会话收 session-joined 含 clientId）；会话离开广播（DELETE 后 session-left）；GET /mcp/sessions 在线清单（token 同面鉴权；clientId/connectedAt/sid 尾段——sid 全段不泄）；zkit mcp sessions --http [端口] CLI 查询（需 ZEROKIT_TOKEN 同 serve）；presence 广播同走 fromSid 排除与工具广播共用风暴防护；mcppresence290 6 断言（加入/离开/清单两态/CLI/风暴自排除）；289 测试断言适配 290 代码形态（hook 调用点 1→3）；基线 3293→3299。
 
 ## [4.1.0] - 2026-11-13
 
