@@ -1,3 +1,4 @@
+import * as pluginSignNs from './pluginSign.ts';
 // 插件分发：打包/解包（zip）、上架检查、市场登记表校验。
 // zip 用 Node 内置 zlib 手写最小实现（stored + deflate）：不引新依赖——
 // 无构建步骤的项目多背一个 archiver/ffi 不值当，而插件包就是「一堆小文本
@@ -276,7 +277,7 @@ export function packPlugin(id: string, outDir?: string): PackResult {
 }
 
 /** 第六十二轮①：打包带完整性清单。返回 [zip字节, 清单文本]。 */
-export async function packPluginWithManifest(id: string, outDir?: string): Promise<PackResult & { integrity?: string }> {
+export async function packPluginWithManifest(id: string, outDir?: string): Promise<PackResult & { integrity?: string; signature?: import('./pluginSign.ts').ToolpackSignature }> {
   const dir = path.join(PLUGINS_DIR, id);
   if (!fs.existsSync(dir)) return { ok: false, message: `插件 ${id} 没有安装（${dir} 不存在）` };
   const files: Array<{ name: string; data: Buffer }> = [];
@@ -314,14 +315,24 @@ export async function packPluginWithManifest(id: string, outDir?: string): Promi
     } catch { /* 生成失败不挡打包 */ }
   }
   const manifest = buildManifest(files);
-  const all = [...files, { name: INTEGRITY_FILE, data: Buffer.from(manifest, 'utf8') }];
   const total = crypto.createHash('sha256').update(manifest).digest('hex');
+  // 第二百八十二轮②：ed25519 签名（有私钥时）——对 files+integrity 的规范串签，SIG.ed25519 入包
+  let sigInfo: import('./pluginSign.ts').ToolpackSignature | undefined;
+  try {
+    const { loadPrivateKey, signPayload, canonicalJson } = await import('./pluginSign.ts');
+    const priv = loadPrivateKey();
+    if (priv) {
+      sigInfo = signPayload({ files: files.map((f) => ({ name: f.name, sha256: crypto.createHash('sha256').update(f.data).digest('hex') })), integrity: total }, priv);
+      void canonicalJson;
+    }
+  } catch { /* 签名失败不挡打包——与无密钥同路 */ }
+  const all = [...files, { name: INTEGRITY_FILE, data: Buffer.from(manifest, 'utf8') }, ...(sigInfo ? [{ name: 'SIG.ed25519', data: Buffer.from(JSON.stringify(sigInfo, null, 2), 'utf8') }] : [])];
   const buf = zipFiles(all);
   const outDirFinal = outDir ?? process.cwd();
   fs.mkdirSync(outDirFinal, { recursive: true });
   const out = path.join(outDirFinal, `zerokit-${id}.zip`);
   fs.writeFileSync(out, buf);
-  return { ok: true, file: out, files: all.map((f) => f.name), bytes: buf.length, integrity: `sha256-${total}` };
+  return { ok: true, file: out, files: all.map((f) => f.name), bytes: buf.length, integrity: `sha256-${total}`, signature: sigInfo };
 }
 
 /** ②解包安装：校验 plugin.toml 结构与动作风险声明后落进插件目录。
@@ -336,6 +347,29 @@ export function unpackPlugin(zipPath: string, opts: { replace?: boolean; verify?
   }
   const toml = entries.find((e) => e.name === 'plugin.toml');
   if (!toml) return { ok: false, message: '包里没有 plugin.toml，不装' };
+  // 第二百八十二轮③：ed25519 签名校验——包带 SIG.ed25519 且本机 keys/ 有对应公钥时强校验；篡改拒绝
+  {
+    const sigEntry = entries.find((e) => e.name === 'SIG.ed25519');
+    if (sigEntry) {
+      const { verifyPayload, loadTrustedPublicKeys } = pluginSignNs;
+      try {
+        const sigInfo = JSON.parse(sigEntry.data.toString('utf8')) as { algo: string; keyId: string; sig: string };
+        if (sigInfo.algo !== 'ed25519') return { ok: false, message: `不认识的签名算法：${sigInfo.algo}` };
+        const trusted = loadTrustedPublicKeys();
+        if (trusted.has(sigInfo.keyId)) {
+          const payloadFiles = entries.filter((e) => e.name !== 'SIG.ed25519' && e.name !== INTEGRITY_FILE).map((e) => ({ name: e.name, sha256: crypto.createHash('sha256').update(e.data).digest('hex') })).sort((a, b) => a.name.localeCompare(b.name));
+          const integ = entries.find((e) => e.name === INTEGRITY_FILE);
+          const payload = { files: payloadFiles, integrity: integ ? crypto.createHash('sha256').update(integ.data).digest('hex') : '' };
+          if (!verifyPayload(payload, sigInfo as never, trusted)) {
+            return { ok: false, message: `签名校验失败（keyId ${sigInfo.keyId}）——包被篡改或密钥不对，拒绝安装` };
+          }
+        }
+        // 本机无该公钥 = 不强校验（兼容：用户只信任自己的 keys/ 里有的签名者）
+      } catch (e) {
+        return { ok: false, message: `签名段解析失败：${(e as Error).message}` };
+      }
+    }
+  }
   // 完整性校验：默认开（老包没清单=没有可比对的基线，放行但提示）
   const manifestEntry = entries.find((e) => e.name === INTEGRITY_FILE);
   if (opts.verify !== false && manifestEntry) {

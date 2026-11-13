@@ -1,3 +1,4 @@
+import * as pluginSignNs from './pluginSign.ts';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -417,16 +418,26 @@ export function exportPlugin(id: string): { ok: boolean; path?: string; message:
     }
   };
   walk(plugin.dir, '');
-  const pack = {
+  const pack: Record<string, unknown> = {
     format: 'zerokit-plugin',
     formatVersion: 1,
     plugin: { id: plugin.id, name: plugin.name, version: plugin.version },
     exportedAt: new Date().toISOString(),
     files,
   };
+  // 第二百八十二轮②：有私钥时 ed25519 签名（对 files+plugin 规范串；sig 不入被签 payload）
+  let signed = '';
+  try {
+    const priv = pluginSignNs.loadPrivateKey();
+    if (priv) {
+      const sig = pluginSignNs.signPayload({ files, plugin: pack['plugin'] }, priv);
+      pack['sig'] = sig;
+      signed = `（已签名 ${sig.algo} keyId ${sig.keyId}）`;
+    }
+  } catch { /* 签名失败不挡导出 */ }
   const outPath = path.join(process.cwd(), `${plugin.id}.toolpack`);
   fs.writeFileSync(outPath, JSON.stringify(pack, null, 2));
-  return { ok: true, path: outPath, message: `已导出 ${Object.keys(files).length} 个文件到 ${outPath}` };
+  return { ok: true, path: outPath, message: `已导出 ${Object.keys(files).length} 个文件到 ${outPath}${signed}` };
 }
 
 export function importPlugin(packPath: string): AddResult {
@@ -439,6 +450,20 @@ export function importPlugin(packPath: string): AddResult {
   }
   if (pack.format !== 'zerokit-plugin' || !pack.files) {
     return { ok: false, message: '不是 zerokit 插件包（缺少 format: zerokit-plugin）', warnings: [] };
+  }
+  // 第二百八十二轮③：ed25519 验签——包带 sig 且本机 keys/ 有对应公钥时强校验（篡改拒）；无 sig/无公钥=原行为
+  const sigInfo = (pack as { sig?: { algo?: string; keyId?: string; sig?: string } }).sig;
+  if (sigInfo) {
+    if (sigInfo.algo !== 'ed25519' || !sigInfo.keyId || !sigInfo.sig) {
+      return { ok: false, message: '签名段不完整（algo/keyId/sig）', warnings: [] };
+    }
+    const trusted = pluginSignNs.loadTrustedPublicKeys();
+    if (trusted.has(sigInfo.keyId)) {
+      const payload = { files: pack.files, plugin: (pack as { plugin?: unknown }).plugin };
+      if (!pluginSignNs.verifyPayload(payload, sigInfo as never, trusted)) {
+        return { ok: false, message: `签名校验失败（keyId ${sigInfo.keyId}）——包被篡改或密钥不对，拒绝导入`, warnings: [] };
+      }
+    }
   }
   const tmp = path.join(PLUGINS_DIR, `.tmp-pack-${Date.now()}`);
   try {

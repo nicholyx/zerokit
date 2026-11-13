@@ -2686,10 +2686,12 @@ async function cmdPluginPack(args: string[]): Promise<number> {
   }
   const r = await packPlugin(id, outIdx >= 0 ? args[outIdx + 1] : undefined);
   if (!r.ok) { process.stderr.write(c.red(`✗ ${r.message}\n`)); return 1; }
-  const r2 = r as { integrity?: string };
+  const r2 = r as { integrity?: string; signature?: { keyId: string; algo: string } };
   process.stdout.write(c.green(`✓ ${r.file}（${r.files?.length} 个文件，${r.bytes} 字节）\n`));
   for (const f of r.files ?? []) process.stdout.write(c.dim(`  ${f}\n`));
   if (r2.integrity) process.stdout.write(c.dim(`  完整性：${r2.integrity}\n`));
+  if (r2.signature) process.stdout.write(c.dim(`  签名：${r2.signature.algo}（keyId ${r2.signature.keyId}）——install 时强校验\n`));
+  else process.stdout.write(c.dim(`  未签名（zkit keygen 生成密钥后 pack 自动签名）\n`));
   process.stdout.write(c.dim('  包里不含用户设置值（settings 只带 .example 模板）\n'));
   return 0;
 }
@@ -5576,6 +5578,18 @@ async function main(): Promise<number> {
       return await cmdBackup(rest); // 第一百三十六轮⑧：与 UI 同一信封
     case 'restore':
       return await cmdRestore(rest);
+    case 'keygen': {
+      // 第二百八十二轮①：ed25519 密钥对生成（签名链起点）
+      const { keygen } = await import('./core/pluginSign.ts');
+      const label = rest.find((a) => !a.startsWith('--')) ?? 'default';
+      const r = keygen(label);
+      console.log(`✓ 密钥对已生成（ed25519，标签 ${label}）`);
+      console.log(`  私钥 ${r.privateKeyPath}（0600——不要提交到任何仓库）`);
+      console.log(`  公钥 ${r.publicKeyPath}`);
+      console.log(`  指纹 keyId：${r.keyId}`);
+      console.log(`  用途：zkit plugin pack 自动签名；把公钥发给用户放 ~/.zerokit/keys/ 即可校验你的包`);
+      return 0;
+    }
     case 'diff': {
       // 第二百七十八轮④：zkit diff <插件.动作>——本次 run 与上一缓存结果的结构化对比
       const target = rest.find((a) => !a.startsWith('--'));
