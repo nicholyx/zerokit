@@ -35,7 +35,7 @@ output  = "json"
 [[action]]
 id      = "pipeline"
 title   = "取数再翻倍"
-description = "组合动作演示：跑 gen 拿 21，翻倍成 42。想看多步传值怎么写就看这个。"
+description = "组合动作演示：跑 gen 拿 21，翻倍成 42。想看多步传值怎么写就看这个。（293：MCP --broadcast 下其他客户端能看到 value=21 的结果摘要）"
 type    = "chain"
 risk    = "read"
 template = "拿到 {first.data.value}，翻倍后是 {second.data.doubled}"

@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- 广播内容增强——结果摘要下发（v4 协作面第三步）：tool-call 广播载荷升级 { type, tool, ok, ms, summary }——summary 先过 maskSensitive 脱敏再分档（≤4KB 紧凑 JSON 全量直放；>4KB 走 { _truncated, head: 600 字首段, fields: fieldStats }——与 MCP 响应同款 48 轮策略复用 summarizeJson）；观察者在 SSE 流直接看到执行结果（value=21 级别），大结果 token 友好不发全文；demochain gen 描述补广播演示注记；broadcastsummary293 5 断言（载荷结构/小结果全量含 value/大结果分档实现/实收 summary）；基线 3311→3316。
 
 ## [4.4.0] - 2026-11-14
 
