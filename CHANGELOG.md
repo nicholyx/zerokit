@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- zerocol 读回 chain step（v4 数据工作流第三步——读取端闭环）：内建伪引用 use = "builtin.zerocol-read"（plan 放行 + 执行特判）；params file（data_dir 下的 zerocol 文件）；importZeroCol 读回 → data 带全列首行捷径（{alias.data.value} 直接取）+ _rows/_columns/_all/_file 元数据；错误两态明确（chain-read-missing 提示先跑 export 生成 / chain-read-bad-format 含 JSON 与列解码两层）；demochain pipe-roundtrip 示例（read → export 回写，**往返 checksum 全等实测**——开发中发现并修正 from 路径漏 .data 层）；plugin-spec 读回步行；zerocolread294 4 断言；基线 3316→3320。数据跨 run 流转成形：昨天的导出今天的管道源。
 
 ## [4.5.0] - 2026-11-14
 
