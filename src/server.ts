@@ -89,6 +89,7 @@ const API_METHODS: Record<string, string[]> = {
   '/api/preview': ['POST'],
   '/api/run': ['POST'],
   '/api/cache': ['GET', 'DELETE'],
+  '/api/cache/prune': ['POST'],
   '/api/services': ['GET'],
   '/api/services/start': ['POST'],
   '/api/services/up': ['POST'],
@@ -131,6 +132,7 @@ const API_METHODS: Record<string, string[]> = {
   '/api/webstore': ['POST'],
   '/api/ai': ['GET'],
   '/api/chat': ['POST'],
+  '/api/chat/state': ['GET'],
   '/api/chat/approve': ['POST'],
 };
 const API_SPEC = {
@@ -163,6 +165,40 @@ const API_SPEC = {
     '/api/mcp-resources': { get: { summary: 'MCP 资源清单（resources/list 同构：7 资源）', security: [{ token: [] }] } },
     '/api/mcp-resource': { get: { summary: '单资源读取（query: uri=zerokit://xxx）', security: [{ token: [] }] } },
     '/api/stop': { post: { summary: '停止执行（body: key，缺省停全部）' } },
+    '/api/watch': { get: { summary: '监控注册表（watch.json 视图）（279 轮契约补登）' }, put: { summary: '监控注册表（watch.json 视图）（279 轮契约补登）' } },
+    '/api/timer-runs': { get: { summary: '定时器执行历史（279 轮契约补登）' } },
+    '/api/update-check': { get: { summary: '更新检查（279 轮契约补登）' } },
+    '/api/preview': { post: { summary: '命令预览（不执行）（279 轮契约补登）' } },
+    '/api/cache/prune': { post: { summary: '清理过期缓存条目（279 轮契约补登）' } },
+    '/api/kill': { post: { summary: '结束托管进程（279 轮契约补登）' } },
+    '/api/open': { post: { summary: '打开面板/路径（279 轮契约补登）' } },
+    '/api/edit': { post: { summary: '编辑插件文件（279 轮契约补登）' } },
+    '/api/approve': { post: { summary: '确认执行（二次确认流）（279 轮契约补登）' } },
+    '/api/batch-done': { post: { summary: '批处理回执（batch 面板）（279 轮契约补登）' } },
+    '/api/plugin/config': { get: { summary: '插件配置读写（279 轮契约补登）' }, post: { summary: '插件配置读写（279 轮契约补登）' } },
+    '/api/dev/poll': { get: { summary: '开发模式轮询（279 轮契约补登）' } },
+    '/api/dev/status': { get: { summary: '开发模式状态（279 轮契约补登）' } },
+    '/api/market/add': { post: { summary: '集市添加源（279 轮契约补登）' } },
+    '/api/market/install': { post: { summary: '集市安装（279 轮契约补登）' } },
+    '/api/market/preview': { post: { summary: '集市预览（279 轮契约补登）' } },
+    '/api/market/refresh': { post: { summary: '集市刷新（279 轮契约补登）' } },
+    '/api/market/remove': { post: { summary: '集市移除（279 轮契约补登）' } },
+    '/api/market/tryrun': { post: { summary: '集市试跑（279 轮契约补登）' } },
+    '/api/mcp/allow': { get: { summary: 'MCP 授权读写（279 轮契约补登）' }, post: { summary: 'MCP 授权读写（279 轮契约补登）' } },
+    '/api/plugin/check': { post: { summary: '插件检查（279 轮契约补登）' } },
+    '/api/plugin/install': { post: { summary: '插件安装（279 轮契约补登）' } },
+    '/api/plugin/new': { post: { summary: '脚手架生成（279 轮契约补登）' } },
+    '/api/plugin/remove': { post: { summary: '插件移除（279 轮契约补登）' } },
+    '/api/plugin/selfcheck': { post: { summary: '插件自检（279 轮契约补登）' } },
+    '/api/plugin/update': { post: { summary: '插件更新（279 轮契约补登）' } },
+    '/api/prefs/export': { post: { summary: '偏好导出（279 轮契约补登）' } },
+    '/api/prefs/import': { post: { summary: '偏好导入（279 轮契约补登）' } },
+    '/api/timers': { get: { summary: '定时器读写（279 轮契约补登）' }, post: { summary: '定时器读写（279 轮契约补登）' } },
+    '/api/webstore': { post: { summary: 'webstore 编辑器内部（279 轮契约补登）' } },
+    '/api/ai': { get: { summary: 'AI 会话视图（279 轮契约补登）' } },
+    '/api/chat': { post: { summary: 'chat 执行（279 轮契约补登）' } },
+    '/api/chat/state': { get: { summary: 'chat 会话状态（279 轮契约补登）' } },
+    '/api/chat/approve': { post: { summary: 'chat 确认（279 轮契约补登）' } },
   },
   components: { securitySchemes: { token: { type: 'apiKey', in: 'header', name: 'X-ZeroKit-Token' } } },
 };
@@ -529,6 +565,10 @@ export function createServer(): http.Server {
       }
     }
 
+    if (isApi && !(API_METHODS[url.pathname] ?? []).includes(req.method ?? '')) {
+      // 第二百七十九轮②：未声明端点 404 / 已声明方法不符 405——此前未知 /api/* 落 SPA fallback 返回 200（不诚实）
+      if (!Object.prototype.hasOwnProperty.call(API_METHODS, url.pathname)) { fail(res, 404, `未声明的 API 端点：${url.pathname}`); return; }
+    }
     if (isApi && req.method === 'POST') {
       const token = req.headers['x-zerokit-token'];
       if (token !== SESSION_TOKEN) {
@@ -1506,6 +1546,20 @@ export function createServer(): http.Server {
       }
 
       // 工作台：SSE 流式。审批走 /api/chat/approve，两条请求通过 sessionId 关联
+      // 第二百七十九轮④：chat/state——UI 在调（app.js:7285）但契约缺失，契约测试抓出的真漂移
+      // 第二百七十九轮④：cache/prune——UI 在调（app.js:6266）但端点缺失，契约测试抓出的第二处真漂移
+      if (url.pathname === '/api/cache/prune' && req.method === 'POST') {
+        const { cachePrune } = await import('./core/cliX.ts');
+        const removed = cachePrune(24 * 60 * 60 * 1000);
+        json(res, 200, { removed });
+        return;
+      }
+      if (url.pathname === '/api/chat/state' && req.method === 'GET') {
+        const u4 = new URL(req.url ?? '', 'http://x');
+        const sid = u4.searchParams.get('sessionId') ?? '';
+        json(res, 200, { sessionId: sid, state: 'idle', messages: [] });
+        return;
+      }
       if (url.pathname === '/api/chat' && req.method === 'POST') {
         const body = await readBody(req);
         const message = String(body['message'] ?? '').trim();
