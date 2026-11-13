@@ -70,6 +70,8 @@ export interface RunResult {
 
 export interface RunOptions {
   caller: Caller;
+  /** 第二百九十一轮②：管道输入（chain pipe 模式——上一步 stdout 作为本步 stdin） */
+  stdinData?: string;
   /** 第六十七轮①⑧：外部中断（UI 停止按钮 / Ctrl+.）。触发即杀子进程，结果标 stopped。 */
   signal?: AbortSignal;
   /** 已解析、已补齐默认值并校验过的参数 */
@@ -434,20 +436,26 @@ function childEnv(base: NodeJS.ProcessEnv, argv0: string): NodeJS.ProcessEnv {
 function execArgv(
   file: string,
   args: string[],
-  opts: { cwd: string; env: NodeJS.ProcessEnv; timeout: number; shell: boolean; encoding: string; signal?: AbortSignal; maxBytes?: number },
+  opts: { cwd: string; env: NodeJS.ProcessEnv; timeout: number; shell: boolean; encoding: string; signal?: AbortSignal; maxBytes?: number; stdinData?: string },
 ): Promise<ExecOutcome> {
   return new Promise((resolve) => {
     const encoding = opts.encoding as BufferEncoding;
     // 第一百二十四轮①：耗时分解——spawn 时刻、首字节时刻，供 --profile 分解展示
     const t0 = Date.now();
     let firstByteMs = 0;
+    const usePipeStdin = typeof opts.stdinData === 'string';
     const child = spawn(file, args, {
       cwd: opts.cwd,
       env: opts.env,
       shell: opts.shell,
       windowsHide: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: [usePipeStdin ? 'pipe' : 'ignore', 'pipe', 'pipe'],
     });
+    // 291②：管道输入——写入后关闭（下游读到 EOF 即处理完毕）
+    if (usePipeStdin) {
+      child.stdin!.write(opts.stdinData!);
+      child.stdin!.end();
+    }
     const spawnMs = Date.now() - t0;
     // 第六十七轮①⑧：外部中断——与超时同路（杀进程），但结局标 stopped 不标 timedOut
     let stopped = false;
@@ -492,7 +500,7 @@ let timedOut = false;
       child.kill('SIGKILL');
     }, opts.timeout);
 
-    child.stdout.on('data', (chunk: Buffer) => {
+    child.stdout?.on('data', (chunk: Buffer) => {
       // 第一百二十四轮①：首字节时刻——「插件慢是启动慢还是跑得慢」的分界
       if (!firstByteMs) firstByteMs = Date.now() - t0;
       const text = outDecoder.write(chunk);
@@ -516,7 +524,7 @@ let timedOut = false;
       stdout += text;
     });
 
-    child.stderr.on('data', (chunk: Buffer) => {
+    child.stderr?.on('data', (chunk: Buffer) => {
       // stderr 只保留尾部，避免报错刷屏把内存吃光
       stderr = (stderr + errDecoder.write(chunk)).slice(-65536);
     });
@@ -839,6 +847,7 @@ export async function runAction(
     shell: action.shell, encoding: action.encoding,
     signal: options.signal,
     ...(action.max_output_bytes !== undefined ? { maxBytes: action.max_output_bytes } : {}),
+    ...(options.stdinData !== undefined ? { stdinData: options.stdinData } : {}),  // 291②
   });
 
   let outcome: ExecOutcome | undefined;
@@ -1093,6 +1102,8 @@ async function runChainAction(
   base: Omit<AuditRecord, 'decision'>,
 ): Promise<RunResult> {
   const command = chainDisplay(action);
+  // 291③：审计 reason 标注 pipe 步（一眼看出数据流向）
+  const pipeSteps = action.steps.filter((st) => st.pipe === true).length;
   const fail = (reason: string, error: string): RunResult => {
     audit({ ...base, decision: 'deny', reason, command, error });
     return {
@@ -1205,6 +1216,8 @@ async function runChainAction(
     const result = await runAction(item.plugin, stepAction, {
       caller: options.caller,
       values: applied.values,
+      // 291②④：pipe 步骤拿上一步 stdout 作 stdin；无上一步输出则空串（下游自然处理空输入）
+      ...(item.step.pipe === true ? { stdinData: prev?.stdout ?? '' } : {}),
       ...(options.cwd ? { cwd: options.cwd } : {}),
       // 链路自己的密钥设置项 / 加密参数，在下游同样必须打码
       secretValues: [...secretValuesOf(plugin, action, ctxValues), ...(options.secretValues ?? [])],
@@ -1259,6 +1272,7 @@ async function runChainAction(
   audit({
     ...base, decision: 'allow', command, exitCode: 0, ms,
     outBytes: stdout.length, truncated,
+    ...(pipeSteps > 0 ? { reason: `chain-ok (${pipeSteps} pipe 步)` } : {}),
   });
   const result: RunResult = {
     ok: true, exitCode: 0, stdout, stderr: '', ms, truncated, argv: [], command,

@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- chain pipe 管道原语（v4 主题②「数据工作流」起步）：ChainStep 加 pipe = true（清单语法 + parseChainSteps 解析）；RunOptions.stdinData → execArgv stdio pipe（写入后 end——下游读 EOF 即处理完）；chain 执行循环 pipe 步拿上一步 stdout 作 stdin（无上一步输出空串）；审计成功 reason 标注 pipe 步数（chain-ok (N pipe 步)）；错误传播沿用既有链停语义（断在第 N 步，后续不执行——291④ 实测 SHOULD-NOT-RUN 未出现）；demochain 加 pipe-count 示例（gen 14 字符 → count-stdin 数回 14）；plugin-spec pipe 行；chainpipe291 6 断言；基线 3299→3305。
 
 ## [4.2.0] - 2026-11-13
 
