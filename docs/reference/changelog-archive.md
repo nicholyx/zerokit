@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [3.68.0] - 2026-11-13
+
+### Added
+
+- MCP 远程化 spike（272 对账建议第 3 条落地，探水深不做接入）：**结论 GO、工作量 L→M**——SDK 1.32.2（当前 latest）已带 StreamableHTTPServerTransport，零包升级；spike 实测三步全通（initialize 200 拿 session-id / tools/list 含 echo / tools/call 返回结果）；**关键坑：transport 会话复用**（每请求新建实例丢会话态报 Server not initialized——按 mcp-session-id 头复用后全通）；docs/debt/mcp-remote-spike.md（传输支持面三行表/serve() 拆分点/破坏面为零/防火墙与 token 鉴权注意/复现要点）；v4-outlook 条目更新（L→M + spike 互链）；mcpspike276 4 断言；基线 3218→3222。
+
 ## [3.67.0] - 2026-11-13
 
 ### Added

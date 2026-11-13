@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.0.0] - 2026-11-13
+
+### Added
+
 - **v4.0.0 起航**——v3 线（v3.1.0–v3.79.0，79 个 minor）收束，v4 线开线。切换前体检全绿（3284 断言基线 / 契约快道 776ms / 八审计 lint / 284 清债三条前置完成）。v4 主题（自 v4-outlook 议题池，按 272 对账 + 284 复盘排定）：① 远程协作面（MCP 远程化已就绪为底座——多客户端共享工作台）；② 数据工作流（watch 聚合/结构化 diff/zerocol 导出三件套为底座——管道化编排）；③ 桌面增强（冻结解除条件：出现真实桌面用户诉求）。技术基线：测试 149 文件 3284 断言、发布链手册化、契约双快道、签名链就绪。
 
 ## [3.79.0] - 2026-11-13
@@ -71,10 +77,4 @@
 ### Added
 
 - MCP 远程化正式接入——zkit mcp serve --http [端口] [--host 地址]（276 spike 结论的落地）：serve() 拆分（buildMcpServer 独立构造，setRequestHandler 全复用，stdio 路径零变化）；serveHttp（spike 会话复用模式——按 mcp-session-id 头取回 transport，首请求建实例 connect 一次）；token 鉴权（进程内随机 48hex 打印 stderr 供复制，ZEROKIT_TOKEN env 可注入——UI token 是页面注入的跨进程不同源，故独立生成；无头/错头 401 带 hint）；默认 127.0.0.1（防火墙友好，远程暴露用户自己 --host）；GET 405（276 spike 决定不维持 SSE 长连）；spike 报告加「已落地」标注；mcphttp277 6 断言（活体端到端：错 token 401 / initialize 200 拿 sid / 会话复用 tools/list 含 zerokit_welcome）；基线 3222→3228。
-
-## [3.68.0] - 2026-11-13
-
-### Added
-
-- MCP 远程化 spike（272 对账建议第 3 条落地，探水深不做接入）：**结论 GO、工作量 L→M**——SDK 1.32.2（当前 latest）已带 StreamableHTTPServerTransport，零包升级；spike 实测三步全通（initialize 200 拿 session-id / tools/list 含 echo / tools/call 返回结果）；**关键坑：transport 会话复用**（每请求新建实例丢会话态报 Server not initialized——按 mcp-session-id 头复用后全通）；docs/debt/mcp-remote-spike.md（传输支持面三行表/serve() 拆分点/破坏面为零/防火墙与 token 鉴权注意/复现要点）；v4-outlook 条目更新（L→M + spike 互链）；mcpspike276 4 断言；基线 3218→3222。
 
