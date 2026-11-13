@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- 多客户端会话广播（v4 主题①「远程协作面」起步）：serveHttp 会话表升级（SessionEntry 带 clientId/connectedAt）；tools/call 成功后其余会话收通用通知（sendLoggingMessage 路由——SDK Server 无公有 sendNotification，280 轮的特化方法经验推广；logging 能力声明）；**修复 277 轮遗留真 bug：每会话独立 server 实例**（SDK Server 单 transport 设计——复用 connect 会踢掉前一连接，双客户端实测暴露，此前单客户端测试从未触发）；广播风暴防护（hook 单点 + fromSid 排除自身）；--broadcast 开关默认关（ZEROKIT_BROADCAST env 等价）；DELETE 断连清出；mcpbroadcast289 9 断言（双客户端活体实收/风暴计数=1）；回归三件套 277/280/289 全绿；基线 3284→3293。
 
 ## [4.0.0] - 2026-11-13
 

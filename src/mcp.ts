@@ -321,13 +321,16 @@ function findByName(name: string): { plugin: Plugin; action: Action } | undefine
   return collectTools().find((t) => toolName(t.plugin.id, t.action.id) === name);
 }
 
+/** 第二百八十九轮②③：协作广播钩子——serveHttp 注册实现；stdio 模式无注册（零行为） */
+let broadcastHook: ((method: string, params: Record<string, unknown>) => Promise<void>) | null = null;
+
 /** 第二百七十七轮①：server 实例构造与传输绑定分离——setRequestHandler 全复用，stdio/http 同一实例形态 */
 function buildMcpServer(): Server {
   const server = new Server(
     { name: 'zerokit', version: PACKAGE_VERSION },
     // 第八十九轮⑦：resources 面（只读：插件清单/健康报告）——MCP 规范原生入口
     // 第二百八十轮①：订阅能力开启（subscribe + listChanged）
-    { capabilities: { tools: {}, resources: { subscribe: true, listChanged: true } } },
+    { capabilities: { tools: {}, resources: { subscribe: true, listChanged: true }, logging: {} } },
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -596,6 +599,10 @@ function buildMcpServer(): Server {
         resourceVersions.set(uri, (resourceVersions.get(uri) ?? 0) + 1);
         try { await server.sendResourceUpdated({ uri }); } catch { /* 单个推送失败不阻断 */ }
       }
+      // 第二百八十九轮②：协作广播——本会话的执行镜像给其他会话（notifications/message）
+      if (broadcastHook) {
+        try { await broadcastHook('notifications/message', { level: 'info', data: JSON.stringify({ type: 'tool-call', tool: name, ok: true, ms: result.ms }) }); } catch { /* 广播失败不阻断 */ }
+      }
     }
     if (result.stderr.trim() && !result.ok) {
       blocks.push({ type: 'text', text: `stderr：${result.stderr.trim().slice(0, 4000)}` });
@@ -645,7 +652,20 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
   // token 鉴权（与 UI 同源）：读 server 的 token 机制——复用 server.ts 的 readBody 形态
   // token：环境变量注入（测试）或进程内随机生成（打印到 stderr 供用户复制——UI 的 token 是页面注入的，跨进程不同源）
   const TOKEN = process.env.ZEROKIT_TOKEN ?? crypto.randomBytes(24).toString('hex');
-  const transports = new Map<string, InstanceType<typeof StreamableHTTPServerTransport>>();
+  // 第二百八十九轮①④⑤：会话表（带元数据）+ 协作广播开关（--broadcast，默认关）
+  const broadcastEnabled = process.argv.includes('--broadcast') || process.env.ZEROKIT_BROADCAST === '1';
+  interface SessionEntry { transport: InstanceType<typeof StreamableHTTPServerTransport>; server: import('@modelcontextprotocol/sdk/server/index.js').Server; clientId: string; connectedAt: number }
+  const transports = new Map<string, SessionEntry>();
+  const notifyOthers = async (fromSid: string, method: string, params: Record<string, unknown>): Promise<void> => {
+    if (!broadcastEnabled) return;
+    for (const [sid, entry] of transports) {
+      if (sid === fromSid || sid === 'pending') continue;
+      try { await (entry.server as unknown as { sendLoggingMessage: (a: { level: string; data: unknown }) => Promise<void> }).sendLoggingMessage({ level: String(params.level ?? 'info'), data: params.data }); } catch { /* 单会话失败不阻断 */ }
+    }
+  };
+  // ② 广播钩子注册：CallTool 成功后由 buildMcpServer 侧调用；fromSid 从当前请求头取（模块级 currentSid）
+  let currentSid = '';
+  broadcastHook = async (method, params) => { await notifyOthers(currentSid, method, params); };
   const srv = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
     if (url.pathname !== '/mcp') { res.writeHead(404).end(); return; }
@@ -660,13 +680,18 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
       let body = '';
       for await (const c of req) body += c;
       const sid = req.headers['mcp-session-id'];
-      let t = typeof sid === 'string' ? transports.get(sid) : undefined;
-      if (!t) {
-        t = new StreamableHTTPServerTransport({ sessionIdGenerator: () => `zk-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}` });
+      if (typeof sid === 'string') currentSid = sid;  // 289② 广播排除自身
+      let entry = typeof sid === 'string' ? transports.get(sid) : undefined;
+      if (!entry) {
+        const t = new StreamableHTTPServerTransport({ sessionIdGenerator: () => `zk-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}` });
+        // 289 修复：每会话独立 server 实例（SDK Server 单 transport 设计——复用会踢掉前一连接，双客户端实测暴露）
+        const sessionServer = buildMcpServer();
+        await sessionServer.connect(t);
         const sid2 = (t as unknown as { sessionId?: string }).sessionId;
-        transports.set(sid2 ?? 'pending', t);
-        await server.connect(t);
+        transports.set(sid2 ?? 'pending', { transport: t, server: sessionServer, clientId: String(req.headers['x-client-id'] ?? sid2 ?? 'anon'), connectedAt: Date.now() });
+        entry = transports.get(sid2 ?? 'pending')!;
       }
+      const t = entry.transport;
       await t.handleRequest(req, res, body ? JSON.parse(body) : undefined);
       const sidAfter = (t as unknown as { sessionId?: string }).sessionId;
       if (sidAfter && transports.has('pending')) { transports.set(sidAfter, transports.get('pending')!); transports.delete('pending'); }
@@ -674,8 +699,8 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
     }
     if (req.method === 'DELETE') {
       const sid = req.headers['mcp-session-id'];
-      const t = typeof sid === 'string' ? transports.get(sid) : undefined;
-      if (t) { await t.close(); transports.delete(sid as string); }
+      const entry = typeof sid === 'string' ? transports.get(sid) : undefined;
+      if (entry) { await entry.transport.close(); transports.delete(sid as string); }
       res.writeHead(200).end();
       return;
     }
@@ -683,10 +708,10 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
       // 第二百八十轮④：SSE 长连接（streamable-http 规范路径）——订阅推送的载体。
       // 鉴权同 POST；连接保持到客户端断开（res close）。
       const sid = req.headers['mcp-session-id'];
-      const t = typeof sid === 'string' ? transports.get(sid) : undefined;
-      if (!t) { res.writeHead(400).end('先 POST initialize 建会话'); return; }
+      const entry = typeof sid === 'string' ? transports.get(sid) : undefined;
+      if (!entry) { res.writeHead(400).end('先 POST initialize 建会话'); return; }
       // StreamableHTTP 的 GET 走 transport 自身（SSE 流由 SDK 管理）
-      await t.handleRequest(req, res);
+      await entry.transport.handleRequest(req, res);
       return;
     }
     res.writeHead(405).end();  // 其余方法（PUT/PATCH 等）
@@ -1145,6 +1170,7 @@ export async function cli(args: string[]): Promise<number> {
       const port = Number(rest[httpIdx + 1]) || 31800;
       const hostIdx = rest.indexOf('--host');
       const host = hostIdx >= 0 && rest[hostIdx + 1] ? rest[hostIdx + 1]! : '127.0.0.1';
+      if (rest.includes('--broadcast')) process.argv.push('--broadcast');  // 289④ 协作广播开关
       return serveHttp(port, host);
     }
     return serve();
