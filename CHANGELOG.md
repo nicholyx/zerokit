@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.69.0] - 2026-11-13
+
+### Added
+
 - MCP 远程化正式接入——zkit mcp serve --http [端口] [--host 地址]（276 spike 结论的落地）：serve() 拆分（buildMcpServer 独立构造，setRequestHandler 全复用，stdio 路径零变化）；serveHttp（spike 会话复用模式——按 mcp-session-id 头取回 transport，首请求建实例 connect 一次）；token 鉴权（进程内随机 48hex 打印 stderr 供复制，ZEROKIT_TOKEN env 可注入——UI token 是页面注入的跨进程不同源，故独立生成；无头/错头 401 带 hint）；默认 127.0.0.1（防火墙友好，远程暴露用户自己 --host）；GET 405（276 spike 决定不维持 SSE 长连）；spike 报告加「已落地」标注；mcphttp277 6 断言（活体端到端：错 token 401 / initialize 200 拿 sid / 会话复用 tools/list 含 zerokit_welcome）；基线 3222→3228。
 
 ## [3.68.0] - 2026-11-13
@@ -71,10 +77,4 @@
 ### Added
 
 - 服务运行时守护——unhealthy 自动重启与退避（服务编排体系续）：zkit service watch [--interval 30s] [--threshold 3] [--backoff-base 30s] 前台循环；只守护「声明 healthCheck 且运行中」的服务（停着的归用户）；连续 threshold 次 unhealthy → 重启走 up 链（依赖先行）；watchCycle/watchBackoffMs 纯函数（指数退避 base×2^(n-1) 封顶 10min，恢复即复位）；Ctrl+C 干净退出（停探测不杀服务）；审计 caller=service-watch；svcdeps261 +3 断言；service-orchestration.md 守护节。
-
-## [3.57.0] - 2026-11-12
-
-### Added
-
-- 服务编排收官——拓扑视图与体系文档（261-265 五轮弧线）：#/services 面板「拓扑」tab（依赖树缩进渲染 + 健康/缺失/环徽标；孤立服务单独分组；环组标红）；docs/reference/service-orchestration.md（四步弧线对照表/声明语法/语义边界七条/三层防线/维护规则五层同步）；v4-outlook 服务编排销项（三项核心全完成）；docs 导航接入；webui +2 断言。
 
