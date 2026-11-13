@@ -102,3 +102,25 @@ params = { file = "pipe-export-demo", columns = [
   { name = "value", type = "int", from = "first.data.value" },
   { name = "chars", type = "int", from = "counted.data.count" },
 ] }
+
+# 第二百九十四轮⑤：pipe-roundtrip 示例——读回→回写，往返自证（数据跨 run 流转的最小演示）。
+[[action]]
+id      = "pipe-roundtrip"
+title   = "读回回写"
+description = "往返演示：读回 pipe-export-demo 的数据，再原样导出到 pipe-roundtrip-out。验证 zerocol 读写闭环。"
+type    = "chain"
+risk    = "read"
+template = "{saved}"
+
+[[action.step]]
+use = "builtin.zerocol-read"
+as  = "back"
+params = { file = "pipe-export-demo" }
+
+[[action.step]]
+use = "builtin.zerocol-export"
+as  = "saved"
+params = { file = "pipe-roundtrip-out", columns = [
+  { name = "value", type = "int", from = "back.data.value" },
+  { name = "chars", type = "int", from = "back.data.chars" },
+] }

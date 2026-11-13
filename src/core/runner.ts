@@ -1120,8 +1120,8 @@ async function runChainAction(
     const pluginRef = step.use.slice(0, dot);
     const actionRef = step.use.slice(dot + 1);
 
-    // 292①：内建导出步——伪引用，不需要目标插件/动作
-    if (step.use === 'builtin.zerocol-export') {
+    // 292① / 294①：内建步——伪引用，不需要目标插件/动作
+    if (step.use === 'builtin.zerocol-export' || step.use === 'builtin.zerocol-read') {
       plan.push({ step, plugin, action });
       continue;
     }
@@ -1180,6 +1180,53 @@ async function runChainAction(
     const remaining = budgetMs - (Date.now() - started);
     if (remaining <= 0) {
       return fail('chain-timeout', `${label} 之前，整条链路 ${action.timeout} 秒的总预算已经用完`);
+    }
+
+    // 294②③④：内建 zerocol 读回步——data_dir 下的列式文件读回供后续步骤取值
+    if (item.step.use === 'builtin.zerocol-read') {
+      const file = typeof item.step.params['file'] === 'string' ? String(item.step.params['file']) : '';
+      if (!file) {
+        return fail('chain-read-bad-params', `${label} 需要 file（data_dir 下的 zerocol 文件名）`);
+      }
+      const pathModule = await import('node:path');
+      const fsMod = await import('node:fs');
+      const { DATA_DIR } = await import('./paths.ts');
+      const inPath = pathModule.join(DATA_DIR, file.endsWith('.zerocol.json') ? file : `${file}.zerocol.json`);
+      if (!fsMod.existsSync(inPath)) {
+        return fail('chain-read-missing', `${label} 文件不存在：${inPath}——先跑一次带 builtin.zerocol-export 的链路生成它`);
+      }
+      let zc: { format?: string; columns?: unknown; data?: string };
+      try {
+        zc = JSON.parse(fsMod.readFileSync(inPath, 'utf8')) as typeof zc;
+      } catch (e) {
+        return fail('chain-read-bad-format', `${label} 不是合法 JSON：${(e as Error).message}`);
+      }
+      if (zc.format !== 'zerocol' || !Array.isArray(zc.columns)) {
+        return fail('chain-read-bad-format', `${label} 不是 zerocol 文件（format 字段缺失）`);
+      }
+      const { importZeroCol } = await import('./arrowIpc.ts');
+      let cols;
+      try {
+        cols = importZeroCol(zc as never);
+      } catch (e) {
+        return fail('chain-read-bad-format', `${label} 列数据解码失败：${(e as Error).message}`);
+      }
+      const rowCount = cols[0]?.values.length ?? 0;
+      // data 形态：每列名 → 值数组（首行另给标量捷径：{ 列名 } = 第一行——后续 {alias.data.value} 直接取首行）
+      const dataObj: Record<string, unknown> = {};
+      for (const c of cols) dataObj[c.name] = c.values;
+      const firstRow: Record<string, unknown> = {};
+      for (const c of cols) firstRow[c.name] = c.values[0];
+      const readResult: RunResult = {
+        ok: true, exitCode: 0, stdout: `已读回 ${inPath}（${rowCount} 行，${cols.length} 列）`, stderr: '',
+        ms: Date.now() - started, truncated: false,
+        data: { ...firstRow, _rows: rowCount, _columns: cols.length, _all: dataObj, _file: inPath },
+        argv: [], command: `zerocol-read ← ${inPath}`,
+      };
+      results.set(item.step.as, readResult);
+      outputs.push({ alias: item.step.as, result: readResult });
+      prev = readResult;
+      continue;
     }
 
     // 292②③④：内建 zerocol 导出步——从上一步结果取值落列式文件
