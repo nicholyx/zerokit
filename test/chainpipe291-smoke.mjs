@@ -25,7 +25,7 @@ check('①⑤ pipe 示例跑通（管道传 N 个字符）', r1.status === 0 && 
 
 // ② 传递正确性：gen 输出是 JSON {"value":21}（14 字符）——数对得上
 const r1b = (r1.stdout + '').match(/管道传了 (\d+) 个字符/);
-check('② 传递内容正确（gen stdout 14 字符进 stdin）', r1b?.[1] === '14', r1b?.[1] ?? 'no-match');
+check('② 传递内容正确（gen stdout 进 stdin——unix 14 / win CRLF 15）', r1b?.[1] === '14' || r1b?.[1] === '15', r1b?.[1] ?? 'no-match');
 
 // ③ 审计标注
 const auditLog = fs.readFileSync(path.join(home, 'logs', 'audit.log'), 'utf8');
