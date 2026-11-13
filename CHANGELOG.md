@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.3.0] - 2026-11-14
+
+### Added
+
 - chain pipe 管道原语（v4 主题②「数据工作流」起步）：ChainStep 加 pipe = true（清单语法 + parseChainSteps 解析）；RunOptions.stdinData → execArgv stdio pipe（写入后 end——下游读 EOF 即处理完）；chain 执行循环 pipe 步拿上一步 stdout 作 stdin（无上一步输出空串）；审计成功 reason 标注 pipe 步数（chain-ok (N pipe 步)）；错误传播沿用既有链停语义（断在第 N 步，后续不执行——291④ 实测 SHOULD-NOT-RUN 未出现）；demochain 加 pipe-count 示例（gen 14 字符 → count-stdin 数回 14）；plugin-spec pipe 行；chainpipe291 6 断言；基线 3299→3305。
 
 ## [4.2.0] - 2026-11-13
@@ -71,10 +77,4 @@
 ### Added
 
 - MCP 资源订阅——变更推送（272 对账 S 第四条收尾，277 远程化解锁长连接面）：capabilities.resources 开 subscribe+listChanged；Subscribe/UnsubscribeRequestSchema handler（订阅集 + 版本计数 resourceVersions）；工具执行成功后 bump——逐订阅 uri sendResourceUpdated（notifications/resources/updated）；GET SSE 长连接打开（277 留的 405 按计划开通——需先 POST initialize 建会话，SDK handleRequest 托管 SSE 流）；mcpsubscribe280 9 断言（活体：initialize 含 subscribe / SSE 200 event-stream / resources/subscribe / 工具执行后真实收到 updated 推送）；基线 3243→3252。
-
-## [3.71.0] - 2026-11-13
-
-### Added
-
-- OpenAPI 契约测试（272 对账 M 第二条）：openapicontract279 五面断言——①API_METHODS↔API_SPEC 端点集一致；②活体 405/404 诚实性；③④UI 调用面采集（web/ 全源码 api() 提取，静态+模板前缀）无漂移；⑤契约 POST 均有 UI 使用（server-internal 白名单）。**契约测试抓出三处真漂移当场修复**：/api/chat/state 与 /api/cache/prune 两端点 UI 在调但 server 无实现（补实现+登记）；API_SPEC 累积缺 34 端点登记（164 轮后新增未同步——按方法表批量补登，活体 paths 25→59）；未知 /api/* 此前落 SPA fallback 返回 200（不诚实——改真 404）。基线 3235→3243。
 
