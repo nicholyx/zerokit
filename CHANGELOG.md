@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.71.0] - 2026-11-13
+
+### Added
+
 - OpenAPI 契约测试（272 对账 M 第二条）：openapicontract279 五面断言——①API_METHODS↔API_SPEC 端点集一致；②活体 405/404 诚实性；③④UI 调用面采集（web/ 全源码 api() 提取，静态+模板前缀）无漂移；⑤契约 POST 均有 UI 使用（server-internal 白名单）。**契约测试抓出三处真漂移当场修复**：/api/chat/state 与 /api/cache/prune 两端点 UI 在调但 server 无实现（补实现+登记）；API_SPEC 累积缺 34 端点登记（164 轮后新增未同步——按方法表批量补登，活体 paths 25→59）；未知 /api/* 此前落 SPA fallback 返回 200（不诚实——改真 404）。基线 3235→3243。
 
 ## [3.70.0] - 2026-11-13
@@ -71,10 +77,4 @@
 ### Added
 
 - 守护后台化——zkit service watch --daemon（266-267 守护体系的「终端一关守护就没」补全）：--daemon 脱离终端常驻（detached 自我重入同参去 --daemon，日志 ~/.zerokit/logs/service-watch.log）；重复启动拒绝（init 前状态文件 pid 存活校验）；--status 查询（pid+时长+最近动作；残留文件显示「未运行（残留 pid=N）」）；--stop 干净停（SIGTERM 等 4s 超时 SIGKILL；未运行幂等「无需停止」）；前台模式 Ctrl+C 语义不变（266 轮行为保留）；svcdeps261 +4 断言（daemon 启动/拒绝重复/status/stop 幂等）；service-orchestration.md 后台化节。
-
-## [3.59.0] - 2026-11-12
-
-### Added
-
-- 守护可视化——watch 状态面板与健康历史（266 轮 CLI 守护的 UI 对位）：~/.zerokit/service-watch.json 状态文件（pid/startedAt/actions 环形日志最近 50 条；同进程续写、异进程覆盖；写前 ensureDirs——修一个目录不存在时 ENOENT 被 catch 吞的真缺陷）；zkit service watch 启动时 init、重启动作时追加；/api/services/watch GET（pid 存活校验——process.kill(pid,0)，残留文件不算在跑）；#/services 面板「守护」区（PID+运行时长+最近 5 条动作：⟳ key ×streak ✓/✗ +退避秒）；I18N 五键；svcdeps261 +3 断言。
 
