@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.78.0] - 2026-11-13
+
+### Added
+
 - 契约测试快道（284 复盘清债②）：scripts/contract.sh + npm run contract——结构契约类单独秒级入口（openapicontract279 API 契约 8 断言 + domain-faces 注入面契约 18 断言连跑，实测 760ms vs 全量 ~10min——契约破坏反馈距离从「PR CI」缩到「即改即验」）；CONTRIBUTING/CLAUDE.md 开发流程提及（改 server API 面 / web api() 调用 / 域文件注入面后先跑）。
 
 ## [3.77.0] - 2026-11-13
@@ -71,10 +77,4 @@
 ### Added
 
 - 审计日志外部投递 webhook（272 对账 S 第三条）：src/core/auditHook.ts——auditWebhookConfig（config.toml [audit] webhook/headers 最小 TOML 节解析；坏配置静默关）；deliverAudit fire-and-forget POST（2s 超时 AbortController，失败不抛不重试）；auditDrain（CLI 退出前排空在途投递上限 2.5s——33 轮「审计后立刻 exit」教训的异步版，CLI 短命进程 fetch 会被带走，手动验证三次空收件后定位）；失败环形缓冲（内存最近 20 条）；zkit audit --failures 视图；audit() 单入口挂钩（无配置零行为）；auditwebhook275 6 断言（含端到端 receiver 实收）；基线 3212→3218。
-
-## [3.66.0] - 2026-11-13
-
-### Added
-
-- plugin.toml JSON Schema 化（272 对账 S 第二条）：docs/schema/plugin-manifest.schema.json（draft-07，六节全覆盖 plugin/action/param/service/setting/requires；5.3KB）；枚举约束（risk 三值/encoding 六值含 gbk/runtime 三模式/output 六类型）；模式约束（id ^[a-z0-9][a-z0-9._-]{0,63}$、param name ^[a-zA-Z_]、port 1-65535、healthCheck http/tcp pattern）；zkit plugin schema 命令（打印路径 + VS Code Even Better TOML / taplo CLI 接线说明）；plugin-spec 头部互链；tomlschema274 7 断言（quick/clipboard/sysinfo 三清单可满足性）；基线 3205→3212。
 

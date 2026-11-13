@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [3.66.0] - 2026-11-13
+
+### Added
+
+- plugin.toml JSON Schema 化（272 对账 S 第二条）：docs/schema/plugin-manifest.schema.json（draft-07，六节全覆盖 plugin/action/param/service/setting/requires；5.3KB）；枚举约束（risk 三值/encoding 六值含 gbk/runtime 三模式/output 六类型）；模式约束（id ^[a-z0-9][a-z0-9._-]{0,63}$、param name ^[a-zA-Z_]、port 1-65535、healthCheck http/tcp pattern）；zkit plugin schema 命令（打印路径 + VS Code Even Better TOML / taplo CLI 接线说明）；plugin-spec 头部互链；tomlschema274 7 断言（quick/clipboard/sysinfo 三清单可满足性）；基线 3205→3212。
+
 ## [3.65.0] - 2026-11-13
 
 ### Added
