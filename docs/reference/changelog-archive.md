@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [3.69.0] - 2026-11-13
+
+### Added
+
+- MCP 远程化正式接入——zkit mcp serve --http [端口] [--host 地址]（276 spike 结论的落地）：serve() 拆分（buildMcpServer 独立构造，setRequestHandler 全复用，stdio 路径零变化）；serveHttp（spike 会话复用模式——按 mcp-session-id 头取回 transport，首请求建实例 connect 一次）；token 鉴权（进程内随机 48hex 打印 stderr 供复制，ZEROKIT_TOKEN env 可注入——UI token 是页面注入的跨进程不同源，故独立生成；无头/错头 401 带 hint）；默认 127.0.0.1（防火墙友好，远程暴露用户自己 --host）；GET 405（276 spike 决定不维持 SSE 长连）；spike 报告加「已落地」标注；mcphttp277 6 断言（活体端到端：错 token 401 / initialize 200 拿 sid / 会话复用 tools/list 含 zerokit_welcome）；基线 3222→3228。
+
 ## [3.68.0] - 2026-11-13
 
 ### Added

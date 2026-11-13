@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.1.0] - 2026-11-13
+
+### Added
+
 - 多客户端会话广播（v4 主题①「远程协作面」起步）：serveHttp 会话表升级（SessionEntry 带 clientId/connectedAt）；tools/call 成功后其余会话收通用通知（sendLoggingMessage 路由——SDK Server 无公有 sendNotification，280 轮的特化方法经验推广；logging 能力声明）；**修复 277 轮遗留真 bug：每会话独立 server 实例**（SDK Server 单 transport 设计——复用 connect 会踢掉前一连接，双客户端实测暴露，此前单客户端测试从未触发）；广播风暴防护（hook 单点 + fromSid 排除自身）；--broadcast 开关默认关（ZEROKIT_BROADCAST env 等价）；DELETE 断连清出；mcpbroadcast289 9 断言（双客户端活体实收/风暴计数=1）；回归三件套 277/280/289 全绿；基线 3284→3293。
 
 ## [4.0.0] - 2026-11-13
@@ -71,10 +77,4 @@
 ### Added
 
 - 结果历史结构化 diff（272 对账 M 第一条·用户可见价值最高）：src/core/structuredDiff.ts 纯函数——字段级三分类（added/removed/changed，点路径寻址 x.y.z.w）；数组索引对齐（长度差进 added/removed）；嵌套递归深度上限 8（防炸）；deepEqual 同构零 diff；zkit diff <插件.动作>（本次 run vs 上一缓存结果——只支持 read 动作【观测面对比不碰 mutate】；首次无缓存提示、对比后自动更新缓存为下次的「上一值」；--json 机读含 summary+entries）；129 轮文本对比的字段级升级；structurediff278 7 断言；基线 3228→3235。
-
-## [3.69.0] - 2026-11-13
-
-### Added
-
-- MCP 远程化正式接入——zkit mcp serve --http [端口] [--host 地址]（276 spike 结论的落地）：serve() 拆分（buildMcpServer 独立构造，setRequestHandler 全复用，stdio 路径零变化）；serveHttp（spike 会话复用模式——按 mcp-session-id 头取回 transport，首请求建实例 connect 一次）；token 鉴权（进程内随机 48hex 打印 stderr 供复制，ZEROKIT_TOKEN env 可注入——UI token 是页面注入的跨进程不同源，故独立生成；无头/错头 401 带 hint）；默认 127.0.0.1（防火墙友好，远程暴露用户自己 --host）；GET 405（276 spike 决定不维持 SSE 长连）；spike 报告加「已落地」标注；mcphttp277 6 断言（活体端到端：错 token 401 / initialize 200 拿 sid / 会话复用 tools/list 含 zerokit_welcome）；基线 3222→3228。
 
