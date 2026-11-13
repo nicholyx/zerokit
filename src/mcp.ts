@@ -601,7 +601,13 @@ function buildMcpServer(): Server {
       }
       // 第二百八十九轮②：协作广播——本会话的执行镜像给其他会话（notifications/message）
       if (broadcastHook) {
-        try { await broadcastHook('notifications/message', { level: 'info', data: JSON.stringify({ type: 'tool-call', tool: name, ok: true, ms: result.ms }) }); } catch { /* 广播失败不阻断 */ }
+        // 第二百九十三轮①②③：载荷升级——summary 分档（小结果全量；>4KB 首段+字段统计）
+        const safeForBroadcast = maskSensitive(safeData);
+        const small = JSON.stringify(safeForBroadcast) ?? '';
+        const summary = small.length <= 4000
+          ? safeForBroadcast
+          : { _truncated: true, head: summarizeJson(safeForBroadcast).text.slice(0, 600), fields: summarizeJson(safeForBroadcast).fieldStats ?? {} };
+        try { await broadcastHook('notifications/message', { level: 'info', data: JSON.stringify({ type: 'tool-call', tool: name, ok: true, ms: result.ms, summary }) }); } catch { /* 广播失败不阻断 */ }
       }
     }
     if (result.stderr.trim() && !result.ok) {
