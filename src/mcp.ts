@@ -13,6 +13,7 @@ import { loadTimers, nextFireTime } from './core/timers.ts';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   CallToolRequestSchema, ListToolsRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema,
+  SubscribeRequestSchema, UnsubscribeRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { type Action, type Plugin, toolName } from './core/manifest.ts';
 import { findPlugin, listPlugins } from './core/registry.ts';
@@ -325,7 +326,8 @@ function buildMcpServer(): Server {
   const server = new Server(
     { name: 'zerokit', version: PACKAGE_VERSION },
     // 第八十九轮⑦：resources 面（只读：插件清单/健康报告）——MCP 规范原生入口
-    { capabilities: { tools: {}, resources: { listChanged: false } } },
+    // 第二百八十轮①：订阅能力开启（subscribe + listChanged）
+    { capabilities: { tools: {}, resources: { subscribe: true, listChanged: true } } },
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -367,6 +369,23 @@ function buildMcpServer(): Server {
     { uri: 'zerokit://timers', name: '定时任务', description: '定时任务与下次触发时间（paused 标注）', mimeType: 'application/json' },
   ];
   server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: RESOURCES }));
+
+  // 第二百八十轮②③：资源订阅——记录订阅集；版本计数 bump 时推送 notifications/resources/updated
+  const subscribers = new Set<string>();  // uri 集合（本进程内；会话级细分由传输层会话天然隔离）
+  const resourceVersions = new Map<string, number>();
+  server.setRequestHandler(SubscribeRequestSchema, async (req) => {
+    const uri = String(req.params?.uri ?? '');
+    if (!RESOURCES.some((r) => r.uri === uri || (uri.startsWith('zerokit://runs/') && r.uri === 'zerokit://runs/{key}'))) {
+      throw new Error(`不认识这个资源：${uri}`);
+    }
+    subscribers.add(uri);
+    resourceVersions.set(uri, (resourceVersions.get(uri) ?? 0) + 1);
+    return {};
+  });
+  server.setRequestHandler(UnsubscribeRequestSchema, async (req) => {
+    subscribers.delete(String(req.params?.uri ?? ''));
+    return {};
+  });
   server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
     const uri = String(req.params.uri ?? '');
     if (uri === 'zerokit://plugins') {
@@ -572,6 +591,11 @@ function buildMcpServer(): Server {
       if (streak) blocks.push({ type: 'text', text: streak });
     } else {
       noteSuccess();
+      // 第二百八十轮⑤：执行成功后资源面可能变化——bump 订阅推送（notifications/resources/updated）
+      for (const uri of subscribers) {
+        resourceVersions.set(uri, (resourceVersions.get(uri) ?? 0) + 1);
+        try { await server.sendResourceUpdated({ uri }); } catch { /* 单个推送失败不阻断 */ }
+      }
     }
     if (result.stderr.trim() && !result.ok) {
       blocks.push({ type: 'text', text: `stderr：${result.stderr.trim().slice(0, 4000)}` });
@@ -655,7 +679,17 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
       res.writeHead(200).end();
       return;
     }
-    res.writeHead(405).end();  // GET 不维持 SSE 长连接（276 spike 决定）
+    if (req.method === 'GET') {
+      // 第二百八十轮④：SSE 长连接（streamable-http 规范路径）——订阅推送的载体。
+      // 鉴权同 POST；连接保持到客户端断开（res close）。
+      const sid = req.headers['mcp-session-id'];
+      const t = typeof sid === 'string' ? transports.get(sid) : undefined;
+      if (!t) { res.writeHead(400).end('先 POST initialize 建会话'); return; }
+      // StreamableHTTP 的 GET 走 transport 自身（SSE 流由 SDK 管理）
+      await t.handleRequest(req, res);
+      return;
+    }
+    res.writeHead(405).end();  // 其余方法（PUT/PATCH 等）
   });
   await new Promise<void>((resolve) => { srv.listen(port, host, () => resolve()); });
   process.stderr.write(`[zerokit] MCP server 已启动（http ${host}:${port}/mcp）\n[zerokit] token（x-zerokit-token 头）：${TOKEN}\n`);

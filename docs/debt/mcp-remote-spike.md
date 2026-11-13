@@ -3,6 +3,8 @@
 > 272 对账建议第 3 条的落地：探水深，不做正式接入。结论先行——**GO，工作量 M**（原估 L 偏保守）。
 >
 > **✅ 已落地（277 轮：zkit mcp serve --http）**——本文的会话复用模式与鉴权设计全部按计划实现。
+>
+> **✅ 资源订阅已落地（280 轮）**：subscribe/listChanged 能力开启、GET SSE 长连接（本文「复现」节的 405 决定已按计划打开）、执行成功后 notifications/resources/updated 推送。
 
 ## ① SDK 传输支持面（已装 1.32.2 = 当前 latest）
 
