@@ -4776,6 +4776,38 @@ async function cmdWatchList(rest: string[]): Promise<number> {
 }
 
 async function cmdData(args: string[]): Promise<number> {
+  // 第二百八十五轮③：zkit data export --zerocol <history|audit>——列式导出 v2
+  if (args[0] === 'export' && args.includes('--zerocol')) {
+    const table = args.find((a) => !a.startsWith('-') && a !== 'export' && a !== '--zerocol');
+    if (table !== 'history' && table !== 'audit') { process.stderr.write('用法：zkit data export --zerocol <history|audit>\n'); return 2; }
+    const { exportZeroCol } = await import('./core/arrowIpc.ts');
+    let file: import('./core/arrowIpc.ts').ZeroColFile;
+    if (table === 'history') {
+      const { readHistory } = await import('./core/cliX.ts');
+      const h = readHistory();
+      file = exportZeroCol([
+        { name: 'ts', type: 'string', values: h.map((e) => e.ts) },
+        { name: 'plugin', type: 'string', values: h.map((e) => e.plugin) },
+        { name: 'action', type: 'string', values: h.map((e) => e.action) },
+        { name: 'exitCode', type: 'int', values: h.map((e) => e.exitCode) },
+      ]);
+    } else {
+      const { readAudit } = await import('./core/ops.ts');
+      const a = readAudit();
+      file = exportZeroCol([
+        { name: 'ts', type: 'string', values: a.map((e) => e.ts) },
+        { name: 'plugin', type: 'string', values: a.map((e) => e.plugin) },
+        { name: 'risk', type: 'string', values: a.map((e) => e.risk) },
+        { name: 'decision', type: 'string', values: a.map((e) => e.decision) },
+      ]);
+    }
+    const out = path.join(process.cwd(), `zerokit-${table}.zerocol.json`);
+    fs.writeFileSync(out, JSON.stringify(file, null, 2));
+    process.stdout.write(`✓ 已导出 ${out}（列式 zerocol v1：${file.columns.map((c) => `${c.name}:${c.type}`).join(' ')}；${file.checksum}）\n`);
+    process.stdout.write(`  读回：任何语言 20 行——列按 columns[].bytes 顺序切；或 zkit 内核 importZeroCol\n`);
+    return 0;
+  }
+
   const sub = args[0];
   const fmtBytes = (n: number): string => (n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KB`); // 第八十八轮搬回（watch list 独立时误删）
   const rest = args.slice(1);
