@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.7.0] - 2026-11-14
+
+### Added
+
 - watch 触发 chain 管道（v4 数据工作流调度面——无人值守数据流）：watch 配置加 chain 字段（详情页 watch 表单「触发管道」输入 插件.动作；reg 条目与 persistWatch 均持久化 chain + lastChainRun）；浏览器 tick 引擎——采样后数据变化且声明 chain → runChainQuiet 静默执行（/api/run 同款信封 token 头）；lastChainRun 记录 ok/ts/key/err；UI watch 面板徽标（⛓ chain 名 + ✓/✗/待触发三态）；恢复侧（GET /api/watch）带 chain；watchchain295 5 断言；基线 3320→3325。「指标越界→自动跑管道→落盘新 zerocol」调度闭环成形。
 
 ## [4.6.0] - 2026-11-14
@@ -71,10 +77,4 @@
 ### Added
 
 - v4 对账复盘（三方向收官 + 启动评估）：v4-outlook 完成度表终态更新——**五大方向 100%**（274/275 轮成果原表漏计本轮修正；桌面维持冻结）；272→284 十二轮执行回顾（新模块 6/新命令 7/协议文档 2/基线 +77/十二个 minor）；v3 负债清点（240 轮判据重跑：app.js 9677 行稳态【拆分系列后核心+胶水】/测试多层/issue 清零——无阻塞级债）；**v4 启动评估 GO** + 首轮清债建议三条（parquet 收尾/契约快道/发布链手册）；docs/README 锚点更新。
-
-## [3.75.0] - 2026-11-13
-
-### Added
-
-- 脚手架→发布通道（生态链第三步，281+282 后继）：zkit plugin publish-check <目录>——发布前组合检查（清单可加载【loadPlugin 全解析】/动作 risk/版本语义化/签名密钥存在/market index 干跑 buildIndex 不落盘）+ 汇总行（硬伤 exit 1 + 修复指引）；publish-ready 通过后打印「发布通道三步」指引（签名密钥状态——有 ✓ 无提示 keygen；zkit market index 生成命令含目录；zkit plugin export；market.json 提交 git → 用户 market add）；market-protocol.md 发布通道节（new→publish-check→add→publish-ready→keygen→index→export 七命令一条龙）；publish283 3 断言；基线 3268→3271。
 
