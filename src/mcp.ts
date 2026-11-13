@@ -668,6 +668,19 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
   broadcastHook = async (method, params) => { await notifyOthers(currentSid, method, params); };
   const srv = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
+    // 第二百九十轮③：在线会话清单（token 同面鉴权）
+    if (url.pathname === '/mcp/sessions' && req.method === 'GET') {
+      const token = req.headers['x-zerokit-token'];
+      if (typeof token !== 'string' || token !== TOKEN) { res.writeHead(401).end(); return; }
+      const sessions = [...transports.entries()].filter(([sid]) => sid !== 'pending').map(([sid, e]) => ({
+        clientId: e.clientId,
+        connectedAt: new Date(e.connectedAt).toISOString(),
+        session: sid.slice(-8),
+      }));
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ count: sessions.length, sessions }, null, 2));
+      return;
+    }
     if (url.pathname !== '/mcp') { res.writeHead(404).end(); return; }
     // ④ token 校验（与 UI 同款语义：无头/错头 401）
     const token = req.headers['x-zerokit-token'];
@@ -694,13 +707,28 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
       const t = entry.transport;
       await t.handleRequest(req, res, body ? JSON.parse(body) : undefined);
       const sidAfter = (t as unknown as { sessionId?: string }).sessionId;
-      if (sidAfter && transports.has('pending')) { transports.set(sidAfter, transports.get('pending')!); transports.delete('pending'); }
+      if (sidAfter && transports.has('pending')) {
+        transports.set(sidAfter, transports.get('pending')!); transports.delete('pending');
+        // 第二百九十轮①：会话加入广播（其余会话收 session-joined 含 clientId）
+        currentSid = sidAfter;
+        if (broadcastHook && body.includes('initialize')) {
+          try { await broadcastHook('notifications/message', { level: 'info', data: JSON.stringify({ type: 'session-joined', clientId: entry.clientId }) }); } catch { /* 旁路 */ }
+        }
+      }
       return;
     }
     if (req.method === 'DELETE') {
       const sid = req.headers['mcp-session-id'];
       const entry = typeof sid === 'string' ? transports.get(sid) : undefined;
-      if (entry) { await entry.transport.close(); transports.delete(sid as string); }
+      if (entry) {
+        await entry.transport.close();
+        transports.delete(sid as string);
+        // 第二百九十轮②：会话离开广播
+        currentSid = sid as string;
+        if (broadcastHook) {
+          try { await broadcastHook('notifications/message', { level: 'info', data: JSON.stringify({ type: 'session-left', clientId: entry.clientId }) }); } catch { /* 旁路 */ }
+        }
+      }
       res.writeHead(200).end();
       return;
     }
@@ -1182,6 +1210,27 @@ export async function cli(args: string[]): Promise<number> {
   if (sub === 'dry-run') return cmdDryRun(args.slice(1));
   // 第一百二十四轮⑦：--dry 别名（进用法表与文档，dry-run 正名保留）
   if (sub === '--dry') return cmdDryRun(args.slice(1));
+  if (sub === 'sessions') {
+    // 第二百九十轮④：查协作会话表（对 zkit mcp serve --http [--broadcast] 的进程）
+    const rest = args.slice(1);
+    const httpIdx = rest.indexOf('--http');
+    const port = httpIdx >= 0 ? Number(rest[httpIdx + 1]) || 31800 : 31800;
+    const token = process.env.ZEROKIT_TOKEN;
+    if (!token) { process.stderr.write('需要 ZEROKIT_TOKEN 环境变量（serve --http 启动时打印/注入的同款）\n'); return 2; }
+    try {
+      const r = await fetch(`http://127.0.0.1:${port}/mcp/sessions`, { headers: { 'x-zerokit-token': token } });
+      if (!r.ok) { process.stderr.write(`查询失败：HTTP ${r.status}\n`); return 1; }
+      const d = await r.json() as { count: number; sessions: Array<{ clientId: string; connectedAt: string; session: string }> };
+      if (rest.includes('--json')) { console.log(JSON.stringify(d, null, 2)); return 0; }
+      if (d.count === 0) { console.log('没有在线会话（serve 未开或无人连接）。'); return 0; }
+      console.log(`在线会话 ${d.count} 个：`);
+      for (const x of d.sessions) console.log(`  ${x.clientId} · 连于 ${x.connectedAt.slice(11, 19)} · sid …${x.session}`);
+      return 0;
+    } catch (e) {
+      process.stderr.write(`连不上 127.0.0.1:${port}——serve --http 起了吗？${(e as Error).message}\n`);
+      return 1;
+    }
+  }
   if (sub === 'probe') return cmdProbe(args.slice(1));
   if (sub === 'status') return cmdStatus();
   if (sub === 'revoke') return cmdRevoke(args.slice(1));
