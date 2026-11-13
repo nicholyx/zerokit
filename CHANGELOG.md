@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.4.0] - 2026-11-14
+
+### Added
+
 - zerocol 导出 chain step 化（v4 数据工作流第二步——管道末端原语）：内建伪引用 use = "builtin.zerocol-export"（无需真实插件动作；plan 静态校验放行 + 执行循环特判）；params file（落 data_dir）+ columns（name/type/from 取值路径——dots 寻址到前步 alias.data.字段 或 alias.stdout）；导出结果回报路径与行列数（data: path/rows/columns）；**修依赖收集真缺陷**：builtin 伪引用曾被当插件依赖致 doctor 报「缺少插件依赖：builtin」——collectDeps 跳过 builtin.*；demochain pipe-export 示例（gen 21 → pipe 计数 → zerocol 落盘 2 列）；plugin-spec 导出步行；zerocolstep292 6 断言；基线 3305→3311。数据工作流闭环成形：取数→pipe 变换→zerocol 落盘。
 
 ## [4.3.0] - 2026-11-14
@@ -71,10 +77,4 @@
 ### Added
 
 - market 安装源协议公开化（272 对账建议 2 生态链第一步）：docs/reference/market-protocol.md——v1 完整规范（源清单格式/字段语义表/校验规则/生成与注册命令/协议演进约定：小改不动版本、破坏性升大版本）；MarketIndex 加 protocol 字段（缺省=1）；lint 新规则（protocol 必须正整数；比本机新的大版本明确拒绝并提示升级——老客户端不会装错新源）；docs 导航接入；marketproto281 8 断言（lint 三态 / 第三方源端到端 add→list→install --yes→run / protocol=99 源被拒）；基线 3252→3260。
-
-## [3.72.0] - 2026-11-13
-
-### Added
-
-- MCP 资源订阅——变更推送（272 对账 S 第四条收尾，277 远程化解锁长连接面）：capabilities.resources 开 subscribe+listChanged；Subscribe/UnsubscribeRequestSchema handler（订阅集 + 版本计数 resourceVersions）；工具执行成功后 bump——逐订阅 uri sendResourceUpdated（notifications/resources/updated）；GET SSE 长连接打开（277 留的 405 按计划开通——需先 POST initialize 建会话，SDK handleRequest 托管 SSE 流）；mcpsubscribe280 9 断言（活体：initialize 含 subscribe / SSE 200 event-stream / resources/subscribe / 工具执行后真实收到 updated 推送）；基线 3243→3252。
 
