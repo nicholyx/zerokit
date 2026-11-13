@@ -2964,6 +2964,9 @@ function openWatchDialog(plugin, action, key) {
       <label class="field">${t('watchMatchLabel')}
         <input id="wMatch" type="text" placeholder="${t('watchMatchPh')}">
       </label>
+      <label class="field"><span class="sub">触发管道（可选）</span>
+        <input id="wChain" type="text" placeholder="demochain.pipe-export（数据变化时自动执行的 chain 动作）">
+      </label>
       <div class="actions">
         <button class="primary" id="wStart">${t('watchStartBtn')}</button>
         <button class="ghost" id="wCancel">${t('cancel')}</button>
@@ -2976,6 +2979,7 @@ function openWatchDialog(plugin, action, key) {
     const sec = Number(overlay.querySelector('#wInterval').value);
     const failStreak = Math.max(0, Number(overlay.querySelector('#wFail').value) || 0);
     const matchStr = overlay.querySelector('#wMatch').value.trim();
+    const chainKey = (overlay.querySelector('#wChain')?.value ?? '').trim();  // 295①：触发的 chain（插件.动作）
     overlay.remove();
     if (!sec) return;
     const reg = __wt().watchRegistry();
@@ -2983,6 +2987,7 @@ function openWatchDialog(plugin, action, key) {
       interval: sec,
       failStreak,
       matchStr,
+      ...(chainKey ? { chain: chainKey } : {}),
       samples: [],
       title: `${plugin.name} · ${action.title}`,
       pluginId: plugin.id,

@@ -33,6 +33,8 @@ async function persistWatch() {
         interval: w.interval, failStreak: w.failStreak, matchStr: w.matchStr,
         title: w.title, pluginId: w.pluginId, actionId: w.actionId,
         runs: w.runs, changes: w.changes, notify: w.notify !== false,
+        ...(w.chain ? { chain: w.chain } : {}),                                // 295①：触发的 chain
+        ...(w.lastChainRun ? { lastChainRun: w.lastChainRun } : {}),            // 295③：最近一次触发结果
         samples: (w.samples ?? []).slice(-10),
       })),
       stops: stops.slice(-20),
@@ -85,6 +87,21 @@ function scheduleWatch(key, sec) {
     }
     w.samples.push({ ts: Date.now(), ok: now?.ok === true, data: now?.data, err: now?.ok === true ? undefined : String(now?.error ?? '') });
     if (w.samples.length > 30) w.samples.shift();
+    // 295②③：watch 触发 chain 管道——数据变化且声明了 chain 时自动执行（无人值守数据流）
+    const changed = w.runs > 1 && prev && now && JSON.stringify(prev.data) !== JSON.stringify(now.data);
+    if (w.chain && changed) {
+      // 295②：静默执行声明的 chain（/api/run 同款信封；key = "插件.动作"）
+      const dot = w.chain.lastIndexOf('.');
+      const cp = dot > 0 ? w.chain.slice(0, dot) : '';
+      const ca = dot > 0 ? w.chain.slice(dot + 1) : '';
+      try {
+        const r = await runChainQuiet(cp, ca);
+        w.lastChainRun = { ok: r?.ok === true, ts: Date.now(), key: w.chain };
+      } catch (e) {
+        w.lastChainRun = { ok: false, ts: Date.now(), key: w.chain, err: String(e?.message ?? e).slice(0, 80) };
+      }
+      void persistWatch();
+    }
     void persistWatch(); // ① 增量持久化：浏览器写、server 透传
     // ⑤ 停止条件
     const stop = watchStopCondition(
@@ -188,7 +205,7 @@ function liveRefreshWatchPanel() {
       const w = k ? reg[k] : undefined;
       if (!w) return;
       const sub = row.querySelector('.sub');
-      if (sub) sub.textContent = `${w.runs} 次采样 · ${w.changes} 次变更${w.changes > 0 && w.samples.length ? ' · 上次变化 ' + relTime(w.samples.at(-1)?.ts ?? Date.now()) : ''}`;
+      if (sub) sub.textContent = `${w.runs} 次采样 · ${w.changes} 次变更${w.changes > 0 && w.samples.length ? ' · 上次变化 ' + relTime(w.samples.at(-1)?.ts ?? Date.now()) : ''}${w.chain ? ` · ⛓ ${esc(w.chain)} ${w.lastChainRun ? (w.lastChainRun.ok ? '✓' : '✗') : '（待触发）'}` : ''}`;
       // ④ sparkline 点阵（最近 10 次成败）
       let spark = row.querySelector('.watch-spark');
       if (!spark) { spark = document.createElement('span'); spark.className = 'watch-spark'; row.querySelector('.watch-summary')?.after(spark); }
@@ -350,6 +367,20 @@ async function fireTimer(key, why) {
     }
   } catch (err) {
     t.history = trimHistory([...(t.history ?? []), { ts: Date.now(), ok: false, why: String(err.message ?? err).slice(0, 80) }]);
+  }
+}
+
+/** 295②：watch 触发的 chain 静默执行（runActionQuiet 同款信封）。 */
+async function runChainQuiet(pluginId, actionId) {
+  try {
+    const r = await fetch('/api/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-zerokit-token': TOKEN },
+      body: JSON.stringify({ plugin: pluginId, action: actionId, values: {} }),
+    });
+    return await r.json();
+  } catch (e) {
+    return { ok: false, error: String(e.message ?? e) };
   }
 }
 
