@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [3.62.0] - 2026-11-12
+
+### Added
+
+- 插件脚手架增强——服务示例节与 MCP probe 指引（插件生态起步）：zkit plugin new --with-service（ScaffoldOptions.withService → [[service]] demo 节含 healthCheck 示范 261-263 轮体系，port 39410）；脚手架 README 开发码块与清单注释各补一行 zkit mcp probe <id>__hello（255 轮探针——新作者第一次就接触 MCP 面验证法）；用法表更新；svcdeps261 +3 断言。
+
 ## [3.61.0] - 2026-11-12
 
 ### Added
