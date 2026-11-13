@@ -1639,3 +1639,6 @@ if\ \(layer\.length\ ===\ 0\)\ \{\ out\.push\(\.\.\.remaining\);\ break;\ \}\ \ 
 const\ miss\ =\ \(x\.depMissing\ \?\?\ \[\]\)\.length\ \?\ `\ <span\ class="badge\ bad">缺\ \$\{\(x\.depMissing\ \?\?\ \[\]\)\.join\('、'\)\}</span>`\ :\ '';
 （缺失）</span><br>';
 （缺失）
+<input\ id="wChain"\ type="text"\ placeholder="demochain\.pipe\-export（数据变化时自动执行的
+<label\ class="field"><span\ class="sub">触发管道（可选）</span>
+const\ chainKey\ =\ \(overlay\.querySelector\('\#wChain'\)\?\.value\ \?\?\ ''\)\.trim\(\);\ \ //

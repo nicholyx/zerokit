@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- watch 触发 chain 管道（v4 数据工作流调度面——无人值守数据流）：watch 配置加 chain 字段（详情页 watch 表单「触发管道」输入 插件.动作；reg 条目与 persistWatch 均持久化 chain + lastChainRun）；浏览器 tick 引擎——采样后数据变化且声明 chain → runChainQuiet 静默执行（/api/run 同款信封 token 头）；lastChainRun 记录 ok/ts/key/err；UI watch 面板徽标（⛓ chain 名 + ✓/✗/待触发三态）；恢复侧（GET /api/watch）带 chain；watchchain295 5 断言；基线 3320→3325。「指标越界→自动跑管道→落盘新 zerocol」调度闭环成形。
 
 ## [4.6.0] - 2026-11-14
 
