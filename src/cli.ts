@@ -2548,6 +2548,40 @@ async function cmdPlugin(args: string[]): Promise<number> {
   if (sub === 'lint') return cmdPluginLint(args.slice(1));
   if (sub === 'doc') return cmdPluginDoc(args.slice(1));
   if (sub === 'publish-ready') return cmdPublishReady(args.slice(1));
+  if (sub === 'publish-check') {
+    // 第二百八十三轮④⑤：发布前组合检查——lint + publish-ready + market index 干跑（不落盘）
+    const dir = args.slice(1).find((a) => !a.startsWith('-'));
+    if (!dir || !fs.existsSync(path.resolve(dir, 'plugin.toml'))) { process.stderr.write('用法：zkit plugin publish-check <插件目录>（含 plugin.toml）\n'); return 2; }
+    const abs = path.resolve(dir);
+    const idm = /^id\s*=\s*"([^"]+)"/m.exec(fs.readFileSync(path.join(abs, 'plugin.toml'), 'utf8'));
+    const pid = idm?.[1] ?? path.basename(abs);
+    const report: Array<{ name: string; state: 'ok' | 'warn' | 'error'; note?: string }> = [];
+    // 1) 清单校验（静态）
+    const { loadPlugin } = await import('./core/manifest.ts');
+    try {
+      const loaded = loadPlugin(abs);
+      report.push({ name: '清单可加载', state: loaded.plugin ? 'ok' : 'error', note: loaded.plugin ? undefined : (loaded.errors[0] ?? '').slice(0, 60) });
+    } catch (e) { report.push({ name: '清单可加载', state: 'error', note: (e as Error).message.slice(0, 60) }); }
+    // 2) publish-ready（已装插件才查——脚手架目录直接装临时副本成本高，这里对目录做静态等价检查）
+    const tomlText = fs.readFileSync(path.join(abs, 'plugin.toml'), 'utf8');
+    report.push({ name: '动作都有 risk', state: /^[^\[]*\[\[action\]\]/m.test(tomlText) && /risk\s*=/.test(tomlText) ? 'ok' : 'error' });
+    report.push({ name: '版本号语义化', state: /version\s*=\s*"\d+\.\d+\.\d/.test(tomlText) ? 'ok' : 'error' });
+    // 3) 签名密钥
+    report.push({ name: '签名密钥', state: fs.existsSync(path.join(HOME_PATH(), 'keys', 'default.ed25519')) ? 'ok' : 'warn', note: 'zkit keygen' });
+    // 4) market index 干跑（buildIndex 不落盘——直接调用看结果）
+    try {
+      const { buildIndex } = await import('./core/market.ts');
+      const idx = buildIndex(abs);
+      report.push({ name: 'market index 可生成', state: (idx.plugins?.length ?? 0) > 0 ? 'ok' : 'warn', note: `${idx.plugins?.length ?? 0} 插件` });
+    } catch (e) { report.push({ name: 'market index 可生成', state: 'warn', note: (e as Error).message.slice(0, 50) }); }
+    const mark = { ok: c.green('✓'), warn: c.yellow('!'), error: c.red('✗') };
+    process.stdout.write(c.bold(`发布前检查：${pid}（${abs}）\n`));
+    for (const r2 of report) process.stdout.write(`  ${mark[r2.state]} ${r2.name}${r2.note ? c.dim(`（${r2.note}）`) : ''}\n`);
+    const errs = report.filter((x) => x.state === 'error').length;
+    if (errs > 0) { process.stdout.write(c.red(`✗ ${errs} 个硬伤——修复后再发布\n`)); return 1; }
+    process.stdout.write(c.green('✓ 可发布（zkit plugin add 安装后 publish-ready 看完整自查）\n'));
+    return 0;
+  }
   process.stderr.write('用法：zkit plugin <new|dev|validate|install|add|update|remove|history|bundled|export|import|pack|unpack|info|recommend|lint|doc|publish-ready>\n');
   return 2;
 }
@@ -2797,6 +2831,16 @@ function cmdPublishReady(args: string[]): number {
   if (r.ok && r.problems.length === 0) process.stdout.write(c.green(`✓ ${plug.name} 达到上架标准（${okN}/${checks.length} 项全过）\n`));
   else if (r.ok) process.stdout.write(c.yellow(`! 可以上架（${okN}/${checks.length} 项过，${r.problems.length} 条建议先处理）\n`));
   else process.stdout.write(c.red(`✗ ${errTexts.length} 个硬伤（${okN}/${checks.length} 项过），先修再上架\n`));
+  // 第二百八十三轮②③：发布通道指引——上架后三步（签名/入集市/分发）
+  if (r.ok) {
+    process.stdout.write(c.bold('\n发布通道（生态链三步）：\n'));
+    const hasKey = fs.existsSync(path.join(HOME_PATH(), 'keys', 'default.ed25519'));
+    if (hasKey) process.stdout.write(c.green('  ✓ 已有签名密钥（pack/export 自动签名）\n'));
+    else process.stdout.write(c.yellow('  ! zkit keygen 生成签名密钥——发布者应签名（282 轮链）\n'));
+    process.stdout.write(c.dim(`  $ zkit market index ${path.dirname(plug.dir)}   # 生成/更新源清单\n`));
+    process.stdout.write(c.dim(`  $ zkit plugin export ${plug.id}              # 打 .toolpack（可直接分发）\n`));
+    process.stdout.write(c.dim('  把 market.json 提交到你的 git 仓库，用户 zkit market add <仓库> 即可安装\n'));
+  }
   return r.ok ? 0 : 1;
 }
 

@@ -75,3 +75,16 @@ zkit plugin import <文件>        # 包带 sig 且本机 keys/ 有对应公钥 
 - **校验范围**：files（名→sha256）+ plugin 元信息，canonicalJson（键排序无空格）。
 - **兼容**：无 sig 包 / 本机无对应公钥 = 原行为不变（信任用户 keys/ 里有的签名者）。
 - 签名段本身不入被签 payload（防自指）。
+
+## 发布通道（第 283 轮——脚手架到上架一条龙）
+
+```bash
+zkit plugin new <id>                  # 脚手架
+zkit plugin publish-check <目录>      # 发布前组合检查（清单可加载/risk/版本/签名密钥/index 干跑）
+zkit plugin add <目录>                # 装入本地
+zkit plugin publish-ready <id>        # 上架自查（过 → 打印发布通道三步指引）
+zkit keygen                           # 签名密钥（一次性）
+zkit market index <父目录>            # 生成/更新源清单
+zkit plugin export <id>               # 打 .toolpack（自动签名）
+# market.json 提交到 git 仓库 → 用户 zkit market add <仓库>
+```
