@@ -33,6 +33,7 @@
 ```bash
 ./scripts/lint.sh                  # 本地静态检查（与 CI 同源）
 node scripts/test-all.mjs          # 测试
+npm run contract                   # 契约快道 <1s（改 API 面 / api() 调用 / 注入面后先跑）
 node src/cli.ts doctor             # 清单与环境自检
 node src/cli.ts ui --open          # 起界面人工看一眼（UI 改动时）
 ```

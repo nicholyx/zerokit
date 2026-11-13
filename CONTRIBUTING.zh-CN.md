@@ -32,6 +32,7 @@ node scripts/test-all.mjs    # 全量测试：9 个文件 200+ 断言，不联�
 
 ```bash
 node scripts/test-all.mjs    # 全量测试（CI 会跑同一命令）
+npm run contract             # 契约快道 <1s（改 server API 面 / web api() 调用 / 域文件注入面后即改即验）
 ```
 
 改了工作流（`.github/workflows/`）或 `.github` 下的 YAML 时，
