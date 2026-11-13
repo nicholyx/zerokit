@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.73.0] - 2026-11-13
+
+### Added
+
 - market 安装源协议公开化（272 对账建议 2 生态链第一步）：docs/reference/market-protocol.md——v1 完整规范（源清单格式/字段语义表/校验规则/生成与注册命令/协议演进约定：小改不动版本、破坏性升大版本）；MarketIndex 加 protocol 字段（缺省=1）；lint 新规则（protocol 必须正整数；比本机新的大版本明确拒绝并提示升级——老客户端不会装错新源）；docs 导航接入；marketproto281 8 断言（lint 三态 / 第三方源端到端 add→list→install --yes→run / protocol=99 源被拒）；基线 3252→3260。
 
 ## [3.72.0] - 2026-11-13
@@ -71,10 +77,4 @@
 ### Added
 
 - 插件脚手架增强——服务示例节与 MCP probe 指引（插件生态起步）：zkit plugin new --with-service（ScaffoldOptions.withService → [[service]] demo 节含 healthCheck 示范 261-263 轮体系，port 39410）；脚手架 README 开发码块与清单注释各补一行 zkit mcp probe <id>__hello（255 轮探针——新作者第一次就接触 MCP 面验证法）；用法表更新；svcdeps261 +3 断言。
-
-## [3.61.0] - 2026-11-12
-
-### Added
-
-- 守护面板操作化——UI 启停 daemon（267 看 + 268 CLI 管后的「UI 动」）：startWatchDaemon/stopWatchDaemon 助手抽到 services.ts（CLI 与 /api 同源防漂移）；/api/services/watch POST {action: start|stop}（start=daemon 同款活 pid 拒绝；stop=SIGTERM 4s→SIGKILL 幂等）；启动参数固定面板缺省（30s/3/30s——一键不做表单）；UI 守护区「▶ 启动守护」/「■ 停止」（confirm 守卫）+ 操作后 showServices 即时刷新；审计 caller=ui；webui +2 断言。端到端实测：start pid=30839 → 状态 running:true → 重复启动拒绝「已在运行」→ stop ✓。
 
