@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.2.0] - 2026-11-13
+
+### Added
+
 - 协作状态同步 presence（v4 协作面第二步）：会话加入广播（initialize 成功后其余会话收 session-joined 含 clientId）；会话离开广播（DELETE 后 session-left）；GET /mcp/sessions 在线清单（token 同面鉴权；clientId/connectedAt/sid 尾段——sid 全段不泄）；zkit mcp sessions --http [端口] CLI 查询（需 ZEROKIT_TOKEN 同 serve）；presence 广播同走 fromSid 排除与工具广播共用风暴防护；mcppresence290 6 断言（加入/离开/清单两态/CLI/风暴自排除）；289 测试断言适配 290 代码形态（hook 调用点 1→3）；基线 3293→3299。
 
 ## [4.1.0] - 2026-11-13
@@ -71,10 +77,4 @@
 ### Added
 
 - OpenAPI 契约测试（272 对账 M 第二条）：openapicontract279 五面断言——①API_METHODS↔API_SPEC 端点集一致；②活体 405/404 诚实性；③④UI 调用面采集（web/ 全源码 api() 提取，静态+模板前缀）无漂移；⑤契约 POST 均有 UI 使用（server-internal 白名单）。**契约测试抓出三处真漂移当场修复**：/api/chat/state 与 /api/cache/prune 两端点 UI 在调但 server 无实现（补实现+登记）；API_SPEC 累积缺 34 端点登记（164 轮后新增未同步——按方法表批量补登，活体 paths 25→59）；未知 /api/* 此前落 SPA fallback 返回 200（不诚实——改真 404）。基线 3235→3243。
-
-## [3.70.0] - 2026-11-13
-
-### Added
-
-- 结果历史结构化 diff（272 对账 M 第一条·用户可见价值最高）：src/core/structuredDiff.ts 纯函数——字段级三分类（added/removed/changed，点路径寻址 x.y.z.w）；数组索引对齐（长度差进 added/removed）；嵌套递归深度上限 8（防炸）；deepEqual 同构零 diff；zkit diff <插件.动作>（本次 run vs 上一缓存结果——只支持 read 动作【观测面对比不碰 mutate】；首次无缓存提示、对比后自动更新缓存为下次的「上一值」；--json 机读含 summary+entries）；129 轮文本对比的字段级升级；structurediff278 7 断言；基线 3228→3235。
 
