@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [3.63.0] - 2026-11-13
+
+### Added
+
+- 断言数回归护栏——270 轮险情判据进 CI：scripts/assertion-baseline.json 基线入库（3198）；test-all 末尾守卫（总数 < 基线且全绿 → exit 1 + 事故型提示「全绿但计数降 = 结构性丢失，参考 270 轮重写吞分支」——skip 不 fail 只有计数会说话）；sync-counts 三路径（计数上升自动抬基线 / 下降不自动提示「删测试须 --force」/ --force 显式降）；assertbaseline271-smoke 守卫自证 4 断言；maintenance-patterns 事故判据条目。修复 sync 写基线时 string 类型泄漏（JSON 数字断言被写成 "3197"——Number() 包一层，守卫 Number.isFinite 拦住）。
+
 ## [3.62.0] - 2026-11-12
 
 ### Added
