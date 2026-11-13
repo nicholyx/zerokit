@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.72.0] - 2026-11-13
+
+### Added
+
 - MCP 资源订阅——变更推送（272 对账 S 第四条收尾，277 远程化解锁长连接面）：capabilities.resources 开 subscribe+listChanged；Subscribe/UnsubscribeRequestSchema handler（订阅集 + 版本计数 resourceVersions）；工具执行成功后 bump——逐订阅 uri sendResourceUpdated（notifications/resources/updated）；GET SSE 长连接打开（277 留的 405 按计划开通——需先 POST initialize 建会话，SDK handleRequest 托管 SSE 流）；mcpsubscribe280 9 断言（活体：initialize 含 subscribe / SSE 200 event-stream / resources/subscribe / 工具执行后真实收到 updated 推送）；基线 3243→3252。
 
 ## [3.71.0] - 2026-11-13
@@ -71,10 +77,4 @@
 ### Added
 
 - 守护面板操作化——UI 启停 daemon（267 看 + 268 CLI 管后的「UI 动」）：startWatchDaemon/stopWatchDaemon 助手抽到 services.ts（CLI 与 /api 同源防漂移）；/api/services/watch POST {action: start|stop}（start=daemon 同款活 pid 拒绝；stop=SIGTERM 4s→SIGKILL 幂等）；启动参数固定面板缺省（30s/3/30s——一键不做表单）；UI 守护区「▶ 启动守护」/「■ 停止」（confirm 守卫）+ 操作后 showServices 即时刷新；审计 caller=ui；webui +2 断言。端到端实测：start pid=30839 → 状态 running:true → 重复启动拒绝「已在运行」→ stop ✓。
-
-## [3.60.0] - 2026-11-12
-
-### Added
-
-- 守护后台化——zkit service watch --daemon（266-267 守护体系的「终端一关守护就没」补全）：--daemon 脱离终端常驻（detached 自我重入同参去 --daemon，日志 ~/.zerokit/logs/service-watch.log）；重复启动拒绝（init 前状态文件 pid 存活校验）；--status 查询（pid+时长+最近动作；残留文件显示「未运行（残留 pid=N）」）；--stop 干净停（SIGTERM 等 4s 超时 SIGKILL；未运行幂等「无需停止」）；前台模式 Ctrl+C 语义不变（266 轮行为保留）；svcdeps261 +4 断言（daemon 启动/拒绝重复/status/stop 幂等）；service-orchestration.md 后台化节。
 
