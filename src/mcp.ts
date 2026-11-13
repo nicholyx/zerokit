@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import crypto from 'node:crypto';
 import { readAudit, readDenied } from './core/ops.ts';
 import fs from 'node:fs';
 import { buildDoctorReport } from './core/doctor.ts';
@@ -319,7 +320,8 @@ function findByName(name: string): { plugin: Plugin; action: Action } | undefine
   return collectTools().find((t) => toolName(t.plugin.id, t.action.id) === name);
 }
 
-export async function serve(): Promise<number> {
+/** 第二百七十七轮①：server 实例构造与传输绑定分离——setRequestHandler 全复用，stdio/http 同一实例形态 */
+function buildMcpServer(): Server {
   const server = new Server(
     { name: 'zerokit', version: PACKAGE_VERSION },
     // 第八十九轮⑦：resources 面（只读：插件清单/健康报告）——MCP 规范原生入口
@@ -606,6 +608,62 @@ export async function serve(): Promise<number> {
     return response;
   });
 
+  return server;
+}
+
+/** 第二百七十七轮②⑤：远程 MCP（streamable-http）——spike 会话复用模式 + token 鉴权，默认 127.0.0.1 */
+export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<number> {
+  const { StreamableHTTPServerTransport } = await import('@modelcontextprotocol/sdk/server/streamableHttp.js');
+  const http = await import('node:http');
+  const { collectTools: _ct, ..._rest } = { collectTools: undefined };
+  void _ct; void _rest;
+  const server = buildMcpServer();
+  // token 鉴权（与 UI 同源）：读 server 的 token 机制——复用 server.ts 的 readBody 形态
+  // token：环境变量注入（测试）或进程内随机生成（打印到 stderr 供用户复制——UI 的 token 是页面注入的，跨进程不同源）
+  const TOKEN = process.env.ZEROKIT_TOKEN ?? crypto.randomBytes(24).toString('hex');
+  const transports = new Map<string, InstanceType<typeof StreamableHTTPServerTransport>>();
+  const srv = http.createServer(async (req, res) => {
+    const url = new URL(req.url ?? '/', 'http://x');
+    if (url.pathname !== '/mcp') { res.writeHead(404).end(); return; }
+    // ④ token 校验（与 UI 同款语义：无头/错头 401）
+    const token = req.headers['x-zerokit-token'];
+    if (typeof token !== 'string' || token !== TOKEN) {
+      res.writeHead(401, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: 'unauthorized', hint: 'x-zerokit-token 头必填（zkit mcp config 打印接入配置里有）' }));
+      return;
+    }
+    if (req.method === 'POST') {
+      let body = '';
+      for await (const c of req) body += c;
+      const sid = req.headers['mcp-session-id'];
+      let t = typeof sid === 'string' ? transports.get(sid) : undefined;
+      if (!t) {
+        t = new StreamableHTTPServerTransport({ sessionIdGenerator: () => `zk-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}` });
+        const sid2 = (t as unknown as { sessionId?: string }).sessionId;
+        transports.set(sid2 ?? 'pending', t);
+        await server.connect(t);
+      }
+      await t.handleRequest(req, res, body ? JSON.parse(body) : undefined);
+      const sidAfter = (t as unknown as { sessionId?: string }).sessionId;
+      if (sidAfter && transports.has('pending')) { transports.set(sidAfter, transports.get('pending')!); transports.delete('pending'); }
+      return;
+    }
+    if (req.method === 'DELETE') {
+      const sid = req.headers['mcp-session-id'];
+      const t = typeof sid === 'string' ? transports.get(sid) : undefined;
+      if (t) { await t.close(); transports.delete(sid as string); }
+      res.writeHead(200).end();
+      return;
+    }
+    res.writeHead(405).end();  // GET 不维持 SSE 长连接（276 spike 决定）
+  });
+  await new Promise<void>((resolve) => { srv.listen(port, host, () => resolve()); });
+  process.stderr.write(`[zerokit] MCP server 已启动（http ${host}:${port}/mcp）\n[zerokit] token（x-zerokit-token 头）：${TOKEN}\n`);
+  return new Promise<number>(() => { /* 挂住直到进程被杀 */ });
+}
+
+export async function serve(): Promise<number> {
+  const server = buildMcpServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
   process.stderr.write(`[zerokit] MCP server 已启动（stdio），插件目录 ${PLUGINS_DIR}\n`);
@@ -1045,7 +1103,18 @@ function cmdAllow(args: string[]): number {
 
 export async function cli(args: string[]): Promise<number> {
   const sub = args[0];
-  if (sub === 'serve') return serve();
+  if (sub === 'serve') {
+    // 第二百七十七轮②：--http [port] 起远程端点（默认 31800；spike 模式 + token 鉴权）
+    const rest = args.slice(1);
+    const httpIdx = rest.indexOf('--http');
+    if (httpIdx >= 0) {
+      const port = Number(rest[httpIdx + 1]) || 31800;
+      const hostIdx = rest.indexOf('--host');
+      const host = hostIdx >= 0 && rest[hostIdx + 1] ? rest[hostIdx + 1]! : '127.0.0.1';
+      return serveHttp(port, host);
+    }
+    return serve();
+  }
   if (sub === 'config') return cmdConfig(args.slice(1));
   if (sub === 'tools') return cmdTools(args.slice(1));
   if (sub === 'allow') return cmdAllow(args.slice(1));
@@ -1058,6 +1127,7 @@ export async function cli(args: string[]): Promise<number> {
   if (sub === 'revoke') return cmdRevoke(args.slice(1));
   process.stdout.write(`用法：
   zkit mcp serve            以 MCP server 方式运行（stdio，给 AI 客户端拉起）
+  zkit mcp serve --http [端口] [--host 地址]  远程模式（streamable-http；token 打印在 stderr——277 轮）
   zkit mcp config [客户端]  打印接入配置；加 --write 直接写入（会备份原文件）
                             客户端：${clientSpecs().map((s) => s.key).join(' / ')}
   zkit mcp tools [--json]   列出全部 MCP 工具与描述（--json 为机读格式）
