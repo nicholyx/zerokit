@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [3.70.0] - 2026-11-13
+
+### Added
+
 - 结果历史结构化 diff（272 对账 M 第一条·用户可见价值最高）：src/core/structuredDiff.ts 纯函数——字段级三分类（added/removed/changed，点路径寻址 x.y.z.w）；数组索引对齐（长度差进 added/removed）；嵌套递归深度上限 8（防炸）；deepEqual 同构零 diff；zkit diff <插件.动作>（本次 run vs 上一缓存结果——只支持 read 动作【观测面对比不碰 mutate】；首次无缓存提示、对比后自动更新缓存为下次的「上一值」；--json 机读含 summary+entries）；129 轮文本对比的字段级升级；structurediff278 7 断言；基线 3228→3235。
 
 ## [3.69.0] - 2026-11-13
@@ -71,10 +77,4 @@
 ### Added
 
 - 守护可视化——watch 状态面板与健康历史（266 轮 CLI 守护的 UI 对位）：~/.zerokit/service-watch.json 状态文件（pid/startedAt/actions 环形日志最近 50 条；同进程续写、异进程覆盖；写前 ensureDirs——修一个目录不存在时 ENOENT 被 catch 吞的真缺陷）；zkit service watch 启动时 init、重启动作时追加；/api/services/watch GET（pid 存活校验——process.kill(pid,0)，残留文件不算在跑）；#/services 面板「守护」区（PID+运行时长+最近 5 条动作：⟳ key ×streak ✓/✗ +退避秒）；I18N 五键；svcdeps261 +3 断言。
-
-## [3.58.0] - 2026-11-12
-
-### Added
-
-- 服务运行时守护——unhealthy 自动重启与退避（服务编排体系续）：zkit service watch [--interval 30s] [--threshold 3] [--backoff-base 30s] 前台循环；只守护「声明 healthCheck 且运行中」的服务（停着的归用户）；连续 threshold 次 unhealthy → 重启走 up 链（依赖先行）；watchCycle/watchBackoffMs 纯函数（指数退避 base×2^(n-1) 封顶 10min，恢复即复位）；Ctrl+C 干净退出（停探测不杀服务）；审计 caller=service-watch；svcdeps261 +3 断言；service-orchestration.md 守护节。
 
