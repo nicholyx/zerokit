@@ -33,6 +33,7 @@
 | [可复现构建](reference/reproducibility.md) | lockfile/engines/Cargo.lock 审计记录 + 已知差距 | 构建问题排查 |
 - [MCP 探针体系](reference/mcp-probe.md) —— 四入口核对工具面：不拉起 MCP server
 - [服务编排体系](reference/service-orchestration.md) —— requires/拓扑启动/健康探针/逆序关停
+- [market 安装源协议](reference/market-protocol.md) —— 第三方集市规范（v1：字段/校验/版本约定）
 | [Cookbook](reference/cookbook.md) | 十篇实战配方 | 照抄解决常见任务 |
 | [项目账本](reference/overview.md) | 已完成/待办/已知差距 | 想知道项目现状 |
 

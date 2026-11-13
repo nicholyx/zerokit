@@ -46,6 +46,8 @@ export interface MarketEntry {
 export interface MarketIndex {
   name: string;
   description?: string;
+  /** 第二百八十一轮①：协议版本（缺省 = 1——公开化后的兼容判据；不认识的大版本拒绝添加） */
+  protocol?: number;
   plugins: MarketEntry[];
 }
 
