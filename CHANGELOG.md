@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- 发布链操作手册（284 复盘清债③）：docs/reference/release-runbook.md——标准五步（feature/prep/release+tag/资产/收尾，逐条命令与预期）；事故分类处置表三张（网络类：DNS 瞬态/CDN 504/registry；CI 类：cdp flake/断言数下降【270 型结构性丢失】/跨平台差/总览异常/rerun running；发布类：draft 422 顺序/资产陈旧/30 分钟不齐/poll 卡 pending）——全部 284 轮以来实录判据；幂等重入三则（--failed 先确认瞬态、draft=false 先于 edit、tag 删再推）；271 基线联动（≥ 基线 / --force 显式降）；docs/README 导航；runbook287 8 断言防漂移；基线 3276→3284。
 
 ## [3.78.0] - 2026-11-13
 
