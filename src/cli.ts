@@ -5576,6 +5576,42 @@ async function main(): Promise<number> {
       return await cmdBackup(rest); // 第一百三十六轮⑧：与 UI 同一信封
     case 'restore':
       return await cmdRestore(rest);
+    case 'diff': {
+      // 第二百七十八轮④：zkit diff <插件.动作>——本次 run 与上一缓存结果的结构化对比
+      const target = rest.find((a) => !a.startsWith('--'));
+      if (!target || !target.includes('.')) { process.stderr.write('用法：zkit diff <插件.动作> [--json]\n  对比本次执行与上一缓存结果（字段级 added/removed/changed）\n'); return 2; }
+      const i = target.indexOf('.');
+      const pid = target.slice(0, i);
+      const aid = target.slice(i + 1);
+      const { findPlugin } = await import('./core/registry.ts');
+      const entry = findPlugin(pid);
+      const action = entry?.plugin?.actions.find((x) => x.id === aid);
+      if (!entry?.plugin || !action) { process.stderr.write(`没有这个动作：${target}\n`); return 1; }
+      const { readResultCache, writeResultCacheEntry } = await import('./core/cliX.ts');
+      const cacheKey = `${pid}.${aid}?`;  // 无参数动作的 key 形态
+      const prevEntry = Object.values(readResultCache()).find((e) => e.key.startsWith(`${pid}.${aid}?`));
+      const prev = prevEntry?.result;
+      // 跑本次（read 动作才许：diff 是观测面不是执行面）
+      if (action.risk !== 'read') { process.stderr.write('diff 只支持 read 动作（观测面对比，不碰 mutate/destructive）\n'); return 2; }
+      const { runAction } = await import('./core/runner.ts');
+      const r = await runAction(entry.plugin, action, { caller: 'cli', values: {} });
+      if (!r.ok || r.data === undefined) { process.stderr.write(`本次执行失败：${r.error ?? r.stderr.slice(0, 120)}\n`); return 1; }
+      const { structuredDiff } = await import('./core/structuredDiff.ts');
+      const d = prev === undefined ? null : structuredDiff(prev, r.data);
+      writeResultCacheEntry(cacheKey, r.data);  // 对比后更新缓存（下次 diff 的「上一值」）
+      audit({ ts: new Date().toISOString(), caller: 'cli', plugin: pid, action: aid, tool: 'diff', risk: 'read', decision: 'allow', reason: `added=${d?.added ?? 0} removed=${d?.removed ?? 0} changed=${d?.changed ?? 0}` });
+      if (rest.includes('--json')) { console.log(JSON.stringify({ target, hasPrev: prev !== undefined, summary: d ? { added: d.added, removed: d.removed, changed: d.changed } : null, entries: d?.entries.slice(0, 50) ?? [] }, null, 2)); return 0; }
+      if (!d) { console.log(`（无上一缓存——本次已存，再跑一次 diff 即有对比）`); return 0; }
+      console.log(`${target}：+${d.added} 加 / -${d.removed} 删 / ~${d.changed} 改`);
+      for (const e of d.entries.slice(0, 20)) {
+        const brief = (v: unknown) => typeof v === 'object' ? JSON.stringify(v).slice(0, 40) : String(v).slice(0, 40);
+        if (e.kind === 'changed') console.log(`  ~ ${e.path}: ${brief(e.before)} → ${brief(e.after)}`);
+        else if (e.kind === 'added') console.log(`  + ${e.path}: ${brief(e.after)}`);
+        else console.log(`  - ${e.path}: ${brief(e.before)}`);
+      }
+      if (d.entries.length > 20) console.log(`  …共 ${d.entries.length} 条（--json 看全）`);
+      return 0;
+    }
     case 'watch': {
       // 第一百三十二轮⑦：zkit watch list（读 watch.json 机读视图）
       // 第二百七十三轮③：zkit watch stats <key>（采样窗口聚合）——顶层 stats 是历史统计（46/92/120 轮），不抢
