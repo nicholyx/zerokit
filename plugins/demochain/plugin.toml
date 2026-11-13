@@ -48,3 +48,30 @@ as  = "first"
 use    = "self.double"
 as     = "second"
 params = { value = "{first.data.value}" }
+
+# 第二百九十一轮⑤：pipe 示例——上一步 stdout 作为下一步 stdin（数据工作流原语）。
+# 第一步 gen 输出 JSON 到 stdout；第二步（pipe = true）拿它作 stdin 数字符数。
+[[action]]
+id      = "pipe-count"
+title   = "管道计数"
+description = "管道演示：gen 的输出通过 stdin 传给计数步，返回字符数。想看 pipe 怎么写就看这个。"
+type    = "chain"
+risk    = "read"
+template = "管道传了 {counted.data.count} 个字符"
+
+[[action.step]]
+use = "self.gen"
+as  = "first"
+
+[[action.step]]
+use    = "self.count-stdin"
+as     = "counted"
+pipe   = true
+
+[[action]]
+id      = "count-stdin"
+title   = "数 stdin 字符"
+description = "读 stdin 数字符（pipe 下游示例）"
+run     = ["{node}", "-e", "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.stringify({count:d.length})))"]
+output  = "json"
+risk    = "read"

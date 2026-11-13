@@ -43,6 +43,8 @@ export interface ChainStep {
   as: string;
   /** 传给该步骤的参数；字符串里的 `{...}` 会被替换成前面步骤的结果或本动作的参数 */
   params: Record<string, unknown>;
+  /** 第二百九十一轮①：管道模式——上一步 stdout 作为本步骤 stdin（数据工作流原语） */
+  pipe?: boolean;
 }
 
 /**
@@ -760,7 +762,9 @@ function parseChainSteps(
       }
       params[k] = v;
     }
-    out.push({ use, as: alias, params });
+    // 291①：pipe = true（上一步 stdout → 本步骤 stdin）
+    const pipe = s['pipe'] === true;
+    out.push({ use, as: alias, params, ...(pipe ? { pipe: true } : {}) });
   }
   return out;
 }
