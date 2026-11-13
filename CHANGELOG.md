@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.5.0] - 2026-11-14
+
+### Added
+
 - 广播内容增强——结果摘要下发（v4 协作面第三步）：tool-call 广播载荷升级 { type, tool, ok, ms, summary }——summary 先过 maskSensitive 脱敏再分档（≤4KB 紧凑 JSON 全量直放；>4KB 走 { _truncated, head: 600 字首段, fields: fieldStats }——与 MCP 响应同款 48 轮策略复用 summarizeJson）；观察者在 SSE 流直接看到执行结果（value=21 级别），大结果 token 友好不发全文；demochain gen 描述补广播演示注记；broadcastsummary293 5 断言（载荷结构/小结果全量含 value/大结果分档实现/实收 summary）；基线 3311→3316。
 
 ## [4.4.0] - 2026-11-14
@@ -71,10 +77,4 @@
 ### Added
 
 - 插件签名链起步——ed25519 最小实现（生态链第二步，281 公开化后继）：src/core/pluginSign.ts（零依赖 Node 内置 crypto）——keygen（密钥对落 ~/.zerokit/keys/ 0600；keyId=SPKI DER sha256 前 16hex 指纹）；canonicalJson 规范串（键排序无空格——签验两侧一致）；signPayload/verifyPayload；.toolpack export 自动签名（有私钥时 sig 段：algo/keyId/sig，不入被签 payload 防自指）；import 强校验（包带 sig 且本机 keys/ 有对应公钥→篡改拒绝；无 sig/无公钥=原行为兼容）；zkit keygen 命令；market-protocol.md 签名节；pluginsign282 8 断言（keygen/纯函数签验/篡改 false/端到端 export 带签/篡改拒/无 sig 兼容）；基线 3260→3268。
-
-## [3.73.0] - 2026-11-13
-
-### Added
-
-- market 安装源协议公开化（272 对账建议 2 生态链第一步）：docs/reference/market-protocol.md——v1 完整规范（源清单格式/字段语义表/校验规则/生成与注册命令/协议演进约定：小改不动版本、破坏性升大版本）；MarketIndex 加 protocol 字段（缺省=1）；lint 新规则（protocol 必须正整数；比本机新的大版本明确拒绝并提示升级——老客户端不会装错新源）；docs 导航接入；marketproto281 8 断言（lint 三态 / 第三方源端到端 add→list→install --yes→run / protocol=99 源被拒）；基线 3252→3260。
 
