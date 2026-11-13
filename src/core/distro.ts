@@ -445,6 +445,10 @@ export function lintMarketIndex(raw: string, opts: { baseDir?: string } = {}): M
     return { ok: false, errors: [`JSON 解析失败：${(e as Error).message}`], warnings, pluginCount: 0 };
   }
   if (!idx.name) errors.push('缺少 name（集市名）');
+  // 第二百八十一轮①：协议版本——1 是当前唯一版本；>1 的新版本客户端不认识，明确拒绝而不是装错
+  const proto = (idx as { protocol?: unknown }).protocol;
+  if (proto !== undefined && (!Number.isInteger(proto) || (proto as number) < 1)) errors.push(`protocol 字段必须是正整数，收到 ${JSON.stringify(proto)}`);
+  if (Number.isInteger(proto) && (proto as number) > 1) errors.push(`protocol 版本 ${String(proto)} 比本机 zerokit 支持的（1）新——升级 zkit 后再添加`);
   const plugins = Array.isArray(idx.plugins) ? idx.plugins : [];
   if (plugins.length === 0) warnings.push('plugins 为空——一个插件都不卖');
   const seen = new Set<string>();
