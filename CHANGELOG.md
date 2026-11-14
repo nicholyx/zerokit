@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- 广播频率控制与静默窗口（v4 协作面第四步——防 watch+chain 高频刷屏）：节流（同 method 最小间隔 min-interval-ms 默认 2000——config [broadcast] 节；**presence 豁免**：joined/left 不占 tool-call 配额，开发中靠 gate 日志定位「A 的 join 占用配额致首个 tool-call 被拦」）；静默窗口 quiet = "22:00-07:00"（跨午夜窗口解析；窗口内非 presence 广播丢弃）；丢弃计数 dropped 进 /mcp/sessions（droppedBroadcasts 字段）；zkit mcp sessions 显示「频率控制丢弃 N 条 + 可调提示」；readBroadcastConfig 最小 TOML 解析；broadcastthrottle296 4 断言（活体 500ms 节流只广播 1 次 + dropped≥1 + 窗口/豁免源码面）；修复过程顺带回归验证 289/290/293 全绿；基线 3325→3329。
 
 ## [4.7.0] - 2026-11-14
 

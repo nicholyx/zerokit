@@ -649,6 +649,21 @@ function buildMcpServer(): Server {
 }
 
 /** 第二百七十七轮②⑤：远程 MCP（streamable-http）——spike 会话复用模式 + token 鉴权，默认 127.0.0.1 */
+/** 296①②：广播频率控制配置（config.toml [broadcast] min-interval-ms / quiet） */
+function readBroadcastConfig(): { minIntervalMs: number; quiet?: string } {
+  try {
+    const raw = fs.readFileSync(path.join(HOME, 'config.toml'), 'utf8');
+    const m = /^\[broadcast\]\s*\n([\s\S]*?)(?=^\[|$(?![\s\S]))/m.exec(raw);
+    if (!m) return { minIntervalMs: 2000 };
+    const sec = m[1] ?? '';
+    const mi = /^min-interval-ms\s*=\s*(\d+)/m.exec(sec)?.[1];
+    const q = /^quiet\s*=\s*\"([^\"]+)\"/m.exec(sec)?.[1];
+    return { minIntervalMs: mi ? Number(mi) : 2000, ...(q ? { quiet: q } : {}) };
+  } catch {
+    return { minIntervalMs: 2000 };
+  }
+}
+
 export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<number> {
   const { StreamableHTTPServerTransport } = await import('@modelcontextprotocol/sdk/server/streamableHttp.js');
   const http = await import('node:http');
@@ -662,8 +677,34 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
   const broadcastEnabled = process.argv.includes('--broadcast') || process.env.ZEROKIT_BROADCAST === '1';
   interface SessionEntry { transport: InstanceType<typeof StreamableHTTPServerTransport>; server: import('@modelcontextprotocol/sdk/server/index.js').Server; clientId: string; connectedAt: number }
   const transports = new Map<string, SessionEntry>();
+  // 296①②③：广播频率控制——节流 + 静默窗口 + 丢弃计数（防 watch+chain 高频刷屏）
+  const bcConfig = readBroadcastConfig();
+  const lastBroadcast = new Map<string, number>();  // method → 上次广播时刻
+  const dropped = { count: 0 };
+  const inQuiet = (): boolean => {
+    if (!bcConfig.quiet) return false;
+    const [s2, e2] = bcConfig.quiet.split('-');
+    if (!s2 || !e2) return false;
+    const now2 = new Date();
+    const mins = now2.getHours() * 60 + now2.getMinutes();
+    const [sh, sm] = s2.split(':').map(Number);
+    const [eh, em] = e2.split(':').map(Number);
+    if (sh === undefined || eh === undefined || Number.isNaN(sh) || Number.isNaN(eh)) return false;
+    const start = sh * 60 + (sm || 0), end = eh * 60 + (em || 0);
+    return start <= end ? (mins >= start && mins < end) : (mins >= start || mins < end);  // 跨午夜窗口
+  };
   const notifyOthers = async (fromSid: string, method: string, params: Record<string, unknown>): Promise<void> => {
     if (!broadcastEnabled) return;
+    // ② 静默窗口：presence（session-joined/left 在 data 里）豁免；其余静默丢弃
+    const isPresence = typeof params.data === 'string' && (params.data.includes('session-joined') || params.data.includes('session-left'));
+    if (bcConfig.quiet && inQuiet() && !isPresence) { dropped.count += 1; return; }
+    // ① 节流：同 method 最小间隔（presence 豁免——joined/left 不占 tool-call 的配额）
+    if (!isPresence) {
+      const now3 = Date.now();
+      const last = lastBroadcast.get(method) ?? 0;
+      if (now3 - last < bcConfig.minIntervalMs) { dropped.count += 1; return; }
+      lastBroadcast.set(method, now3);
+    }
     for (const [sid, entry] of transports) {
       if (sid === fromSid || sid === 'pending') continue;
       try { await (entry.server as unknown as { sendLoggingMessage: (a: { level: string; data: unknown }) => Promise<void> }).sendLoggingMessage({ level: String(params.level ?? 'info'), data: params.data }); } catch { /* 单会话失败不阻断 */ }
@@ -684,7 +725,7 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
         session: sid.slice(-8),
       }));
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ count: sessions.length, sessions }, null, 2));
+      res.end(JSON.stringify({ count: sessions.length, sessions, droppedBroadcasts: dropped.count }, null, 2));
       return;
     }
     if (url.pathname !== '/mcp') { res.writeHead(404).end(); return; }
@@ -1226,11 +1267,12 @@ export async function cli(args: string[]): Promise<number> {
     try {
       const r = await fetch(`http://127.0.0.1:${port}/mcp/sessions`, { headers: { 'x-zerokit-token': token } });
       if (!r.ok) { process.stderr.write(`查询失败：HTTP ${r.status}\n`); return 1; }
-      const d = await r.json() as { count: number; sessions: Array<{ clientId: string; connectedAt: string; session: string }> };
+      const d = await r.json() as { count: number; sessions: Array<{ clientId: string; connectedAt: string; session: string }>; droppedBroadcasts?: number };
       if (rest.includes('--json')) { console.log(JSON.stringify(d, null, 2)); return 0; }
       if (d.count === 0) { console.log('没有在线会话（serve 未开或无人连接）。'); return 0; }
       console.log(`在线会话 ${d.count} 个：`);
       for (const x of d.sessions) console.log(`  ${x.clientId} · 连于 ${x.connectedAt.slice(11, 19)} · sid …${x.session}`);
+      if (d.droppedBroadcasts) console.log(`（频率控制丢弃广播 ${d.droppedBroadcasts} 条——[broadcast] min-interval-ms / quiet 可调）`);
       return 0;
     } catch (e) {
       process.stderr.write(`连不上 127.0.0.1:${port}——serve --http 起了吗？${(e as Error).message}\n`);
