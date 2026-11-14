@@ -35,6 +35,7 @@
 - [服务编排体系](reference/service-orchestration.md) —— requires/拓扑启动/健康探针/逆序关停
 - [market 安装源协议](reference/market-protocol.md) —— 第三方集市规范（v1：字段/校验/版本约定）
 - [发布链操作手册](reference/release-runbook.md) —— 五步标准链 + 事故分类处置（网络/CI/发布三类实录判据）
+- [v4 线进度](guide/v4-outlook.md#v4-线进度第-297-轮阶段复盘2026-11-14) —— 双主题 4+4 步全闭环 + 下一阶段建议
 | [Cookbook](reference/cookbook.md) | 十篇实战配方 | 照抄解决常见任务 |
 | [项目账本](reference/overview.md) | 已完成/待办/已知差距 | 想知道项目现状 |
 
