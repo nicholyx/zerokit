@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [3.77.0] - 2026-11-13
+
+### Added
+
+- 导出 v2 列式 zerocol（284 复盘清债①；parquet 需 wasm 违零依赖约束——设计等价替代）：src/core/arrowIpc.ts——exportZeroCol/importZeroCol 纯函数（int 8B LE / double 8B LE / string 偏移表+utf8【多 string 列支持：columns[].bytes 元数据】；8 字节对齐；sha256 校验和）；格式透明（JSON 信封 + base64 列段——任何语言 20 行读回）；zkit data export --zerocol <history|audit>（history: ts/plugin/action/exitCode；audit: ts/plugin/risk/decision）；zerocol285 5 断言（四列 roundtrip 含中文空串/空表/校验和稳定/Σbytes=数据长度自洽/CLI 导出）；基线 3271→3276。方向 4「数据分析」3/3 全清。
+
 ## [3.76.0] - 2026-11-13
 
 ### Added

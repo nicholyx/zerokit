@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.9.0] - 2026-11-14
+
+### Added
+
 - v4 双主题阶段复盘（第 297 轮）：v4-outlook 加「v4 线进度」节——协作面 4/4（广播/presence/摘要/频控）+ 数据工作流 4/4（pipe/导出端/读取端/调度面）双表对照（步/轮/交付/版本 v4.1.0–v4.8.0）；下一阶段建议四条（协作深化 M：广播过滤订阅+协作锁 / 数据深化 M：zerocol 多行+管道 DSL 文档化 / 桌面冻结重审 S：首个桌面用户出现时插 / 新议题征集常开——298 轮起 1→2 交替）；docs/README 进度锚点；v4mid297 5 断言；基线 3329→3334。
 
 ## [4.8.0] - 2026-11-14
@@ -71,10 +77,4 @@
 ### Added
 
 - 契约测试快道（284 复盘清债②）：scripts/contract.sh + npm run contract——结构契约类单独秒级入口（openapicontract279 API 契约 8 断言 + domain-faces 注入面契约 18 断言连跑，实测 760ms vs 全量 ~10min——契约破坏反馈距离从「PR CI」缩到「即改即验」）；CONTRIBUTING/CLAUDE.md 开发流程提及（改 server API 面 / web api() 调用 / 域文件注入面后先跑）。
-
-## [3.77.0] - 2026-11-13
-
-### Added
-
-- 导出 v2 列式 zerocol（284 复盘清债①；parquet 需 wasm 违零依赖约束——设计等价替代）：src/core/arrowIpc.ts——exportZeroCol/importZeroCol 纯函数（int 8B LE / double 8B LE / string 偏移表+utf8【多 string 列支持：columns[].bytes 元数据】；8 字节对齐；sha256 校验和）；格式透明（JSON 信封 + base64 列段——任何语言 20 行读回）；zkit data export --zerocol <history|audit>（history: ts/plugin/action/exitCode；audit: ts/plugin/risk/decision）；zerocol285 5 断言（四列 roundtrip 含中文空串/空表/校验和稳定/Σbytes=数据长度自洽/CLI 导出）；基线 3271→3276。方向 4「数据分析」3/3 全清。
 
