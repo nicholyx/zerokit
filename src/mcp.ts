@@ -675,12 +675,12 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
   const TOKEN = process.env.ZEROKIT_TOKEN ?? crypto.randomBytes(24).toString('hex');
   // 第二百八十九轮①④⑤：会话表（带元数据）+ 协作广播开关（--broadcast，默认关）
   const broadcastEnabled = process.argv.includes('--broadcast') || process.env.ZEROKIT_BROADCAST === '1';
-  interface SessionEntry { transport: InstanceType<typeof StreamableHTTPServerTransport>; server: import('@modelcontextprotocol/sdk/server/index.js').Server; clientId: string; connectedAt: number }
+  interface SessionEntry { transport: InstanceType<typeof StreamableHTTPServerTransport>; server: import('@modelcontextprotocol/sdk/server/index.js').Server; clientId: string; connectedAt: number; filters?: string[] }  // 298①：tool 前缀过滤集（空=全收）
   const transports = new Map<string, SessionEntry>();
   // 296①②③：广播频率控制——节流 + 静默窗口 + 丢弃计数（防 watch+chain 高频刷屏）
   const bcConfig = readBroadcastConfig();
   const lastBroadcast = new Map<string, number>();  // method → 上次广播时刻
-  const dropped = { count: 0 };
+  const dropped = { count: 0, filtered: 0 };
   const inQuiet = (): boolean => {
     if (!bcConfig.quiet) return false;
     const [s2, e2] = bcConfig.quiet.split('-');
@@ -705,8 +705,14 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
       if (now3 - last < bcConfig.minIntervalMs) { dropped.count += 1; return; }
       lastBroadcast.set(method, now3);
     }
+    // 298③：tool 前缀过滤——data 里的 tool 名不匹配会话声明的 filters 则跳过该会话（presence ④豁免）
+    const toolName = typeof params.data === 'string' ? (/"tool":"([^"]+)"/.exec(params.data)?.[1] ?? '') : '';
     for (const [sid, entry] of transports) {
       if (sid === fromSid || sid === 'pending') continue;
+      if (!isPresence && toolName && entry.filters && entry.filters.length > 0 && !entry.filters.some((f) => toolName.startsWith(f))) {
+        dropped.filtered += 1;
+        continue;
+      }
       try { await (entry.server as unknown as { sendLoggingMessage: (a: { level: string; data: unknown }) => Promise<void> }).sendLoggingMessage({ level: String(params.level ?? 'info'), data: params.data }); } catch { /* 单会话失败不阻断 */ }
     }
   };
@@ -725,7 +731,7 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
         session: sid.slice(-8),
       }));
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ count: sessions.length, sessions, droppedBroadcasts: dropped.count }, null, 2));
+      res.end(JSON.stringify({ count: sessions.length, sessions, droppedBroadcasts: dropped.count, filteredBroadcasts: dropped.filtered }, null, 2));
       return;
     }
     if (url.pathname !== '/mcp') { res.writeHead(404).end(); return; }
@@ -748,7 +754,14 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
         const sessionServer = buildMcpServer();
         await sessionServer.connect(t);
         const sid2 = (t as unknown as { sessionId?: string }).sessionId;
-        transports.set(sid2 ?? 'pending', { transport: t, server: sessionServer, clientId: String(req.headers['x-client-id'] ?? sid2 ?? 'anon'), connectedAt: Date.now() });
+        // 298②：客户端过滤声明（initialize params.clientInfo.filterTools——tool 名前缀集）
+        let filters: string[] | undefined;
+        try {
+          const parsed = body ? JSON.parse(body) as { params?: { clientInfo?: { filterTools?: unknown } } } : null;
+          const ft = parsed?.params?.clientInfo?.filterTools;
+          if (Array.isArray(ft) && ft.length > 0) filters = ft.map(String);
+        } catch { /* 声明解析失败=不过滤 */ }
+        transports.set(sid2 ?? 'pending', { transport: t, server: sessionServer, clientId: String(req.headers['x-client-id'] ?? sid2 ?? 'anon'), connectedAt: Date.now(), ...(filters ? { filters } : {}) });
         entry = transports.get(sid2 ?? 'pending')!;
       }
       const t = entry.transport;
