@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.10.0] - 2026-11-15
+
+### Added
+
 - 广播过滤订阅（297 复盘建议 1 第一项，v4 协作面深化）：SessionEntry 加 filters（tool 名前缀集，空=全收）；客户端声明走 initialize params.clientInfo.filterTools（string[]——标准 MCP 握手参数内携带，无需扩展协议）；notifyOthers 发送前按 tool 名前缀匹配（不匹配跳过该会话）；presence 豁免（joined/left 永远全发）；filtered 单列计数进 /mcp/sessions（filteredBroadcasts）；bcastfilter298 4 断言（活体：B 声明只收 demochain → sysinfo 被滤、demochain 命中、filtered≥1、presence 不受影响）；基线 3334→3338。
 
 ## [4.9.0] - 2026-11-14
@@ -71,10 +77,4 @@
 ### Added
 
 - 发布链操作手册（284 复盘清债③）：docs/reference/release-runbook.md——标准五步（feature/prep/release+tag/资产/收尾，逐条命令与预期）；事故分类处置表三张（网络类：DNS 瞬态/CDN 504/registry；CI 类：cdp flake/断言数下降【270 型结构性丢失】/跨平台差/总览异常/rerun running；发布类：draft 422 顺序/资产陈旧/30 分钟不齐/poll 卡 pending）——全部 284 轮以来实录判据；幂等重入三则（--failed 先确认瞬态、draft=false 先于 edit、tag 删再推）；271 基线联动（≥ 基线 / --force 显式降）；docs/README 导航；runbook287 8 断言防漂移；基线 3276→3284。
-
-## [3.78.0] - 2026-11-13
-
-### Added
-
-- 契约测试快道（284 复盘清债②）：scripts/contract.sh + npm run contract——结构契约类单独秒级入口（openapicontract279 API 契约 8 断言 + domain-faces 注入面契约 18 断言连跑，实测 760ms vs 全量 ~10min——契约破坏反馈距离从「PR CI」缩到「即改即验」）；CONTRIBUTING/CLAUDE.md 开发流程提及（改 server API 面 / web api() 调用 / 域文件注入面后先跑）。
 
