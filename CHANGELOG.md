@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.14.0] - 2026-11-19
+
+### Added
+
 - 管道 DSL 指南（300 轮盘点候选 1 第二项，数据深化收尾②）：docs/guide/data-pipelines.md——chain 基础（params 传值/引用规则）→ pipe（stdout 直通 stdin）→ export（mode/rowsLimit/from 路径与类型）→ read（首行捷径/_rows/_all）→ watch 调度（触发管道配置）全链一图 + 每节可运行示例（全部来自 demochain 真实动作）+ 组合模式速查表四行（取数→变换→落盘 / 读回→回写 / 定时积累 / 读回再加工）；plugin-spec 互链 + docs/README 导航；pipedsl302 6 断言（五节齐全/实例引用/速查表/互链/导航/闭环可跑）；基线 3355→3361。数据深化收尾完成（300 轮盘点候选 1 两项全清）。
 
 ## [4.13.0] - 2026-11-19
@@ -71,10 +77,4 @@
 ### Added
 
 - chain pipe 管道原语（v4 主题②「数据工作流」起步）：ChainStep 加 pipe = true（清单语法 + parseChainSteps 解析）；RunOptions.stdinData → execArgv stdio pipe（写入后 end——下游读 EOF 即处理完）；chain 执行循环 pipe 步拿上一步 stdout 作 stdin（无上一步输出空串）；审计成功 reason 标注 pipe 步数（chain-ok (N pipe 步)）；错误传播沿用既有链停语义（断在第 N 步，后续不执行——291④ 实测 SHOULD-NOT-RUN 未出现）；demochain 加 pipe-count 示例（gen 14 字符 → count-stdin 数回 14）；plugin-spec pipe 行；chainpipe291 6 断言；基线 3299→3305。
-
-## [4.2.0] - 2026-11-13
-
-### Added
-
-- 协作状态同步 presence（v4 协作面第二步）：会话加入广播（initialize 成功后其余会话收 session-joined 含 clientId）；会话离开广播（DELETE 后 session-left）；GET /mcp/sessions 在线清单（token 同面鉴权；clientId/connectedAt/sid 尾段——sid 全段不泄）；zkit mcp sessions --http [端口] CLI 查询（需 ZEROKIT_TOKEN 同 serve）；presence 广播同走 fromSid 排除与工具广播共用风暴防护；mcppresence290 6 断言（加入/离开/清单两态/CLI/风暴自排除）；289 测试断言适配 290 代码形态（hook 调用点 1→3）；基线 3293→3299。
 
