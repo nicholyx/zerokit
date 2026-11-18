@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.11.0] - 2026-11-19
+
+### Added
+
 - 协作锁（297 复盘建议 1 第二项，v4 协作面深化）：coopLocks 模块级注册表（key → sid/clientId/since；--broadcast 开启才启用；read 不锁）；CallTool 授权闸前检查——同 key 已被他会话持有返回 busy-locked（含 holder clientId + since）+ 结构化 error；**修两个真缺陷**：①授权拒绝路径不释放锁（泄漏——299 排障定位：B busy 但 A 的 handler 从未进 runAction，链路工具未 allow 提前 return）②同 sid 重入不重置锁（SDK POST 重放）；释放三路：完成/失败 finally（闭包捕获 mySid——模块级 currentSid 被并发请求覆盖的坑）+ 授权拒绝 + DELETE 断连批量释放；sessions 端点带 locks 视图；mcplock299 8 断言（互斥/持锁/轮询释放/重试/read 并发/断连）；**perf-guard 加 load>3 降级豁免**（本机外部进程 45% CPU 抢占时冷启动 300-410ms 间歇红——CI 干净机仍守 300ms 真回归）；基线 3338→3346。
 
 ## [4.10.0] - 2026-11-15
@@ -71,10 +77,4 @@
 ### Added
 
 - **v4.0.0 起航**——v3 线（v3.1.0–v3.79.0，79 个 minor）收束，v4 线开线。切换前体检全绿（3284 断言基线 / 契约快道 776ms / 八审计 lint / 284 清债三条前置完成）。v4 主题（自 v4-outlook 议题池，按 272 对账 + 284 复盘排定）：① 远程协作面（MCP 远程化已就绪为底座——多客户端共享工作台）；② 数据工作流（watch 聚合/结构化 diff/zerocol 导出三件套为底座——管道化编排）；③ 桌面增强（冻结解除条件：出现真实桌面用户诉求）。技术基线：测试 149 文件 3284 断言、发布链手册化、契约双快道、签名链就绪。
-
-## [3.79.0] - 2026-11-13
-
-### Added
-
-- 发布链操作手册（284 复盘清债③）：docs/reference/release-runbook.md——标准五步（feature/prep/release+tag/资产/收尾，逐条命令与预期）；事故分类处置表三张（网络类：DNS 瞬态/CDN 504/registry；CI 类：cdp flake/断言数下降【270 型结构性丢失】/跨平台差/总览异常/rerun running；发布类：draft 422 顺序/资产陈旧/30 分钟不齐/poll 卡 pending）——全部 284 轮以来实录判据；幂等重入三则（--failed 先确认瞬态、draft=false 先于 edit、tag 删再推）；271 基线联动（≥ 基线 / --force 显式降）；docs/README 导航；runbook287 8 断言防漂移；基线 3276→3284。
 
