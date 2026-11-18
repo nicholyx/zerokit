@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- 管道 DSL 指南（300 轮盘点候选 1 第二项，数据深化收尾②）：docs/guide/data-pipelines.md——chain 基础（params 传值/引用规则）→ pipe（stdout 直通 stdin）→ export（mode/rowsLimit/from 路径与类型）→ read（首行捷径/_rows/_all）→ watch 调度（触发管道配置）全链一图 + 每节可运行示例（全部来自 demochain 真实动作）+ 组合模式速查表四行（取数→变换→落盘 / 读回→回写 / 定时积累 / 读回再加工）；plugin-spec 互链 + docs/README 导航；pipedsl302 6 断言（五节齐全/实例引用/速查表/互链/导航/闭环可跑）；基线 3355→3361。数据深化收尾完成（300 轮盘点候选 1 两项全清）。
 
 ## [4.13.0] - 2026-11-19
 
