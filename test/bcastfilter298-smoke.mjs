@@ -46,11 +46,15 @@ await fetch(BASE, { method: 'POST', headers: { ...H, 'mcp-session-id': A.sid }, 
 await new Promise((r) => setTimeout(r, 900));
 check('③ sysinfo 被过滤（B 不收 tool-call）', !(bText.includes('sysinfo__overview')) || !bText.includes('tool-call'), `bText=${bText.slice(0, 100)}`);
 
-// A 再调 demochain（B 应收）
-await new Promise((r) => setTimeout(r, 2200));  // 节流窗口外
+// A 再调 demochain（B 应收）——等节流窗口过后发，收流用轮询（Windows 时序余量）
+await new Promise((r) => setTimeout(r, 2600));
 await fetch(BASE, { method: 'POST', headers: { ...H, 'mcp-session-id': A.sid }, body: JSON.stringify({ jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'demochain__gen', arguments: {} } }) });
-await new Promise((r) => setTimeout(r, 900));
-check('③ demochain 命中过滤（B 收到 tool-call）', bText.includes('demochain__gen') && bText.includes('tool-call'), bText.slice(0, 100));
+let hit = false;
+for (let i = 0; i < 20; i++) {
+  if (bText.includes('demochain__gen') && bText.includes('tool-call')) { hit = true; break; }
+  await new Promise((r) => setTimeout(r, 400));
+}
+check('③ demochain 命中过滤（B 收到 tool-call）', hit, bText.slice(0, 100));
 
 // ⑤ filtered 计数
 const sess = await fetch(`http://127.0.0.1:${PORT}/mcp/sessions`, { headers: { 'x-zerokit-token': TOKEN } }).then((r) => r.json());
