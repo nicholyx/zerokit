@@ -61,6 +61,9 @@ else
 fi
 
 # a11y 静态扫描（第六十六轮）：已知反模式正则盘点
+echo "=== web JS 严格度巡检（303 轮——getter 误用/裸解构）==="
+run "web JS 严格度" node scripts/web-strict-check.mjs
+
 echo "=== i18n 扫描 ==="
 node scripts/contrast-audit.mjs > /dev/null || { echo "对比度审计未达标"; exit 1; }
 node scripts/cli-copy-audit.mjs > /dev/null || { echo "CLI 文案审计未达标"; exit 1; }
