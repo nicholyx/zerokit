@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.15.0] - 2026-11-19
+
+### Added
+
 - 跨浏览器语法差异巡检（300 轮盘点候选 3 第一项，稳定性长跑①）：全量扫 web/*.js 的 V8 严格度敏感模式（getter 误用当 setter / 语句位置裸解构赋值）——**当前 0 处残留**（299 轮已清 logs.js 重灾区）；**正本清源**：X.get(k) = v 是 MemberExpression 赋值——语法合法但语义错误（给 getter 返回的临时对象赋值，store 永不更新→静默失效；CI 的 SyntaxError 归因 logs.js 是模块级连锁，4 处 getter 误用是 0/12 面板的真因）；新增 scripts/web-strict-check.mjs（语义正则 .get(k) = 精确命中、成员赋值与比较不误报、注释行跳过——注入样本自证 exit≠0）；lint.sh 挂载新审计线（第九线）；webstrict303 5 断言（注入可抓/全量 0 处/logs 修复保持/cdp URL 捕获保持/lint 挂载）；基线 3361→3366。
 
 ## [4.14.0] - 2026-11-19
@@ -71,10 +77,4 @@
 ### Added
 
 - zerocol 导出 chain step 化（v4 数据工作流第二步——管道末端原语）：内建伪引用 use = "builtin.zerocol-export"（无需真实插件动作；plan 静态校验放行 + 执行循环特判）；params file（落 data_dir）+ columns（name/type/from 取值路径——dots 寻址到前步 alias.data.字段 或 alias.stdout）；导出结果回报路径与行列数（data: path/rows/columns）；**修依赖收集真缺陷**：builtin 伪引用曾被当插件依赖致 doctor 报「缺少插件依赖：builtin」——collectDeps 跳过 builtin.*；demochain pipe-export 示例（gen 21 → pipe 计数 → zerocol 落盘 2 列）；plugin-spec 导出步行；zerocolstep292 6 断言；基线 3305→3311。数据工作流闭环成形：取数→pipe 变换→zerocol 落盘。
-
-## [4.3.0] - 2026-11-14
-
-### Added
-
-- chain pipe 管道原语（v4 主题②「数据工作流」起步）：ChainStep 加 pipe = true（清单语法 + parseChainSteps 解析）；RunOptions.stdinData → execArgv stdio pipe（写入后 end——下游读 EOF 即处理完）；chain 执行循环 pipe 步拿上一步 stdout 作 stdin（无上一步输出空串）；审计成功 reason 标注 pipe 步数（chain-ok (N pipe 步)）；错误传播沿用既有链停语义（断在第 N 步，后续不执行——291④ 实测 SHOULD-NOT-RUN 未出现）；demochain 加 pipe-count 示例（gen 14 字符 → count-stdin 数回 14）；plugin-spec pipe 行；chainpipe291 6 断言；基线 3299→3305。
 
