@@ -82,7 +82,7 @@ async function renderLogs() {
     b.addEventListener('click', () => { logsState().set('logsRange', b.dataset.logRange); logsToday = logsState().get('logsRange') === 'today'; logsState().set('logsPage', 1); renderLogs(); });
   });
   el.logsView.querySelectorAll('[data-log-plugin]').forEach((b) => {
-    b.addEventListener('click', () => { logsState().get('logsPlugin') = logsState().get('logsPlugin') === b.dataset.logPlugin ? '' : b.dataset.logPlugin; logsState().set('logsPage', 1); renderLogs(); });
+    b.addEventListener('click', () => { logsState().set('logsPlugin', logsState().get('logsPlugin') === b.dataset.logPlugin ? '' : b.dataset.logPlugin); logsState().set('logsPage', 1); renderLogs(); });
   });
   $('logQuery').addEventListener('change', () => { logsState().set('logsQuery', $('logQuery').value.trim()); logsState().set('logsPage', 1); renderLogs(); });
   $('logReload').addEventListener('click', renderLogs);
@@ -131,7 +131,7 @@ async function renderLogs() {
     } catch (err) { setCount(`导出失败：${err.message}`); }
   });
   $('logFile').addEventListener('click', () => {
-    logsState().get('logsFile') = logsState().get('logsFile') === 'audit' ? 'denied' : 'audit';
+    logsState().set('logsFile', logsState().get('logsFile') === 'audit' ? 'denied' : 'audit');
     logsState().set('logsPage', 1);
     renderLogs();
   });
@@ -147,7 +147,7 @@ async function renderLogs() {
     if (logsState().get('logsRange')) data.entries = filterAudit(data.entries ?? [], { range: logsState().get('logsRange') });
     // 插件 chip 候选：从当前页数据的插件集合取（去重保序）
     const prevPlugins = logsState().get('logsPlugins').join(',');
-    logsState().get('logsPlugins') = [...new Set((data.entries ?? []).map((e) => e.plugin).filter(Boolean))];
+    logsState().set('logsPlugins', [...new Set((data.entries ?? []).map((e) => e.plugin).filter(Boolean))]);
     if (logsState().get('logsPlugins').join(',') !== prevPlugins) {
       // 首次拿到集合（或集合变了）：把插件 chip 增补到「今天」chip 之后，再重绑
       const holder = el.logsView.querySelector('.chips');
@@ -163,7 +163,7 @@ async function renderLogs() {
         }
         holder.appendChild(frag);
         holder.querySelectorAll('[data-log-plugin]').forEach((b) => {
-          b.addEventListener('click', () => { logsState().get('logsPlugin') = logsState().get('logsPlugin') === b.dataset.logPlugin ? '' : b.dataset.logPlugin; logsState().set('logsPage', 1); renderLogs(); });
+          b.addEventListener('click', () => { logsState().set('logsPlugin', logsState().get('logsPlugin') === b.dataset.logPlugin ? '' : b.dataset.logPlugin); logsState().set('logsPage', 1); renderLogs(); });
         });
       }
     }

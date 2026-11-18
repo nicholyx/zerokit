@@ -324,6 +324,13 @@ function findByName(name: string): { plugin: Plugin; action: Action } | undefine
 /** 第二百八十九轮②③：协作广播钩子——serveHttp 注册实现；stdio 模式无注册（零行为） */
 let broadcastHook: ((method: string, params: Record<string, unknown>) => Promise<void>) | null = null;
 
+/** 第二百九十九轮①：协作锁注册表（模块级——CallTool 与 serveHttp 共享；--broadcast 开启才启用，read 不锁） */
+const coopLocks = new Map<string, { sid: string; clientId: string; since: number }>();
+/** 299 会话名映射（sid → clientId；serveHttp 维护，CallTool 查询） */
+const sessionNames = new Map<string, string>();
+const isBroadcastOn = (): boolean => process.env.ZEROKIT_BROADCAST === '1' || process.argv.includes('--broadcast');
+let currentSid = '';  // 299②：当前请求会话（serveHttp 请求线程写）
+
 /** 第二百七十七轮①：server 实例构造与传输绑定分离——setRequestHandler 全复用，stdio/http 同一实例形态 */
 function buildMcpServer(): Server {
   const server = new Server(
@@ -496,7 +503,27 @@ function buildMcpServer(): Server {
     const { plugin, action } = found;
 
     const allow = loadAllow();
+    // 299②：协作锁——mutate/destructive 且 --broadcast 开启时，同 key 已被其他会话持有 → busy
+    const lockEligible = isBroadcastOn() && action.risk !== 'read';
+    let mySid: string | undefined;  // 299③：加锁时刻捕获（handler 顶层声明——finally 可见）
+    const lockKey = toolName(plugin.id, action.id);
+    if (lockEligible) {
+      const held = coopLocks.get(lockKey);
+      if (held && held.sid !== currentSid) {
+        return {
+          content: [{ type: 'text', text: `工具 ${lockKey} 正在被 ${held.clientId} 执行（自 ${new Date(held.since).toISOString().slice(11, 19)}）——协作锁互斥，请稍后重试` }],
+          isError: true,
+          structuredContent: { error: 'busy-locked', holder: held.clientId, since: new Date(held.since).toISOString() },
+        };
+      }
+      mySid = currentSid;
+      // 299②：同 sid 重入（SDK POST 重放/同会话并发）不重置锁——首个请求的 finally 负责释放
+      if (coopLocks.get(lockKey)?.sid !== mySid) {
+        coopLocks.set(lockKey, { sid: mySid, clientId: sessionNames.get(mySid) ?? `session-${mySid.slice(-6)}`, since: Date.now() });
+      }
+    }
     if (!isAllowed(plugin, action, allow)) {
+      if (mySid !== undefined) coopLocks.delete(lockKey);  // 299③：授权拒绝也释放（防泄漏——holder 未跑不该占锁）
       const key = `${plugin.id}.${action.id}`;
       audit({
         ts: new Date().toISOString(), plugin: plugin.id, action: action.id,
@@ -567,6 +594,7 @@ function buildMcpServer(): Server {
       result = await runAction(plugin, action, { caller: 'mcp', values: withDefaults.values });
     } finally {
       mcpInflight.set(name, Math.max(0, (mcpInflight.get(name) ?? 1) - 1));
+      if (mySid !== undefined && coopLocks.get(toolName(plugin.id, action.id))?.sid === mySid) { coopLocks.delete(toolName(plugin.id, action.id)); if (process.env.ZK_DBG) console.error(`[unlock] key=${toolName(plugin.id, action.id)} sid=${mySid.slice(-8)}`); }
     }
 
     // ③出口统一脱敏：不管成功失败，出的门的数据不能带敏感值
@@ -717,8 +745,7 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
     }
   };
   // ② 广播钩子注册：CallTool 成功后由 buildMcpServer 侧调用；fromSid 从当前请求头取（模块级 currentSid）
-  let currentSid = '';
-  broadcastHook = async (method, params) => { await notifyOthers(currentSid, method, params); };
+  broadcastHook = async (method, params) => { await notifyOthers(currentSid, method, params); };  // 299：currentSid 用模块级（局部声明已删——曾遮蔽致 handler 恒读空串）
   const srv = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
     // 第二百九十轮③：在线会话清单（token 同面鉴权）
@@ -731,7 +758,8 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
         session: sid.slice(-8),
       }));
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ count: sessions.length, sessions, droppedBroadcasts: dropped.count, filteredBroadcasts: dropped.filtered }, null, 2));
+      const locks = [...coopLocks.entries()].map(([tool, l]) => ({ tool, holder: l.clientId, since: new Date(l.since).toISOString().slice(11, 19) }));
+      res.end(JSON.stringify({ count: sessions.length, sessions, droppedBroadcasts: dropped.count, filteredBroadcasts: dropped.filtered, locks }, null, 2));
       return;
     }
     if (url.pathname !== '/mcp') { res.writeHead(404).end(); return; }
@@ -769,6 +797,7 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
       const sidAfter = (t as unknown as { sessionId?: string }).sessionId;
       if (sidAfter && transports.has('pending')) {
         transports.set(sidAfter, transports.get('pending')!); transports.delete('pending');
+        sessionNames.set(sidAfter, transports.get(sidAfter)?.clientId ?? sidAfter);  // 299②：锁 holder 名可读
         // 第二百九十轮①：会话加入广播（其余会话收 session-joined 含 clientId）
         currentSid = sidAfter;
         if (broadcastHook && body.includes('initialize')) {
@@ -783,6 +812,9 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
       if (entry) {
         await entry.transport.close();
         transports.delete(sid as string);
+        // 299③：断连释放该会话持有的全部锁 + 名字映射
+        for (const [lk, lv] of coopLocks) if (lv.sid === sid) coopLocks.delete(lk);
+        sessionNames.delete(sid as string);
         // 第二百九十轮②：会话离开广播
         currentSid = sid as string;
         if (broadcastHook) {
