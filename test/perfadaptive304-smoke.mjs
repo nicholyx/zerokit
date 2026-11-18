@@ -24,7 +24,7 @@ check('④ 报告带基线/实测/阈值来源', src.includes('基线') && src.i
 let ok = true;
 let tail = '';
 try {
-  const out = execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'perf-guard.mjs')], { stdio: 'pipe', timeout: 600000, encoding: 'utf8' });
+  const out = execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'perf-guard.mjs')], { cwd: ROOT, stdio: 'pipe', timeout: 600000, encoding: 'utf8' });
   tail = out;
 } catch (e) {
   ok = false;
