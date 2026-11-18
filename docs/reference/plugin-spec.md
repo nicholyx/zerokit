@@ -292,6 +292,7 @@ env_pass = ["HTTP_PROXY"]  # 环境变量白名单：声明后宿主机其余变
 | `pipe` | bool | chain step 专用：`pipe = true` 时上一步 stdout 作为本步骤 stdin（数据工作流原语——291 轮） |
 | `builtin.zerocol-export` | 内建步 | chain step 的 `use` 可写此伪引用（无需真实动作）：params 给 `file`（落 data_dir）与 `columns`（name/type/from 取值路径——292 轮） |
 | `builtin.zerocol-read` | 内建步 | 读回步：params 给 `file`（data_dir 下的 zerocol 文件）——data 带全列首行 + _rows/_columns/_all（294 轮） |
+| export `mode`/`rowsLimit` | 内建步参数 | `mode = "append"` 追加模式（默认 overwrite）；`rowsLimit`（默认 1000）行数上限；新列声明对旧行补 null 占位（301 轮） |
 | `description` | | 会进 MCP 的 `inputSchema.description`，是模型判断传什么的依据 |
 | `required` | | 默认 `false` |
 | `default` | | 默认值 |

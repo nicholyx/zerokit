@@ -124,3 +124,23 @@ params = { file = "pipe-roundtrip-out", columns = [
   { name = "value", type = "int", from = "back.data.value" },
   { name = "chars", type = "int", from = "back.data.chars" },
 ] }
+
+# 第三百零一轮⑤：append 示例——多行积累（每次执行追加一行）
+[[action]]
+id      = "pipe-append"
+title   = "追加导出"
+description = "多行演示：gen 产数 → zerocol append 追加。跑几次就是几行。"
+type    = "chain"
+risk    = "read"
+template = "{saved}"
+
+[[action.step]]
+use = "self.gen"
+as  = "first"
+
+[[action.step]]
+use = "builtin.zerocol-export"
+as  = "saved"
+params = { file = "append-demo", mode = "append", columns = [
+  { name = "value", type = "int", from = "first.data.value" },
+] }

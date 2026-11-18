@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- zerocol 多行导出（300 轮盘点候选 1 第一项，数据深化收尾①）：export 步 mode = "append"（默认 overwrite 保持现状）+ rowsLimit（默认 1000——**kebab 不过 PARAM_RE**，参数名用 camelCase）；append 实现——读旧文件按新列声明对齐合并（**行对齐补 null**：旧行在新列上占位——初版漏此导致旧行丢失，最小复现定位）；回报带 mode 与合并后行数；demochain pipe-append 示例（跑三次 3 行）；plugin-spec mode/rowsLimit 行；zerocolappend301 4 断言（append/上限截断/新列补空/回报）；292/294 回归全绿；基线 3351→3355。时序数据集成形：watch（295）触发 + append 积累 + read 端 _all 消费。
 
 ## [4.12.0] - 2026-11-19
 
