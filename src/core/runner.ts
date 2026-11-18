@@ -1229,13 +1229,15 @@ async function runChainAction(
       continue;
     }
 
-    // 292②③④：内建 zerocol 导出步——从上一步结果取值落列式文件
+    // 292②③④ / 301①②③④：内建 zerocol 导出步——mode=append 时合并已有文件（多行积累）
     if (item.step.use === 'builtin.zerocol-export') {
       const file = typeof item.step.params['file'] === 'string' ? String(item.step.params['file']) : '';
       const colsRaw = Array.isArray(item.step.params['columns']) ? item.step.params['columns'] as Array<Record<string, unknown>> : [];
       if (!file || colsRaw.length === 0) {
         return fail('chain-export-bad-params', `${label} 需要 file（文件名）与 columns（列声明 name/type/from）`);
       }
+      const mode = item.step.params['mode'] === 'append' ? 'append' : 'overwrite';
+      const rowsLimit = typeof item.step.params['rowsLimit'] === 'number' ? Math.max(1, Math.floor(item.step.params['rowsLimit'] as number)) : 1000;
       const { exportZeroCol } = await import('./arrowIpc.ts');
       const pathModule = await import('node:path');
       const { DATA_DIR, ensureDirs } = await import('./paths.ts');
@@ -1250,16 +1252,38 @@ async function runChainAction(
         }, srcMap);
         return { name, type, values: [src] } as { name: string; type: 'int' | 'double' | 'string'; values: unknown[] };
       });
-      const zc = exportZeroCol(cols);
-      ensureDirs();
+      // 301②：append 合并（新列声明为准；旧缺列当空、旧多列丢弃）+ rows-limit 截断
       const outPath = pathModule.join(DATA_DIR, file.endsWith('.zerocol.json') ? file : `${file}.zerocol.json`);
       const fsMod = await import('node:fs');
+      let finalCols = cols;
+      if (mode === 'append' && fsMod.existsSync(outPath)) {
+        try {
+          const oldZc = JSON.parse(fsMod.readFileSync(outPath, 'utf8')) as { format?: string; data?: string };
+          if (oldZc.format === 'zerocol' && typeof oldZc.data === 'string') {
+            const { importZeroCol } = await import('./arrowIpc.ts');
+            const oldCols = importZeroCol(oldZc as never);
+            const oldByName = new Map(oldCols.map((c) => [c.name, c]));
+            const oldRows = Math.max(0, ...oldCols.map((c) => c.values.length));
+            const newRows = Math.max(0, ...cols.map((c) => c.values.length));
+            finalCols = cols.map((c) => {
+              const oc = oldByName.get(c.name);
+              const oldVals = oc?.values ?? [];
+              // 旧行对齐：该列旧值不足 oldRows 的部分（含整列缺失）补 null 占位
+              const paddedOld = [...oldVals, ...Array.from({ length: oldRows - oldVals.length }, () => null)];
+              return { ...c, values: [...paddedOld, ...c.values].slice(-(oldRows + newRows)) };
+            });
+          }
+        } catch { /* 旧文件坏——当空表 */ }
+      }
+      finalCols = finalCols.map((c) => ({ ...c, values: c.values.slice(-rowsLimit) }));
+      const zc = exportZeroCol(finalCols);
+      ensureDirs();
       fsMod.writeFileSync(outPath, JSON.stringify(zc, null, 2));
-      const rowCount = cols[0]?.values.length ?? 0;
+      const rowCount = finalCols[0]?.values.length ?? 0;
       const exportResult: RunResult = {
         ok: true, exitCode: 0, stdout: `已导出 ${outPath}（${rowCount} 行，${cols.length} 列）`, stderr: '',
-        ms: Date.now() - started, truncated: false, data: { path: outPath, rows: rowCount, columns: cols.length },
-        argv: [], command: `zerocol-export → ${outPath}`,
+        ms: Date.now() - started, truncated: false, data: { path: outPath, rows: rowCount, columns: finalCols.length, ...(mode === 'append' ? { mode: 'append' } : {}) },
+        argv: [], command: `zerocol-export(${mode}) → ${outPath}`,
       };
       results.set(item.step.as, exportResult);
       outputs.push({ alias: item.step.as, result: exportResult });
