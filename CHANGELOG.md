@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.13.0] - 2026-11-19
+
+### Added
+
 - zerocol 多行导出（300 轮盘点候选 1 第一项，数据深化收尾①）：export 步 mode = "append"（默认 overwrite 保持现状）+ rowsLimit（默认 1000——**kebab 不过 PARAM_RE**，参数名用 camelCase）；append 实现——读旧文件按新列声明对齐合并（**行对齐补 null**：旧行在新列上占位——初版漏此导致旧行丢失，最小复现定位）；回报带 mode 与合并后行数；demochain pipe-append 示例（跑三次 3 行）；plugin-spec mode/rowsLimit 行；zerocolappend301 4 断言（append/上限截断/新列补空/回报）；292/294 回归全绿；基线 3351→3355。时序数据集成形：watch（295）触发 + append 积累 + read 端 _all 消费。
 
 ## [4.12.0] - 2026-11-19
@@ -71,10 +77,4 @@
 ### Added
 
 - 协作状态同步 presence（v4 协作面第二步）：会话加入广播（initialize 成功后其余会话收 session-joined 含 clientId）；会话离开广播（DELETE 后 session-left）；GET /mcp/sessions 在线清单（token 同面鉴权；clientId/connectedAt/sid 尾段——sid 全段不泄）；zkit mcp sessions --http [端口] CLI 查询（需 ZEROKIT_TOKEN 同 serve）；presence 广播同走 fromSid 排除与工具广播共用风暴防护；mcppresence290 6 断言（加入/离开/清单两态/CLI/风暴自排除）；289 测试断言适配 290 代码形态（hook 调用点 1→3）；基线 3293→3299。
-
-## [4.1.0] - 2026-11-13
-
-### Added
-
-- 多客户端会话广播（v4 主题①「远程协作面」起步）：serveHttp 会话表升级（SessionEntry 带 clientId/connectedAt）；tools/call 成功后其余会话收通用通知（sendLoggingMessage 路由——SDK Server 无公有 sendNotification，280 轮的特化方法经验推广；logging 能力声明）；**修复 277 轮遗留真 bug：每会话独立 server 实例**（SDK Server 单 transport 设计——复用 connect 会踢掉前一连接，双客户端实测暴露，此前单客户端测试从未触发）；广播风暴防护（hook 单点 + fromSid 排除自身）；--broadcast 开关默认关（ZEROKIT_BROADCAST env 等价）；DELETE 断连清出；mcpbroadcast289 9 断言（双客户端活体实收/风暴计数=1）；回归三件套 277/280/289 全绿；基线 3284→3293。
 
