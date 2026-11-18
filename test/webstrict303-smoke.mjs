@@ -1,6 +1,7 @@
 // 第三百零三轮：web 严格度巡检——getter 误用可被抓 / 全量 0 处 / cdp 回归
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,7 +12,7 @@ console.log('webstrict303-smoke');
 
 // ① 巡检脚本自身：注入 getter 误用应非零退出
 const script = path.join(ROOT, 'scripts', 'web-strict-check.mjs');
-const tmpd = fs.mkdtempSync(path.join(path.sep, 'tmp', 'ws303-'));
+const tmpd = fs.mkdtempSync(path.join(os.tmpdir(), 'ws303-'));
 const fakedir = path.join(tmpd, 'web');
 fs.mkdirSync(fakedir);
 const real = fs.readFileSync(script, 'utf8');
