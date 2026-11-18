@@ -68,7 +68,7 @@ try {
   ws.addEventListener('message', (ev) => {
     const m = JSON.parse(ev.data);
     if (m.id && pending.has(m.id)) { pending.get(m.id)(m.result); pending.delete(m.id); }
-    if (m.method === 'Runtime.exceptionThrown') errors.push((m.params.exceptionDetails?.exception?.description ?? m.params.exceptionDetails?.text ?? '').split('\n')[0]);
+    if (m.method === 'Runtime.exceptionThrown') { const d = m.params.exceptionDetails; const desc = (d.exception?.description ?? d.text ?? ''); const url = d.url ?? d.stackTrace?.callFrames?.[0]?.url ?? ''; errors.push((desc.split('\n')[0] + ' @ ' + (url || 'inline')).slice(0, 200)); }
     if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') errors.push(m.params.args.map((a) => a.value ?? a.description ?? '').join(' ').slice(0, 120));
   });
   await new Promise((r) => ws.addEventListener('open', r));
