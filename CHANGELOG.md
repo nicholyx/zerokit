@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.26.0] - 2026-11-19
+
+### Added
+
 - dataflow 注释升级（活教材跟上新能力）：plugin.toml 头注释三种用法（手动跑 / watch 触发无人值守——触发管道填 dataflow.append-ts + 面板 ⛓ 徽标 / consume-detail 内置统计）；append-ts 注释补触发指引与 UI 读缓存 fresh 说明；consume-detail 注释补 stats 内建步第四件说明；zkit show dataflow 输出自检（闭环描述串起）；基线不变（纯注释）。
 （下一版攒着）
 
@@ -77,10 +83,4 @@
 ### Added
 
 - 跨浏览器语法差异巡检（300 轮盘点候选 3 第一项，稳定性长跑①）：全量扫 web/*.js 的 V8 严格度敏感模式（getter 误用当 setter / 语句位置裸解构赋值）——**当前 0 处残留**（299 轮已清 logs.js 重灾区）；**正本清源**：X.get(k) = v 是 MemberExpression 赋值——语法合法但语义错误（给 getter 返回的临时对象赋值，store 永不更新→静默失效；CI 的 SyntaxError 归因 logs.js 是模块级连锁，4 处 getter 误用是 0/12 面板的真因）；新增 scripts/web-strict-check.mjs（语义正则 .get(k) = 精确命中、成员赋值与比较不误报、注释行跳过——注入样本自证 exit≠0）；lint.sh 挂载新审计线（第九线）；webstrict303 5 断言（注入可抓/全量 0 处/logs 修复保持/cdp URL 捕获保持/lint 挂载）；基线 3361→3366。
-
-## [4.14.0] - 2026-11-19
-
-### Added
-
-- 管道 DSL 指南（300 轮盘点候选 1 第二项，数据深化收尾②）：docs/guide/data-pipelines.md——chain 基础（params 传值/引用规则）→ pipe（stdout 直通 stdin）→ export（mode/rowsLimit/from 路径与类型）→ read（首行捷径/_rows/_all）→ watch 调度（触发管道配置）全链一图 + 每节可运行示例（全部来自 demochain 真实动作）+ 组合模式速查表四行（取数→变换→落盘 / 读回→回写 / 定时积累 / 读回再加工）；plugin-spec 互链 + docs/README 导航；pipedsl302 6 断言（五节齐全/实例引用/速查表/互链/导航/闭环可跑）；基线 3355→3361。数据深化收尾完成（300 轮盘点候选 1 两项全清）。
 
