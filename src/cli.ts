@@ -33,7 +33,7 @@ import { makeSnapshot, parseSnapshot, restoreSnapshot, diffSnapshot } from './co
 import { listServices, stopService } from './core/services.ts';
 import {
   addMarket, buildIndex, installFromMarket, loadMarkets, previewInstall,
-  readIndex, refreshMarket, removeMarket, searchMarkets,
+  readIndex, readInstallStats, refreshMarket, removeMarket, searchMarkets,
 } from './core/market.ts';
 import { applyDefaults, parseArgv, toCliFlags, toJsonSchema } from './core/schema.ts';
 import { depHealth, depStates, depTree, dependents, findCycle, installDeps, missingDeps, topoOrder } from './core/deps.ts';
@@ -4544,6 +4544,17 @@ function cmdMarket(args: string[]): number {
   }
 
   if (sub === 'list' || sub === 'ls') {
+    // 306③：--by-installs 热度视图——跨集市按本机安装计数降序（真实使用信号）
+    if (args.includes('--by-installs')) {
+      const stats = readInstallStats();
+      const rows = Object.entries(stats).sort(([, a], [, b]) => b.installs - a.installs);
+      if (rows.length === 0) { process.stdout.write('还没有安装记录（zkit plugin install 后这里会有热度）。\n'); return 0; }
+      process.stdout.write('本机安装热度（历史累积，卸载不减）：\n');
+      for (const [id, st] of rows) {
+        process.stdout.write(`  ${c.bold(String(st.installs))} 次  ${id} ${c.dim(`v${st.lastVersion} · 最近 ${st.lastInstallAt.slice(0, 10)}`)}\n`);
+      }
+      return 0;
+    }
     const markets = loadMarkets();
     if (markets.length === 0) {
       process.stdout.write('还没有添加任何集市。\n');

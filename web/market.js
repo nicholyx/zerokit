@@ -8,6 +8,18 @@ export function createMarket(ui) {
   const { esc, t, lang, el, api, setCount, exitMarket: _exitM = () => {}, hidePanels, panelDescBar, skeletonRows, marketRiskMix, load, modeRef, panelsRef } = ui;
   __exitMarket = _exitM;
 
+
+// 306④：安装热度（真实使用信号）——面板打开时拉一次，渲染已装徽标附 🔥N
+let __mkStats = {};
+(async () => {
+  try {
+    const r = await api('/api/market-stats');
+    __mkStats = r?.stats ?? {};
+    if (typeof renderMarket === 'function') { try { renderMarket(); } catch { /* 重渲染失败不阻断 */ } }
+  } catch { /* 端点不可用静默 */ }
+})();
+function hotFor(id) { return __mkStats[id]?.installs ?? 0; }
+
 function marketMsg(text, kind = '') {
   const box = $('marketMsg');
   if (!box) return;
@@ -37,7 +49,7 @@ function marketEntryHtml(m, e) {
         <b>${esc(e.name)}</b>
         <span class="aid">${esc(e.id)}${e.version ? ` · v${esc(e.version)}` : ''}${typeof e.actionCount === 'number' ? ` · ${e.actionCount} 个动作` : ''}</span>
         <span class="badge market-src" title="来源集市">🏪 ${esc(m.name)}</span>${mixHtml}
-        ${installed ? `<span class="badge read">✓ 已装${e.installedVersion ? ` v${esc(e.installedVersion)}` : ''}</span>` : ''}
+        ${installed ? `<span class="badge read">✓ 已装${e.installedVersion ? ` v${esc(e.installedVersion)}` : ''}${hotFor(e.id) ? `<span title="本机安装计数（历史累积）"> · 🔥${esc(String(hotFor(e.id)))}</span>` : ''}</span>` : ''}
         <span class="plug-ops">
           ${installed ? '' : '<button class="primary mini" data-op="preview">安装</button>'}
         </span>
