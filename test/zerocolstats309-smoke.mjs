@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 let pass = 0, fail = 0;
@@ -119,6 +119,56 @@ params = { file = "ts-data", column = "value", ops = "min" }
 spawnSync(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'plugin', 'add', dir3], { cwd: ROOT, env, encoding: 'utf8' });
 const rsingle = run(['run', 'statssingle.single']);
 check('315④ 单数形态平铺兼容（stats.min 直取）', rsingle.status === 0 && (rsingle.stdout + '').includes('min='), (rsingle.stdout + rsingle.stderr).slice(0, 80));
+
+// 320 窗口：造 5 行 value 1..5 的已知数据，window=3 → count=3 min=3 max=5
+const dir4 = path.join(home, 'plug', 'statswin');
+fs.mkdirSync(dir4, { recursive: true });
+fs.writeFileSync(path.join(dir4, 'plugin.toml'), `[plugin]
+id = "statswin"
+name = "窗口统计"
+version = "0.1.0"
+summary = "x"
+
+[[action]]
+id = "seed"
+title = "s"
+description = "s"
+run = ["{node}", "-e", "console.log(JSON.stringify({v:1}))"]
+risk = "read"
+output = "json"
+
+[[action]]
+id = "w3"
+title = "w"
+description = "w"
+type = "chain"
+risk = "read"
+template = "count={s.data.stats.v.count} min={s.data.stats.v.min} max={s.data.stats.v.max}"
+
+[[action.step]]
+use = "builtin.zerocol-read"
+as  = "r"
+params = { file = "win-data" }
+
+[[action.step]]
+use = "builtin.zerocol-stats"
+as  = "s"
+params = { file = "win-data", columns = "v", ops = "min,max,count", window = 3 }
+`);
+spawnSync(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'plugin', 'add', dir4], { cwd: ROOT, env, encoding: 'utf8' });
+// 造数据：node 直接写 zerocol（复用 exportZeroCol 的 JSON 形态——用 append 5 次：值 1..5 经插件难控——
+// 直接写文件（与 arrowIpc 编码一致：int 列 8B LE + columns 元数据）
+const { exportZeroCol } = await import(pathToFileURL(path.join(ROOT, 'src/core/arrowIpc.ts')).href);
+fs.mkdirSync(path.join(home, 'data'), { recursive: true });
+fs.writeFileSync(path.join(home, 'data', 'win-data.zerocol.json'), JSON.stringify(exportZeroCol([{ name: 'v', type: 'int', values: [1, 2, 3, 4, 5] }])));
+const rw3 = run(['run', 'statswin.w3']);
+check('320②③ 窗口取尾（5 行 window=3 → count=3 min=3 max=5）', rw3.status === 0 && (rw3.stdout + '').includes('count=3 min=3 max=5'), (rw3.stdout + rw3.stderr).slice(0, 90));
+// window 超行数 → 取全表
+fs.writeFileSync(path.join(dir4, 'plugin.toml'), fs.readFileSync(path.join(dir4, 'plugin.toml'), 'utf8').replace('window = 3', 'window = 99'));
+spawnSync(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'plugin', 'remove', 'statswin'], { cwd: ROOT, env, encoding: 'utf8' });
+spawnSync(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'plugin', 'add', dir4], { cwd: ROOT, env, encoding: 'utf8' });
+const rw99 = run(['run', 'statswin.w3']);
+check('320② 超行取全（window=99 > 5 行 → count=5 min=1）', rw99.status === 0 && (rw99.stdout + '').includes('count=5 min=1'), (rw99.stdout + rw99.stderr).slice(0, 90));
 
 try { fs.rmSync(home, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }); } catch { /* EBUSY */ }
 console.log(`\n${'='.repeat(60)}\n通过 ${pass} / ${pass + fail}`);
