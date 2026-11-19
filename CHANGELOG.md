@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.16.0] - 2026-11-19
+
+### Added
+
 - perf 阈值机器自适应（300 轮盘点候选 3 第二项，稳定性长跑②）：perf-guard 先测本机基线（预热 3 次 JIT/文件缓存 + 取样 5 次取中位 b），阈值 = max(300 硬线, b×2.5)——健康机 b≈100ms 仍守 300 真回归；慢机/CI x86 b≈180-200 放宽到 450-500（机器差异不算回归，实测本机 load≈3 下基线 197→493 线全过）；load>3 抢占豁免保留（环境非代码）；报告行带基线/实测/阈值来源（「自适应 493ms（本机基线 197×2.5）」/「300ms 硬线」两态）；perfadaptive304 5 断言（基线采样/阈值公式/豁免保留/报告信息/活体不误伤）；基线 3366→3371。299 的粗豁免升级为精细自校准。
 
 ## [4.15.0] - 2026-11-19
@@ -71,10 +77,4 @@
 ### Added
 
 - 广播内容增强——结果摘要下发（v4 协作面第三步）：tool-call 广播载荷升级 { type, tool, ok, ms, summary }——summary 先过 maskSensitive 脱敏再分档（≤4KB 紧凑 JSON 全量直放；>4KB 走 { _truncated, head: 600 字首段, fields: fieldStats }——与 MCP 响应同款 48 轮策略复用 summarizeJson）；观察者在 SSE 流直接看到执行结果（value=21 级别），大结果 token 友好不发全文；demochain gen 描述补广播演示注记；broadcastsummary293 5 断言（载荷结构/小结果全量含 value/大结果分档实现/实收 summary）；基线 3311→3316。
-
-## [4.4.0] - 2026-11-14
-
-### Added
-
-- zerocol 导出 chain step 化（v4 数据工作流第二步——管道末端原语）：内建伪引用 use = "builtin.zerocol-export"（无需真实插件动作；plan 静态校验放行 + 执行循环特判）；params file（落 data_dir）+ columns（name/type/from 取值路径——dots 寻址到前步 alias.data.字段 或 alias.stdout）；导出结果回报路径与行列数（data: path/rows/columns）；**修依赖收集真缺陷**：builtin 伪引用曾被当插件依赖致 doctor 报「缺少插件依赖：builtin」——collectDeps 跳过 builtin.*；demochain pipe-export 示例（gen 21 → pipe 计数 → zerocol 落盘 2 列）；plugin-spec 导出步行；zerocolstep292 6 断言；基线 3305→3311。数据工作流闭环成形：取数→pipe 变换→zerocol 落盘。
 
