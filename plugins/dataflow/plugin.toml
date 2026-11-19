@@ -1,0 +1,71 @@
+[plugin]
+id = "dataflow"
+name = "数据流实战"
+version = "0.1.0"
+summary = "watch 定时积累端到端演示：产时间戳样本 → zerocol append 积累 → read 消费汇总"
+risk = "read"
+
+# 第三百零八轮：数据工作流五件套的完整闭环示例（对应 docs/guide/data-pipelines.md 的
+# 「定时积累」模式）。照抄这三个动作就能搭自己的时序数据集。
+
+# ① 产样本：一个时间戳 + 一个随机值（真实场景这里是 watch 监控的指标读数）
+[[action]]
+id = "gen-ts"
+title = "产样本"
+description = "产一个 {ts, value} 样本——真实场景这里替换成你的指标读数动作"
+run = ["{node}", "-e", "console.log(JSON.stringify({ts:new Date().toISOString(),value:Math.floor(Math.random()*100)}))"]
+risk = "read"
+output = "json"
+
+# ② 积累：append 追加一行（301 轮多行导出），rowsLimit=20 演示上限——
+#    watch 定时触发本动作（295 轮），数据集自动滚动增长
+[[action]]
+id = "append-ts"
+title = "积累样本"
+description = "append 到 ts-data（每次 +1 行，上限 20 行滚动）——配合 watch 定时触发即无人值守积累"
+type = "chain"
+risk = "read"
+template = "{saved}"
+
+[[action.step]]
+use = "self.gen-ts"
+as  = "g"
+
+[[action.step]]
+use = "builtin.zerocol-export"
+as  = "saved"
+params = { file = "ts-data", mode = "append", rowsLimit = 20, columns = [
+  { name = "ts", type = "string", from = "g.data.ts" },
+  { name = "value", type = "int", from = "g.data.value" },
+] }
+
+# ③ 消费：读回全列做汇总（294 轮 read 的 _all/_rows）——真实场景接报表/告警动作
+[[action]]
+id = "consume-ts"
+title = "消费汇总"
+description = "读回 ts-data：输出行数——数据集的报表端（标量路径只能取单值；min/max 见 consume-detail）"
+type = "chain"
+risk = "read"
+template = "📊 ts-data 共 {back.data._rows} 行样本（明细 min/max 跑 dataflow.consume-detail）"
+
+[[action.step]]
+use = "builtin.zerocol-read"
+as  = "back"
+params = { file = "ts-data" }
+
+[[action.step]]
+use = "builtin.zerocol-export"
+as  = "agg"
+params = { file = "ts-summary", columns = [
+  { name = "rows", type = "int", from = "back.data._rows" },
+] }
+
+# ③b 明细版：解析 value 列（int → 8B LE 数组；列起点 = 前面各列 bytes 之和）算 min/max
+# ——zerocol int 解码参考实现（真实汇总逻辑照这个写）
+[[action]]
+id = "consume-detail"
+title = "消费明细"
+description = "解析 ts-data 的 int 列字节算 min/max——zerocol int 解码参考实现"
+run = ["{node}", "-e", "const fs=require('fs');const p=process.env.ZEROKIT_HOME+'/data/ts-data.zerocol.json';if(!fs.existsSync(p)){console.log(JSON.stringify({rows:0,min:null,max:null}));process.exit(0)}const d=JSON.parse(fs.readFileSync(p,'utf8'));let off=0;let vc=null;for(const c of d.columns){if(c.name==='value'){vc=c;break}off+=c.bytes}const buf=Buffer.from(d.data,'base64');const vals=[];for(let i=0;i<vc.count;i++)vals.push(Number(buf.readBigInt64LE(off+i*8)));console.log(JSON.stringify({rows:vals.length,min:vals.length?Math.min(...vals):null,max:vals.length?Math.max(...vals):null}))"]
+risk = "read"
+output = "json"

@@ -50,7 +50,7 @@ run(['plugin', 'bundled']);
 {
   const r = run(['plugin', 'lint', '--all']);
   const out = r.stdout ?? '';
-  check('③ 批量表头+13 个', out.includes('批量体检（13 个插件') && out.includes('分数'), out.slice(0, 90));
+  check('③ 批量表头+14 个', out.includes('批量体检（14 个插件') && out.includes('分数'), out.slice(0, 90));
   check('③ 升序（首行分 ≤ 末行分）', (() => { const ns = [...out.matchAll(/^\s+(\d+)\s+[ABCD]\s/gm)].map((m) => Number(m[1])); return ns.length >= 10 && ns[0] <= ns[ns.length - 1]; })());
   check('③ 无 error exit 0', r.status === 0);
 }

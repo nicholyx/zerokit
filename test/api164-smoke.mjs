@@ -34,7 +34,7 @@ const get = async (p, init) => (await fetch(base + p, init)).json();
 {
   const h = await get('/api/health');
   check('② health 扩展字段', h.app === 'zerokit' && h.api === 1 && typeof h.plugins?.installed === 'number' && typeof h.runningTasks === 'number' && typeof h.dataHomeBytes === 'number', JSON.stringify(h).slice(0, 120));
-  check('② 插件计数=13', h.plugins?.installed === 13, String(h.plugins?.installed));
+  check('② 插件计数=14', h.plugins?.installed === 14, String(h.plugins?.installed));
 }
 // ① /api/version
 {

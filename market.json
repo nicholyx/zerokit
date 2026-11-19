@@ -272,6 +272,22 @@
         "mutate": 4,
         "destructive": 0
       }
+    },
+    {
+      "id": "dataflow",
+      "name": "数据流实战",
+      "version": "0.1.0",
+      "summary": "watch 定时积累端到端演示：产时间戳样本 → zerocol append 积累 → read 消费汇总",
+      "tags": [
+        "demo",
+        "chain",
+        "数据管道"
+      ],
+      "actionCount": 4,
+      "riskMix": {
+        "read": 4
+      },
+      "source": "path:plugins/dataflow"
     }
   ]
 }
