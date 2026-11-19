@@ -28,7 +28,7 @@ try {
   tail = out;
 } catch (e) {
   ok = false;
-  tail = ((e.stdout ?? '') + '\n' + (e.stderr ?? '')).slice(-500);
+  tail = ((e.stdout ?? '') + '\n' + (e.stderr ?? '')).slice(-900);
 }
 check('⑧ 活体全过（自适应下不误伤）', ok, tail.replace(/\n/g, ' | ').slice(0, 180));
 

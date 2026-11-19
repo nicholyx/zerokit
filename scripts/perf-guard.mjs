@@ -4,6 +4,7 @@
 // 冷启动预算 300ms 是第 58 轮写的全局预算，机器无关（实测 90-110ms，x86 CI 200ms 内）。
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { loadavg } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -48,8 +49,7 @@ const med = times.sort((a, b) => a - b)[2];
 // 健康机 b≈100ms → 仍是 300 硬线（守真回归）；慢机/CI x86 b≈180 → 放宽到 450（机器差异不算回归）。
 // load>3 豁免保留（外部进程抢占场景——抢占是环境不是代码）。
 {
-  const os2 = await import('node:os');
-  const load = os2.loadavg()[0] ?? 0;
+  const load = loadavg()[0] ?? 0;
   // ① 机器基线：预热 3 次（JIT/文件缓存）+ 取样 5 次取中位
   for (let i = 0; i < 3; i++) { try { execFileSync(process.execPath, [CLI, '--help'], { timeout: 60000, stdio: 'ignore' }); } catch { /* 预热失败按基线 0 */ } }
   const bt = [];
