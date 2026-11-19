@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.35.0] - 2026-11-20
+
+### Added
+
 - v4 线健康快照（323 轮定盘星——真实信号驱动阶段前的横切收束）：docs/reference/v4-health-snapshot.md——技术基线指纹（181 文件级/基线以 assertion-baseline.json 为准/内建步 4 件套/组合拳 2 条/lint 9 线）；测试主题分布五档（内核 127/数据 18/协作 15/UI 11/稳定性 9——按文件名前缀自动归类）；v4 线 36 轮清单（288-323 轮号-版本-主题对照表）；**顺带发现并记录已知债务**：overview「已完成」清单自 v4 中期起插入守卫静默跳过（anchor find -1 → if 守卫跳过），轮次行只更新「最后更新」——快照文档承担轮次清单职责；**快照与精确断言数解耦**（写死数字会与 sync-counts 每轮 +1 形成追数死循环——首轮快照 3455→3460 三次追赶后改为「以 baseline 文件为准」表述）；v4snap323 5 断言；基线 3455→3460。
 （下一版攒着）
 
@@ -82,12 +88,5 @@
 ### Added
 
 - 协作面板操作化（311 只读面板补操作面）：mcp serve 加 POST /mcp/sessions/filters（session + filters 写回会话并刷快照——在线改订阅前缀立即生效）与 POST /mcp/sessions/unlock（管理员语义手动释放锁并刷快照）；UI server 双代理 POST（转发到 MCP_HTTP_PORT 的 mcp serve，默认 31800；token 用 MCP_HTTP_TOKEN env）+ openapi；collab.js 面板操作面——会话行过滤输入框（回车提交）、锁行「释放」按钮（成功即 refresh）、标题手动刷新按钮；collabops312 6 断言（双端点/代理透传活体：过滤编辑 200+ok、unlock 无锁 404 形态）；基线 3409→3415。协作面从「看」到「管」。
-（下一版攒着）
-
-## [4.23.0] - 2026-11-19
-
-### Added
-
-- UI 协作面板（collab，#面）：mcp serve 运行时快照落盘 HOME/mcp-runtime.json（会话建立/断连/锁变化/频控丢弃四处挂钩——Inner 全量写 + writeLocksSnapshot 模块级锁写，双进程解耦）；GET /api/mcp-sessions 代理端点（读快照，15s 心跳超时判 running:false——白名单+openapi）；web/collab.js 面板三块（在线会话表 clientId/连于/过滤、持锁表 tool/holder/since、频控计数 dropped/filtered）+ 三态渲染（未运行引导 zkit mcp serve --broadcast / 读取失败 / 运行中心跳）；#/collab 路由（applyHash + hashchange 双侧）+ 3s 轮询；collabpanel311 7 断言（端点/挂钩×5/三块三态/引导/路由/空态/伪造快照透传）；基线 3396→3409。协作面 UI 收官：CLI、MCP、桌面三端之外，浏览器也成为协作状态的一等观察窗。
 （下一版攒着）
 
