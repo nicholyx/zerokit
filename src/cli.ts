@@ -3137,6 +3137,7 @@ async function cmdDoctor(): Promise<number> {
       dirs: report.dirs,
       desktop: report.desktop,
       orphanTimerKeys: report.orphanTimerKeys,
+      signal: report.signal,  // 324①：使用信号摘要
       integrity: report.integrity,
       historyStore: report.historyStore,
       plugins: report.plugins.map((pl) => ({
@@ -3162,6 +3163,15 @@ async function cmdDoctor(): Promise<number> {
     const u = usageByArea();
     if (u.totalBytes > 100 * 1024 * 1024) {
       process.stdout.write(c.yellow(`数据目录 ${(u.totalBytes / 1048576).toFixed(1)} MB 超 100 MB 阈值（zkit data usage 分项 · zkit data junk 找垃圾）\n`));
+    }
+  }
+  // 324②：使用信号摘要（安装计数——真实信号驱动的可见性；空/缺是 info 级不算 error）
+  {
+    const sig = report.signal;
+    if (sig.hasData) {
+      process.stdout.write(c.dim(`使用信号：${sig.plugins} 个插件有安装记录（累计 ${sig.totalInstalls} 次）· zkit market list --by-installs 看热度\n`));
+    } else {
+      process.stdout.write(c.dim('使用信号：暂无安装记录（zkit plugin install 后这里会有数据）\n'));
     }
   }
   // 第三十五轮⑦⑧：--fix 自动修可修项 + 半安装插件检测

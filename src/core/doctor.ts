@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { orphanTimers } from './timers.ts';
 // 环境与插件自检。
 //
@@ -63,6 +64,8 @@ export interface DoctorReport {
   desktop: { installed: boolean; path?: string; hotkey?: string; deepLinkRegistered?: boolean };
   /** 第六十三轮⑧：孤儿定时任务 key（timers.json 引用的插件已卸载）。 */
   orphanTimerKeys: string[];
+  /** 第三百二十四轮①：使用信号（安装计数）状态——真实信号驱动的可见性。 */
+  signal: { plugins: number; totalInstalls: number; hasData: boolean };
   summary: { plugins: number; actions: number; errors: number; warnings: number };
   /** 第八十四轮②：每次全量体检的摘要落 doctor-history.jsonl（保留 50 条）。 */
   history: DoctorHistoryEntry[];
@@ -466,6 +469,16 @@ export async function buildDoctorReport(): Promise<DoctorReport> {
     dirs: { home: HOME, plugins: PLUGINS_DIR },
     desktop: { installed: shell.installed, path: shell.path, hotkey, deepLinkRegistered: shell.installed ? deepLinkRegistered() : undefined },
     orphanTimerKeys,
+    // 324①②：使用信号摘要（market-stats.json；空/缺不算 error——info 级）
+    signal: (() => {
+      try {
+        const raw = JSON.parse(fs.readFileSync(path.join(HOME, 'market-stats.json'), 'utf8')) as Record<string, { installs: number }>;
+        const entries = Object.values(raw);
+        return { plugins: entries.length, totalInstalls: entries.reduce((a, b) => a + (b.installs ?? 0), 0), hasData: entries.length > 0 };
+      } catch {
+        return { plugins: 0, totalInstalls: 0, hasData: false };
+      }
+    })(),
     plugins,
     history: historyBefore.slice(0, 5),
     // 第一百二十九轮⑦：执行历史存储盘点（读同 cliX.readHistory，坏行不计）
