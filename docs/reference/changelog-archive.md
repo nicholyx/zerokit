@@ -2,6 +2,13 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [4.21.0] - 2026-11-19
+
+### Added
+
+- builtin 统计步（dataflow consume-detail 的内置化——数据消费端补强）：use = "builtin.zerocol-stats"（plan 放行 + 执行特判，与 export/read 同模式）；params file + column + ops（min/max/avg/count 逗号分隔——非法 ops/string 列明确报错 chain-stats-*）；int/double 8B LE 解码复用 308 轮经验（列起点=前面 bytes 之和）；结果 data.stats.* 模板直取（{s.data.stats.min}）；dataflow consume-detail 重写为 stats 步（删手写解码 node 脚本）；plugin-spec stats 行 + 管道指南统计快捷方式节；zerocolstats309 4 断言 + dataflow308 断言随新文案更新；基线 3392→3396。
+（下一版攒着）
+
 ## [4.20.0] - 2026-11-19
 
 ### Added

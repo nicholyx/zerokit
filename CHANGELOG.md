@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.33.0] - 2026-11-20
+
+### Added
+
 - 数据工作流组合拳回顾（315 多列 × 301 append × 320 window 三轮能力单一链路串验——收官回归）：combo321 4 断言——多列 append ×5（两列各 5 行）→ window=3 多列统计（value 3..5 / score 30..50 分组各自正确）→ **全表对照防假绿**（全表 min=1 ≠ 窗口 min=3——窗口没生效时对照即拆穿）→ 数据演进（再 3 次后 8 行、窗口滚动 value 6..8）；gen 动作用计数器文件产出递增序列（value=n, score=n×10——多列演进可控）；基线 3444→3448。数据工作流主题收官回归：增量各有测试 + 组合拳一条链。
 （下一版攒着）
 
@@ -82,12 +88,5 @@
 ### Added
 
 - watch × dataflow 端到端闭环验证（定时积累实战定稿）：watchdfe2e310 6 断言——watch.json chain 持久化、UI server /api/run 真实执行 append-ts（**三次触发行数 0→3 实测**）、tick 钩子 lastChainRun 形态、指南 5b 节（dataflow 组合样例 + **/api/run 读缓存坑**：10s TTL 内 cacheHit 直回缓存，POST body 必须 fresh:true 才真跑）；**架构判据沉淀**：/api/*（runChainQuiet 的目标端点）在 zkit ui 的 server（startServer），mcp serve 只有 /mcp 面——watch 触发场景本就是 UI 起着的场景；UI token 随机生成注入页面（__TOKEN__ 替换），测试从首页 HTML 抠取；基线 3396→3402。
-（下一版攒着）
-
-## [4.21.0] - 2026-11-19
-
-### Added
-
-- builtin 统计步（dataflow consume-detail 的内置化——数据消费端补强）：use = "builtin.zerocol-stats"（plan 放行 + 执行特判，与 export/read 同模式）；params file + column + ops（min/max/avg/count 逗号分隔——非法 ops/string 列明确报错 chain-stats-*）；int/double 8B LE 解码复用 308 轮经验（列起点=前面 bytes 之和）；结果 data.stats.* 模板直取（{s.data.stats.min}）；dataflow consume-detail 重写为 stats 步（删手写解码 node 脚本）；plugin-spec stats 行 + 管道指南统计快捷方式节；zerocolstats309 4 断言 + dataflow308 断言随新文案更新；基线 3392→3396。
 （下一版攒着）
 
