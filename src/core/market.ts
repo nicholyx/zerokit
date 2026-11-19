@@ -281,6 +281,31 @@ export function previewInstall(pluginId: string, marketName?: string): InstallPr
   };
 }
 
+/** 306①：市场安装计数（真实使用信号）——~/.zerokit/market-stats.json { id: { installs, lastInstallAt, lastVersion } } */
+export function recordInstall(pluginId: string, version: string): void {
+  try {
+    ensureDirs();
+    const f = path.join(HOME, 'market-stats.json');
+    let stats: Record<string, { installs: number; lastInstallAt: string; lastVersion: string }> = {};
+    if (fs.existsSync(f)) stats = JSON.parse(fs.readFileSync(f, 'utf8')) as typeof stats;
+    const cur = stats[pluginId];
+    // 306② 幂等：同版本重复装不重复计（版本变化或首次才 +1）；⑤ uninstall 不减（历史累积）
+    if (!cur) stats[pluginId] = { installs: 1, lastInstallAt: new Date().toISOString(), lastVersion: version };
+    else if (cur.lastVersion !== version) stats[pluginId] = { installs: cur.installs + 1, lastInstallAt: new Date().toISOString(), lastVersion: version };
+    else stats[pluginId] = { ...cur, lastInstallAt: new Date().toISOString() };
+    fs.writeFileSync(f, JSON.stringify(stats, null, 2));
+  } catch { /* 计数失败不影响安装 */ }
+}
+
+/** 306③：读计数（market list / UI 用） */
+export function readInstallStats(): Record<string, { installs: number; lastInstallAt: string; lastVersion: string }> {
+  try {
+    const f = path.join(HOME, 'market-stats.json');
+    if (!fs.existsSync(f)) return {};
+    return JSON.parse(fs.readFileSync(f, 'utf8')) as Record<string, { installs: number; lastInstallAt: string; lastVersion: string }>;
+  } catch { return {}; }
+}
+
 export function installFromMarket(pluginId: string, marketName?: string, opts: { replace?: boolean } = {}): AddResult {
   const preview = previewInstall(pluginId, marketName);
   if (!preview) return { ok: false, message: `所有集市里都没有插件 "${pluginId}"`, warnings: [] };
@@ -304,6 +329,7 @@ export function installFromMarket(pluginId: string, marketName?: string, opts: {
     },
   });
   if (result.ok && result.id) {
+    recordInstall(result.id, preview.load.plugin?.version ?? '0');  // 306①②：真实使用信号计数
     // 存一份安装时的清单快照，之后被改动可以发现（对应 rug pull 风险）
     try {
       ensureDirs();

@@ -30,6 +30,7 @@ import { addFromDir, addFromGit, findPlugin, listPlugins, previewAdd, removePlug
 import { applyUpdate, checkUpdate } from './core/update.ts';
 import { describeSource, readSource } from './core/sources.ts';
 import { checkRequires } from './core/resolve.ts';
+import { readInstallStats } from './core/market.ts';  // 306④：安装热度
 // 第一百二十一轮②：web 插件页面 KV 存储（sandbox 里没有 localStorage，宿主代存）
 import { storeGet, storeKeys, storeRemove, storeSet } from './core/webstore.ts';
 import { applyDefaults, coerceParam, toFormFields, toJsonSchema } from './core/schema.ts';
@@ -83,6 +84,7 @@ const API_METHODS: Record<string, string[]> = {
   '/api/logs': ['GET'],
   '/api/doctor': ['GET'],
   '/api/markets': ['GET'],
+  '/api/market-stats': ['GET'],
   '/api/watch': ['GET', 'PUT'],
   '/api/timer-runs': ['GET'],
   '/api/update-check': ['GET'],
@@ -148,6 +150,7 @@ const API_SPEC = {
     '/api/logs': { get: { summary: '审计日志（?limit=）' } },
     '/api/doctor': { get: { summary: '环境自检' } },
     '/api/markets': { get: { summary: '集市索引' } },
+    '/api/market-stats': { get: { summary: '安装热度计数' } },
     '/api/bookmarks': { get: { summary: '书签列表（与 CLI bookmarks.json 同源）' }, post: { summary: '新增书签', security: [{ token: [] }] }, delete: { summary: '删除书签（?name=）', security: [{ token: [] }] } },
     '/api/run': { post: { summary: '执行动作（body: plugin/action/values）', security: [{ token: [] }] } },
     '/api/cache': { get: { summary: '缓存面板（条目+命中统计）', security: [{ token: [] }] }, delete: { summary: '清空缓存', security: [{ token: [] }] } },
@@ -1166,6 +1169,12 @@ export function createServer(): http.Server {
       // 安装仍然要能力摊开 + 确认令牌，令牌绑定「集市 + 插件 id」。
       if (url.pathname === '/api/markets' && req.method === 'GET') {
         json(res, 200, marketSnapshot());
+        return;
+      }
+
+      // 306④：安装热度（真实使用信号）——UI market 面板徽标用
+      if (url.pathname === '/api/market-stats' && req.method === 'GET') {
+        json(res, 200, { stats: readInstallStats() });
         return;
       }
 
