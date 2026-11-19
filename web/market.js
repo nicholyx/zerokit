@@ -9,8 +9,9 @@ export function createMarket(ui) {
   __exitMarket = _exitM;
 
 
-// 306④：安装热度（真实使用信号）——面板打开时拉一次，渲染已装徽标附 🔥N
+// 306④+324③：安装热度（真实使用信号）——面板打开时拉一次；装没装都显示热度徽标
 let __mkStats = {};
+let __mkSortByInstalls = false;
 (async () => {
   try {
     const r = await api('/api/market-stats');
@@ -19,6 +20,9 @@ let __mkStats = {};
   } catch { /* 端点不可用静默 */ }
 })();
 function hotFor(id) { return __mkStats[id]?.installs ?? 0; }
+// 324④：热度排序开关（重排当前渲染的条目）
+function toggleSortByInstalls() { __mkSortByInstalls = !__mkSortByInstalls; if (typeof renderMarket === 'function') { try { renderMarket(); } catch { /* */ } } }
+function sortByInstalls(list) { return __mkSortByInstalls ? [...list].sort((a, b) => hotFor(b.id ?? b.pluginId ?? '') - hotFor(a.id ?? a.pluginId ?? '')) : list; }
 
 function marketMsg(text, kind = '') {
   const box = $('marketMsg');
@@ -49,7 +53,8 @@ function marketEntryHtml(m, e) {
         <b>${esc(e.name)}</b>
         <span class="aid">${esc(e.id)}${e.version ? ` · v${esc(e.version)}` : ''}${typeof e.actionCount === 'number' ? ` · ${e.actionCount} 个动作` : ''}</span>
         <span class="badge market-src" title="来源集市">🏪 ${esc(m.name)}</span>${mixHtml}
-        ${installed ? `<span class="badge read">✓ 已装${e.installedVersion ? ` v${esc(e.installedVersion)}` : ''}${hotFor(e.id) ? `<span title="本机安装计数（历史累积）"> · 🔥${esc(String(hotFor(e.id)))}</span>` : ''}</span>` : ''}
+        ${hotFor(e.id) ? `<span class="badge" title="本机安装计数（历史累积）">🔥 ${esc(String(hotFor(e.id)))}</span>` : ''}
+        ${installed ? `<span class="badge read">✓ 已装${e.installedVersion ? ` v${esc(e.installedVersion)}` : ''}</span>` : ''}
         <span class="plug-ops">
           ${installed ? '' : '<button class="primary mini" data-op="preview">安装</button>'}
         </span>
@@ -243,10 +248,14 @@ async function renderMarket() {
       if (!q || hay.includes(q)) entries.push([m, e]);
     }
   }
+  // 324④：热度排序（toggle 开关；关=原序）
+  const renderEntries = sortByInstalls(entries);
 
   el.marketView.innerHTML = `
     <div class="ps-head">
       <h2>集市（${marketData.markets.length} 个 · ${marketData.total ?? 0} 个插件）</h2>
+      <button class="ghost mini" id
+  document.getElementById('mkSortBtn')?.addEventListener('click', () => toggleSortByInstalls());="mkSortBtn">${__mkSortByInstalls ? '🔥 按热度排（点回原序）' : '🔥 按热度排'}</button>
       <span class="sub">任何 git 仓库 + market.json 都能当集市</span>
     </div>
   ${panelDescBar('market')}
@@ -263,9 +272,9 @@ async function renderMarket() {
          </div>`}
     <div id="marketMsg" class="market-msg"></div>
     ${marketData.markets.map(marketCardHtml).join('')}
-    ${entries.length ? entries.slice(0, marketLimit).map(([m, e]) => marketEntryHtml(m, e)).join('')
-      + (entries.length > marketLimit
-        ? `<div class="pager"><button class="ghost" id="marketMore">加载更多（已显示 ${Math.min(marketLimit, entries.length)} / ${entries.length}）</button></div>`
+    ${renderEntries.length ? renderEntries.slice(0, marketLimit).map(([m, e]) => marketEntryHtml(m, e)).join('')
+      + (renderEntries.length > marketLimit
+        ? `<div class="pager"><button class="ghost" id="marketMore">加载更多（已显示 ${Math.min(marketLimit, renderEntries.length)} / ${renderEntries.length}）</button></div>`
         : '')
       : (marketData.markets.length && q ? '<div class="ps-empty" role="status">没有匹配的插件。</div>' : '')}
     <div id="marketPreview"></div>

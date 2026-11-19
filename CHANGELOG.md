@@ -4,6 +4,7 @@
 
 ### Added
 
+- 安装计数读侧消费（真实信号驱动第一轮——信号看得见）：doctor 报告加 signal 字段（plugins/totalInstalls/hasData——json 出口 + 人读行「N 个插件有安装记录（累计 M 次）」；空/缺是 info 级不算 error，提示 zkit plugin install 后会有数据）；UI 市场面板热度徽标独立化（未装插件也显示 🔥N——原先只在已装徽标内）；热度排序入口（面板头「🔥 按热度排」toggle 按钮 + renderEntries 排序链替换 entries 渲染链四点）；signalread324 6 断言（有/无数据两态 + exit 0 + json 字段 + 徽标独立 + 排序入口）；基线 3460→3466。306 写侧 → 324 读侧，安装计数闭环。
 （下一版攒着）
 
 ## [4.35.0] - 2026-11-20
