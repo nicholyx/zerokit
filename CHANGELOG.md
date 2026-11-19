@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.25.0] - 2026-11-19
+
+### Added
+
 - 桌面 updater 就绪度评估（300 轮盘点候选 2 的零成本预检——冻结不动）：三件套核查——插件签名链 ✅（zkit keygen 干跑通过 + export 自动签名实测 demochain.toolpack 带 sig/keyId）、tauri.conf.json updater 段 ❌ 未启用（配置缺席非损坏）、release.yml 无 latest.json 步骤 ❌（tauri-action 已 pin 在位）；解除步骤清单四步（conf 三行 + Secrets 密钥 + tauri-action 自动产 latest.json + 双通道观察）+ 风险三条（密钥保管/单发 PR/插件签名与 updater 签名两套不混用）；docs/reference/updater-readiness.md 固化评估；updater313 6 断言（三件套/步骤/冻结不动/conf 现状确认/keygen 在位/导航）；基线 3415→3421。结论：解除成本约一轮，维持冻结等真实诉求。
 （下一版攒着）
 
@@ -76,10 +82,4 @@
 ### Added
 
 - 管道 DSL 指南（300 轮盘点候选 1 第二项，数据深化收尾②）：docs/guide/data-pipelines.md——chain 基础（params 传值/引用规则）→ pipe（stdout 直通 stdin）→ export（mode/rowsLimit/from 路径与类型）→ read（首行捷径/_rows/_all）→ watch 调度（触发管道配置）全链一图 + 每节可运行示例（全部来自 demochain 真实动作）+ 组合模式速查表四行（取数→变换→落盘 / 读回→回写 / 定时积累 / 读回再加工）；plugin-spec 互链 + docs/README 导航；pipedsl302 6 断言（五节齐全/实例引用/速查表/互链/导航/闭环可跑）；基线 3355→3361。数据深化收尾完成（300 轮盘点候选 1 两项全清）。
-
-## [4.13.0] - 2026-11-19
-
-### Added
-
-- zerocol 多行导出（300 轮盘点候选 1 第一项，数据深化收尾①）：export 步 mode = "append"（默认 overwrite 保持现状）+ rowsLimit（默认 1000——**kebab 不过 PARAM_RE**，参数名用 camelCase）；append 实现——读旧文件按新列声明对齐合并（**行对齐补 null**：旧行在新列上占位——初版漏此导致旧行丢失，最小复现定位）；回报带 mode 与合并后行数；demochain pipe-append 示例（跑三次 3 行）；plugin-spec mode/rowsLimit 行；zerocolappend301 4 断言（append/上限截断/新列补空/回报）；292/294 回归全绿；基线 3351→3355。时序数据集成形：watch（295）触发 + append 积累 + read 端 _all 消费。
 
