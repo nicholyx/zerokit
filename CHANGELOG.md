@@ -4,6 +4,7 @@
 
 ### Added
 
+- watch × dataflow 端到端闭环验证（定时积累实战定稿）：watchdfe2e310 6 断言——watch.json chain 持久化、UI server /api/run 真实执行 append-ts（**三次触发行数 0→3 实测**）、tick 钩子 lastChainRun 形态、指南 5b 节（dataflow 组合样例 + **/api/run 读缓存坑**：10s TTL 内 cacheHit 直回缓存，POST body 必须 fresh:true 才真跑）；**架构判据沉淀**：/api/*（runChainQuiet 的目标端点）在 zkit ui 的 server（startServer），mcp serve 只有 /mcp 面——watch 触发场景本就是 UI 起着的场景；UI token 随机生成注入页面（__TOKEN__ 替换），测试从首页 HTML 抠取；基线 3396→3402。
 （下一版攒着）
 
 ## [4.21.0] - 2026-11-19

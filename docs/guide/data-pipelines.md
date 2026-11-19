@@ -101,6 +101,18 @@ params = { file = "my-data" }
 动作详情页 → 「监控」→ 间隔与停止条件 → **触发管道** 填 `插件.chain动作`。
 数据变化时自动执行整条链；面板 ⛓ 徽标显示最近触发成败。
 
+## 5b. 定时积累实战（310 轮定稿——dataflow 插件）
+
+```
+详情页 → 监控 → 间隔 300 秒 → 触发管道填 dataflow.append-ts
+```
+
+数据变化时自动追加一行到 `ts-data`（rowsLimit=20 滚动窗口）；
+随时跑 `dataflow.consume-detail` 看统计。注意两点：
+- watch 的 chain 走 `/api/run`（UI server 的读缓存）——监控动作默认带 `fresh`，
+  自己写客户端时 POST body 记得 `fresh: true` 才不会吃到 10s 缓存；
+- `lastChainRun`（ok/ts/key）持久化在 watch.json，面板 ⛓ 徽标显示。
+
 ## 组合模式速查
 
 | 模式 | 步骤 | demochain 实例 |
