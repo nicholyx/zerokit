@@ -295,6 +295,7 @@ env_pass = ["HTTP_PROXY"]  # 环境变量白名单：声明后宿主机其余变
 | export `mode`/`rowsLimit` | 内建步参数 | `mode = "append"` 追加模式（默认 overwrite）；`rowsLimit`（默认 1000）行数上限；新列声明对旧行补 null 占位（301 轮） |
 
 > 完整管道搭建指南见 [数据管道指南](../guide/data-pipelines.md)。
+> 协作模式（广播/锁/过滤）客户端接入见 [协作指南](../guide/collaboration.md)。
 | `description` | | 会进 MCP 的 `inputSchema.description`，是模型判断传什么的依据 |
 | `required` | | 默认 `false` |
 | `default` | | 默认值 |

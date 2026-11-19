@@ -108,5 +108,6 @@ params = { file = "my-data" }
 
 ## 相关文档
 
+- [协作指南](collaboration.md)（广播里跑管道——多人实时可见）
 - [插件清单规范](../reference/plugin-spec.md)（chain/pipe/builtin 步字段）
 - [v4 展望](v4-outlook.md)（数据工作流主题来龙去脉）
