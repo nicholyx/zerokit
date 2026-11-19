@@ -68,9 +68,11 @@ title = "消费明细"
 description = "value 列统计：min/max/avg/count——builtin.zerocol-stats 内置步演示"
 type = "chain"
 risk = "read"
-template = "📊 value 统计 min={s.data.stats.min} max={s.data.stats.max} avg={s.data.stats.avg}（{s.data.stats.count} 行）"
+template = "📊 value 统计 min={s.data.stats.value.min} max={s.data.stats.value.max} avg={s.data.stats.value.avg}（{s.data.stats.value.count} 行）"
+# 多列扩展（315 轮）：columns = "value,duration" → 分组取 {s.data.stats.duration.min}
 
 [[action.step]]
 use = "builtin.zerocol-stats"
 as  = "s"
-params = { file = "ts-data", column = "value", ops = "min,max,avg,count" }
+params = { file = "ts-data", columns = "value", ops = "min,max,avg,count" }
+# 多列扩展：columns = "value,duration" → data.stats.列名.min 分组取值（315 轮）

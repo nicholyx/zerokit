@@ -4,6 +4,7 @@
 
 ### Added
 
+- builtin.zerocol-stats 多列支持（数据消费端再看一眼）：params columns（复数逗号分隔，优先于单数 column）——一次统计多列，结果 data.stats 按列名分组（{alias.data.stats.duration.min}）；**string 列策略分形态**：多列静默跳过（混列合法）/单数保持 309 明确报错（向后兼容）；单数 column 平铺形态不变（309 行为兼容）；dataflow consume-detail 改分组形态 + 多列扩展注释；plugin-spec/管道指南同步；zerocolstats309 6 断言（+多列分组/单数兼容——string 报错断言随分形态语义保留）；基线 3421→3423。
 （下一版攒着）
 
 ## [4.26.0] - 2026-11-19

@@ -70,6 +70,56 @@ check('⑥ 非法 ops 报错（median 不支持）', r3.status !== 0 && (r3.stde
 const src = fs.readFileSync(path.join(ROOT, 'src', 'core', 'runner.ts'), 'utf8');
 check('① plan 放行三内建步（export/read/stats）', src.includes("'builtin.zerocol-stats'") && (src.match(/builtin\.zerocol-stats/g) ?? []).length >= 2, '');
 
+// 315①②③④ 多列形态：columns 分组 + string 跳过 + 单数兼容
+const dir2 = path.join(home, 'plug', 'statsmulti');
+fs.mkdirSync(dir2, { recursive: true });
+fs.writeFileSync(path.join(dir2, 'plugin.toml'), `[plugin]
+id = "statsmulti"
+name = "多列统计"
+version = "0.1.0"
+summary = "x"
+
+[[action]]
+id = "multi"
+title = "m"
+description = "m"
+type = "chain"
+risk = "read"
+template = "v={s.data.stats.value.count}"
+
+[[action.step]]
+use = "builtin.zerocol-stats"
+as  = "s"
+params = { file = "ts-data", columns = "value,ts", ops = "min,max,count" }
+`);
+spawnSync(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'plugin', 'add', dir2], { cwd: ROOT, env, encoding: 'utf8' });
+const rmulti = run(['run', 'statsmulti.multi']);
+check('315② 多列分组（value 计数 5 + ts string 跳过不炸）', rmulti.status === 0 && (rmulti.stdout + '').includes('v=5'), (rmulti.stdout + rmulti.stderr).slice(0, 90));
+const dir3 = path.join(home, 'plug', 'statssingle');
+fs.mkdirSync(dir3, { recursive: true });
+fs.writeFileSync(path.join(dir3, 'plugin.toml'), `[plugin]
+id = "statssingle"
+name = "单数兼容"
+version = "0.1.0"
+summary = "x"
+
+[[action]]
+id = "single"
+title = "s"
+description = "s"
+type = "chain"
+risk = "read"
+template = "min={s.data.stats.min}"
+
+[[action.step]]
+use = "builtin.zerocol-stats"
+as  = "s"
+params = { file = "ts-data", column = "value", ops = "min" }
+`);
+spawnSync(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'plugin', 'add', dir3], { cwd: ROOT, env, encoding: 'utf8' });
+const rsingle = run(['run', 'statssingle.single']);
+check('315④ 单数形态平铺兼容（stats.min 直取）', rsingle.status === 0 && (rsingle.stdout + '').includes('min='), (rsingle.stdout + rsingle.stderr).slice(0, 80));
+
 try { fs.rmSync(home, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }); } catch { /* EBUSY */ }
 console.log(`\n${'='.repeat(60)}\n通过 ${pass} / ${pass + fail}`);
 process.exit(fail > 0 ? 1 : 0);

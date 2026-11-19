@@ -82,7 +82,7 @@ params = {
 
 **统计快捷方式（309 轮）**：`builtin.zerocol-stats` 直接出 min/max/avg/count——
 `params = { file = "ts-data", column = "value", ops = "min,max,avg,count" }`，
-结果 `{alias.data.stats.min}` 模板直取（int/double 列专用）。
+结果 `{alias.data.stats.min}` 模板直取（int/double 列专用）。多列一次统计：`columns = "value,duration"` → 分组取 `{alias.data.stats.duration.min}`（315 轮；string 列多列形态静默跳过）。
 
 ```toml
 [[action.step]]
