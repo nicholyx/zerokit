@@ -197,10 +197,20 @@ PowerShell 用 `$env:https_proxy="http://127.0.0.1:<端口>"`（其余两个同�
 
 ---
 
+## 六点五、跑起来之后：三条路（各 5 分钟）
+
+| 想干什么 | 第一个实操 | 完整指南 |
+|---|---|---|
+| **跑更多动作** | `zkit run demochain.pipe-export`（看链式动作怎么跑） | 本页「三、确认它是正常的」 |
+| **搭数据管道**（取数→变换→落盘→积累→统计） | `zkit run dataflow.append-ts` 跑 3 次，再 `zkit run dataflow.consume-detail` 看统计 | [数据管道指南](docs/guide/data-pipelines.md) |
+| **接入协作**（多客户端广播/过滤/锁） | `zkit mcp serve --broadcast --http 31800` 起服务，照指南 curl 一条广播 | [协作指南](docs/guide/collaboration.md) |
+
+三条路互相独立，按需选。深度背景看 [v4 展望](docs/guide/v4-outlook.md)。
+
 ## 七、这个项目现在是什么状态
 
 内核、四个面、插件集市、原生壳、uTools 插件兼容层都已跑通，各有测试
-（`node scripts/test-all.mjs`，176 个文件，3433 项断言，不联网、不花钱）。<!-- zk-version -->当前版本 v4.29.0<!-- /zk-version -->
+（`node scripts/test-all.mjs`，177 个文件，3437 项断言，不联网、不花钱）。<!-- zk-version -->当前版本 v4.29.0<!-- /zk-version -->
 
 已知的缺口和明确不做的事，都列在 `docs/reference/overview.md` 的「待办」和「已知差距」两节里——
 那份是诚实的账本，建议看一眼再判断这个项目值不值得用。
