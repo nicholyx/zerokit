@@ -40,6 +40,7 @@
 - [数据管道指南](guide/data-pipelines.md) —— chain/pipe/zerocol 全链搭法（demochain 实例）
 - [平台差异判据](reference/platform-pitfalls.md) —— Windows/Chrome/路径坑与战役对照（跨平台开发必读）
 - [桌面 updater 就绪度](reference/updater-readiness.md) —— 签名链核查/解除步骤/风险（313 轮评估）
+- [v4 线健康快照](reference/v4-health-snapshot.md) —— 36 轮技术基线指纹 + 主题分布 + 轮次清单（323 轮定盘星）
 - [协作指南](guide/collaboration.md) —— --broadcast 客户端接入（SSE/过滤/锁/presence）
 | [Cookbook](reference/cookbook.md) | 十篇实战配方 | 照抄解决常见任务 |
 | [项目账本](reference/overview.md) | 已完成/待办/已知差距 | 想知道项目现状 |
