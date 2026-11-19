@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [4.18.0] - 2026-11-19
+
+### Added
+
+- 市场安装计数（300 轮盘点候选 4 首项——真实使用信号）：~/.zerokit/market-stats.json（installs/lastInstallAt/lastVersion）；installFromMarket 成功即计数——**同版本重复装幂等不重复计**（版本变化才 +1）；uninstall 不减（历史累积语义）；zkit market list --by-installs 热度视图（跨集市降序）；GET /api/market-stats 端点（白名单+openapi）；UI market 面板已装徽标附 🔥N；marketstats306 5 断言（幂等/卸载不减/排序视图/端点/UI）；基线 3378→3383。议题池新陈代谢第一步：项目方从此看得到「用户装了什么、升级了几次」。
+
 ## [4.17.0] - 2026-11-19
 
 ### Added
