@@ -60,12 +60,16 @@ params = { file = "ts-summary", columns = [
   { name = "rows", type = "int", from = "back.data._rows" },
 ] }
 
-# ③b 明细版：解析 value 列（int → 8B LE 数组；列起点 = 前面各列 bytes 之和）算 min/max
-# ——zerocol int 解码参考实现（真实汇总逻辑照这个写）
+# ③b 明细版：builtin 统计步（309 轮）——min/max/avg 内置，不再手写 8B LE 解码
 [[action]]
 id = "consume-detail"
 title = "消费明细"
-description = "解析 ts-data 的 int 列字节算 min/max——zerocol int 解码参考实现"
-run = ["{node}", "-e", "const fs=require('fs');const p=process.env.ZEROKIT_HOME+'/data/ts-data.zerocol.json';if(!fs.existsSync(p)){console.log(JSON.stringify({rows:0,min:null,max:null}));process.exit(0)}const d=JSON.parse(fs.readFileSync(p,'utf8'));let off=0;let vc=null;for(const c of d.columns){if(c.name==='value'){vc=c;break}off+=c.bytes}const buf=Buffer.from(d.data,'base64');const vals=[];for(let i=0;i<vc.count;i++)vals.push(Number(buf.readBigInt64LE(off+i*8)));console.log(JSON.stringify({rows:vals.length,min:vals.length?Math.min(...vals):null,max:vals.length?Math.max(...vals):null}))"]
+description = "value 列统计：min/max/avg/count——builtin.zerocol-stats 内置步演示"
+type = "chain"
 risk = "read"
-output = "json"
+template = "📊 value 统计 min={s.data.stats.min} max={s.data.stats.max} avg={s.data.stats.avg}（{s.data.stats.count} 行）"
+
+[[action.step]]
+use = "builtin.zerocol-stats"
+as  = "s"
+params = { file = "ts-data", column = "value", ops = "min,max,avg,count" }

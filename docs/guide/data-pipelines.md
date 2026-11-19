@@ -80,6 +80,10 @@ params = {
 
 ## 4. 读回：builtin.zerocol-read
 
+**统计快捷方式（309 轮）**：`builtin.zerocol-stats` 直接出 min/max/avg/count——
+`params = { file = "ts-data", column = "value", ops = "min,max,avg,count" }`，
+结果 `{alias.data.stats.min}` 模板直取（int/double 列专用）。
+
 ```toml
 [[action.step]]
 use = "builtin.zerocol-read"

@@ -1120,8 +1120,8 @@ async function runChainAction(
     const pluginRef = step.use.slice(0, dot);
     const actionRef = step.use.slice(dot + 1);
 
-    // 292① / 294①：内建步——伪引用，不需要目标插件/动作
-    if (step.use === 'builtin.zerocol-export' || step.use === 'builtin.zerocol-read') {
+    // 292① / 294① / 309①：内建步——伪引用，不需要目标插件/动作
+    if (step.use === 'builtin.zerocol-export' || step.use === 'builtin.zerocol-read' || step.use === 'builtin.zerocol-stats') {
       plan.push({ step, plugin, action });
       continue;
     }
@@ -1226,6 +1226,62 @@ async function runChainAction(
       results.set(item.step.as, readResult);
       outputs.push({ alias: item.step.as, result: readResult });
       prev = readResult;
+      continue;
+    }
+
+    // 309①②③④：内建统计步——zerocol 文件的数值列汇总（min/max/avg/count）
+    if (item.step.use === 'builtin.zerocol-stats') {
+      const file = typeof item.step.params['file'] === 'string' ? String(item.step.params['file']) : '';
+      const column = typeof item.step.params['column'] === 'string' ? String(item.step.params['column']) : '';
+      const opsRaw = typeof item.step.params['ops'] === 'string' ? String(item.step.params['ops']) : 'count';
+      if (!file || !column) {
+        return fail('chain-stats-bad-params', `${label} 需要 file（data_dir 文件名）与 column（列名）`);
+      }
+      const ops = opsRaw.split(',').map((x) => x.trim()).filter((x) => ['min', 'max', 'avg', 'count'].includes(x));
+      if (ops.length === 0) {
+        return fail('chain-stats-bad-params', `${label} ops 只支持 min/max/avg/count（逗号分隔）`);
+      }
+      const pathModuleS = await import('node:path');
+      const fsModS = await import('node:fs');
+      const { DATA_DIR } = await import('./paths.ts');
+      const inPathS = pathModuleS.join(DATA_DIR, file.endsWith('.zerocol.json') ? file : `${file}.zerocol.json`);
+      if (!fsModS.existsSync(inPathS)) {
+        return fail('chain-read-missing', `${label} 文件不存在：${inPathS}`);
+      }
+      const zcS = JSON.parse(fsModS.readFileSync(inPathS, 'utf8')) as { format?: string; columns?: Array<{ name: string; type: string; count: number; bytes: number }>; data?: string };
+      if (zcS.format !== 'zerocol' || !Array.isArray(zcS.columns)) {
+        return fail('chain-read-bad-format', `${label} 不是 zerocol 文件`);
+      }
+      const target = zcS.columns.find((c) => c.name === column);
+      if (!target) {
+        return fail('chain-stats-bad-column', `${label} 列 "${column}" 不存在（有：${zcS.columns.map((c) => c.name).join('、')}）`);
+      }
+      if (target.type === 'string') {
+        return fail('chain-stats-bad-column', `${label} 列 "${column}" 是 string——统计只支持 int/double 数值列`);
+      }
+      // int/double 都是 8B 定长 LE；列起点 = 前面各列 bytes 之和
+      let off = 0;
+      for (const c of zcS.columns) { if (c.name === column) break; off += c.bytes; }
+      const buf = Buffer.from(zcS.data ?? '', 'base64');
+      const vals: number[] = [];
+      for (let i = 0; i < target.count; i++) {
+        vals.push(target.type === 'int' ? Number(buf.readBigInt64LE(off + i * 8)) : buf.readDoubleLE(off + i * 8));
+      }
+      const statsOut: Record<string, number> = {};
+      if (ops.includes('count')) statsOut.count = vals.length;
+      if (vals.length > 0) {
+        if (ops.includes('min')) statsOut.min = Math.min(...vals);
+        if (ops.includes('max')) statsOut.max = Math.max(...vals);
+        if (ops.includes('avg')) statsOut.avg = Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 1000) / 1000;
+      }
+      const statsResult: RunResult = {
+        ok: true, exitCode: 0, stdout: `${column} 统计：${JSON.stringify(statsOut)}`, stderr: '',
+        ms: Date.now() - started, truncated: false, data: { stats: statsOut, rows: vals.length },
+        argv: [], command: `zerocol-stats ${column} ← ${inPathS}`,
+      };
+      results.set(item.step.as, statsResult);
+      outputs.push({ alias: item.step.as, result: statsResult });
+      prev = statsResult;
       continue;
     }
 
