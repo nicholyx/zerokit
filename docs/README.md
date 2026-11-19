@@ -38,6 +38,7 @@
 - [v4 线进度](guide/v4-outlook.md#v4-线进度第-297-轮阶段复盘2026-11-14) —— 双主题 4+4 步全闭环 + 下一阶段建议
 - [第三百轮盘点](guide/v4-outlook.md#第三百轮旅程与展望2026-11-19) —— 287+13 轮量级数据与下一百轮候选
 - [数据管道指南](guide/data-pipelines.md) —— chain/pipe/zerocol 全链搭法（demochain 实例）
+- [平台差异判据](reference/platform-pitfalls.md) —— Windows/Chrome/路径坑与战役对照（跨平台开发必读）
 | [Cookbook](reference/cookbook.md) | 十篇实战配方 | 照抄解决常见任务 |
 | [项目账本](reference/overview.md) | 已完成/待办/已知差距 | 想知道项目现状 |
 
