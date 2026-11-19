@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.19.0] - 2026-11-19
+
+### Added
+
 - 协作指南（协作面六步文档化收尾）：docs/guide/collaboration.md——接入五步（token/x-client-id/initialize/SSE）→ 广播载荷（tool-call/summary 脱敏分档真实样例）→ 过滤订阅（clientInfo.filterTools 前缀）→ 频率控制与静默窗口（config.toml 两键 + dropped/filtered 计数）→ 协作锁（busy-locked 结构化处理 + 退避策略 + 三路释放）→ 会话查询；plugin-spec / data-pipelines / platform-pitfalls 互链 + docs/README 导航；collabguide307 4 断言（五节/载荷形态/接入清单/互链）；基线 3383→3387。协作面六步全部有正式指南——外部客户端作者照单接入。
 
 ## [4.18.0] - 2026-11-19
@@ -71,10 +77,4 @@
 ### Added
 
 - 广播频率控制与静默窗口（v4 协作面第四步——防 watch+chain 高频刷屏）：节流（同 method 最小间隔 min-interval-ms 默认 2000——config [broadcast] 节；**presence 豁免**：joined/left 不占 tool-call 配额，开发中靠 gate 日志定位「A 的 join 占用配额致首个 tool-call 被拦」）；静默窗口 quiet = "22:00-07:00"（跨午夜窗口解析；窗口内非 presence 广播丢弃）；丢弃计数 dropped 进 /mcp/sessions（droppedBroadcasts 字段）；zkit mcp sessions 显示「频率控制丢弃 N 条 + 可调提示」；readBroadcastConfig 最小 TOML 解析；broadcastthrottle296 4 断言（活体 500ms 节流只广播 1 次 + dropped≥1 + 窗口/豁免源码面）；修复过程顺带回归验证 289/290/293 全绿；基线 3325→3329。
-
-## [4.7.0] - 2026-11-14
-
-### Added
-
-- watch 触发 chain 管道（v4 数据工作流调度面——无人值守数据流）：watch 配置加 chain 字段（详情页 watch 表单「触发管道」输入 插件.动作；reg 条目与 persistWatch 均持久化 chain + lastChainRun）；浏览器 tick 引擎——采样后数据变化且声明 chain → runChainQuiet 静默执行（/api/run 同款信封 token 头）；lastChainRun 记录 ok/ts/key/err；UI watch 面板徽标（⛓ chain 名 + ✓/✗/待触发三态）；恢复侧（GET /api/watch）带 chain；watchchain295 5 断言；基线 3320→3325。「指标越界→自动跑管道→落盘新 zerocol」调度闭环成形。
 
