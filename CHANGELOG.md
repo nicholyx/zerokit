@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.30.0] - 2026-11-19
+
+### Added
+
 - 双指南进主路径（协作/数据指南的用户触达收尾）：START-HERE「六点五、跑起来之后：三条路」——跑动作（demochain.pipe-export）/ 搭数据管道（dataflow 实操 3+1）/ 接协作（mcp serve --broadcast）各带 5 分钟第一实操直达对应指南；overview 首屏路径注（账本入口指同一三步）；startpaths318 4 断言（路径表/实操真实性——引用插件都在 market/互链）；基线 3435→3437。新用户从「跑起来」到「搭管道/接协作」有显式路径。
 （下一版攒着）
 
@@ -81,10 +87,4 @@
 ### Added
 
 - 协作指南（协作面六步文档化收尾）：docs/guide/collaboration.md——接入五步（token/x-client-id/initialize/SSE）→ 广播载荷（tool-call/summary 脱敏分档真实样例）→ 过滤订阅（clientInfo.filterTools 前缀）→ 频率控制与静默窗口（config.toml 两键 + dropped/filtered 计数）→ 协作锁（busy-locked 结构化处理 + 退避策略 + 三路释放）→ 会话查询；plugin-spec / data-pipelines / platform-pitfalls 互链 + docs/README 导航；collabguide307 4 断言（五节/载荷形态/接入清单/互链）；基线 3383→3387。协作面六步全部有正式指南——外部客户端作者照单接入。
-
-## [4.18.0] - 2026-11-19
-
-### Added
-
-- 市场安装计数（300 轮盘点候选 4 首项——真实使用信号）：~/.zerokit/market-stats.json（installs/lastInstallAt/lastVersion）；installFromMarket 成功即计数——**同版本重复装幂等不重复计**（版本变化才 +1）；uninstall 不减（历史累积语义）；zkit market list --by-installs 热度视图（跨集市降序）；GET /api/market-stats 端点（白名单+openapi）；UI market 面板已装徽标附 🔥N；marketstats306 5 断言（幂等/卸载不减/排序视图/端点/UI）；基线 3378→3383。议题池新陈代谢第一步：项目方从此看得到「用户装了什么、升级了几次」。
 
