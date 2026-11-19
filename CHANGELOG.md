@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.29.0] - 2026-11-19
+
+### Added
+
 - v4 全主题进度看板更新（301-316 十六轮复盘）：v4-outlook 深化收官表（候选 1×2 / 3×3 / 2 预检 / 4×1 对照轮次版本）；数据工作流全链贯通段（append/stats 多列/stats 可读化 + 310 端到端实测 + 内建步四件套齐）；协作面 UI 收官段（311 面板 + 312 操作化——四端观察窗）；当前剩余候选三条（opt-in 匿名上报 / 管道 DSL 进阶 / 桌面启用——各带触发条件）；v4board317 6 断言；基线 3427→3433。
 （下一版攒着）
 
@@ -80,10 +86,4 @@
 ### Added
 
 - 市场安装计数（300 轮盘点候选 4 首项——真实使用信号）：~/.zerokit/market-stats.json（installs/lastInstallAt/lastVersion）；installFromMarket 成功即计数——**同版本重复装幂等不重复计**（版本变化才 +1）；uninstall 不减（历史累积语义）；zkit market list --by-installs 热度视图（跨集市降序）；GET /api/market-stats 端点（白名单+openapi）；UI market 面板已装徽标附 🔥N；marketstats306 5 断言（幂等/卸载不减/排序视图/端点/UI）；基线 3378→3383。议题池新陈代谢第一步：项目方从此看得到「用户装了什么、升级了几次」。
-
-## [4.17.0] - 2026-11-19
-
-### Added
-
-- 平台差异判据手册（300 轮盘点候选 3 第三项，稳定性长跑③）：docs/reference/platform-pitfalls.md——Windows 五坑（file:// ESM/tmp/CRLF/路径分隔符/execFileSync 相对 cwd）+ Chrome 表（getter 误用/跨版本语法炸弹/固定 sleep）+ 防线三层（本地静态→本地全量→三平台 CI 唯一防线），每坑带判据/修复/战役对照（291/299/303/304）；web-strict-check 扩 RAW_DYN_IMPORT 线（动态 import(path.join…) Windows 炸弹静态可判——现库 0 处）；全量 test/*.mjs 的 /tmp 硬编码排查——4 处均无害（报错用例/字面量/mock/样例）不修记入手册；START-HERE + docs/README 判据索引；platformpit305 7 断言；基线 3371→3378。
 
