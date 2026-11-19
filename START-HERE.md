@@ -5,6 +5,7 @@ zerokit 是一个**不绑定宿主**的插件运行器：插件是一份纯文�
 所以「给 AI 用」不是额外开发，而是免费副产品。
 
 > 更完整的东西：`README.md`（怎么用）、`docs/reference/overview.md`（初衷 / 已完成 / 待办）、
+- 平台差异判据（Windows/Chrome/路径坑，写跨平台代码前必读）：[docs/reference/platform-pitfalls.md](docs/reference/platform-pitfalls.md)
 > `docs/reference/plugin-spec.md`（怎么写插件）、`docs/deep/design.md`（为什么这么设计）。
 
 ---
@@ -199,7 +200,7 @@ PowerShell 用 `$env:https_proxy="http://127.0.0.1:<端口>"`（其余两个同�
 ## 七、这个项目现在是什么状态
 
 内核、四个面、插件集市、原生壳、uTools 插件兼容层都已跑通，各有测试
-（`node scripts/test-all.mjs`，165 个文件，3371 项断言，不联网、不花钱）。<!-- zk-version -->当前版本 v4.16.0<!-- /zk-version -->
+（`node scripts/test-all.mjs`，166 个文件，3378 项断言，不联网、不花钱）。<!-- zk-version -->当前版本 v4.16.0<!-- /zk-version -->
 
 已知的缺口和明确不做的事，都列在 `docs/reference/overview.md` 的「待办」和「已知差距」两节里——
 那份是诚实的账本，建议看一眼再判断这个项目值不值得用。

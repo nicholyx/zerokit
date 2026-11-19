@@ -14,6 +14,9 @@ let bad = 0;
 const GETTER_ASSIGN = /\.\s*get\s*\([^)]*\)\s*=(?![=>])/;
 // ② 语句位置解构赋值：行首 [..] = 或 {..} =（无 const/let/var 前缀且行内无开括号包裹）
 const BARE_DESTRUCT = /^[\[{][^;]*[\]}]\s*=(?![=>])/;
+// 305②：动态 import 裸路径（Windows 上 C:\ 绝对路径不被 ESM loader 收——ERR_UNSUPPORTED_ESM_URL_SCHEME，
+// 304 轮 perf-guard extras.js 三连排障的真因）。import(path.join(...)) 必须 pathToFileURL().href。
+const RAW_DYN_IMPORT = /import\s*\(\s*path\.join\s*\(/;
 // ③ 保留字当对象字面量键值目标（极少数形态）：{ class: x } 在严格模式合法，跳过——只抓裸语句
 for (const f of readdirSync(path.join(ROOT, 'web')).filter((x) => x.endsWith('.js'))) {
   const lines = readFileSync(path.join(ROOT, 'web', f), 'utf8').split('\n');
@@ -23,6 +26,9 @@ for (const f of readdirSync(path.join(ROOT, 'web')).filter((x) => x.endsWith('.j
     if (GETTER_ASSIGN.test(t)) { bad++; console.error(`✗ ${f}:${i + 1} getter 误用当 setter: ${t.slice(0, 90)}`); }
     else if (BARE_DESTRUCT.test(t) && !/^(const|let|var|for|if|while|return|=>)/.test(t) && !t.startsWith('(')) {
       bad++; console.error(`✗ ${f}:${i + 1} 语句位置裸解构赋值: ${t.slice(0, 90)}`);
+    }
+    else if (RAW_DYN_IMPORT.test(t)) {
+      bad++; console.error(`✗ ${f}:${i + 1} 动态 import 裸路径（Windows 需 pathToFileURL().href）: ${t.slice(0, 90)}`);
     }
   });
 }
