@@ -22,6 +22,7 @@ import { createBatch } from './batch.js';
 import { createPanels } from './panels.js';
 import { createShare } from './share.js';
 import { createWatchTimers } from './watchtimers.js';
+import { createCollab } from './collab.js';
 import { createMarket } from './market.js';
 import { createLogs } from './logs.js';
 import { createDoctorStats } from './doctorstats.js';
@@ -55,6 +56,12 @@ const __share = () => {
 
 // 第二百四十五轮②③：监控/定时域注入式迁出（14 函数整域）
 let __wtInst = null;
+let __cbInst = null;
+const __cb = () => {
+  __cbInst ??= createCollab();
+  return __cbInst;
+};
+
 const __wt = () => {
   __wtInst ??= createWatchTimers({ esc, t, lang, api, TOKEN, el, setCount, hidePanels, panelDescBar, actionKey, paramStore, submit, openDetail, readJson, writeJson, renderResult, modeRef: { get: () => mode, set: (v) => { mode = v; } }, watchStopLogRef: () => (watchStopLog ?? []), panelsRef: () => __panels(), renderQuietSection });
   return __wtInst;
@@ -8836,6 +8843,7 @@ function applyHash() {
   if ((location.hash || '') === '#/clip') { __tc().showClipPanel(); return; }
   // #/watch 监控聚合面板（第十八轮⑥）
   if ((location.hash || '') === '#/watch') { __wt().showWatchPanel(); return; }
+  if ((location.hash || '') === '#/collab') { __cb().showCollab(); return; }  // 311②：协作面板
   // 第八十六轮：#/dev 开发者面板
   if ((location.hash || '') === '#/dev') { showDevPanel(); return; }
   // #/brief 每日简报
@@ -9014,6 +9022,7 @@ window.addEventListener('hashchange', () => {
   // 第六十四轮：#/clip 剪贴板历史面板
   if ((location.hash || '') === '#/clip') { __tc().showClipPanel(); return; }
   // 第十八轮⑥：#/watch 是面板路由——监控继续跑（面板就是聚合它们的），只切视图
+  if ((location.hash || '') === '#/collab') { __cb().showCollab(); return; }  // 311②：协作面板
   if ((location.hash || '') === '#/watch') {
     __wt().showWatchPanel();
     return;

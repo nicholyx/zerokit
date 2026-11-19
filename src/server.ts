@@ -85,6 +85,7 @@ const API_METHODS: Record<string, string[]> = {
   '/api/doctor': ['GET'],
   '/api/markets': ['GET'],
   '/api/market-stats': ['GET'],
+  '/api/mcp-sessions': ['GET'],
   '/api/watch': ['GET', 'PUT'],
   '/api/timer-runs': ['GET'],
   '/api/update-check': ['GET'],
@@ -151,6 +152,7 @@ const API_SPEC = {
     '/api/doctor': { get: { summary: '环境自检' } },
     '/api/markets': { get: { summary: '集市索引' } },
     '/api/market-stats': { get: { summary: '安装热度计数' } },
+    '/api/mcp-sessions': { get: { summary: '协作运行时快照（会话/锁/频控计数）' } },
     '/api/bookmarks': { get: { summary: '书签列表（与 CLI bookmarks.json 同源）' }, post: { summary: '新增书签', security: [{ token: [] }] }, delete: { summary: '删除书签（?name=）', security: [{ token: [] }] } },
     '/api/run': { post: { summary: '执行动作（body: plugin/action/values）', security: [{ token: [] }] } },
     '/api/cache': { get: { summary: '缓存面板（条目+命中统计）', security: [{ token: [] }] }, delete: { summary: '清空缓存', security: [{ token: [] }] } },
@@ -1176,6 +1178,21 @@ export function createServer(): http.Server {
       if (url.pathname === '/api/market-stats' && req.method === 'GET') {
         json(res, 200, { stats: readInstallStats() });
         return;
+      }
+
+      // 311①：协作运行时快照代理（mcp serve 独立进程写的 mcp-runtime.json；UI 只读）
+      if (url.pathname === '/api/mcp-sessions' && req.method === 'GET') {
+        try {
+          const f = path.join(HOME, 'mcp-runtime.json');
+          if (!fs.existsSync(f)) { json(res, 200, { running: false }); return; }
+          const snap = JSON.parse(fs.readFileSync(f, 'utf8')) as Record<string, unknown>;
+          const stale = typeof snap.ts === 'string' ? Date.now() - new Date(snap.ts).getTime() > 15000 : true;
+          json(res, 200, stale ? { running: false } : snap);
+          return;
+        } catch {
+          json(res, 200, { running: false });
+          return;
+        }
       }
 
       if (url.pathname === '/api/market/add' && req.method === 'POST') {
