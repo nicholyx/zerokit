@@ -2,6 +2,13 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [4.24.0] - 2026-11-19
+
+### Added
+
+- 协作面板操作化（311 只读面板补操作面）：mcp serve 加 POST /mcp/sessions/filters（session + filters 写回会话并刷快照——在线改订阅前缀立即生效）与 POST /mcp/sessions/unlock（管理员语义手动释放锁并刷快照）；UI server 双代理 POST（转发到 MCP_HTTP_PORT 的 mcp serve，默认 31800；token 用 MCP_HTTP_TOKEN env）+ openapi；collab.js 面板操作面——会话行过滤输入框（回车提交）、锁行「释放」按钮（成功即 refresh）、标题手动刷新按钮；collabops312 6 断言（双端点/代理透传活体：过滤编辑 200+ok、unlock 无锁 404 形态）；基线 3409→3415。协作面从「看」到「管」。
+（下一版攒着）
+
 ## [4.23.0] - 2026-11-19
 
 ### Added

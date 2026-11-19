@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.36.0] - 2026-11-20
+
+### Added
+
 - 安装计数读侧消费（真实信号驱动第一轮——信号看得见）：doctor 报告加 signal 字段（plugins/totalInstalls/hasData——json 出口 + 人读行「N 个插件有安装记录（累计 M 次）」；空/缺是 info 级不算 error，提示 zkit plugin install 后会有数据）；UI 市场面板热度徽标独立化（未装插件也显示 🔥N——原先只在已装徽标内）；热度排序入口（面板头「🔥 按热度排」toggle 按钮 + renderEntries 排序链替换 entries 渲染链四点）；signalread324 6 断言（有/无数据两态 + exit 0 + json 字段 + 徽标独立 + 排序入口）；基线 3460→3466。306 写侧 → 324 读侧，安装计数闭环。
 （下一版攒着）
 
@@ -82,12 +88,5 @@
 ### Added
 
 - 桌面 updater 就绪度评估（300 轮盘点候选 2 的零成本预检——冻结不动）：三件套核查——插件签名链 ✅（zkit keygen 干跑通过 + export 自动签名实测 demochain.toolpack 带 sig/keyId）、tauri.conf.json updater 段 ❌ 未启用（配置缺席非损坏）、release.yml 无 latest.json 步骤 ❌（tauri-action 已 pin 在位）；解除步骤清单四步（conf 三行 + Secrets 密钥 + tauri-action 自动产 latest.json + 双通道观察）+ 风险三条（密钥保管/单发 PR/插件签名与 updater 签名两套不混用）；docs/reference/updater-readiness.md 固化评估；updater313 6 断言（三件套/步骤/冻结不动/conf 现状确认/keygen 在位/导航）；基线 3415→3421。结论：解除成本约一轮，维持冻结等真实诉求。
-（下一版攒着）
-
-## [4.24.0] - 2026-11-19
-
-### Added
-
-- 协作面板操作化（311 只读面板补操作面）：mcp serve 加 POST /mcp/sessions/filters（session + filters 写回会话并刷快照——在线改订阅前缀立即生效）与 POST /mcp/sessions/unlock（管理员语义手动释放锁并刷快照）；UI server 双代理 POST（转发到 MCP_HTTP_PORT 的 mcp serve，默认 31800；token 用 MCP_HTTP_TOKEN env）+ openapi；collab.js 面板操作面——会话行过滤输入框（回车提交）、锁行「释放」按钮（成功即 refresh）、标题手动刷新按钮；collabops312 6 断言（双端点/代理透传活体：过滤编辑 200+ok、unlock 无锁 404 形态）；基线 3409→3415。协作面从「看」到「管」。
 （下一版攒着）
 
