@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.17.0] - 2026-11-19
+
+### Added
+
 - 平台差异判据手册（300 轮盘点候选 3 第三项，稳定性长跑③）：docs/reference/platform-pitfalls.md——Windows 五坑（file:// ESM/tmp/CRLF/路径分隔符/execFileSync 相对 cwd）+ Chrome 表（getter 误用/跨版本语法炸弹/固定 sleep）+ 防线三层（本地静态→本地全量→三平台 CI 唯一防线），每坑带判据/修复/战役对照（291/299/303/304）；web-strict-check 扩 RAW_DYN_IMPORT 线（动态 import(path.join…) Windows 炸弹静态可判——现库 0 处）；全量 test/*.mjs 的 /tmp 硬编码排查——4 处均无害（报错用例/字面量/mock/样例）不修记入手册；START-HERE + docs/README 判据索引；platformpit305 7 断言；基线 3371→3378。
 
 ## [4.16.0] - 2026-11-19
@@ -71,10 +77,4 @@
 ### Added
 
 - zerocol 读回 chain step（v4 数据工作流第三步——读取端闭环）：内建伪引用 use = "builtin.zerocol-read"（plan 放行 + 执行特判）；params file（data_dir 下的 zerocol 文件）；importZeroCol 读回 → data 带全列首行捷径（{alias.data.value} 直接取）+ _rows/_columns/_all/_file 元数据；错误两态明确（chain-read-missing 提示先跑 export 生成 / chain-read-bad-format 含 JSON 与列解码两层）；demochain pipe-roundtrip 示例（read → export 回写，**往返 checksum 全等实测**——开发中发现并修正 from 路径漏 .data 层）；plugin-spec 读回步行；zerocolread294 4 断言；基线 3316→3320。数据跨 run 流转成形：昨天的导出今天的管道源。
-
-## [4.5.0] - 2026-11-14
-
-### Added
-
-- 广播内容增强——结果摘要下发（v4 协作面第三步）：tool-call 广播载荷升级 { type, tool, ok, ms, summary }——summary 先过 maskSensitive 脱敏再分档（≤4KB 紧凑 JSON 全量直放；>4KB 走 { _truncated, head: 600 字首段, fields: fieldStats }——与 MCP 响应同款 48 轮策略复用 summarizeJson）；观察者在 SSE 流直接看到执行结果（value=21 级别），大结果 token 友好不发全文；demochain gen 描述补广播演示注记；broadcastsummary293 5 断言（载荷结构/小结果全量含 value/大结果分档实现/实收 summary）；基线 3311→3316。
 
