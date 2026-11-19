@@ -2,6 +2,12 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [4.10.0] - 2026-11-15
+
+### Added
+
+- 广播过滤订阅（297 复盘建议 1 第一项，v4 协作面深化）：SessionEntry 加 filters（tool 名前缀集，空=全收）；客户端声明走 initialize params.clientInfo.filterTools（string[]——标准 MCP 握手参数内携带，无需扩展协议）；notifyOthers 发送前按 tool 名前缀匹配（不匹配跳过该会话）；presence 豁免（joined/left 永远全发）；filtered 单列计数进 /mcp/sessions（filteredBroadcasts）；bcastfilter298 4 断言（活体：B 声明只收 demochain → sysinfo 被滤、demochain 命中、filtered≥1、presence 不受影响）；基线 3334→3338。
+
 ## [4.9.0] - 2026-11-14
 
 ### Added

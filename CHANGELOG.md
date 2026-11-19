@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.22.0] - 2026-11-19
+
+### Added
+
 - watch × dataflow 端到端闭环验证（定时积累实战定稿）：watchdfe2e310 6 断言——watch.json chain 持久化、UI server /api/run 真实执行 append-ts（**三次触发行数 0→3 实测**）、tick 钩子 lastChainRun 形态、指南 5b 节（dataflow 组合样例 + **/api/run 读缓存坑**：10s TTL 内 cacheHit 直回缓存，POST body 必须 fresh:true 才真跑）；**架构判据沉淀**：/api/*（runChainQuiet 的目标端点）在 zkit ui 的 server（startServer），mcp serve 只有 /mcp 面——watch 触发场景本就是 UI 起着的场景；UI token 随机生成注入页面（__TOKEN__ 替换），测试从首页 HTML 抠取；基线 3396→3402。
 （下一版攒着）
 
@@ -73,10 +79,4 @@
 ### Added
 
 - 协作锁（297 复盘建议 1 第二项，v4 协作面深化）：coopLocks 模块级注册表（key → sid/clientId/since；--broadcast 开启才启用；read 不锁）；CallTool 授权闸前检查——同 key 已被他会话持有返回 busy-locked（含 holder clientId + since）+ 结构化 error；**修两个真缺陷**：①授权拒绝路径不释放锁（泄漏——299 排障定位：B busy 但 A 的 handler 从未进 runAction，链路工具未 allow 提前 return）②同 sid 重入不重置锁（SDK POST 重放）；释放三路：完成/失败 finally（闭包捕获 mySid——模块级 currentSid 被并发请求覆盖的坑）+ 授权拒绝 + DELETE 断连批量释放；sessions 端点带 locks 视图；mcplock299 8 断言（互斥/持锁/轮询释放/重试/read 并发/断连）；**perf-guard 加 load>3 降级豁免**（本机外部进程 45% CPU 抢占时冷启动 300-410ms 间歇红——CI 干净机仍守 300ms 真回归）；基线 3338→3346。
-
-## [4.10.0] - 2026-11-15
-
-### Added
-
-- 广播过滤订阅（297 复盘建议 1 第一项，v4 协作面深化）：SessionEntry 加 filters（tool 名前缀集，空=全收）；客户端声明走 initialize params.clientInfo.filterTools（string[]——标准 MCP 握手参数内携带，无需扩展协议）；notifyOthers 发送前按 tool 名前缀匹配（不匹配跳过该会话）；presence 豁免（joined/left 永远全发）；filtered 单列计数进 /mcp/sessions（filteredBroadcasts）；bcastfilter298 4 断言（活体：B 声明只收 demochain → sysinfo 被滤、demochain 命中、filtered≥1、presence 不受影响）；基线 3334→3338。
 
