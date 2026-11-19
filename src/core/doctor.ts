@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { orphanTimers } from './timers.ts';
+import { readAudit } from './ops.ts';
 // 环境与插件自检。
 //
 // 这套检查原本长在 cli.ts 的 cmdDoctor 里，只服务终端一个面。启动器也想显示
@@ -64,8 +65,8 @@ export interface DoctorReport {
   desktop: { installed: boolean; path?: string; hotkey?: string; deepLinkRegistered?: boolean };
   /** 第六十三轮⑧：孤儿定时任务 key（timers.json 引用的插件已卸载）。 */
   orphanTimerKeys: string[];
-  /** 第三百二十四轮①：使用信号（安装计数）状态——真实信号驱动的可见性。 */
-  signal: { plugins: number; totalInstalls: number; hasData: boolean };
+  /** 第三百二十四轮①/325③：使用信号（安装计数 + 执行热度）状态——真实信号驱动的可见性。 */
+  signal: { plugins: number; totalInstalls: number; hasData: boolean; executions: number; topAction: string | null };
   summary: { plugins: number; actions: number; errors: number; warnings: number };
   /** 第八十四轮②：每次全量体检的摘要落 doctor-history.jsonl（保留 50 条）。 */
   history: DoctorHistoryEntry[];
@@ -471,13 +472,22 @@ export async function buildDoctorReport(): Promise<DoctorReport> {
     orphanTimerKeys,
     // 324①②：使用信号摘要（market-stats.json；空/缺不算 error——info 级）
     signal: (() => {
+      // 安装与执行各自独立 try——一个缺不能拖垮另一个（325 实测坑：market-stats 缺失时执行数也归零）
+      let installs = { plugins: 0, totalInstalls: 0, hasData: false };
       try {
         const raw = JSON.parse(fs.readFileSync(path.join(HOME, 'market-stats.json'), 'utf8')) as Record<string, { installs: number }>;
         const entries = Object.values(raw);
-        return { plugins: entries.length, totalInstalls: entries.reduce((a, b) => a + (b.installs ?? 0), 0), hasData: entries.length > 0 };
-      } catch {
-        return { plugins: 0, totalInstalls: 0, hasData: false };
-      }
+        installs = { plugins: entries.length, totalInstalls: entries.reduce((a, b) => a + (b.installs ?? 0), 0), hasData: entries.length > 0 };
+      } catch { /* 安装数据缺失不算异常 */ }
+      let exec = { executions: 0, topAction: null as string | null };
+      try {
+        const audit = readAudit();
+        const byKey = new Map<string, number>();
+        for (const e of audit) { const k = `${e.plugin}.${e.action}`; byKey.set(k, (byKey.get(k) ?? 0) + 1); }
+        const topEntry = [...byKey.entries()].sort((a, b) => b[1] - a[1])[0];
+        exec = { executions: audit.length, topAction: topEntry ? `${topEntry[0]}×${topEntry[1]}` : null };
+      } catch { /* 审计读失败不算异常 */ }
+      return { ...installs, ...exec };
     })(),
     plugins,
     history: historyBefore.slice(0, 5),
