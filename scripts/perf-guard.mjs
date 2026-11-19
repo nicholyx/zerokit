@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { loadavg } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = path.join(ROOT, 'src', 'cli.ts');
@@ -24,7 +24,7 @@ const entries = Array.from({ length: 10000 }, (_, i) => ({
 }));
 const rows = Array.from({ length: 10000 }, (_, i) => ({ PID: i, 名称: `proc-${i}`, 内存: `${(i % 900) + 10} MB`, ts: 1760000000 + i }));
 
-const { filterRows, highlightHtml } = await import(path.join(ROOT, 'web', 'extras.js'));
+const { filterRows, highlightHtml } = await import(pathToFileURL(path.join(ROOT, 'web', 'extras.js')).href);
 const t = (fn) => { const t0 = performance.now(); fn(); return performance.now() - t0; };
 
 // ① 高亮（搜索命中渲染的热路径）10k
