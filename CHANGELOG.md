@@ -4,6 +4,7 @@
 
 ### Added
 
+- UI 协作面板（collab，#面）：mcp serve 运行时快照落盘 HOME/mcp-runtime.json（会话建立/断连/锁变化/频控丢弃四处挂钩——Inner 全量写 + writeLocksSnapshot 模块级锁写，双进程解耦）；GET /api/mcp-sessions 代理端点（读快照，15s 心跳超时判 running:false——白名单+openapi）；web/collab.js 面板三块（在线会话表 clientId/连于/过滤、持锁表 tool/holder/since、频控计数 dropped/filtered）+ 三态渲染（未运行引导 zkit mcp serve --broadcast / 读取失败 / 运行中心跳）；#/collab 路由（applyHash + hashchange 双侧）+ 3s 轮询；collabpanel311 7 断言（端点/挂钩×5/三块三态/引导/路由/空态/伪造快照透传）；基线 3396→3409。协作面 UI 收官：CLI、MCP、桌面三端之外，浏览器也成为协作状态的一等观察窗。
 （下一版攒着）
 
 ## [4.22.0] - 2026-11-19

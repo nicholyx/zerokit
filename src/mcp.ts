@@ -9,6 +9,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { HOME, PLUGINS_DIR } from './core/paths.ts';
+import { ensureDirs } from './core/paths.ts';
 import { loadTimers, nextFireTime } from './core/timers.ts';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -329,6 +330,20 @@ const coopLocks = new Map<string, { sid: string; clientId: string; since: number
 /** 299 会话名映射（sid → clientId；serveHttp 维护，CallTool 查询） */
 const sessionNames = new Map<string, string>();
 const isBroadcastOn = (): boolean => process.env.ZEROKIT_BROADCAST === '1' || process.argv.includes('--broadcast');
+
+/** 311①：读快照文件（供合并写） */
+function readRuntimeSnapshotFile(): Record<string, unknown> {
+  try { return JSON.parse(fs.readFileSync(path.join(HOME, 'mcp-runtime.json'), 'utf8')) as Record<string, unknown>; } catch { return {}; }
+}
+
+/** 311①：模块级锁快照更新（CallTool handler 可见 coopLocks；sessions/dropped 由 serveHttp 侧全量写） */
+function writeLocksSnapshot(): void {
+  try {
+    const cur = readRuntimeSnapshotFile();
+    const locks = [...coopLocks.entries()].map(([tool, l]) => ({ tool, holder: l.clientId, since: new Date(l.since).toISOString().slice(11, 19) }));
+    fs.writeFileSync(path.join(HOME, 'mcp-runtime.json'), JSON.stringify({ ...cur, ts: new Date().toISOString(), running: true, locks }, null, 2));
+  } catch { /* 快照失败不影响协作 */ }
+}
 let currentSid = '';  // 299②：当前请求会话（serveHttp 请求线程写）
 
 /** 第二百七十七轮①：server 实例构造与传输绑定分离——setRequestHandler 全复用，stdio/http 同一实例形态 */
@@ -520,6 +535,7 @@ function buildMcpServer(): Server {
       // 299②：同 sid 重入（SDK POST 重放/同会话并发）不重置锁——首个请求的 finally 负责释放
       if (coopLocks.get(lockKey)?.sid !== mySid) {
         coopLocks.set(lockKey, { sid: mySid, clientId: sessionNames.get(mySid) ?? `session-${mySid.slice(-6)}`, since: Date.now() });
+        writeLocksSnapshot();
       }
     }
     if (!isAllowed(plugin, action, allow)) {
@@ -709,6 +725,24 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
   const bcConfig = readBroadcastConfig();
   const lastBroadcast = new Map<string, number>();  // method → 上次广播时刻
   const dropped = { count: 0, filtered: 0 };
+
+/** 311①：运行时快照落盘（serveHttp 内全量版——可见 transports/dropped/coopLocks） */
+  function writeRuntimeSnapshotInner(): void {
+    const locks = [...coopLocks.entries()].map(([tool, l]) => ({ tool, holder: l.clientId, since: new Date(l.since).toISOString().slice(11, 19) }));
+    const sessions = [...transports.entries()].filter(([sid]) => sid !== 'pending').map(([sid, e]) => ({
+      clientId: e.clientId,
+      connectedAt: new Date(e.connectedAt).toISOString(),
+      session: sid.slice(-8),
+      filters: e.filters ?? [],
+    }));
+    writeRuntimeSnapshot({ count: sessions.length, sessions, locks, droppedBroadcasts: dropped.count, filteredBroadcasts: dropped.filtered });
+  }
+  const writeRuntimeSnapshot = (partial: Partial<{ count: number; sessions: unknown[]; locks: unknown[]; droppedBroadcasts: number; filteredBroadcasts: number }> = {}) => {
+    try {
+      const cur = readRuntimeSnapshotFile();
+      fs.writeFileSync(path.join(HOME, 'mcp-runtime.json'), JSON.stringify({ ts: new Date().toISOString(), running: true, ...cur, ...partial }, null, 2));
+    } catch { /* 快照失败不影响协作 */ }
+  };
   const inQuiet = (): boolean => {
     if (!bcConfig.quiet) return false;
     const [s2, e2] = bcConfig.quiet.split('-');
@@ -725,7 +759,7 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
     if (!broadcastEnabled) return;
     // ② 静默窗口：presence（session-joined/left 在 data 里）豁免；其余静默丢弃
     const isPresence = typeof params.data === 'string' && (params.data.includes('session-joined') || params.data.includes('session-left'));
-    if (bcConfig.quiet && inQuiet() && !isPresence) { dropped.count += 1; return; }
+    if (bcConfig.quiet && inQuiet() && !isPresence) { dropped.count += 1; writeRuntimeSnapshotInner(); return; }
     // ① 节流：同 method 最小间隔（presence 豁免——joined/left 不占 tool-call 的配额）
     if (!isPresence) {
       const now3 = Date.now();
@@ -739,6 +773,7 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
       if (sid === fromSid || sid === 'pending') continue;
       if (!isPresence && toolName && entry.filters && entry.filters.length > 0 && !entry.filters.some((f) => toolName.startsWith(f))) {
         dropped.filtered += 1;
+        writeRuntimeSnapshotInner();
         continue;
       }
       try { await (entry.server as unknown as { sendLoggingMessage: (a: { level: string; data: unknown }) => Promise<void> }).sendLoggingMessage({ level: String(params.level ?? 'info'), data: params.data }); } catch { /* 单会话失败不阻断 */ }
@@ -798,6 +833,7 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
       if (sidAfter && transports.has('pending')) {
         transports.set(sidAfter, transports.get('pending')!); transports.delete('pending');
         sessionNames.set(sidAfter, transports.get(sidAfter)?.clientId ?? sidAfter);  // 299②：锁 holder 名可读
+        writeRuntimeSnapshotInner();  // 311①：会话建立即刷新快照
         // 第二百九十轮①：会话加入广播（其余会话收 session-joined 含 clientId）
         currentSid = sidAfter;
         if (broadcastHook && body.includes('initialize')) {
@@ -815,6 +851,7 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
         // 299③：断连释放该会话持有的全部锁 + 名字映射
         for (const [lk, lv] of coopLocks) if (lv.sid === sid) coopLocks.delete(lk);
         sessionNames.delete(sid as string);
+        writeRuntimeSnapshotInner();
         // 第二百九十轮②：会话离开广播
         currentSid = sid as string;
         if (broadcastHook) {
