@@ -4,7 +4,7 @@
 
 ### Added
 
-（下一版攒着）
+- 协作指南（协作面六步文档化收尾）：docs/guide/collaboration.md——接入五步（token/x-client-id/initialize/SSE）→ 广播载荷（tool-call/summary 脱敏分档真实样例）→ 过滤订阅（clientInfo.filterTools 前缀）→ 频率控制与静默窗口（config.toml 两键 + dropped/filtered 计数）→ 协作锁（busy-locked 结构化处理 + 退避策略 + 三路释放）→ 会话查询；plugin-spec / data-pipelines / platform-pitfalls 互链 + docs/README 导航；collabguide307 4 断言（五节/载荷形态/接入清单/互链）；基线 3383→3387。协作面六步全部有正式指南——外部客户端作者照单接入。
 
 ## [4.18.0] - 2026-11-19
 
