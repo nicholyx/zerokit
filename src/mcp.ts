@@ -784,6 +784,46 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
   const srv = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
     // 第二百九十轮③：在线会话清单（token 同面鉴权）
+    // 312①：过滤前缀在线编辑（body: session + filters[]）——写回会话并刷快照
+    if (url.pathname === '/mcp/sessions/filters' && req.method === 'POST') {
+      const token = req.headers['x-zerokit-token'];
+      if (typeof token !== 'string' || token !== TOKEN) { res.writeHead(401).end(); return; }
+      let body = '';
+      req.on('data', (c) => { body += c; if (body.length > 65536) req.destroy(); });
+      req.on('end', () => {
+        try {
+          const parsed = JSON.parse(body) as { session?: string; filters?: unknown };
+          const sid = String(parsed.session ?? '');
+          const entry = sid ? transports.get(sid) : undefined;
+          if (!entry) { res.writeHead(404, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'session-not-found' })); return; }
+          const ft = Array.isArray(parsed.filters) ? parsed.filters.map(String) : [];
+          entry.filters = ft.length > 0 ? ft : undefined;
+          writeRuntimeSnapshotInner();
+          res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, session: sid, filters: entry.filters ?? [] }));
+        } catch { res.writeHead(400).end(); }
+      });
+      return;
+    }
+
+    // 312②：锁手动释放（管理员语义；body: tool）——释放指定锁并刷快照
+    if (url.pathname === '/mcp/sessions/unlock' && req.method === 'POST') {
+      const token = req.headers['x-zerokit-token'];
+      if (typeof token !== 'string' || token !== TOKEN) { res.writeHead(401).end(); return; }
+      let body = '';
+      req.on('data', (c) => { body += c; if (body.length > 65536) req.destroy(); });
+      req.on('end', () => {
+        try {
+          const parsed = JSON.parse(body) as { tool?: string };
+          const tool = String(parsed.tool ?? '');
+          if (!tool || !coopLocks.has(tool)) { res.writeHead(404, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'lock-not-found' })); return; }
+          coopLocks.delete(tool);
+          writeRuntimeSnapshotInner();
+          res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, released: tool }));
+        } catch { res.writeHead(400).end(); }
+      });
+      return;
+    }
+
     if (url.pathname === '/mcp/sessions' && req.method === 'GET') {
       const token = req.headers['x-zerokit-token'];
       if (typeof token !== 'string' || token !== TOKEN) { res.writeHead(401).end(); return; }
