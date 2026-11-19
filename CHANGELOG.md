@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.21.0] - 2026-11-19
+
+### Added
+
 - builtin 统计步（dataflow consume-detail 的内置化——数据消费端补强）：use = "builtin.zerocol-stats"（plan 放行 + 执行特判，与 export/read 同模式）；params file + column + ops（min/max/avg/count 逗号分隔——非法 ops/string 列明确报错 chain-stats-*）；int/double 8B LE 解码复用 308 轮经验（列起点=前面 bytes 之和）；结果 data.stats.* 模板直取（{s.data.stats.min}）；dataflow consume-detail 重写为 stats 步（删手写解码 node 脚本）；plugin-spec stats 行 + 管道指南统计快捷方式节；zerocolstats309 4 断言 + dataflow308 断言随新文案更新；基线 3392→3396。
 （下一版攒着）
 
@@ -72,10 +78,4 @@
 ### Added
 
 - 广播过滤订阅（297 复盘建议 1 第一项，v4 协作面深化）：SessionEntry 加 filters（tool 名前缀集，空=全收）；客户端声明走 initialize params.clientInfo.filterTools（string[]——标准 MCP 握手参数内携带，无需扩展协议）；notifyOthers 发送前按 tool 名前缀匹配（不匹配跳过该会话）；presence 豁免（joined/left 永远全发）；filtered 单列计数进 /mcp/sessions（filteredBroadcasts）；bcastfilter298 4 断言（活体：B 声明只收 demochain → sysinfo 被滤、demochain 命中、filtered≥1、presence 不受影响）；基线 3334→3338。
-
-## [4.9.0] - 2026-11-14
-
-### Added
-
-- v4 双主题阶段复盘（第 297 轮）：v4-outlook 加「v4 线进度」节——协作面 4/4（广播/presence/摘要/频控）+ 数据工作流 4/4（pipe/导出端/读取端/调度面）双表对照（步/轮/交付/版本 v4.1.0–v4.8.0）；下一阶段建议四条（协作深化 M：广播过滤订阅+协作锁 / 数据深化 M：zerocol 多行+管道 DSL 文档化 / 桌面冻结重审 S：首个桌面用户出现时插 / 新议题征集常开——298 轮起 1→2 交替）；docs/README 进度锚点；v4mid297 5 断言；基线 3329→3334。
 
