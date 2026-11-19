@@ -4,6 +4,7 @@
 
 ### Added
 
+- stats 摘要进 watch（指标越界可读化——数据消费端最后一块）：tick 钩子把 chain 结果的 data.stats（309 统计步产物）摘进 lastChainRun.stats；通知文案升级「数据变化 · value max=95 avg=48」人话摘要（尊重 notify 开关）；面板 ⛓ 徽标行内带最新统计（statsBrief max）；watch.json 持久化随 lastChainRun 整体落盘；watchstats316 4 断言（钩子/通知/徽标/持久化）；基线 3423→3427。watch 通知从「数据变了」到「变成多少」——指标越界告警的人话形态。
 （下一版攒着）
 
 ## [4.27.0] - 2026-11-19

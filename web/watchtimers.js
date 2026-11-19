@@ -96,7 +96,14 @@ function scheduleWatch(key, sec) {
       const ca = dot > 0 ? w.chain.slice(dot + 1) : '';
       try {
         const r = await runChainQuiet(cp, ca);
-        w.lastChainRun = { ok: r?.ok === true, ts: Date.now(), key: w.chain };
+        // 316①：chain 结果带 stats（309 统计步）→ 摘进 lastChainRun 供通知/徽标引用
+        const st = r?.data?.stats ?? null;
+        w.lastChainRun = { ok: r?.ok === true, ts: Date.now(), key: w.chain, ...(st ? { stats: st } : {}) };
+        // 316②：通知文案带人话摘要——「value max=95」级别
+        if (w.notify !== false && st) {
+          const brief = Object.entries(st).slice(0, 2).map(([col, o]) => `${col} max=${o.max ?? '-'} avg=${o.avg ?? '-'}`).join(' · ');
+          try { notifyWatchChange(w, prev, { data: { _stats: brief } }); } catch { /* 通知失败不阻断 */ }
+        }
       } catch (e) {
         w.lastChainRun = { ok: false, ts: Date.now(), key: w.chain, err: String(e?.message ?? e).slice(0, 80) };
       }
@@ -205,7 +212,10 @@ function liveRefreshWatchPanel() {
       const w = k ? reg[k] : undefined;
       if (!w) return;
       const sub = row.querySelector('.sub');
-      if (sub) sub.textContent = `${w.runs} 次采样 · ${w.changes} 次变更${w.changes > 0 && w.samples.length ? ' · 上次变化 ' + relTime(w.samples.at(-1)?.ts ?? Date.now()) : ''}${w.chain ? ` · ⛓ ${esc(w.chain)} ${w.lastChainRun ? (w.lastChainRun.ok ? '✓' : '✗') : '（待触发）'}` : ''}`;
+      if (sub) {
+        const statsBrief = w.lastChainRun?.stats ? Object.entries(w.lastChainRun.stats).slice(0, 1).map(([col, o]) => `${col} max=${o.max ?? '-'}`).join('') : '';
+        sub.textContent = `${w.runs} 次采样 · ${w.changes} 次变更${w.changes > 0 && w.samples.length ? ' · 上次变化 ' + relTime(w.samples.at(-1)?.ts ?? Date.now()) : ''}${w.chain ? ` · ⛓ ${esc(w.chain)} ${w.lastChainRun ? (w.lastChainRun.ok ? '✓' : '✗') : '（待触发）'}${statsBrief ? ` ${esc(statsBrief)}` : ''}` : ''}`;
+      }
       // ④ sparkline 点阵（最近 10 次成败）
       let spark = row.querySelector('.watch-spark');
       if (!spark) { spark = document.createElement('span'); spark.className = 'watch-spark'; row.querySelector('.watch-summary')?.after(spark); }
