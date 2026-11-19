@@ -18,7 +18,8 @@ risk = "read"
 output = "json"
 
 # ② 积累：append 追加一行（301 轮多行导出），rowsLimit=20 演示上限——
-#    watch 定时触发本动作（295 轮），数据集自动滚动增长
+#    watch 定时触发本动作（295 轮）即无人值守积累：详情页 → 监控 → 触发管道填
+#    「dataflow.append-ts」；UI server 读缓存 10s，监控动作默认 fresh 不受影响
 [[action]]
 id = "append-ts"
 title = "积累样本"
