@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.31.0] - 2026-11-20
+
+### Added
+
 - zerocol 内建步 Windows 路径守护（304 坑的系统性后验）：静态审查全绿——三内建步路径全 pathModule.join(DATA_DIR)（三种局部名形态、零手写斜杠拼接）；读写 JSON utf8 + 字符串写（二进制走 base64 不落原始字节）；解码全 LE 后缀（readBigInt64LE/readDoubleLE——Buffer API 级字节序保证平台无关）；web/ 零 /tmp 硬编码、test/ 临时目录全 os.tmpdir；**审查判据固化为 winpaths319 守护测试 5 断言**（join 形态合计/裸读/LE-BE 计数/web tmp/test tmp——任何回归本地即拦）；基线 3437→3442。结论：内建步文件操作无 Windows 隐患，CI 全绿的信任有了静态背书。
 （下一版攒着）
 
@@ -82,10 +88,4 @@
 ### Added
 
 - dataflow 端到端实战插件（数据工作流五件套的组合示例）：gen-ts（产时间戳样本）→ append-ts（mode=append + rowsLimit=20 积累）→ consume-ts（read 汇总行数——**引 {back.data._rows} 不引 {agg.rows}**：导出统计行数与数据行数同名撞车，模板要从读步行数取）→ consume-detail（int 列 8B LE 解码参考实现——**列起点=前面各列 bytes 之和**）；market.json 登记（source=path:plugins/dataflow）；新插件入驻顺带更新 4 个计数断言测试（api164/authordx153 计数 13→14 + deps87/distro 因缺 source 修 market.json）；dataflow308 5 断言（5 次 append 5 行/汇总/明细/登记/指南注释）；基线 3387→3392。
-
-## [4.19.0] - 2026-11-19
-
-### Added
-
-- 协作指南（协作面六步文档化收尾）：docs/guide/collaboration.md——接入五步（token/x-client-id/initialize/SSE）→ 广播载荷（tool-call/summary 脱敏分档真实样例）→ 过滤订阅（clientInfo.filterTools 前缀）→ 频率控制与静默窗口（config.toml 两键 + dropped/filtered 计数）→ 协作锁（busy-locked 结构化处理 + 退避策略 + 三路释放）→ 会话查询；plugin-spec / data-pipelines / platform-pitfalls 互链 + docs/README 导航；collabguide307 4 断言（五节/载荷形态/接入清单/互链）；基线 3383→3387。协作面六步全部有正式指南——外部客户端作者照单接入。
 
