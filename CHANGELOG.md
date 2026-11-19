@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.18.0] - 2026-11-19
+
+### Added
+
 - 市场安装计数（300 轮盘点候选 4 首项——真实使用信号）：~/.zerokit/market-stats.json（installs/lastInstallAt/lastVersion）；installFromMarket 成功即计数——**同版本重复装幂等不重复计**（版本变化才 +1）；uninstall 不减（历史累积语义）；zkit market list --by-installs 热度视图（跨集市降序）；GET /api/market-stats 端点（白名单+openapi）；UI market 面板已装徽标附 🔥N；marketstats306 5 断言（幂等/卸载不减/排序视图/端点/UI）；基线 3378→3383。议题池新陈代谢第一步：项目方从此看得到「用户装了什么、升级了几次」。
 
 ## [4.17.0] - 2026-11-19
@@ -71,10 +77,4 @@
 ### Added
 
 - watch 触发 chain 管道（v4 数据工作流调度面——无人值守数据流）：watch 配置加 chain 字段（详情页 watch 表单「触发管道」输入 插件.动作；reg 条目与 persistWatch 均持久化 chain + lastChainRun）；浏览器 tick 引擎——采样后数据变化且声明 chain → runChainQuiet 静默执行（/api/run 同款信封 token 头）；lastChainRun 记录 ok/ts/key/err；UI watch 面板徽标（⛓ chain 名 + ✓/✗/待触发三态）；恢复侧（GET /api/watch）带 chain；watchchain295 5 断言；基线 3320→3325。「指标越界→自动跑管道→落盘新 zerocol」调度闭环成形。
-
-## [4.6.0] - 2026-11-14
-
-### Added
-
-- zerocol 读回 chain step（v4 数据工作流第三步——读取端闭环）：内建伪引用 use = "builtin.zerocol-read"（plan 放行 + 执行特判）；params file（data_dir 下的 zerocol 文件）；importZeroCol 读回 → data 带全列首行捷径（{alias.data.value} 直接取）+ _rows/_columns/_all/_file 元数据；错误两态明确（chain-read-missing 提示先跑 export 生成 / chain-read-bad-format 含 JSON 与列解码两层）；demochain pipe-roundtrip 示例（read → export 回写，**往返 checksum 全等实测**——开发中发现并修正 from 路径漏 .data 层）；plugin-spec 读回步行；zerocolread294 4 断言；基线 3316→3320。数据跨 run 流转成形：昨天的导出今天的管道源。
 
