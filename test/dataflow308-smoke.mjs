@@ -28,9 +28,8 @@ check('③ consume-ts 汇总（共 5 行样本）', r1.status === 0 && (r1.stdou
 
 // ③b consume-detail 明细（rows/min/max JSON）
 const r2 = run(['run', 'dataflow.consume-detail']);
-const m = (r2.stdout + '').match(/\{[\s\S]*\}/);
-const j = m ? JSON.parse(m[0]) : {};
-check('③ consume-detail（rows=5 + min/max 数值）', j.rows === 5 && Number.isFinite(j.min) && Number.isFinite(j.max), (r2.stdout + '').slice(0, 80));
+const m = (r2.stdout + '').match(/min=(-?\d+) max=(-?\d+) avg=([\d.]+)（(\d+) 行）/);
+check('③ consume-detail（stats 步：min/max/avg + 5 行）', r2.status === 0 && m && m[4] === '5' && Number.isFinite(Number(m[1])) && Number.isFinite(Number(m[2])), (r2.stdout + '').slice(0, 80));
 
 // ⑤ market 登记
 const mk = JSON.parse(fs.readFileSync(path.join(ROOT, 'market.json'), 'utf8'));
