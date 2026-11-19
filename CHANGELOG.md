@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.28.0] - 2026-11-19
+
+### Added
+
 - stats 摘要进 watch（指标越界可读化——数据消费端最后一块）：tick 钩子把 chain 结果的 data.stats（309 统计步产物）摘进 lastChainRun.stats；通知文案升级「数据变化 · value max=95 avg=48」人话摘要（尊重 notify 开关）；面板 ⛓ 徽标行内带最新统计（statsBrief max）；watch.json 持久化随 lastChainRun 整体落盘；watchstats316 4 断言（钩子/通知/徽标/持久化）；基线 3423→3427。watch 通知从「数据变了」到「变成多少」——指标越界告警的人话形态。
 （下一版攒着）
 
@@ -79,10 +85,4 @@
 ### Added
 
 - 平台差异判据手册（300 轮盘点候选 3 第三项，稳定性长跑③）：docs/reference/platform-pitfalls.md——Windows 五坑（file:// ESM/tmp/CRLF/路径分隔符/execFileSync 相对 cwd）+ Chrome 表（getter 误用/跨版本语法炸弹/固定 sleep）+ 防线三层（本地静态→本地全量→三平台 CI 唯一防线），每坑带判据/修复/战役对照（291/299/303/304）；web-strict-check 扩 RAW_DYN_IMPORT 线（动态 import(path.join…) Windows 炸弹静态可判——现库 0 处）；全量 test/*.mjs 的 /tmp 硬编码排查——4 处均无害（报错用例/字面量/mock/样例）不修记入手册；START-HERE + docs/README 判据索引；platformpit305 7 断言；基线 3371→3378。
-
-## [4.16.0] - 2026-11-19
-
-### Added
-
-- perf 阈值机器自适应（300 轮盘点候选 3 第二项，稳定性长跑②）：perf-guard 先测本机基线（预热 3 次 JIT/文件缓存 + 取样 5 次取中位 b），阈值 = max(300 硬线, b×2.5)——健康机 b≈100ms 仍守 300 真回归；慢机/CI x86 b≈180-200 放宽到 450-500（机器差异不算回归，实测本机 load≈3 下基线 197→493 线全过）；load>3 抢占豁免保留（环境非代码）；报告行带基线/实测/阈值来源（「自适应 493ms（本机基线 197×2.5）」/「300ms 硬线」两态）；perfadaptive304 5 断言（基线采样/阈值公式/豁免保留/报告信息/活体不误伤）；基线 3366→3371。299 的粗豁免升级为精细自校准。
 
