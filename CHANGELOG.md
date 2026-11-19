@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.24.0] - 2026-11-19
+
+### Added
+
 - 协作面板操作化（311 只读面板补操作面）：mcp serve 加 POST /mcp/sessions/filters（session + filters 写回会话并刷快照——在线改订阅前缀立即生效）与 POST /mcp/sessions/unlock（管理员语义手动释放锁并刷快照）；UI server 双代理 POST（转发到 MCP_HTTP_PORT 的 mcp serve，默认 31800；token 用 MCP_HTTP_TOKEN env）+ openapi；collab.js 面板操作面——会话行过滤输入框（回车提交）、锁行「释放」按钮（成功即 refresh）、标题手动刷新按钮；collabops312 6 断言（双端点/代理透传活体：过滤编辑 200+ok、unlock 无锁 404 形态）；基线 3409→3415。协作面从「看」到「管」。
 （下一版攒着）
 
@@ -75,10 +81,4 @@
 ### Added
 
 - zerocol 多行导出（300 轮盘点候选 1 第一项，数据深化收尾①）：export 步 mode = "append"（默认 overwrite 保持现状）+ rowsLimit（默认 1000——**kebab 不过 PARAM_RE**，参数名用 camelCase）；append 实现——读旧文件按新列声明对齐合并（**行对齐补 null**：旧行在新列上占位——初版漏此导致旧行丢失，最小复现定位）；回报带 mode 与合并后行数；demochain pipe-append 示例（跑三次 3 行）；plugin-spec mode/rowsLimit 行；zerocolappend301 4 断言（append/上限截断/新列补空/回报）；292/294 回归全绿；基线 3351→3355。时序数据集成形：watch（295）触发 + append 积累 + read 端 _all 消费。
-
-## [4.12.0] - 2026-11-19
-
-### Added
-
-- 第三百轮盘点（v4 深化收官 + 旅程 + 展望）：v4-outlook 深化阶段表（298 过滤订阅 + 299 协作锁——含 Chrome 158 暴露 247 轮笔误的战果记录；建议 2 待续）；三百轮旅程摘要（v3 287 轮 79 minor + v4 13 轮 12 minor；160 文件 3346 断言；发布链全自动 + 生态三链 + 双主题闭环）；下一百轮候选四条（数据深化收尾 M / 真实用户驱动按需 / 稳定性长跑——跨浏览器巡检+perf 自适应 / 议题池新陈代谢）；docs/README 三百轮锚点；round300 5 断言；基线 3346→3351。
 
