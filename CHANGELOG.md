@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.20.0] - 2026-11-19
+
+### Added
+
 - dataflow 端到端实战插件（数据工作流五件套的组合示例）：gen-ts（产时间戳样本）→ append-ts（mode=append + rowsLimit=20 积累）→ consume-ts（read 汇总行数——**引 {back.data._rows} 不引 {agg.rows}**：导出统计行数与数据行数同名撞车，模板要从读步行数取）→ consume-detail（int 列 8B LE 解码参考实现——**列起点=前面各列 bytes 之和**）；market.json 登记（source=path:plugins/dataflow）；新插件入驻顺带更新 4 个计数断言测试（api164/authordx153 计数 13→14 + deps87/distro 因缺 source 修 market.json）；dataflow308 5 断言（5 次 append 5 行/汇总/明细/登记/指南注释）；基线 3387→3392。
 
 ## [4.19.0] - 2026-11-19
@@ -71,10 +77,4 @@
 ### Added
 
 - v4 双主题阶段复盘（第 297 轮）：v4-outlook 加「v4 线进度」节——协作面 4/4（广播/presence/摘要/频控）+ 数据工作流 4/4（pipe/导出端/读取端/调度面）双表对照（步/轮/交付/版本 v4.1.0–v4.8.0）；下一阶段建议四条（协作深化 M：广播过滤订阅+协作锁 / 数据深化 M：zerocol 多行+管道 DSL 文档化 / 桌面冻结重审 S：首个桌面用户出现时插 / 新议题征集常开——298 轮起 1→2 交替）；docs/README 进度锚点；v4mid297 5 断言；基线 3329→3334。
-
-## [4.8.0] - 2026-11-14
-
-### Added
-
-- 广播频率控制与静默窗口（v4 协作面第四步——防 watch+chain 高频刷屏）：节流（同 method 最小间隔 min-interval-ms 默认 2000——config [broadcast] 节；**presence 豁免**：joined/left 不占 tool-call 配额，开发中靠 gate 日志定位「A 的 join 占用配额致首个 tool-call 被拦」）；静默窗口 quiet = "22:00-07:00"（跨午夜窗口解析；窗口内非 presence 广播丢弃）；丢弃计数 dropped 进 /mcp/sessions（droppedBroadcasts 字段）；zkit mcp sessions 显示「频率控制丢弃 N 条 + 可调提示」；readBroadcastConfig 最小 TOML 解析；broadcastthrottle296 4 断言（活体 500ms 节流只广播 1 次 + dropped≥1 + 窗口/豁免源码面）；修复过程顺带回归验证 289/290/293 全绿；基线 3325→3329。
 
