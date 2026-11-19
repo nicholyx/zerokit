@@ -1235,6 +1235,7 @@ async function runChainAction(
       const columnSingle = typeof item.step.params['column'] === 'string' ? String(item.step.params['column']) : '';
       const columnsMulti = typeof item.step.params['columns'] === 'string' ? String(item.step.params['columns']) : '';
       const opsRaw = typeof item.step.params['ops'] === 'string' ? String(item.step.params['ops']) : 'count';
+      const windowN = typeof item.step.params['window'] === 'number' ? Math.max(1, Math.floor(item.step.params['window'] as number)) : 0;  // 320①：最近 N 行窗口（0=全表）
       const wanted = columnsMulti ? columnsMulti.split(',').map((x) => x.trim()).filter(Boolean) : (columnSingle ? [columnSingle] : []);
       if (!file || wanted.length === 0) {
         return fail('chain-stats-bad-params', `${label} 需要 file（data_dir 文件名）与 column/columns（列名，columns 逗号分隔可多列）`);
@@ -1269,12 +1270,14 @@ async function runChainAction(
           off += c.bytes;
           continue;
         }
-        const vals: number[] = [];
+        let vals: number[] = [];
         if (target) {
           rows = target.count;
           for (let i = 0; i < target.count; i++) {
             vals.push(target.type === 'int' ? Number(buf.readBigInt64LE(off + i * 8)) : buf.readDoubleLE(off + i * 8));
           }
+          // 320②③：窗口取尾 N 行（count = 窗口内行数；N ≥ 行数时取全表）
+          if (windowN > 0) vals = vals.slice(-windowN);
           const one: Record<string, number> = {};
           if (ops.includes('count')) one.count = vals.length;
           if (vals.length > 0) {

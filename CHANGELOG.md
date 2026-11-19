@@ -4,6 +4,7 @@
 
 ### Added
 
+- stats 窗口统计（window 最近 N 行——监控语义对齐）：params window（正整数；缺省=全表兼容不变）——每列 vals 取尾 N 行再算 min/max/avg/count；count 语义明确为窗口内行数（5 行 window=3 → count=3）；超行取全表（window=99 > 5 行 → count=5）；多列每列独立取尾（列长一致同窗）；dataflow consume-detail 加窗口扩展注释（不改默认行为）；plugin-spec/guide 同步；zerocolstats309 8 断言（+窗口取尾 1..5→min=3 max=5 count=3 / 超行取全 count=5 min=1）；基线 3442→3444。滚动窗口数据集 + 窗口统计——异常恢复后告警可复位。
 （下一版攒着）
 
 ## [4.31.0] - 2026-11-20

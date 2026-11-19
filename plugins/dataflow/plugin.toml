@@ -76,3 +76,4 @@ use = "builtin.zerocol-stats"
 as  = "s"
 params = { file = "ts-data", columns = "value", ops = "min,max,avg,count" }
 # 多列扩展：columns = "value,duration" → data.stats.列名.min 分组取值（315 轮）
+# 窗口扩展：params 加 window = 3 → 只统计每列最近 3 行（监控语义——异常恢复后告警可复位，320 轮）
