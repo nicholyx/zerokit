@@ -86,6 +86,8 @@ const API_METHODS: Record<string, string[]> = {
   '/api/markets': ['GET'],
   '/api/market-stats': ['GET'],
   '/api/mcp-sessions': ['GET'],
+  '/api/mcp-sessions/filters': ['POST'],
+  '/api/mcp-sessions/unlock': ['POST'],
   '/api/watch': ['GET', 'PUT'],
   '/api/timer-runs': ['GET'],
   '/api/update-check': ['GET'],
@@ -153,6 +155,8 @@ const API_SPEC = {
     '/api/markets': { get: { summary: '集市索引' } },
     '/api/market-stats': { get: { summary: '安装热度计数' } },
     '/api/mcp-sessions': { get: { summary: '协作运行时快照（会话/锁/频控计数）' } },
+    '/api/mcp-sessions/filters': { post: { summary: '改会话过滤前缀（session + filters）' } },
+    '/api/mcp-sessions/unlock': { post: { summary: '手动释放锁（tool）' } },
     '/api/bookmarks': { get: { summary: '书签列表（与 CLI bookmarks.json 同源）' }, post: { summary: '新增书签', security: [{ token: [] }] }, delete: { summary: '删除书签（?name=）', security: [{ token: [] }] } },
     '/api/run': { post: { summary: '执行动作（body: plugin/action/values）', security: [{ token: [] }] } },
     '/api/cache': { get: { summary: '缓存面板（条目+命中统计）', security: [{ token: [] }] }, delete: { summary: '清空缓存', security: [{ token: [] }] } },
@@ -1177,6 +1181,24 @@ export function createServer(): http.Server {
       // 306④：安装热度（真实使用信号）——UI market 面板徽标用
       if (url.pathname === '/api/market-stats' && req.method === 'GET') {
         json(res, 200, { stats: readInstallStats() });
+        return;
+      }
+
+      // 312④：协作操作代理（转发 POST 到 mcp serve 的 HTTP 口；MCP_HTTP_PORT 可配，默认 31800）
+      if ((url.pathname === '/api/mcp-sessions/filters' || url.pathname === '/api/mcp-sessions/unlock') && req.method === 'POST') {
+        const body = await readBody(req);
+        try {
+          const mcpPort = Number(process.env.MCP_HTTP_PORT ?? '31800');
+          const r = await fetch(`http://127.0.0.1:${mcpPort}/mcp/sessions/${url.pathname.endsWith('filters') ? 'filters' : 'unlock'}`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', ...(process.env.MCP_HTTP_TOKEN ? { 'x-zerokit-token': process.env.MCP_HTTP_TOKEN } : {}) },
+            body: JSON.stringify(body),
+          });
+          const out = await r.text();
+          res.writeHead(r.status, { 'content-type': 'application/json' }).end(out);
+        } catch (e) {
+          fail(res, 502, `mcp serve 不可达（先 zkit mcp serve --broadcast --http ${process.env.MCP_HTTP_PORT ?? 31800}）：${(e as Error).message}`);
+        }
         return;
       }
 
