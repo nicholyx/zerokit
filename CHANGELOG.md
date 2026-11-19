@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.23.0] - 2026-11-19
+
+### Added
+
 - UI 协作面板（collab，#面）：mcp serve 运行时快照落盘 HOME/mcp-runtime.json（会话建立/断连/锁变化/频控丢弃四处挂钩——Inner 全量写 + writeLocksSnapshot 模块级锁写，双进程解耦）；GET /api/mcp-sessions 代理端点（读快照，15s 心跳超时判 running:false——白名单+openapi）；web/collab.js 面板三块（在线会话表 clientId/连于/过滤、持锁表 tool/holder/since、频控计数 dropped/filtered）+ 三态渲染（未运行引导 zkit mcp serve --broadcast / 读取失败 / 运行中心跳）；#/collab 路由（applyHash + hashchange 双侧）+ 3s 轮询；collabpanel311 7 断言（端点/挂钩×5/三块三态/引导/路由/空态/伪造快照透传）；基线 3396→3409。协作面 UI 收官：CLI、MCP、桌面三端之外，浏览器也成为协作状态的一等观察窗。
 （下一版攒着）
 
@@ -74,10 +80,4 @@
 ### Added
 
 - 第三百轮盘点（v4 深化收官 + 旅程 + 展望）：v4-outlook 深化阶段表（298 过滤订阅 + 299 协作锁——含 Chrome 158 暴露 247 轮笔误的战果记录；建议 2 待续）；三百轮旅程摘要（v3 287 轮 79 minor + v4 13 轮 12 minor；160 文件 3346 断言；发布链全自动 + 生态三链 + 双主题闭环）；下一百轮候选四条（数据深化收尾 M / 真实用户驱动按需 / 稳定性长跑——跨浏览器巡检+perf 自适应 / 议题池新陈代谢）；docs/README 三百轮锚点；round300 5 断言；基线 3346→3351。
-
-## [4.11.0] - 2026-11-19
-
-### Added
-
-- 协作锁（297 复盘建议 1 第二项，v4 协作面深化）：coopLocks 模块级注册表（key → sid/clientId/since；--broadcast 开启才启用；read 不锁）；CallTool 授权闸前检查——同 key 已被他会话持有返回 busy-locked（含 holder clientId + since）+ 结构化 error；**修两个真缺陷**：①授权拒绝路径不释放锁（泄漏——299 排障定位：B busy 但 A 的 handler 从未进 runAction，链路工具未 allow 提前 return）②同 sid 重入不重置锁（SDK POST 重放）；释放三路：完成/失败 finally（闭包捕获 mySid——模块级 currentSid 被并发请求覆盖的坑）+ 授权拒绝 + DELETE 断连批量释放；sessions 端点带 locks 视图；mcplock299 8 断言（互斥/持锁/轮询释放/重试/read 并发/断连）；**perf-guard 加 load>3 降级豁免**（本机外部进程 45% CPU 抢占时冷启动 300-410ms 间歇红——CI 干净机仍守 300ms 真回归）；基线 3338→3346。
 
