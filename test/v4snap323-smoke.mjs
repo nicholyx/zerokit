@@ -10,8 +10,8 @@ console.log('v4snap323-smoke');
 
 const doc = fs.readFileSync(path.join(ROOT, 'docs', 'reference', 'v4-health-snapshot.md'), 'utf8');
 const bl = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts', 'assertion-baseline.json'), 'utf8'));
-check('① 指纹五项（文件/基线/4 内建步/2 组合拳/9 线）', ['181 个级', 'assertion-baseline.json 为准', '4 件套', '2 条', '9 线'].every((k) => doc.includes(k)), '');
-check('② 主题分布五档（127/18/15/11/9）', ['127', '18', '15', '11', '9'].every((k) => doc.includes(k)), '');
+check('① 指纹五项（文件/基线/4 内建步/2 组合拳/9 线）', ['192 个', 'assertion-baseline.json 为准', '4 件套', '2 条', '9 线'].every((k) => doc.includes(k)), '');
+check('② 主题分布五档（129/19/16/12/10）', ['129', '19', '16', '12', '10'].every((k) => doc.includes(k)), '');
 const rows = doc.split('\n').filter((l) => /^\| \d+ \| v4\.\d/.test(l));
 check('③ 轮次清单 36 行（288 起航 → 323 本快照）', rows.length === 36 && rows[0].includes('288') && rows[35].includes('323'), String(rows.length));
 // 基线一致：快照数字与 assertion-baseline.json 同源
