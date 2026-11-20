@@ -24,6 +24,22 @@
 - **破坏现有安装包链**：启用的 PR 必须单发（不上混合改动），release 链失败按 18 轮判据排查（draft 422 等）。
 - **签名对象不同**：插件签名（282，ed25519 toolpack）与 updater 签名（tauri minisign 格式）是两套——不要混用文档表述。
 
+## 附：安装包烟测记录（第三百二十八轮，2026-11-20）
+
+v4.40.0 aarch64.dmg 实测（macOS arm64 本机）：
+
+| 检查项 | 结果 |
+|---|---|
+| sha256 与 release digest 对齐 | ✅ be0b0156…（两侧一致） |
+| hdiutil 挂载（只读） | ✅ /Volumes/zerokit |
+| zerokit.app 结构（Info.plist/MacOS/Resources） | ✅ 全在位 |
+| CFBundleIdentifier / 版本 | ✅ dev.zerokit.desktop / 4.40.0 |
+| Resources 内嵌（web 面板 + plugins + src + node_modules） | ✅ |
+| MacOS 二进制 | ✅ Mach-O 64-bit arm64 |
+| 卸载清理 | ✅ detach + /tmp 清理 |
+
+结论：「下载→校验→结构完整」路径通。未实测「实际安装+启动」（避免破坏本机环境——留首个真实桌面用户时做）。
+
 ## 结论
 
 **签名能力在位、配置缺席、解除成本约一轮**。维持冻结，等真实桌面用户诉求出现时按上面清单一键启用。
