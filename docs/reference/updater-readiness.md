@@ -38,6 +38,16 @@ v4.40.0 aarch64.dmg 实测（macOS arm64 本机）：
 | MacOS 二进制 | ✅ Mach-O 64-bit arm64 |
 | 卸载清理 | ✅ detach + /tmp 清理 |
 
+### 年检追加：v4.50.0（第三百三十九轮，2026-11-20）
+
+| 检查项 | 结果 |
+|---|---|
+| sha256 与 release digest 对齐 | ✅ 5585dc28…（两侧一致） |
+| 挂载 + Info.plist | ✅ dev.zerokit.desktop / 4.50.0 |
+| MacOS 二进制 | ✅ Mach-O 64-bit arm64 |
+| Resources 内嵌（web/plugins/src） | ✅ |
+| 清理 | ✅ detach + /tmp 清理 |
+
 结论：「下载→校验→结构完整」路径通。未实测「实际安装+启动」（避免破坏本机环境——留首个真实桌面用户时做）。
 
 ## 结论
