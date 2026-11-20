@@ -4,6 +4,7 @@
 
 ### Added
 
+- 三面板运行时烟测（CDP 真渲染——首抓四个真 bug 全修）：panelsmoke341 起 ui server + headless Chrome CDP 抓 dashboard/watch/collab 三面板——**首跑即抓出四个潜伏真 bug**：①collab.js 工厂声明 deps 却没传参（showCollab 运行时 ReferenceError——311 轮以来 #/collab 从未真实渲染过）②dashboard 信号卡片点击绑定放在 renderSignal 函数外的 try 块顶层（body 局部变量引用——ReferenceError）③④panels.js renderList 的 deps 漏注入 perfStats 与 renderListInner（243 轮迁出遗漏——**每个全新环境首页都炸**「加载失败：perfStats」，老环境因缓存幸存）——四处全修后插件列表/信号卡片/双列表真实渲染验证通过；CDP 排障判据沉淀（代理劫持 127.0.0.1 fetch / chrome target 选 /devtools/page/ / 冷启动重试）；watch 写盘条目读回与 #/collab 深链时序留 342（已知问题记录）；panelsmoke341 4 断言；基线 3510→3514。
 （下一版攒着）
 
 ## [4.50.0] - 2026-11-20

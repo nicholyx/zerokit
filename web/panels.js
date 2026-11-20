@@ -3,7 +3,7 @@
 // 注入式：ui 传入 app 侧函数与依赖，本文件不 import app（避免循环依赖）。
 
 export function createPanels(ui) {
-  const { esc, t, lang, actionKey, actionRiskCard, barsScale, diffResults, formatMs, hotkeyMap, maskSecrets, maskState, openDetail, perfMark, resultCompare, riskText, submit, wbSend, notifyLogRef } = ui;
+  const { esc, t, lang, actionKey, actionRiskCard, barsScale, diffResults, formatMs, hotkeyMap, maskSecrets, maskState, openDetail, perfMark, perfStats, renderListInner, resultCompare, riskText, submit, wbSend, notifyLogRef } = ui;  // 341 修：perfStats/renderListInner 漏注入
 
 function renderBars(rows) {
   const bars = barsScale(rows);
