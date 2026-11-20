@@ -21,6 +21,16 @@
 | **语法炸弹跨版本** | Chrome 156 容忍的写法 158 可能严格（反向也存在） | cdp-smoke 异常捕获带 URL+堆栈首帧（299 升级）；本地单版本不够，三平台 CI 是唯一防线 | 299 轮 |
 | **网络等待** | 固定 sleep 在慢 runner 不足 | 轮询（条件满足即退，封顶 8-10s） | 298 轮 bcastfilter |
 
+## CDP / headless Chrome（341-342 烟测战役换来的）
+
+| 坑 | 判据 | 修复 | 战役 |
+|---|---|---|---|
+| **DevTools host 校验** | Chrome 111+ 的 `/json/*` 端点校验 Host 头，Node fetch 发 `127.0.0.1` 会被拒（返回 200 + HTML 假响应——状态码不报错更迷惑） | fetch URL 用 `localhost` 不用 `127.0.0.1` | 342 |
+| **target 类型漂移** | headless=new 的 json/list 首个 target 可能是 `browser_ui`（Omnibox）而非 `page` | 按 `webSocketDebuggerUrl` 含 `/devtools/page/` 挑，不按 type | 341 |
+| **冷启动竞态** | spawn chrome 后立即 json/list 可能空转全失败 | 重试循环（20×800ms）+ json/new PUT 兜底 + 残实例 pkill | 341 |
+| **代理劫持回环** | Node fetch 若走代理（env 或系统），127.0.0.1 请求被代理截获返回 HTML | 测试进程顶部删 proxy env；CDP fetch 一律 localhost | 341 |
+| **降级一致性** | CI 无 Chrome 时降级源码级断言——**断言数必须与本地 CDP 版一致**，否则基线护栏拦截（3513<3517 差 4 实战） | 降级路径补齐同数断言 | 342 |
+
 ## 通用
 
 - Node ≥ 22.18（项目硬规则）；`execFileSync(process.execPath, [...])` 在三平台行为一致。

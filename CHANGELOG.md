@@ -4,6 +4,7 @@
 
 ### Added
 
+- 面板烟测制度化（341/342 挖七 bug 后——真渲染验证进日常流程）：scripts/pre-push-smoke.sh（web/src 有改动才跑——panelsmoke 三面板 + cdp-smoke 12 面板两个真渲染验证；无改动秒跳过）；.git/hooks/pre-push 幂等安装（无 husky——exec 脚本）；CDP 判据五条落 platform-pitfalls（DevTools host 校验拒 127.0.0.1→localhost / target 类型漂移按 /devtools/page/ 挑 / 冷启动 20×800ms 重试+pkill 残实例 / 代理劫持回环删 proxy env / **降级一致性**——CI 降级断言数必须与本地 CDP 版同数否则基线拦截 3513<3517 实战）；smokeinst343 5 断言（脚本存在可执行/跳过路径/判据五条/panelsmoke 活体 7 断言）；基线 3517→3522。
 - 341 遗留两已知问题清偿（watch 读回 + collab 深链——挖出三个更深的真 bug）：①**restoreWatches 定义了却从未被调用**（79 轮的 watch.json 持久化只写不读——重启页面监控全丢！接通进 load() boot 链）②**读回漏 chain/lastChainRun 字段**（295 写侧有读侧漏——补进 reg 条目重建）③**恢复条目被「翻页自动停」误杀**（boot 时无 detail 上下文 → 首轮 tick 即 stopWatch——加 __restored 首轮宽限标记）；collab 深链根因确认 = 341①（deps 未传）已随上轮修复消失；watch 面板**首渲行也带 ⛓/看统计/趋势段**（此前只有 liveRefresh 动态字段有——首渲与动态同构）；CDP 排障终章：Chrome 111+ 的 DevTools host 校验拒 127.0.0.1 → fetch URL 换 localhost（200+HTML 假响应的真相）；panelsmoke341 升级 7 断言全绿（三面板完整验证）；基线 3514→3517。
 - 三面板运行时烟测（CDP 真渲染——首抓四个真 bug 全修）：panelsmoke341 起 ui server + headless Chrome CDP 抓 dashboard/watch/collab 三面板——**首跑即抓出四个潜伏真 bug**：①collab.js 工厂声明 deps 却没传参（showCollab 运行时 ReferenceError——311 轮以来 #/collab 从未真实渲染过）②dashboard 信号卡片点击绑定放在 renderSignal 函数外的 try 块顶层（body 局部变量引用——ReferenceError）③④panels.js renderList 的 deps 漏注入 perfStats 与 renderListInner（243 轮迁出遗漏——**每个全新环境首页都炸**「加载失败：perfStats」，老环境因缓存幸存）——四处全修后插件列表/信号卡片/双列表真实渲染验证通过；CDP 排障判据沉淀（代理劫持 127.0.0.1 fetch / chrome target 选 /devtools/page/ / 冷启动重试）；watch 写盘条目读回与 #/collab 深链时序留 342（已知问题记录）；panelsmoke341 4 断言；基线 3510→3514。
 （下一版攒着）
