@@ -286,19 +286,22 @@ export function recordInstall(pluginId: string, version: string): void {
   try {
     ensureDirs();
     const f = path.join(HOME, 'market-stats.json');
-    let stats: Record<string, { installs: number; lastInstallAt: string; lastVersion: string }> = {};
+    let stats: Record<string, { installs: number; lastInstallAt: string; lastVersion: string; last30d?: string[] }> = {};
     if (fs.existsSync(f)) stats = JSON.parse(fs.readFileSync(f, 'utf8')) as typeof stats;
     const cur = stats[pluginId];
+    const now = new Date().toISOString();
     // 306② 幂等：同版本重复装不重复计（版本变化或首次才 +1）；⑤ uninstall 不减（历史累积）
-    if (!cur) stats[pluginId] = { installs: 1, lastInstallAt: new Date().toISOString(), lastVersion: version };
-    else if (cur.lastVersion !== version) stats[pluginId] = { installs: cur.installs + 1, lastInstallAt: new Date().toISOString(), lastVersion: version };
-    else stats[pluginId] = { ...cur, lastInstallAt: new Date().toISOString() };
+    // 336①：last30d——30 天内安装时间戳数组（超出裁剪；同版重复装也记 ts——趋势要真实频次）
+    const l30 = [...(cur?.last30d ?? []), now].filter((t) => Date.now() - Date.parse(t) < 30 * 86400000);
+    if (!cur) stats[pluginId] = { installs: 1, lastInstallAt: now, lastVersion: version, last30d: l30 };
+    else if (cur.lastVersion !== version) stats[pluginId] = { installs: cur.installs + 1, lastInstallAt: now, lastVersion: version, last30d: l30 };
+    else stats[pluginId] = { ...cur, lastInstallAt: now, last30d: l30 };
     fs.writeFileSync(f, JSON.stringify(stats, null, 2));
   } catch { /* 计数失败不影响安装 */ }
 }
 
 /** 306③：读计数（market list / UI 用） */
-export function readInstallStats(): Record<string, { installs: number; lastInstallAt: string; lastVersion: string }> {
+export function readInstallStats(): Record<string, { installs: number; lastInstallAt: string; lastVersion: string; last30d?: string[] }> {
   try {
     const f = path.join(HOME, 'market-stats.json');
     if (!fs.existsSync(f)) return {};
