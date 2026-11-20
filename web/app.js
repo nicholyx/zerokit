@@ -6010,7 +6010,7 @@ async function showDashboard() {
           <div class="dash-tile"><span class="dt-name">${d.plugins.count} / ${d.plugins.actions}</span><span>${t('dash220Plug')}</span></div>
         </div>
         ${histHtml}
-        <div id="dashSignalCard" class="ps-head" style="margin-top:14px"><h3 class="sec-title">使用信号</h3><span class="sub">安装热度 · 执行热度（每 30 秒刷新）</span></div>
+        <div id="dashSignalCard" class="ps-head" style="margin-top:14px"><h3 class="sec-title">使用信号</h3><span class="sub">安装热度 · 执行热度（每 30 秒刷新）· <a href="#/watch">去监控</a></span></div>
         <div id="dashSignalBody" class="ps-empty" role="status">读取中…</div>
         <div class="actions">
           <button class="ghost" id="dashDoctor">${t('dash220GoDoc')}</button>
@@ -6032,7 +6032,7 @@ async function showDashboard() {
         const instRows = Object.entries(mk?.stats ?? {}).sort((a, b) => (b[1]?.installs ?? 0) - (a[1]?.installs ?? 0)).slice(0, 5)
           .map(([id, v]) => `<tr><td>🔥 ${esc(String(v.installs ?? 0))}</td><td>${esc(id)}</td></tr>`).join('');
         const execRows = (st?.top ?? []).map((x) => `<tr><td>×${esc(String(x.count))}${x.fail ? ` <span class="sub">（败 ${x.fail}）</span>` : ''}</td><td><a href="#/" data-sigact="${encodeURIComponent(x.key)}" title="打开动作详情">${esc(x.key)}</a></td></tr>`).join('');
-        const empty = '<div class="ps-empty" role="status">暂无信号——装一个插件（zkit plugin install）/跑一次动作后这里会有数据</div>';
+        const empty = '<div class="ps-empty" role="status">暂无信号——装一个插件（zkit plugin install）/跑一次动作后这里会有数据；要定时触发，去 <a href="#/watch">监控面板</a> 给动作配「触发管道」</div>';
         body.innerHTML = (!instRows && !execRows) ? empty : `
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
             <table><thead><tr><th>安装热度</th><th>插件</th></tr></thead><tbody>${instRows || '<tr><td colspan="2" class="ps-empty" role="status">暂无</td></tr>'}</tbody></table>
