@@ -1240,7 +1240,7 @@ async function runChainAction(
       if (!file || wanted.length === 0) {
         return fail('chain-stats-bad-params', `${label} 需要 file（data_dir 文件名）与 column/columns（列名，columns 逗号分隔可多列）`);
       }
-      const ops = opsRaw.split(',').map((x) => x.trim()).filter((x) => ['min', 'max', 'avg', 'count'].includes(x));
+      const ops = opsRaw.split(',').map((x) => x.trim()).filter((x) => ['min', 'max', 'avg', 'count', 'top'].includes(x));
       if (ops.length === 0) {
         return fail('chain-stats-bad-params', `${label} ops 只支持 min/max/avg/count（逗号分隔）`);
       }
@@ -1258,15 +1258,34 @@ async function runChainAction(
       // 315③：多列逐个统计；string 列跳过（混列合法）；列起点 = 前面各列 bytes 之和
       const buf = Buffer.from(zcS.data ?? '', 'base64');
       let off = 0;
-      const statsOut: Record<string, Record<string, number>> = {};
+      const statsOut: Record<string, Record<string, number | string | null>> = {};
       let rows = 0;
       for (const c of zcS.columns) {
         const target = wanted.includes(c.name) ? c : undefined;
         if (target && target.type === 'string') {
-          // 315③：string 列——多列形态静默跳过（混列合法）；单数形态保持 309 明确报错
-          if (columnSingle && wanted.length === 1) {
-            return fail('chain-stats-bad-column', `${label} 列 "${c.name}" 是 string——统计只支持 int/double 数值列`);
+          // 345①④：top op——utf8 解码统计最高频值（单数无 top 时保持 315 明确报错）
+          if (!(ops.includes('top') || ops.includes('count'))) {
+            if (columnSingle && wanted.length === 1) {
+              return fail('chain-stats-bad-column', `${label} 列 "${c.name}" 是 string——统计只支持 int/double 数值列（或 ops 带 top/count）`);
+            }
+            off += c.bytes;
+            continue;
           }
+          const { importZeroCol: importZC } = await import('./arrowIpc.ts');
+          const zcObj = { format: 'zerocol', columns: zcS.columns, data: zcS.data ?? '' };
+          const allCols = importZC(zcObj);
+          const colDec = allCols.find((c2) => c2.name === c.name);
+          const strs = (colDec?.values ?? []).map((v) => String(v));
+          const oneS: Record<string, unknown> = { count: strs.length };
+          if (ops.includes('top') && strs.length > 0) {
+            const freq = new Map<string, number>();
+            for (const v of strs) freq.set(v, (freq.get(v) ?? 0) + 1);
+            const sortedF = [...freq.entries()].sort((a, b) => b[1] - a[1]);
+            oneS.top_value = sortedF[0][0];
+            oneS.top_count = sortedF[0][1];
+            oneS.top_ratio = Math.round((sortedF[0][1] / strs.length) * 1000) / 1000;
+          }
+          statsOut[c.name] = oneS;
           off += c.bytes;
           continue;
         }
@@ -1285,13 +1304,23 @@ async function runChainAction(
             if (ops.includes('max')) one.max = Math.max(...vals);
             if (ops.includes('avg')) one.avg = Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 1000) / 1000;
           }
+          if (ops.includes('top') && vals.length > 0) {
+            const freq = new Map<number, number>();
+            for (const v of vals) freq.set(v, (freq.get(v) ?? 0) + 1);
+            const sortedN = [...freq.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+            one.top_value = sortedN[0][0];
+            one.top_count = sortedN[0][1];
+            one.top_ratio = Math.round((sortedN[0][1] / vals.length) * 1000) / 1000;
+          }
           statsOut[c.name] = one;
         }
         off += c.bytes;
       }
       // 315④：单数形态保持 309 平铺兼容（data.stats.min 直取）；复数形态分组（data.stats.列名.min）
       const flat = wanted.length === 1 && columnSingle ? statsOut[wanted[0]!] : undefined;
-      const statsData = flat ? { stats: flat, rows } : { stats: statsOut, rows };
+      const statsData = flat
+        ? { stats: { ...flat, [wanted[0]!]: flat }, rows }
+        : { stats: statsOut, rows };
       const statsResult: RunResult = {
         ok: true, exitCode: 0, stdout: `${wanted.join('/')} 统计：${JSON.stringify(statsOut)}`, stderr: '',
         ms: Date.now() - started, truncated: false, data: statsData,
