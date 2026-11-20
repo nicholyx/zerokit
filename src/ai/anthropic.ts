@@ -149,7 +149,7 @@ export function createAnthropicProvider(ai: AiSettings): Provider {
           for (const m of messages) {
             const blocks = Array.isArray(m.content) ? m.content : [{ type: 'text' as const, text: m.content }];
             for (const b of blocks) {
-              if (b.type === 'text') out.push({ role: m.role === 'user' ? 'user' : 'assistant', text: b.text });
+              if (b.type === 'text') out.push({ role: m.role === 'user' ? 'user' : 'assistant', text: b.text ?? '' });
               else if (b.type === 'tool_result') {
                 const inner = typeof b.content === 'string' ? b.content
                   : Array.isArray(b.content)
