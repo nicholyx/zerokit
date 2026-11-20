@@ -39,7 +39,7 @@ check('① devDeps 无未解释项（工具链白名单外须被引用）', ghos
 
 // ② 锁文件一致：npm ls --package-lock-only 静默=一致
 try {
-  execFileSync('npm', ['ls', '--package-lock-only', '--omit=dev'], { cwd: ROOT, encoding: 'utf8', timeout: 120000, stdio: 'pipe' });
+  execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['ls', '--package-lock-only', '--omit=dev'], { cwd: ROOT, encoding: 'utf8', timeout: 120000, stdio: 'pipe' });
   check('② lockfile 与 manifest 一致（npm ls dry）', true);
 } catch (e) {
   check('② lockfile 与 manifest 一致（npm ls dry）', false, (e.stderr || '').slice(0, 80));
