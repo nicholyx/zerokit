@@ -4155,6 +4155,24 @@ function cmdStats(args: string[]): number {
     const topSlow = [...stats].sort((a, b) => (b.p95Ms ?? 0) - (a.p95Ms ?? 0)).slice(0, topN);
     process.stdout.write(`执行概览：共 ${total} 次，成功率 ${rate}%（失败 ${fail}）\n`);
     if (topUse[0]) process.stdout.write(`最常用：${topUse.map((s) => `${s.key}×${s.count}`).join('、')}\n`);
+    // 334①②③：--trend 周环比——本周（7d）vs 上周（前 7d）分窗，箭头标记 + 新入榜「新」
+    if (args.includes('--trend')) {
+      const now = Date.now();
+      const inWeek = all.filter((r) => now - Date.parse(r.ts ?? '') < 7 * 86400000);
+      const lastWeek = all.filter((r) => { const t = now - Date.parse(r.ts ?? ''); return t >= 7 * 86400000 && t < 14 * 86400000; });
+      const wkBy = new Map<string, number>();
+      for (const r of inWeek) { const k = `${r.plugin}.${r.action}`; wkBy.set(k, (wkBy.get(k) ?? 0) + 1); }
+      const lwBy = new Map<string, number>();
+      for (const r of lastWeek) { const k = `${r.plugin}.${r.action}`; lwBy.set(k, (lwBy.get(k) ?? 0) + 1); }
+      const rows2 = [...wkBy.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+      process.stdout.write(`周环比（本周 vs 上周，本周共 ${inWeek.length} 次 · 上周共 ${lastWeek.length} 次）：\n`);
+      if (rows2.length === 0) process.stdout.write(c.dim('  本周无执行记录。\n'));
+      for (const [k, cnt] of rows2) {
+        const prev = lwBy.get(k) ?? 0;
+        const mark = prev === 0 ? c.green('新') : cnt > prev ? c.green(`↑+${cnt - prev}`) : cnt < prev ? c.yellow(`↓-${prev - cnt}`) : c.dim('→持平');
+        process.stdout.write(`  ${k} 本周×${cnt} 上周×${prev} ${mark}\n`);
+      }
+    }
     if (topSlow[0] && (topSlow[0]?.p95Ms ?? 0) > 0) process.stdout.write(`最慢（P95）：${topSlow.map((s) => `${s.key} ${fmt(s.p95Ms)}`).join('、')}\n`);
   }
   process.stdout.write(`动作耗时统计（${stats.length} 个动作，来自审计日志）：\n`);
