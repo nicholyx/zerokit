@@ -1272,7 +1272,7 @@ async function runChainAction(
             continue;
           }
           const { importZeroCol: importZC } = await import('./arrowIpc.ts');
-          const zcObj = { format: 'zerocol', columns: zcS.columns, data: zcS.data ?? '' };
+          const zcObj: import('./arrowIpc.ts').ZeroColFile = { format: 'zerocol', formatVersion: 1, createdAt: new Date().toISOString(), checksum: '', columns: zcS.columns, data: zcS.data ?? '' };
           const allCols = importZC(zcObj);
           const colDec = allCols.find((c2) => c2.name === c.name);
           const strs = (colDec?.values ?? []).map((v) => String(v));
@@ -1308,9 +1308,11 @@ async function runChainAction(
             const freq = new Map<number, number>();
             for (const v of vals) freq.set(v, (freq.get(v) ?? 0) + 1);
             const sortedN = [...freq.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]);
-            one.top_value = sortedN[0][0];
-            one.top_count = sortedN[0][1];
-            one.top_ratio = Math.round((sortedN[0][1] / vals.length) * 1000) / 1000;
+            if (sortedN[0]) {
+              one.top_value = sortedN[0][0];
+              one.top_count = sortedN[0][1];
+              one.top_ratio = Math.round((sortedN[0][1] / vals.length) * 1000) / 1000;
+            }
           }
           statsOut[c.name] = one;
         }
