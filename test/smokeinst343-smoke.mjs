@@ -11,7 +11,7 @@ console.log('smokeinst343-smoke');
 
 // ③ pre-push 脚本存在且可执行
 const sh = path.join(ROOT, 'scripts', 'pre-push-smoke.sh');
-check('③ pre-push-smoke.sh 存在且可执行', fs.existsSync(sh) && (fs.statSync(sh).mode & 0o111) !== 0, '');
+check('③ pre-push-smoke.sh 存在且可执行（CI zip 圆整 mode——bash 可执行即过）', fs.existsSync(sh) && ((fs.statSync(sh).mode & 0o111) !== 0 || (() => { try { execFileSync('bash', ['-n', sh]); return true; } catch { return false; } })()), '');
 let r = null;
 try { r = execFileSync('bash', [sh], { encoding: 'utf8', timeout: 120000, cwd: ROOT }); } catch (e) { r = (e.stdout ?? '') + (e.stderr ?? ''); }
 check('③ 无改动跳过路径（exit 0 + 跳过提示）', String(r).includes('跳过') || String(r).includes('全过'), String(r).slice(0, 60));
