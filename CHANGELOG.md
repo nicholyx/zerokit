@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.37.0] - 2026-11-20
+
+### Added
+
 - 动作执行热度 Top（信号第二面——「装了」不等于「在用」）：zkit stats --top N 参数化（92 轮「最常用」行升级，1-20 条；成功/失败分列已在耗时表）；doctor signal 扩展 executions 维度（总次数 + topAction「gen×3」形态）+ 人读行升级「使用信号：安装侧 · 执行 N 次（最常用 X）」；**修 signal 块单 try 绑架坑**（market-stats 缺失时 JSON.parse 抛错把执行数也归零——拆独立 try，实测坑）；GET /api/stats/top-actions?n=（UI 可消费；白名单+openapi；含 count/fail 分列）；topactions325 3 断言（stats --top 2 gen×3 排首 / doctor executions+topAction / 端点 total=4 top[0] count=3）；基线 3466→3469。
 （下一版攒着）
 
@@ -82,12 +88,5 @@
 ### Added
 
 - dataflow 注释升级（活教材跟上新能力）：plugin.toml 头注释三种用法（手动跑 / watch 触发无人值守——触发管道填 dataflow.append-ts + 面板 ⛓ 徽标 / consume-detail 内置统计）；append-ts 注释补触发指引与 UI 读缓存 fresh 说明；consume-detail 注释补 stats 内建步第四件说明；zkit show dataflow 输出自检（闭环描述串起）；基线不变（纯注释）。
-（下一版攒着）
-
-## [4.25.0] - 2026-11-19
-
-### Added
-
-- 桌面 updater 就绪度评估（300 轮盘点候选 2 的零成本预检——冻结不动）：三件套核查——插件签名链 ✅（zkit keygen 干跑通过 + export 自动签名实测 demochain.toolpack 带 sig/keyId）、tauri.conf.json updater 段 ❌ 未启用（配置缺席非损坏）、release.yml 无 latest.json 步骤 ❌（tauri-action 已 pin 在位）；解除步骤清单四步（conf 三行 + Secrets 密钥 + tauri-action 自动产 latest.json + 双通道观察）+ 风险三条（密钥保管/单发 PR/插件签名与 updater 签名两套不混用）；docs/reference/updater-readiness.md 固化评估；updater313 6 断言（三件套/步骤/冻结不动/conf 现状确认/keygen 在位/导航）；基线 3415→3421。结论：解除成本约一轮，维持冻结等真实诉求。
 （下一版攒着）
 
