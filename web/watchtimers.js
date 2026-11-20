@@ -214,7 +214,8 @@ function liveRefreshWatchPanel() {
       const sub = row.querySelector('.sub');
       if (sub) {
         const statsBrief = w.lastChainRun?.stats ? Object.entries(w.lastChainRun.stats).slice(0, 1).map(([col, o]) => `${col} max=${o.max ?? '-'}`).join('') : '';
-        sub.textContent = `${w.runs} 次采样 · ${w.changes} 次变更${w.changes > 0 && w.samples.length ? ' · 上次变化 ' + relTime(w.samples.at(-1)?.ts ?? Date.now()) : ''}${w.chain ? ` · ⛓ ${esc(w.chain)} ${w.lastChainRun ? (w.lastChainRun.ok ? '✓' : '✗') : '（待触发）'}${statsBrief ? ` ${esc(statsBrief)}` : ''}` : ''}`;
+        sub.innerHTML = `${w.runs} 次采样 · ${w.changes} 次变更${w.changes > 0 && w.samples.length ? ' · 上次变化 ' + relTime(w.samples.at(-1)?.ts ?? Date.now()) : ''}${w.chain ? ` · <span class="chain-badge" title="${w.lastChainRun?.stats ? esc(Object.entries(w.lastChainRun.stats).map(([col, o]) => `${col}: max=${o.max ?? '-'} avg=${o.avg ?? '-'} count=${o.count ?? '-'}`).join(' · ')) : '尚无统计（触发一次带 builtin.zerocol-stats 的链路后显示）'}">⛓ ${esc(w.chain)} ${w.lastChainRun ? (w.lastChainRun.ok ? '✓' : '✗') : '（待触发）'}${statsBrief ? ` ${esc(statsBrief)}` : ''}</span> · <a href="#/dashboard" data-sig="${esc(w.chain)}" title="看首页使用信号卡片">看统计</a>` : ''}`;
+        // 327②：⛓ 徽标 hover title 带最近统计数字（title 属性——不挤行内）
       }
       // ④ sparkline 点阵（最近 10 次成败）
       let spark = row.querySelector('.watch-spark');
