@@ -53,7 +53,7 @@ function marketEntryHtml(m, e) {
         <b>${esc(e.name)}</b>
         <span class="aid">${esc(e.id)}${e.version ? ` · v${esc(e.version)}` : ''}${typeof e.actionCount === 'number' ? ` · ${e.actionCount} 个动作` : ''}</span>
         <span class="badge market-src" title="来源集市">🏪 ${esc(m.name)}</span>${mixHtml}
-        ${hotFor(e.id) ? `<span class="badge" title="本机安装计数（历史累积）">🔥 ${esc(String(hotFor(e.id)))}</span>` : ''}
+        ${hotFor(e.id) ? `<span class="badge" title="本机安装计数（历史累积${(() => { const l30 = __mkStats[e.id]?.last30d ?? []; return l30.length ? `；近 30 天 ${l30.length} 次` : '' })()})">🔥 ${esc(String(hotFor(e.id)))}${(() => { const l30 = (__mkStats[e.id]?.last30d ?? []).filter((t2) => Date.now() - Date.parse(t2) < 30 * 86400000); return l30.length ? ` +30d ↑${l30.length}` : ''; })()}</span>` : ''}
         ${installed ? `<span class="badge read">✓ 已装${e.installedVersion ? ` v${esc(e.installedVersion)}` : ''}</span>` : ''}
         <span class="plug-ops">
           ${installed ? '' : '<button class="primary mini" data-op="preview">安装</button>'}
