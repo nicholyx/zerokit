@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.38.0] - 2026-11-20
+
+### Added
+
 - UI 首页使用信号卡片（信号第三面——双信号可视化收口）：dashboard tiles 下加「使用信号」卡片——左安装 top（🔥N 插件名）/ 右执行 top（×N 动作名 + 败次数）双列 grid；空态引导（「装一个插件/跑一次动作后这里会有数据」）；执行项点击跳动作详情（fetch /api/plugins 找 plugin+action 对调 openDetail——无缓存依赖，已卸载静默留原地）；30s 自动刷新 + 离开面板 clearInterval；顺带补 95 轮判据（td 空占位 ps-empty 也带 role=status——polish95 抓出）；6 条中文 whitelist 登记；dashsignal326 5 断言（双列/空态/跳转/刷新/双端点联测——安装 1 + 执行 gen×3 卡片可渲染）；基线 3469→3474。信号三面齐：写（306/审计）→ API（324/325）→ UI（326）。
 （下一版攒着）
 
@@ -82,12 +88,5 @@
 ### Added
 
 - builtin.zerocol-stats 多列支持（数据消费端再看一眼）：params columns（复数逗号分隔，优先于单数 column）——一次统计多列，结果 data.stats 按列名分组（{alias.data.stats.duration.min}）；**string 列策略分形态**：多列静默跳过（混列合法）/单数保持 309 明确报错（向后兼容）；单数 column 平铺形态不变（309 行为兼容）；dataflow consume-detail 改分组形态 + 多列扩展注释；plugin-spec/管道指南同步；zerocolstats309 6 断言（+多列分组/单数兼容——string 报错断言随分形态语义保留）；基线 3421→3423。
-（下一版攒着）
-
-## [4.26.0] - 2026-11-19
-
-### Added
-
-- dataflow 注释升级（活教材跟上新能力）：plugin.toml 头注释三种用法（手动跑 / watch 触发无人值守——触发管道填 dataflow.append-ts + 面板 ⛓ 徽标 / consume-detail 内置统计）；append-ts 注释补触发指引与 UI 读缓存 fresh 说明；consume-detail 注释补 stats 内建步第四件说明；zkit show dataflow 输出自检（闭环描述串起）；基线不变（纯注释）。
 （下一版攒着）
 
