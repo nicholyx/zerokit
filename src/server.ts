@@ -85,6 +85,7 @@ const API_METHODS: Record<string, string[]> = {
   '/api/doctor': ['GET'],
   '/api/markets': ['GET'],
   '/api/market-stats': ['GET'],
+  '/api/stats/top-actions': ['GET'],
   '/api/mcp-sessions': ['GET'],
   '/api/mcp-sessions/filters': ['POST'],
   '/api/mcp-sessions/unlock': ['POST'],
@@ -154,6 +155,7 @@ const API_SPEC = {
     '/api/doctor': { get: { summary: '环境自检' } },
     '/api/markets': { get: { summary: '集市索引' } },
     '/api/market-stats': { get: { summary: '安装热度计数' } },
+    '/api/stats/top-actions': { get: { summary: '动作执行热度 Top（?n= 默认 5；含成功/失败分列）' } },
     '/api/mcp-sessions': { get: { summary: '协作运行时快照（会话/锁/频控计数）' } },
     '/api/mcp-sessions/filters': { post: { summary: '改会话过滤前缀（session + filters）' } },
     '/api/mcp-sessions/unlock': { post: { summary: '手动释放锁（tool）' } },
@@ -1199,6 +1201,23 @@ export function createServer(): http.Server {
         } catch (e) {
           fail(res, 502, `mcp serve 不可达（先 zkit mcp serve --broadcast --http ${process.env.MCP_HTTP_PORT ?? 31800}）：${(e as Error).message}`);
         }
+        return;
+      }
+
+      // 325④：动作执行热度 Top（UI 可消费；?n= 条数默认 5）
+      if (url.pathname === '/api/stats/top-actions' && req.method === 'GET') {
+        const n = Math.max(1, Math.min(20, Number(url.searchParams.get('n') ?? 5) || 5));
+        const audit = readAudit();
+        const byKey = new Map<string, { key: string; count: number; fail: number }>();
+        for (const e of audit) {
+          const k = `${e.plugin}.${e.action}`;
+          const cur = byKey.get(k) ?? { key: k, count: 0, fail: 0 };
+          cur.count += 1;
+          if (e.exitCode != null && e.exitCode !== 0) cur.fail += 1;
+          byKey.set(k, cur);
+        }
+        const top = [...byKey.values()].sort((a, b) => b.count - a.count).slice(0, n);
+        json(res, 200, { total: audit.length, top });
         return;
       }
 

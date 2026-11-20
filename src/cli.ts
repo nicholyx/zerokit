@@ -3168,11 +3168,9 @@ async function cmdDoctor(): Promise<number> {
   // 324②：使用信号摘要（安装计数——真实信号驱动的可见性；空/缺是 info 级不算 error）
   {
     const sig = report.signal;
-    if (sig.hasData) {
-      process.stdout.write(c.dim(`使用信号：${sig.plugins} 个插件有安装记录（累计 ${sig.totalInstalls} 次）· zkit market list --by-installs 看热度\n`));
-    } else {
-      process.stdout.write(c.dim('使用信号：暂无安装记录（zkit plugin install 后这里会有数据）\n'));
-    }
+    const instPart = sig.hasData ? `${sig.plugins} 个插件有安装记录（累计 ${sig.totalInstalls} 次）` : '暂无安装记录';
+    const execPart = sig.executions > 0 ? `执行 ${sig.executions} 次（最常用 ${sig.topAction}）` : '暂无执行记录';
+    process.stdout.write(c.dim(`使用信号：${instPart} · ${execPart}\n`));
   }
   // 第三十五轮⑦⑧：--fix 自动修可修项 + 半安装插件检测
   const fix = process.argv.includes('--fix');
@@ -4150,8 +4148,11 @@ function cmdStats(args: string[]): number {
     const fail = stats.reduce((s, x) => s + x.failCount, 0);
     const rate = total === 0 ? 0 : Math.round(((total - fail) / total) * 100);
     const fmt = (v: number | undefined) => (v == null ? '—' : v >= 1000 ? (v / 1000).toFixed(1) + 's' : Math.round(v) + 'ms');
-    const topUse = [...stats].sort((a, b) => b.count - a.count).slice(0, 5);
-    const topSlow = [...stats].sort((a, b) => (b.p95Ms ?? 0) - (a.p95Ms ?? 0)).slice(0, 5);
+    // 325②：--top N 参数化（默认 5；含成功/失败分列）
+    const topIdx = args.indexOf('--top');
+    const topN = topIdx >= 0 ? Math.max(1, Math.min(20, Number(args[topIdx + 1]) || 5)) : 5;
+    const topUse = [...stats].sort((a, b) => b.count - a.count).slice(0, topN);
+    const topSlow = [...stats].sort((a, b) => (b.p95Ms ?? 0) - (a.p95Ms ?? 0)).slice(0, topN);
     process.stdout.write(`执行概览：共 ${total} 次，成功率 ${rate}%（失败 ${fail}）\n`);
     if (topUse[0]) process.stdout.write(`最常用：${topUse.map((s) => `${s.key}×${s.count}`).join('、')}\n`);
     if (topSlow[0] && (topSlow[0]?.p95Ms ?? 0) > 0) process.stdout.write(`最慢（P95）：${topSlow.map((s) => `${s.key} ${fmt(s.p95Ms)}`).join('、')}\n`);
