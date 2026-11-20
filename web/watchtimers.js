@@ -12,6 +12,22 @@ function timerRegistry() {
 }
 
 /** 监控注册表：key = actionKey，value = { interval, failStreak, matchStr, samples[], title, deadline } */
+/** 335①②：监控条目周环比（samples[] 按时间戳分窗：本周 7d vs 上周 7-14d） */
+function trendHtml(w) {
+  const ts = (w.samples ?? []).map((s2) => s2.ts).filter((t2) => typeof t2 === 'number');
+  if (ts.length === 0) return '';
+  const now = Date.now();
+  const thisWk = ts.filter((t2) => now - t2 < 7 * 86400000).length;
+  const lastWk = ts.filter((t2) => { const age = now - t2; return age >= 7 * 86400000 && age < 14 * 86400000; }).length;
+  const spanDays = Math.max(1, Math.round((now - Math.min(...ts)) / 86400000));
+  let mark;
+  if (lastWk === 0) mark = `<span class="sub">数据积累中（${spanDays} 天）</span>`;
+  else if (thisWk > lastWk) mark = `<span style="color:var(--ok)">↑+${thisWk - lastWk}</span>`;
+  else if (thisWk < lastWk) mark = `<span style="color:var(--warn)">↓-${lastWk - thisWk}</span>`;
+  else mark = '<span class="sub">→持平</span>';
+  return ` · <span class="sub">趋势：本周 ${thisWk} 次 / 上周 ${lastWk} 次</span> ${mark}`;
+}
+
 function watchRegistry() {
   if (!window.__zkWatch) window.__zkWatch = {};
   return window.__zkWatch;
@@ -214,7 +230,7 @@ function liveRefreshWatchPanel() {
       const sub = row.querySelector('.sub');
       if (sub) {
         const statsBrief = w.lastChainRun?.stats ? Object.entries(w.lastChainRun.stats).slice(0, 1).map(([col, o]) => `${col} max=${o.max ?? '-'}`).join('') : '';
-        sub.innerHTML = `${w.runs} 次采样 · ${w.changes} 次变更${w.changes > 0 && w.samples.length ? ' · 上次变化 ' + relTime(w.samples.at(-1)?.ts ?? Date.now()) : ''}${w.chain ? ` · <span class="chain-badge" title="${w.lastChainRun?.stats ? esc(Object.entries(w.lastChainRun.stats).map(([col, o]) => `${col}: max=${o.max ?? '-'} avg=${o.avg ?? '-'} count=${o.count ?? '-'}`).join(' · ')) : '尚无统计（触发一次带 builtin.zerocol-stats 的链路后显示）'}">⛓ ${esc(w.chain)} ${w.lastChainRun ? (w.lastChainRun.ok ? '✓' : '✗') : '（待触发）'}${statsBrief ? ` ${esc(statsBrief)}` : ''}</span> · <a href="#/dashboard" data-sig="${esc(w.chain)}" title="看首页使用信号卡片">看统计</a>` : ''}`;
+        sub.innerHTML = `${w.runs} 次采样 · ${w.changes} 次变更${w.changes > 0 && w.samples.length ? ' · 上次变化 ' + relTime(w.samples.at(-1)?.ts ?? Date.now()) : ''}${w.chain ? ` · <span class="chain-badge" title="${w.lastChainRun?.stats ? esc(Object.entries(w.lastChainRun.stats).map(([col, o]) => `${col}: max=${o.max ?? '-'} avg=${o.avg ?? '-'} count=${o.count ?? '-'}`).join(' · ')) : '尚无统计（触发一次带 builtin.zerocol-stats 的链路后显示）'}">⛓ ${esc(w.chain)} ${w.lastChainRun ? (w.lastChainRun.ok ? '✓' : '✗') : '（待触发）'}${statsBrief ? ` ${esc(statsBrief)}` : ''}</span> · <a href="#/dashboard" data-sig="${esc(w.chain)}" title="看首页使用信号卡片">看统计</a>` : ''}${trendHtml(w)}`;
         // 327②：⛓ 徽标 hover title 带最近统计数字（title 属性——不挤行内）
       }
       // ④ sparkline 点阵（最近 10 次成败）
