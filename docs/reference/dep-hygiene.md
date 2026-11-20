@@ -9,7 +9,7 @@
    - patch/minor（Wanted 可达）：`npm update <pkg>` 后跑全量 → 直接合。
    - major（Latest ≠ Wanted）：开分支评估——grep 引用面 → 本地装新版跑 tsc + 全量 → 一行修复常见（如 325 sdk text optional）→ 评估修复必须在 PR 分支 push 后确认远端可见（299 判据）。
    - 停更/风险：留 issue 说明（不强升）。
-3. **安全公告**：`npm audit --omit=dev` —— high/critical 当轮处理。
+3. **安全公告**：`npm audit --omit=dev --registry=https://registry.npmjs.org` —— 官方 registry 才支持 audit endpoint（镜像源会 NOT_IMPLEMENTED）；high/critical 当轮处理。
 4. **记录**：处理过的 PR 在 dependabot 评论里留评估结论（引用面/破坏点/测试证据）。
 
 ## 判据
@@ -27,3 +27,4 @@
 | 2026-11-20 | codeql-action bump（#957） | 直合 |
 | 2026-11-20 | sdk 1.11 / tauri-cli 2.12.6 minor | npm update 直合 |
 | 2026-11-20 | @types/node 26 / typescript 7 | 观望（运行时/生态未跟） |
+| 2026-11-20（331 轮 11 月例跑） | @hono/node-server 2.1.4→2.1.10 + hono 4.13.19（GHSA-qv5m/GHSA-jpvv moderate——传递依赖，零直用） | `npm audit fix --omit=dev`（需官方 registry；jlc mirror 不支持 audit endpoint）→ 0 vulnerabilities |
