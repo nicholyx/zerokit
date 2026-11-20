@@ -32,8 +32,7 @@ const page0 = await fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.text());
 const tok = (page0.match(/['"]([0-9a-f]{48})['"]/) ?? [])[1] ?? '';
 
 // Chrome 起来（找可执行文件——三候选）
-const CHROME = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', '/Applications/Chromium.app/Contents/MacOS/Chromium',
-  '/usr/bin/google-chrome', '/usr/bin/chromium-browser', '/usr/bin/chromium'].find((p2) => fs.existsSync(p2));
+const CHROME = process.env.CI ? '' : ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', '/Applications/Chromium.app/Contents/MacOS/Chromium'].find((p2) => fs.existsSync(p2));
 if (!CHROME) {
   // CI 无 Chrome（Linux）——降级源码级判据（341 四修复静态可验）
   const collab = fs.readFileSync(path.join(ROOT, 'web', 'collab.js'), 'utf8');
