@@ -88,11 +88,12 @@ function scheduleWatch(key, sec) {
   w.timerId = setTimeout(async () => {
     const cur = detail && actionKey(detail.plugin.id, detail.action.id) === key;
     const onPanel = mode === 'watch'; // 监控面板盯着它跑：不算「翻页」
-    if (!cur && !onPanel) { // 真翻页了（别的动作/列表）：停掉（① 翻页自动停）
+    if (!cur && !onPanel && !w.__restored) { // 真翻页了：停掉（① 翻页自动停）
       stopWatch(key);
       renderWatchBar();
       return;
     }
+    w.__restored = false;  // 342②：恢复条目首轮宽限（boot 时无 detail 上下文，不能误停）
     const prev = lastResult;
     await submit(false).catch(() => {});
     const now = lastResult;
@@ -271,7 +272,7 @@ function showWatchPanel() {
     <div class="run-row watch-row">
       <span class="badge ${stateCls}">${stateMark}</span>
       <span class="run-when">${esc(w.title)}（每 ${esc(intervalLabel(w.interval))}）</span>
-      <span class="sub">${w.runs} 次采样 · ${w.changes} 次变更${w.changes > 0 && w.samples.length ? ' · 上次变化 ' + relTime(lastSample?.ts ?? Date.now()) : ''}</span>
+      <span class="sub">${w.runs} 次采样 · ${w.changes} 次变更${w.changes > 0 && w.samples.length ? ' · 上次变化 ' + relTime(lastSample?.ts ?? Date.now()) : ''}${w.chain ? ` · <span class="chain-badge" title="${w.lastChainRun?.stats ? esc(Object.entries(w.lastChainRun.stats).map(([col, o]) => `${col}: max=${o.max ?? '-'} avg=${o.avg ?? '-'} count=${o.count ?? '-'}`).join(' · ')) : '尚无统计'}">⛓ ${esc(w.chain)} ${w.lastChainRun ? (w.lastChainRun.ok ? '✓' : '✗') : '（待触发）'}</span> · <a href="#/dashboard" data-sig="${esc(w.chain)}" title="看首页使用信号卡片">看统计</a>` : ''}${trendHtml(w)}</span>
       <span class="watch-spark">${(w.samples ?? []).slice(-10).map((sm) => `<i class="${sm.ok ? 'ok' : 'bad'}"${Number.isFinite(sm.ms) ? ` title="${esc(relTime(sm.ts))} · 耗时 ${fmtElapsed(sm.ms)}"` : ''}></i>`).join('')}</span>
       <span class="watch-summary">${esc(summary)}</span>
       ${failReason ? `<span class="bad watch-fail-reason">失败原因：${esc(failReason)}</span>` : ''}

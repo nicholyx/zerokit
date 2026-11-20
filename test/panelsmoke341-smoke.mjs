@@ -46,14 +46,16 @@ if (!CHROME) {
   process.exit(fail > 0 ? 1 : 0);
 }
 const dbgPort = String(49000 + (process.pid % 1000));
+try { spawnSync('pkill', ['-f', 'remote-debugging-port']); } catch { /* 无旧实例 */ }
+await new Promise((r) => setTimeout(r, 600));
 const chrome = spawn(CHROME, [`--remote-debugging-port=${dbgPort}`, '--user-data-dir=' + fs.mkdtempSync(path.join(os.tmpdir(), 'ps341-chrome-')), '--headless=new', '--no-sandbox', '--disable-gpu', '--no-first-run', '--no-default-browser-check', 'about:blank'], { stdio: 'ignore', detached: true });
 chrome.on('exit', (c) => { if (process.env.ZK_DBG) process.stderr.write('[chrome exit ' + c + ']\n'); });
 await new Promise((r) => setTimeout(r, 3000));
 
 // CDP 简易客户端
 let ws = null;
-for (let i = 0; i < 10; i++) {
-  const resp = await fetch(`http://127.0.0.1:${dbgPort}/json/list`);
+for (let i = 0; i < 20; i++) {
+  const resp = await fetch(`http://localhost:${dbgPort}/json/list`);
   if (process.env.ZK_DBG) console.error('[cdp status] ' + resp.status);
   const txt = await resp.text();
   if (process.env.ZK_DBG) console.error('[cdp] ' + txt.slice(0, 600));
@@ -62,17 +64,17 @@ for (let i = 0; i < 10; i++) {
     ws = list.find((t) => (t.webSocketDebuggerUrl ?? '').includes('/devtools/page/'));
     if (ws) break;
   } catch { /* 未就绪再试 */ }
-  await new Promise((r) => setTimeout(r, 500));
+  await new Promise((r) => setTimeout(r, 800));
 }
 if (!ws) {
-  const created = await fetch(`http://127.0.0.1:${dbgPort}/json/new?about:blank`, { method: 'PUT' }).then((r) => r.text()).catch((e) => 'ERR ' + e.message);
+  const created = await fetch(`http://localhost:${dbgPort}/json/new?about:blank`, { method: 'PUT' }).then((r) => r.text()).catch((e) => 'ERR ' + e.message);
   if (process.env.ZK_DBG) console.error('[cdp new] ' + created.slice(0, 200));
   try { ws = JSON.parse(created); } catch { ws = null; }
 }
 if (!ws || !ws.webSocketDebuggerUrl) {
   await new Promise((r) => setTimeout(r, 3000));
   for (let i = 0; i < 5; i++) {
-    const t2 = await fetch(`http://127.0.0.1:${dbgPort}/json/list`).then((r) => r.text()).catch(() => '');
+    const t2 = await fetch(`http://localhost:${dbgPort}/json/list`).then((r) => r.text()).catch(() => '');
     try { ws = JSON.parse(t2).find((x) => (x.webSocketDebuggerUrl ?? '').includes('/devtools/page/')); if (ws) break; } catch { /* */ }
     await new Promise((r) => setTimeout(r, 700));
   }
@@ -128,10 +130,17 @@ await send('Runtime.evaluate', { expression: `location.hash = '#/watch'` });
 await new Promise((r) => setTimeout(r, 2500));
 let wtxt = await send('Runtime.evaluate', { expression: `JSON.stringify({h: location.hash, t: document.body.innerText.slice(0, 300)})`, returnByValue: true });
 process.stderr.write('[watch] ' + String(wtxt?.result?.result?.value ?? '') + '\n');
-// ②③ 已知问题留 342：#/watch 渲染但写盘条目未读回（schema 差异）；#/collab 深链落在欢迎页
-// （hashchange 分支时序）——本轮修复的是四个真 bug（collab deps / body 层级 / perfStats /
-// renderListInner deps），面板路由深链问题单独一轮处理。
-check('②③ watch/collab 深链已知问题留 342（本轮修复四 bug 已验）', true, '');
+// ②③ 342：watch 条目读回（含 chain）+ collab 深链（根因=341①已修）——完整验证
+let r2 = await send('Runtime.evaluate', { expression: `document.body.innerText.includes('⛓')`, returnByValue: true });
+check('② ⛓ 徽标渲染（342 读回修复）', r2?.result?.result?.value === true, '');
+r2 = await send('Runtime.evaluate', { expression: `document.body.innerText.includes('看统计')`, returnByValue: true });
+check('② 看统计链接渲染', r2?.result?.result?.value === true, '');
+r2 = await send('Runtime.evaluate', { expression: `document.body.innerText.includes('趋势：本周')`, returnByValue: true });
+check('② 趋势段渲染（本周 N 次）', r2?.result?.result?.value === true, '');
+await send('Runtime.evaluate', { expression: `location.hash = '#/collab'` });
+await new Promise((r) => setTimeout(r, 2500));
+let r3 = await send('Runtime.evaluate', { expression: `document.body.innerText.includes('协作') || document.body.innerText.includes('mcp serve')`, returnByValue: true });
+check('③ 协作面板渲染（深链——根因 341① 已修）', r3?.result?.result?.value === true, '');
 
 wsSock.close();
 finish();
