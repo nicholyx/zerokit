@@ -39,6 +39,7 @@
 - [第三百轮盘点](guide/v4-outlook.md#第三百轮旅程与展望2026-11-19) —— 287+13 轮量级数据与下一百轮候选
 - [数据管道指南](guide/data-pipelines.md) —— chain/pipe/zerocol 全链搭法（demochain 实例）
 - [平台差异判据](reference/platform-pitfalls.md) —— Windows/Chrome/路径坑与战役对照（跨平台开发必读）
+- [依赖卫生巡检](reference/dep-hygiene.md) —— 月度巡检步骤与判据（330 轮立）
 - [桌面 updater 就绪度](reference/updater-readiness.md) —— 签名链核查/解除步骤/风险（313 轮评估）
 - [v4 线健康快照](reference/v4-health-snapshot.md) —— 36 轮技术基线指纹 + 主题分布 + 轮次清单（323 轮定盘星）
 - [协作指南](guide/collaboration.md) —— --broadcast 客户端接入（SSE/过滤/锁/presence）
