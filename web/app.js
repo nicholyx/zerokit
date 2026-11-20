@@ -42,7 +42,7 @@ const __batch = () => {
 // 第二百四十三轮②③：面板壳域注入式迁出（零状态耦合子集——16 个纯渲染函数）
 let __panelsInst = null;
 const __panels = () => {
-  __panelsInst ??= createPanels({ esc, t, lang, actionKey, actionRiskCard, barsScale, diffResults, formatMs, hotkeyMap, maskSecrets, maskState, openDetail, perfMark, resultCompare, riskText, submit, wbSend, notifyLogRef: () => notifyLog });
+  __panelsInst ??= createPanels({ esc, t, lang, actionKey, actionRiskCard, barsScale, diffResults, formatMs, hotkeyMap, maskSecrets, maskState, openDetail, perfMark, perfStats, renderListInner, resultCompare, riskText, submit, wbSend, notifyLogRef: () => notifyLog });  // 341 修：perfStats/renderListInner 漏注入
   return __panelsInst;
 };
 
@@ -58,7 +58,7 @@ const __share = () => {
 let __wtInst = null;
 let __cbInst = null;
 const __cb = () => {
-  __cbInst ??= createCollab();
+  __cbInst ??= createCollab({ esc, el, api, hidePanels, modeRef: { get: () => mode, set: (v) => { mode = v; } } });
   return __cbInst;
 };
 
@@ -139,6 +139,10 @@ const TOKEN = document.querySelector('meta[name=zk-token]').content;
 const $ = (id) => document.getElementById(id);
 
 window.__zkVersion = (document.querySelector('meta[name=zk-version]')?.content ?? '');
+// 341 修：perfStats 定义前移到模块头部——load()（9515）在模块顶层 await 后的微任务里
+// 跑 renderList（1261 用 perfStats），若定义在 8695 存在 TDZ 竞态窗口（本地快 API 暴露）
+const perfStats = { listItems: 0, listMs: 0, searchMs: 0, lastRenderAt: 0, renderCount: 0 };
+
 const el = {
   q: $('q'), list: $('list'), empty: $('empty'), count: $('count'), searchRow: $('searchRow'),
   stage: $('stage'),
@@ -6043,7 +6047,8 @@ async function showDashboard() {
       }
     };
     // ③ 点击执行项 → 拉插件表找动作对（无缓存依赖；未装/已卸显示无跳转）
-    body?.querySelectorAll?.('[data-sigact]')?.forEach?.((aEl) => { aEl.addEventListener('click', async (ev) => {
+    // 341 修：body 是 renderSignal 局部变量——此处（try 块顶层）需重新获取元素（326 轮插入放错层级）
+    document.getElementById('dashSignalBody')?.querySelectorAll?.('[data-sigact]')?.forEach?.((aEl) => { aEl.addEventListener('click', async (ev) => {
       ev.preventDefault();
       const k = decodeURIComponent(aEl.getAttribute('data-sigact') ?? '');
       const dot = k.lastIndexOf('.');
@@ -8692,7 +8697,6 @@ let entriesVersion = 0;
 const searchMemo = new Map();
 let searchDebounceTimer = 0;
 let searchRaf = 0;
-const perfStats = { listItems: 0, listMs: 0, searchMs: 0, lastRenderAt: 0, renderCount: 0 };
 let perfTimer = 0; // 第一百一十八轮⑧：#/perf 自动刷新句柄
 
 // 第四十二轮⑨：热点入口打 perf 标签——Performance 面板/面板页都能对上时间线
