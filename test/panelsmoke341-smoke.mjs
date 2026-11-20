@@ -32,8 +32,20 @@ const page0 = await fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.text());
 const tok = (page0.match(/['"]([0-9a-f]{48})['"]/) ?? [])[1] ?? '';
 
 // Chrome 起来（找可执行文件——三候选）
-const CHROME = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', '/Applications/Chromium.app/Contents/MacOS/Chromium'].find((p2) => fs.existsSync(p2));
-if (!CHROME) { check('chrome 存在', false, '三候选都不在'); finish(); }
+const CHROME = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', '/Applications/Chromium.app/Contents/MacOS/Chromium',
+  '/usr/bin/google-chrome', '/usr/bin/chromium-browser', '/usr/bin/chromium'].find((p2) => fs.existsSync(p2));
+if (!CHROME) {
+  // CI 无 Chrome（Linux）——降级源码级判据（341 四修复静态可验）
+  const collab = fs.readFileSync(path.join(ROOT, 'web', 'collab.js'), 'utf8');
+  check('降级① collab deps 注入（createCollab(deps)）', collab.includes('createCollab(deps)'), '');
+  const app = fs.readFileSync(path.join(ROOT, 'web', 'app.js'), 'utf8');
+  check('降级②④ renderListInner/perStats 双端注入', app.includes('perfStats, renderListInner') && fs.readFileSync(path.join(ROOT, 'web', 'panels.js'), 'utf8').includes('perfStats, renderListInner'), '');
+  check('降级② 信号卡片绑定 getElementById', app.includes("document.getElementById('dashSignalBody')?.querySelectorAll"), '');
+  try { process.kill(-child.pid, 'SIGTERM'); } catch { child.kill(); }
+  try { fs.rmSync(home, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }); } catch { /* */ }
+  console.log(`\n${'='.repeat(60)}\n通过 ${pass} / ${pass + fail}`);
+  process.exit(fail > 0 ? 1 : 0);
+}
 const dbgPort = String(49000 + (process.pid % 1000));
 const chrome = spawn(CHROME, [`--remote-debugging-port=${dbgPort}`, '--user-data-dir=' + fs.mkdtempSync(path.join(os.tmpdir(), 'ps341-chrome-')), '--headless=new', '--no-sandbox', '--disable-gpu', '--no-first-run', '--no-default-browser-check', 'about:blank'], { stdio: 'ignore', detached: true });
 chrome.on('exit', (c) => { if (process.env.ZK_DBG) process.stderr.write('[chrome exit ' + c + ']\n'); });
