@@ -40,6 +40,10 @@ if (!CHROME) {
   const app = fs.readFileSync(path.join(ROOT, 'web', 'app.js'), 'utf8');
   check('降级②④ renderListInner/perStats 双端注入', app.includes('perfStats, renderListInner') && fs.readFileSync(path.join(ROOT, 'web', 'panels.js'), 'utf8').includes('perfStats, renderListInner'), '');
   check('降级② 信号卡片绑定 getElementById', app.includes("document.getElementById('dashSignalBody')?.querySelectorAll"), '');
+  check('降级① collab 操作面（过滤输入/释放/刷新）', collab.includes('collab-filter') && collab.includes('data-cunlock') && collab.includes('collabRefresh'), '');
+  check('降级② watch 读回接通（restoreWatches 进 load）', app.includes('await restoreWatches()'), '');
+  check('降级② 首渲行带 ⛓（chain-badge 在 showWatchPanel 模板）', fs.readFileSync(path.join(ROOT, 'web', 'watchtimers.js'), 'utf8').includes('chain-badge'), '');
+  check('降级③ 深链路由（applyHash + hashchange 双侧 #/collab）', (app.match(/#\/collab/g) ?? []).length >= 2, '');
   try { process.kill(-child.pid, 'SIGTERM'); } catch { child.kill(); }
   try { fs.rmSync(home, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }); } catch { /* */ }
   console.log(`\n${'='.repeat(60)}\n通过 ${pass} / ${pass + fail}`);
