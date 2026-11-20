@@ -6,7 +6,6 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 let fail = 0;
@@ -49,8 +48,6 @@ check('① devDeps 无未解释项（工具链白名单外须被引用）', ghos
     .map(([name]) => name);
   if (missing.length === 0) check('② lockfile 与 manifest 一致（纯读对比）', true);
   else { fail++; console.error(`✗ ② lockfile 缺条目: ${missing.join(', ')}`); }
-}
-  check('② lockfile 与 manifest 一致（npm ls dry）', false, (e.stderr || '').slice(0, 80));
 }
 
 // ③ 许可证白名单
