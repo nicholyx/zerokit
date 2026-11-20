@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.39.0] - 2026-11-20
+
+### Added
+
 - watch↔dashboard 信号导航（使用信号导航收口）：watch 面板条目加「看统计」链接（#/dashboard 直达首页信号卡片——监控→触发→结果→统计一条线点到底）；⛓ 徽标升级 span + hover title（title 属性带最近统计数字 max/avg/count——不挤行内；无统计时提示触发带 stats 的链路）；dashboard 信号卡片反向导航「去监控」（空态引导 + 卡片头双入口）；signav327 3 断言（入口/徽标 title/反向导航）；基线 3474→3477。监控到信号的导航双向往返。
 （下一版攒着）
 
@@ -82,12 +88,5 @@
 ### Added
 
 - stats 摘要进 watch（指标越界可读化——数据消费端最后一块）：tick 钩子把 chain 结果的 data.stats（309 统计步产物）摘进 lastChainRun.stats；通知文案升级「数据变化 · value max=95 avg=48」人话摘要（尊重 notify 开关）；面板 ⛓ 徽标行内带最新统计（statsBrief max）；watch.json 持久化随 lastChainRun 整体落盘；watchstats316 4 断言（钩子/通知/徽标/持久化）；基线 3423→3427。watch 通知从「数据变了」到「变成多少」——指标越界告警的人话形态。
-（下一版攒着）
-
-## [4.27.0] - 2026-11-19
-
-### Added
-
-- builtin.zerocol-stats 多列支持（数据消费端再看一眼）：params columns（复数逗号分隔，优先于单数 column）——一次统计多列，结果 data.stats 按列名分组（{alias.data.stats.duration.min}）；**string 列策略分形态**：多列静默跳过（混列合法）/单数保持 309 明确报错（向后兼容）；单数 column 平铺形态不变（309 行为兼容）；dataflow consume-detail 改分组形态 + 多列扩展注释；plugin-spec/管道指南同步；zerocolstats309 6 断言（+多列分组/单数兼容——string 报错断言随分形态语义保留）；基线 3421→3423。
 （下一版攒着）
 
