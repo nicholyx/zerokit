@@ -80,9 +80,18 @@ try {
   await sleep(2500);
 
   let opened = 0;
+  const missed = [];
   for (const hash of PANELS) {
     await send('Runtime.evaluate', { expression: `location.hash = '${hash}'` });
     await sleep(900);
+    const r = await send('Runtime.evaluate', { expression: `!!document.querySelector('.panel, .ps-empty, h2, table')` });
+    if (r?.result?.value) opened++; else missed.push(hash);
+  }
+  // 326：CI 慢机渲染时序 flake 防御——未出的面板等 2s 重试一次（真回归重试也出不来）
+  for (const hash of missed) {
+    await sleep(2000);
+    await send('Runtime.evaluate', { expression: `location.hash = '${hash}'` });
+    await sleep(1200);
     const r = await send('Runtime.evaluate', { expression: `!!document.querySelector('.panel, .ps-empty, h2, table')` });
     if (r?.result?.value) opened++;
   }

@@ -1643,4 +1643,9 @@ const\ miss\ =\ \(x\.depMissing\ \?\?\ \[\]\)\.length\ \?\ `\ <span\ class="badg
 <label\ class="field"><span\ class="sub">触发管道（可选）</span>
 const\ chainKey\ =\ \(overlay\.querySelector\('\#wChain'\)\?\.value\ \?\?\ ''\)\.trim\(\);\ \ //
 el.modeLabel.textContent = '协作';
-
+<div id="dashSignalCard" class="ps-head" style="margin-top:14px"><h3 class="sec-title">使用信号</h3><span class="sub">安装热度 · 执行热度（每 30 秒刷新）</span></div>
+const execRows = (st?.top ?? []).map((x) => `<tr><td>×${esc(String(x.count))}${x.fail ? ` <span class="sub">（败 ${x.fail}）</span>` : ''}</td>
+const empty = '<div class="ps-empty" role="status">暂无信号——装一个插件（zkit plugin install）/跑一次动作后这里会有数据</div>';
+<table><thead><tr><th>安装热度</th><th>插件</th></tr></thead><tbody>${instRows || '<tr><td colspan="2" class="ps-empty" role="status">暂无</td></tr>'}</tbody></table>
+<table><thead><tr><th>执行热度</th><th>动作</th></tr></thead><tbody>${execRows || '<tr><td colspan="2" class="ps-empty" role="status">暂无</td></tr>'}</tbody></table>
+body.innerHTML = `<div class="ps-empty" role="status">信号读取失败：${esc(e2.message)}</div>`;

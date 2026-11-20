@@ -6010,6 +6010,8 @@ async function showDashboard() {
           <div class="dash-tile"><span class="dt-name">${d.plugins.count} / ${d.plugins.actions}</span><span>${t('dash220Plug')}</span></div>
         </div>
         ${histHtml}
+        <div id="dashSignalCard" class="ps-head" style="margin-top:14px"><h3 class="sec-title">使用信号</h3><span class="sub">安装热度 · 执行热度（每 30 秒刷新）</span></div>
+        <div id="dashSignalBody" class="ps-empty" role="status">读取中…</div>
         <div class="actions">
           <button class="ghost" id="dashDoctor">${t('dash220GoDoc')}</button>
           <button class="ghost" id="dashSvc">${t('dash220GoSvc')}</button>
@@ -6021,10 +6023,45 @@ async function showDashboard() {
     $('dashSvc')?.addEventListener('click', () => { location.hash = '#/services'; });
     $('dashCache')?.addEventListener('click', () => { location.hash = '#/cache'; });
     $('dashBack')?.addEventListener('click', () => { location.hash = '#/'; });
+    // 326①②③④：使用信号卡片（安装/执行双 top）——30s 刷新，离开面板即停
+    const renderSignal = async () => {
+      const body = document.getElementById('dashSignalBody');
+      if (!body || mode !== 'dashboard') { clearInterval(signalTimer); signalTimer = null; return; }
+      try {
+        const [mk, st] = await Promise.all([api('/api/market-stats'), api('/api/stats/top-actions?n=5')]);
+        const instRows = Object.entries(mk?.stats ?? {}).sort((a, b) => (b[1]?.installs ?? 0) - (a[1]?.installs ?? 0)).slice(0, 5)
+          .map(([id, v]) => `<tr><td>🔥 ${esc(String(v.installs ?? 0))}</td><td>${esc(id)}</td></tr>`).join('');
+        const execRows = (st?.top ?? []).map((x) => `<tr><td>×${esc(String(x.count))}${x.fail ? ` <span class="sub">（败 ${x.fail}）</span>` : ''}</td><td><a href="#/" data-sigact="${encodeURIComponent(x.key)}" title="打开动作详情">${esc(x.key)}</a></td></tr>`).join('');
+        const empty = '<div class="ps-empty" role="status">暂无信号——装一个插件（zkit plugin install）/跑一次动作后这里会有数据</div>';
+        body.innerHTML = (!instRows && !execRows) ? empty : `
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <table><thead><tr><th>安装热度</th><th>插件</th></tr></thead><tbody>${instRows || '<tr><td colspan="2" class="ps-empty" role="status">暂无</td></tr>'}</tbody></table>
+            <table><thead><tr><th>执行热度</th><th>动作</th></tr></thead><tbody>${execRows || '<tr><td colspan="2" class="ps-empty" role="status">暂无</td></tr>'}</tbody></table>
+          </div>`;
+      } catch (e2) {
+        body.innerHTML = `<div class="ps-empty" role="status">信号读取失败：${esc(e2.message)}</div>`;
+      }
+    };
+    // ③ 点击执行项 → 拉插件表找动作对（无缓存依赖；未装/已卸显示无跳转）
+    body?.querySelectorAll?.('[data-sigact]')?.forEach?.((aEl) => { aEl.addEventListener('click', async (ev) => {
+      ev.preventDefault();
+      const k = decodeURIComponent(aEl.getAttribute('data-sigact') ?? '');
+      const dot = k.lastIndexOf('.');
+      if (dot <= 0) return;
+      try {
+        const pl = ((await api('/api/plugins')).plugins ?? []).find((x) => x.id === k.slice(0, dot));
+        const act = pl?.actions?.find?.((a2) => a2.id === k.slice(dot + 1));
+        if (pl && act) openDetail(pl, act);
+      } catch { /* 已卸载或拉取失败——留在原地 */ }
+    }); });
+    clearInterval(signalTimer);
+    signalTimer = setInterval(renderSignal, 30000);
+    void renderSignal();
   } catch (e) {
     el.doctorView.innerHTML = `<div class="ps-empty" role="status">${t('cacheLoadFail')}${esc(e.message)}</div>`;
   }
 }
+let signalTimer = null;
 
 async function showServices() {
   mode = 'services';
