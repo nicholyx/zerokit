@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.49.0] - 2026-11-20
+
+### Added
+
 - 安装热度 30d 增量（market 面板对齐 watch/CLI 趋势——信号四层同构可视）：recordInstall 加 last30d（30 天内安装时间戳数组，超出裁剪；**同版重复装也记 ts**——趋势要真实频次，与 installs 幂等语义分离）；热度徽标附「+30d ↑M」增量（M=30 天内次数；无增量只显示累计；title 注明近 30 天次数）；旧数据兼容（无 last30d 字段 doctor/market-stats 读侧不炸——增量按 0 计）；/api/market-stats 透传 last30d；hot30d336 4 断言（同版两装 last30d=2 趋势记频次/旧形态兼容/透传/徽标增量）；基线 3502→3506。安装热度从「累计」到「累计+30d 方向」——与 watch 趋势、CLI --trend 同构。
 （下一版攒着）
 
@@ -85,12 +91,5 @@
 ### Added
 
 - stats 窗口统计（window 最近 N 行——监控语义对齐）：params window（正整数；缺省=全表兼容不变）——每列 vals 取尾 N 行再算 min/max/avg/count；count 语义明确为窗口内行数（5 行 window=3 → count=3）；超行取全表（window=99 > 5 行 → count=5）；多列每列独立取尾（列长一致同窗）；dataflow consume-detail 加窗口扩展注释（不改默认行为）；plugin-spec/guide 同步；zerocolstats309 8 断言（+窗口取尾 1..5→min=3 max=5 count=3 / 超行取全 count=5 min=1）；基线 3442→3444。滚动窗口数据集 + 窗口统计——异常恢复后告警可复位。
-（下一版攒着）
-
-## [4.31.0] - 2026-11-20
-
-### Added
-
-- zerocol 内建步 Windows 路径守护（304 坑的系统性后验）：静态审查全绿——三内建步路径全 pathModule.join(DATA_DIR)（三种局部名形态、零手写斜杠拼接）；读写 JSON utf8 + 字符串写（二进制走 base64 不落原始字节）；解码全 LE 后缀（readBigInt64LE/readDoubleLE——Buffer API 级字节序保证平台无关）；web/ 零 /tmp 硬编码、test/ 临时目录全 os.tmpdir；**审查判据固化为 winpaths319 守护测试 5 断言**（join 形态合计/裸读/LE-BE 计数/web tmp/test tmp——任何回归本地即拦）；基线 3437→3442。结论：内建步文件操作无 Windows 隐患，CI 全绿的信任有了静态背书。
 （下一版攒着）
 

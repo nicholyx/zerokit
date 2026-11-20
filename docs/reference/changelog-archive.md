@@ -2,6 +2,13 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [4.31.0] - 2026-11-20
+
+### Added
+
+- zerocol 内建步 Windows 路径守护（304 坑的系统性后验）：静态审查全绿——三内建步路径全 pathModule.join(DATA_DIR)（三种局部名形态、零手写斜杠拼接）；读写 JSON utf8 + 字符串写（二进制走 base64 不落原始字节）；解码全 LE 后缀（readBigInt64LE/readDoubleLE——Buffer API 级字节序保证平台无关）；web/ 零 /tmp 硬编码、test/ 临时目录全 os.tmpdir；**审查判据固化为 winpaths319 守护测试 5 断言**（join 形态合计/裸读/LE-BE 计数/web tmp/test tmp——任何回归本地即拦）；基线 3437→3442。结论：内建步文件操作无 Windows 隐患，CI 全绿的信任有了静态背书。
+（下一版攒着）
+
 ## [4.30.0] - 2026-11-19
 
 ### Added
