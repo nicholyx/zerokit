@@ -36,6 +36,7 @@ const KNOWN_TOOLS = ['typescript', '@types/node', '@tauri-apps/cli'];
 const ghostDev = devDeps.filter((d) => !KNOWN_TOOLS.includes(d) && !allSrc.includes(d));
 check('① devDeps 无未解释项（工具链白名单外须被引用）', ghostDev.length === 0, ghostDev.join(','));
 
+<<<<<<< HEAD
 // ② 锁文件一致（331 轮改纯读：Windows spawn npm.cmd 受 Node CVE 防护限制不可靠）
 {
   const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
@@ -48,6 +49,14 @@ check('① devDeps 无未解释项（工具链白名单外须被引用）', ghos
     .map(([name]) => name);
   if (missing.length === 0) check('② lockfile 与 manifest 一致（纯读对比）', true);
   else { fail++; console.error(`✗ ② lockfile 缺条目: ${missing.join(', ')}`); }
+=======
+// ② 锁文件一致：npm ls --package-lock-only 静默=一致
+try {
+  execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['ls', '--package-lock-only', '--omit=dev'], { cwd: ROOT, encoding: 'utf8', timeout: 120000, stdio: 'pipe' });
+  check('② lockfile 与 manifest 一致（npm ls dry）', true);
+} catch (e) {
+  check('② lockfile 与 manifest 一致（npm ls dry）', false, (e.stderr || '').slice(0, 80));
+>>>>>>> origin/main
 }
 
 // ③ 许可证白名单

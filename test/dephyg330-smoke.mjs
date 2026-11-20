@@ -11,14 +11,7 @@ console.log('dephyg330-smoke');
 
 // ① dep-audit 全过（活体）
 let auditOk = true;
-let diag = '';
-try {
-  execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'dep-audit.mjs')], { stdio: 'pipe', timeout: 120000, cwd: ROOT, encoding: 'utf8' });
-} catch (e) {
-  auditOk = false;
-  diag = ((e.stdout ?? '') + '\n' + (e.stderr ?? '')).slice(-400);
-}
-check('① dep-audit 四项全过（活体）', auditOk, diag.replace(/\n/g, ' | ').slice(0, 200));
+try { execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'dep-audit.mjs')], { stdio: 'pipe', timeout: 120000, cwd: ROOT }); } catch { auditOk = false; }
 check('① dep-audit 四项全过（活体）', auditOk, '');
 
 // ④ 清单文档存在 + 判据齐全
