@@ -2942,6 +2942,9 @@ async function restoreWatches() {
         title: w.title ?? w.key, pluginId: pluginId ?? '', actionId: actRest.join('.') ?? '',
         deadline: Date.now() + w.interval * 1000,
         runs: w.runs ?? 0, changes: w.changes ?? 0, notify: w.notify !== false,
+        ...(w.chain ? { chain: w.chain } : {}),                                // 342①：读回漏 chain（295 写侧有读侧漏）
+        ...(w.lastChainRun ? { lastChainRun: w.lastChainRun } : {}),            // 342①：同上
+        __restored: true,  // 342②：boot 恢复标记（首轮 tick 宽限，防翻页误停）
       };
       __wt().scheduleWatch(w.key, w.interval);
     }
@@ -8813,6 +8816,7 @@ async function load(notify) {
     api('/api/markets')
       .then((m) => { el.marketCount.textContent = String((m.markets || []).length); })
       .catch(() => { /* 集市读不到不影响命令面 */ });
+    try { await restoreWatches(); } catch { /* 读回失败不阻塞 boot */ }  // 342②：接通 watch.json 读回（79 轮定义了却从未调用——只写不读）
     applyHash();
     // 列表态深链还原：#/?q=词&filter=… —— 刷新不丢搜索词/筛选
     if (!detail && /^#\/\?(.+)/.test(location.hash || '')) {
