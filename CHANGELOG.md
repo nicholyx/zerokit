@@ -4,6 +4,7 @@
 
 ### Added
 
+- 依赖卫生巡检清单（维护节奏第二轮——例行巡检标准化）：docs/reference/dep-hygiene.md——月度巡检四步（dep-audit 基线 / npm outdated 三档处理【patch 直合、major 评估、停更留 issue】/ npm audit 公告 / dependabot 评论留评估结论）+ 判据四条（lockfile 一致 / 主版本先查引用面——329 sdk 1.8 一行兜底案例 / @types/node 跟运行时 / typescript 7 观望）+ 历史处理记录表；本轮实跑：sdk 1.8→1.11、tauri-cli 2.12.6 minor 直合，@types/node 26 与 typescript 7 观望；dephyg330 4 断言（活体审计全过/清单判据/历史记录/导航）；基线 3485→3485（文档轮断言数由守护测试自证）。
 （下一版攒着）
 
 ## [4.40.0] - 2026-11-20
