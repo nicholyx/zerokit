@@ -22,17 +22,8 @@ for (let i = 0; i < 3; i++) spawnSync(process.execPath, [path.join(ROOT, 'src/cl
 // ② 造一条带 chain 的 watch 配置（写 watch.json——295 持久化语义）
 fs.writeFileSync(path.join(home, 'watch.json'), JSON.stringify({ version: 1, watches: [{ key: 'ps341', interval: 300, chain: 'dataflow.append-ts', lastChainRun: { ok: true, ts: Date.now(), key: 'dataflow.append-ts', stats: { value: { min: 1, max: 5, avg: 3, count: 5 } } }, samples: [{ ts: Date.now() - 1000, ok: true }, { ts: Date.now() - 9 * 86400000, ok: true }] }], stops: [] }, null, 2));
 
-const PORT = String(48000 + (process.pid % 2000));
-const child = spawn(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'ui', '--port', PORT], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
-let started = false;
-child.stdout.on('data', (d) => { if (String(d).includes('已就绪')) started = true; });
-for (let i = 0; i < 40 && !started; i++) await new Promise((r) => setTimeout(r, 250));
-if (!started) { check('ui server 启动', false, ''); finish(); }
-const page0 = await fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.text());
-const tok = (page0.match(/['"]([0-9a-f]{48})['"]/) ?? [])[1] ?? '';
-
-// Chrome 起来（找可执行文件——三候选）
 const CHROME = process.env.CI || process.env.CDP_SKIP ? '' : ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', '/Applications/Chromium.app/Contents/MacOS/Chromium'].find((p2) => fs.existsSync(p2));
+
 if (!CHROME) {
   // CI 无 Chrome（Linux）——降级源码级判据（341 四修复静态可验）
   const collab = fs.readFileSync(path.join(ROOT, 'web', 'collab.js'), 'utf8');
@@ -45,11 +36,23 @@ if (!CHROME) {
   check('降级② 首渲行带 ⛓（chain-badge 在 showWatchPanel 模板）', fs.readFileSync(path.join(ROOT, 'web', 'watchtimers.js'), 'utf8').includes('chain-badge'), '');
   check('降级③ 深链路由（applyHash + hashchange 双侧 #/collab）', (app.match(/#\/collab/g) ?? []).length >= 2, '');
   check('352① 降级：数据集行数显示（watchtimers 含 rowsN）', fs.readFileSync(path.join(ROOT, 'web', 'watchtimers.js'), 'utf8').includes('数据集 ${rowsN} 行'), '');
-  try { process.kill(-child.pid, 'SIGTERM'); } catch { child.kill(); }
+  try { if (typeof child !== 'undefined' && child?.pid) process.kill(-child.pid, 'SIGTERM'); } catch { /* 未 spawn */ }
   try { fs.rmSync(home, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }); } catch { /* */ }
   console.log(`\n${'='.repeat(60)}\n通过 ${pass} / ${pass + fail}`);
   process.exit(fail > 0 ? 1 : 0);
 }
+
+const PORT = String(48000 + (process.pid % 2000));
+const child = spawn(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'ui', '--port', PORT], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+let started = false;
+child.stdout.on('data', (d) => { if (String(d).includes('已就绪')) started = true; });
+for (let i = 0; i < 40 && !started; i++) await new Promise((r) => setTimeout(r, 250));
+if (!started) { check('ui server 启动', false, ''); finish(); }
+const page0 = await fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.text());
+const tok = (page0.match(/['"]([0-9a-f]{48})['"]/) ?? [])[1] ?? '';
+
+// Chrome 起来（找可执行文件——三候选）
+
 const dbgPort = String(49000 + (process.pid % 1000));
 try { spawnSync('pkill', ['-f', 'remote-debugging-port']); } catch { /* 无旧实例 */ }
 await new Promise((r) => setTimeout(r, 600));
