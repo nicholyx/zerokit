@@ -55,7 +55,9 @@ if (CHROME) {
   let up2 = false;
   child2.stdout.on('data', (d) => { if (String(d).includes('已就绪')) up2 = true; });
   for (let i = 0; i < 40 && !up2; i++) await new Promise((r) => setTimeout(r, 250));
-  const chrome2 = spawn(CHROME, ['--headless=new', '--no-sandbox', '--disable-gpu', `--remote-debugging-port=${49600 + (process.pid % 300)}`, '--user-data-dir=' + fs.mkdtempSync(path.join(os.tmpdir(), 'ds-chrome-')), '--no-first-run', 'about:blank'], { stdio: 'ignore', detached: true });
+  try { spawnSync('pkill', ['-f', 'remote-debugging-port']); } catch { /* 无残例 */ }
+      await new Promise((r) => setTimeout(r, 600));
+      const chrome2 = spawn(CHROME, ['--headless=new', '--no-sandbox', '--disable-gpu', `--remote-debugging-port=${49600 + (process.pid % 300)}`, '--user-data-dir=' + fs.mkdtempSync(path.join(os.tmpdir(), 'ds-chrome-')), '--no-first-run', 'about:blank'], { stdio: 'ignore', detached: true });
   await new Promise((r) => setTimeout(r, 3000));
   try {
     let tgt = null;
@@ -88,7 +90,7 @@ if (CHROME) {
       await send2('Runtime.evaluate', { expression: `location.hash = '#/dashboard'` });
       // 352：轮询等元素（boot 慢时固定 sleep 不够）
       let cv = '';
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 30; i++) {
         const probe = await send2('Runtime.evaluate', { expression: `document.getElementById('dashSignalBody')?.innerText.slice(0, 200) ?? 'NO-EL'`, returnByValue: true });
         cv = String(probe?.result?.result?.value ?? '');
         if (cv !== 'NO-EL' && cv.length > 3) break;
