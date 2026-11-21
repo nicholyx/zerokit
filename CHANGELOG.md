@@ -4,6 +4,7 @@
 
 ### Added
 
+- zerocol-export rename（写侧列改名——与 358 读侧投影对称）：export params 加 rename（「旧名:新名」逗号分隔多条；旧名不存在忽略该条）；rename 后下游 stats/read 按新名引用（列元数据一致）；无 rename 行为不变（向后兼容）；data-pipelines.md 补写侧改名示例（与 358 读侧投影并列成对）；exportrename359 4 断言（改名生效/数据集列名/无 rename 兼容/幂等）；基线 3551→3555。
 - zerocol-read columns 投影（读侧列裁剪——宽表只看部分列时输出与心智负担都小）：read params 加 columns（逗号分隔，只输出指定列，**列序按参数序**）；列不存在报错与 stats 同文案（「列 x 不存在（有：…）」）；无 columns 时行为不变（全列——向后兼容）；stdout 附「投影自 N」提示；data-pipelines.md 补读侧投影示例；readproj358 4 断言（投影 _columns=2/无 columns 全列 3/列不存在报错/列序按参数）；基线 3547→3551。
 - 协作操作可追溯（mcp-sessions 快照含 ops 日志——filters/unlock 留痕）：mcp serve 加 opsLog 环形数组（最近 20 条 { ts, op, target }）；POST /mcp/sessions/filters 与 /unlock 成功时记入（404 失败不记——只有真实生效的操作留痕）；快照透传 ops[]（倒序——最新在前）；协作面板「最近操作」段（时间/操作/目标三列表格）；collaboration.md 补「操作可追溯」节；mcpops356 3 断言（404 不记/404 filters/快照可读）；基线 3544→3547。
 （下一版攒着）

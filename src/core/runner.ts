@@ -1365,12 +1365,22 @@ async function runChainAction(
       }
       const mode = item.step.params['mode'] === 'append' ? 'append' : 'overwrite';
       const rowsLimit = typeof item.step.params['rowsLimit'] === 'number' ? Math.max(1, Math.floor(item.step.params['rowsLimit'] as number)) : 1000;
+      // 359①：rename（「旧名:新名」逗号分隔——写侧列改名；旧名不存在忽略该条）
+      const renameRaw = typeof item.step.params['rename'] === 'string' ? String(item.step.params['rename']) : '';
+      const renameMap = new Map<string, string>();
+      if (renameRaw) {
+        for (const pair of renameRaw.split(',').map((x) => x.trim()).filter(Boolean)) {
+          const ci = pair.indexOf(':');
+          if (ci > 0) renameMap.set(pair.slice(0, ci).trim(), pair.slice(ci + 1).trim());
+        }
+      }
       const { exportZeroCol } = await import('./arrowIpc.ts');
       const pathModule = await import('node:path');
       const { DATA_DIR, ensureDirs } = await import('./paths.ts');
       const srcMap: Record<string, unknown> = Object.fromEntries([...results.entries()].map(([alias, r]) => [alias, { data: r.data, stdout: r.stdout }]));
       const cols = colsRaw.map((c) => {
-        const name = String(c['name'] ?? '');
+        let name = String(c['name'] ?? '');
+        if (renameMap.has(name)) name = renameMap.get(name)!;  // 359①：写侧列改名
         const type = c['type'] === 'int' || c['type'] === 'double' ? c['type'] as 'int' | 'double' : 'string';
         const from = String(c['from'] ?? '');
         const src = from.split('.').reduce<unknown>((acc, key) => {
