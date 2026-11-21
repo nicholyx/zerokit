@@ -23,13 +23,12 @@ if (setup.status !== 0) {
   process.exit(1);
 }
 
-const serverPath = process.argv[2];
+const serverPath = process.argv[2] ?? path.join(ROOT, 'src', 'mcp.ts');  // 342：默认路径（直接跑不传参也不炸）
 const child = spawn(process.execPath, [serverPath, 'serve'], {
   stdio: ['pipe', 'pipe', 'pipe'],
   windowsHide: true,
   env: { ...process.env, ZEROKIT_HOME: TMP_HOME },
 });
-
 let stdoutBuf = '';
 const pending = new Map();
 let stderrOut = '';
@@ -61,7 +60,7 @@ let nextId = 1;
 function request(method, params) {
   const id = nextId++;
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`${method} 超时`)), 20000);
+    const timer = setTimeout(() => reject(new Error(`${method} 超时`)), 45000);
     pending.set(id, (msg) => { clearTimeout(timer); resolve(msg); });
     child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
   });

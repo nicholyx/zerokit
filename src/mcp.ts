@@ -363,6 +363,12 @@ function buildMcpServer(): Server {
       description: '环境体检摘要（✓/⚠/✗ 计数）、首个建议动作、缺什么工具与安装命令。AI 客户端第一次接入时先调这个。',
       inputSchema: { type: 'object' as const, properties: {}, additionalProperties: false },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    }, {
+      name: 'zerokit_stats',
+      title: 'zerokit · 数据集统计',
+      description: '读取 data_dir 下的 zerocol 数据集并统计：file=文件名、column=列名、ops=min/max/avg/count/top 逗号分隔。返回 top_value/top_count/top_ratio 等结构化统计。',
+      inputSchema: { type: 'object' as const, properties: { file: { type: 'string' }, column: { type: 'string' }, ops: { type: 'string' } }, required: ['file', 'column'] },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     }];
     const pluginTools = collectTools().map(({ plugin, action }) => ({
       name: toolName(plugin.id, action.id),
@@ -487,6 +493,30 @@ function buildMcpServer(): Server {
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     const name = req.params.name;
     // 第八十轮⑦：内建工具在此分流，不进插件 runner
+    // 346①：内建 zerokit_stats——zerocol 数据集统计（与 chain 内建步同参数）
+    if (name === 'zerokit_stats') {
+      const args2 = (req.params.arguments ?? {}) as Record<string, unknown>;
+      const file = String(args2['file'] ?? '');
+      const column = String(args2['column'] ?? '');
+      const opsRaw2 = String(args2['ops'] ?? 'count');
+      if (!file || !column) {
+        return { content: [{ type: 'text', text: '需要 file 与 column 参数' }], isError: true };
+      }
+      const ops2 = opsRaw2.split(',').map((x) => x.trim()).filter((x) => ['min', 'max', 'avg', 'count', 'top'].includes(x));
+      if (ops2.length === 0) {
+        return { content: [{ type: 'text', text: 'ops 只支持 min/max/avg/count/top' }], isError: true };
+      }
+      try {
+        const mod = await import('./core/runner.ts');
+        const result2 = await mod.builtinStats({ file, column, ops: ops2 });
+        return {
+          content: [{ type: 'text', text: `${column} 统计：${JSON.stringify(result2.stats)}` }],
+          structuredContent: { stats: result2.stats, rows: result2.rows },
+        };
+      } catch (e) {
+        return { content: [{ type: 'text', text: `统计失败：${(e as Error).message}` }], isError: true };
+      }
+    }
     if (name === 'zerokit_welcome') {
       const report = await buildDoctorReport();
       const pyInstall = process.platform === 'win32' ? 'winget install Python.Python.3.13'
@@ -1237,6 +1267,16 @@ function cmdTools(args: string[]): number {
     inputSchema: { type: 'object' as const, properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   };
+  // 346⑥：内建 zerokit_stats——CLI 与 server 同源（331 判据）
+  const builtinStatsTool = {
+    name: 'zerokit_stats',
+    title: 'zerokit · 数据集统计',
+    description: '读取 data_dir 下的 zerocol 数据集并统计：file=文件名、column=列名、ops=min/max/avg/count/top。返回结构化统计。',
+    risk: 'read',
+    params: [] as never[],
+    inputSchema: { type: 'object' as const, properties: { file: { type: 'string' }, column: { type: 'string' }, ops: { type: 'string' } }, required: ['file', 'column'] },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  };
   // 第七十一轮⑧：--risk <级别> 按风险过滤（read / mutate / destructive）
   const riskIdx = args.indexOf('--risk');
   const riskRaw = riskIdx >= 0 ? args[riskIdx + 1] : undefined;
@@ -1267,7 +1307,7 @@ function cmdTools(args: string[]): number {
     },
   }));
   // 第八十轮⑦：welcome 不吃 --risk/--plugin 过滤（它是内建面，永远第一行）
-  const tools = riskWant || plugWant ? pluginCollected : [builtinWelcome, ...pluginCollected];
+  const tools = riskWant || plugWant ? pluginCollected : [builtinWelcome, builtinStatsTool, ...pluginCollected];
   if (asJson) {
     process.stdout.write(JSON.stringify({ count: tools.length, ...(riskWant ? { risk: riskWant } : {}), tools }, null, 2) + '\n');
     return 0;

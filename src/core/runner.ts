@@ -1583,3 +1583,65 @@ export function confirmPolicy(risk: RiskLevel): ConfirmPolicy {
     default: return 'always';
   }
 }
+
+
+/** 346②：zerocol 统计（MCP zerokit_stats 工具与 chain 内建步共用——参数同构） */
+export async function builtinStats(args: { file: string; column: string; ops: string[] }): Promise<{ stats: Record<string, unknown>; rows: number }> {
+  const { readFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { DATA_DIR } = (() => { try { return { DATA_DIR: HOME + '/data' }; } catch { return { DATA_DIR: HOME + '/data' }; } })();
+  const { DATA_DIR: DD } = await import('./paths.ts');
+  const inPath = join(DD, args.file.endsWith('.zerocol.json') ? args.file : `${args.file}.zerocol.json`);
+  const raw = JSON.parse(readFileSync(inPath, 'utf8')) as { format?: string; columns?: Array<{ name: string; type: string; count: number; bytes: number }>; data?: string };
+  if (raw.format !== 'zerocol' || !Array.isArray(raw.columns)) {
+    throw new Error('不是 zerocol 文件');
+  }
+  const target = raw.columns.find((c) => c.name === args.column);
+  if (!target) {
+    throw new Error(`列 "${args.column}" 不存在（有：${raw.columns.map((c) => c.name).join('、')}）`);
+  }
+  const statsOut: Record<string, unknown> = {};
+  if (target.type === 'string') {
+    // 345 top-frequency（string 列）
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { importZeroCol } = await import('./arrowIpc.ts');
+    const allCols = importZeroCol({ format: 'zerocol', formatVersion: 1, createdAt: '', checksum: '', columns: (raw.columns ?? []).map((c) => ({ ...c, type: c.type as 'string' | 'int' | 'double' })), data: raw.data ?? '' });
+    const colDec = allCols.find((c) => c.name === args.column);
+    const strs = (colDec?.values ?? []).map((v) => String(v));
+    const freq = new Map<string, number>();
+    for (const v of strs) freq.set(v, (freq.get(v) ?? 0) + 1);
+    const sorted = [...freq.entries()].sort((a, b) => b[1] - a[1]);
+    statsOut[args.column] = { count: strs.length };
+    if (strs.length > 0 && sorted[0]) {
+      const one = statsOut[args.column] as Record<string, unknown>;
+      one.top_value = sorted[0][0];
+      one.top_count = sorted[0][1];
+      one.top_ratio = Math.round((sorted[0][1] / strs.length) * 1000) / 1000;
+    }
+    return { stats: statsOut[args.column] as Record<string, unknown>, rows: strs.length };
+  }
+  // 数值列
+  let off = 0;
+  for (const c of raw.columns) { if (c.name === args.column) break; off += c.bytes; }
+  const buf = Buffer.from(raw.data ?? '', 'base64');
+  const vals: number[] = [];
+  for (let i = 0; i < target.count; i++) {
+    vals.push(target.type === 'int' ? Number(buf.readBigInt64LE(off + i * 8)) : buf.readDoubleLE(off + i * 8));
+  }
+  const one: Record<string, number> = {};
+  for (const op of args.ops) {
+    if (op === 'count') one.count = vals.length;
+    if (op === 'min' && vals.length > 0) one.min = Math.min(...vals);
+    if (op === 'max' && vals.length > 0) one.max = Math.max(...vals);
+    if (op === 'avg' && vals.length > 0) one.avg = Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 1000) / 1000;
+    if (op === 'top' && vals.length > 0) {
+      const freq = new Map<number, number>();
+      for (const v of vals) freq.set(v, (freq.get(v) ?? 0) + 1);
+      const sorted = [...freq.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+      const best = sorted[0];
+      if (best) { one.top_value = best[0]; one.top_count = best[1]; one.top_ratio = Math.round((best[1] / vals.length) * 1000) / 1000; }
+    }
+  }
+  statsOut[args.column] = one;
+  return { stats: one, rows: vals.length };
+}
