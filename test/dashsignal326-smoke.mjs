@@ -97,6 +97,12 @@ if (CHROME) {
         await new Promise((r) => setTimeout(r, 800));
       }
       check('①② CDP 卡片真渲染（含安装或执行数据）', cv.includes('🔥') || cv.includes('×') || cv.includes('暂无'), cv.slice(0, 80));
+      // 365①：窗口切换按钮组渲染
+      const winBtns = await send2('Runtime.evaluate', { expression: `document.querySelectorAll('[data-sigwin]').length`, returnByValue: true });
+      check('365① 窗口切换按钮组（全部/20/50 = 3 个）', winBtns?.result?.result?.value === 3, String(winBtns?.result?.result?.value));
+      // 365②：点击「最近 20」后卡片重渲染（fetch 带 window=20）
+      const clicked = await send2('Runtime.evaluate', { expression: `(() => { document.querySelector('[data-sigwin=\"20\"]')?.click(); return window.__sigWin; })()`, returnByValue: true });
+      check('365② 点击切换（__sigWin=20）', String(clicked?.result?.result?.value) === '20', String(clicked?.result?.result?.value));
       ws2.close();
     } else {
       check('①② CDP 卡片真渲染', false, 'target 不可达');
@@ -110,6 +116,8 @@ if (CHROME) {
   // CI 降级：源码断言补 2（与 CDP 同数）
   check('①② 降级：卡片容器与双表结构（源码级）', app.includes('dashSignalBody') && app.includes('安装热度') && app.includes('执行热度'), '');
   check('④ 降级：执行项跳转链路（openDetail 在绑定内）', app.includes('openDetail(pl, act)'), '');
+  check('365① 降级：窗口切换组（data-sigwin 三档 + API window 参数）', (app.match(/data-sigwin/g) ?? []).length >= 3, '');
+  check('365② 降级：API window 参数透传（server 读 searchParams）', fs.readFileSync(path.join(ROOT, 'src', 'server.ts'), 'utf8').includes("searchParams.get('window')"), '');
 }
 
 console.log(`\n${'='.repeat(60)}\n通过 ${pass} / ${pass + fail}`);

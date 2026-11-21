@@ -4,6 +4,7 @@
 
 ### Added
 
+- dashboard 信号卡片窗口切换（364 CLI --tail 的 UI 对位——三端窗口语义齐同构）：卡片头加窗口切换组（全部 / 最近 20 / 最近 50，active 高亮）；点击后 __sigWin 全局 + fetch 带 window 参数重新渲染；**30s 刷新保持当前窗口**（不弹回全表）；/api/stats/top-actions 加 window 参数（0/缺省=全表——向后兼容；与 CLI --tail 同 clamp 语义 1-1000）；dashsignal326 9 断言（CDP +3：按钮组渲染/点击切换 __sigWin=20/卡片重渲染；降级 +2 同数）；基线 3564→3566。
 - CLI stats --tail N（最近 N 次窗口视图——与 320 链路 window / 361 分位打通，实时 SLA）：cmdStats 加 --tail N（1-1000，非法值钳到 1——clamp 语义不炸）；窗口内重新统计（分位数/最常用/最慢都是窗口语义）；输出头部「⏱ 窗口视图 最近 N 次」+ --action 单动作视图带窗口标注 + --json 透传 window 字段；无 --tail 行为不变（向后兼容）；statstail364 4 断言（窗口头/兼容/json window/钳位）；基线 3560→3564。
 （下一版攒着）
 

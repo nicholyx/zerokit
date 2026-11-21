@@ -1207,7 +1207,10 @@ export function createServer(): http.Server {
       // 325④：动作执行热度 Top（UI 可消费；?n= 条数默认 5）
       if (url.pathname === '/api/stats/top-actions' && req.method === 'GET') {
         const n = Math.max(1, Math.min(20, Number(url.searchParams.get('n') ?? 5) || 5));
-        const audit = readAudit();
+        // 365②：window 参数——最近 N 次执行窗口（与 CLI --tail 语义对位；0/缺省=全表）
+        const winN = Math.max(0, Math.min(1000, Number(url.searchParams.get('window') ?? 0) || 0));
+        const auditAll = readAudit();
+        const audit = winN > 0 ? auditAll.slice(-winN) : auditAll;
         const byKey = new Map<string, { key: string; count: number; fail: number }>();
         for (const e of audit) {
           const k = `${e.plugin}.${e.action}`;
