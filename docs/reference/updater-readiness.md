@@ -38,6 +38,16 @@ v4.40.0 aarch64.dmg 实测（macOS arm64 本机）：
 | MacOS 二进制 | ✅ Mach-O 64-bit arm64 |
 | 卸载清理 | ✅ detach + /tmp 清理 |
 
+### 复检追加：v4.58.0（第三百五十三轮，2026-11-21——352 UI 改动后包内/HEAD 对照）
+
+| 检查项 | 结果 |
+|---|---|
+| sha256 与 release digest | ✅ 0dd9a079…（与 349 轮一致——release 未变） |
+| 挂载 + Info.plist | ✅ dev.zerokit.desktop / 4.58.0 |
+| **包内 web/watchtimers.js vs main** | ⚠️ 包内「数据集」0 行 / main 3 行——352 的「数据集 M 行」改动**未进当前安装包**（v4.58.0 发布于 352 之前，符合预期）；下次 release 时这些改动随包下发 |
+| MacOS 二进制 / Resources | ✅ arm64 / web+plugins+src 在位 |
+| 清理 | ✅ detach + /tmp 清理 |
+
 ### 年检追加：v4.58.0（第三百四十九轮，2026-11-21）
 
 | 检查项 | 结果 |
