@@ -28,4 +28,5 @@
 | 2026-11-20 | sdk 1.11 / tauri-cli 2.12.6 minor | npm update 直合 |
 | 2026-11-20 | @types/node 26 / typescript 7 | 观望（运行时/生态未跟） |
 | 2026-11-21（340 轮周检） | audit 0 vulnerabilities / sdk 1.11 已是 latest / outdated 无新增 | 本轮无动作（周检干净） |
+| 2026-11-21（347 轮月度例跑） | audit 0 / sdk 1.11→1.12直升 / @types 26、ts 7 维持观望 | sdk 升 1.12 + **判据补全：本地 typecheck 需 npm install --no-save typescript**（无 bin 时静默通过——345 教训） |
 | 2026-11-20（331 轮 11 月例跑） | @hono/node-server 2.1.4→2.1.10 + hono 4.13.19（GHSA-qv5m/GHSA-jpvv moderate——传递依赖，零直用） | `npm audit fix --omit=dev`（需官方 registry；jlc mirror 不支持 audit endpoint）→ 0 vulnerabilities |
