@@ -78,3 +78,7 @@ CLI 侧：`zkit mcp sessions`（含频控丢弃提示行）。
 - [插件清单规范](../reference/plugin-spec.md)（动作 risk 分级——锁的触发面）
 - [平台差异判据](../reference/platform-pitfalls.md)（SSE 客户端的跨平台坑）
 - [数据管道指南](data-pipelines.md)（广播里跑的管道长什么样）
+
+## 操作可追溯（356 轮）
+
+filters/unlock 操作会记入 ops 日志（最近 20 条环形）：协作面板「最近操作」段与 `/api/mcp-sessions` 快照的 `ops[]` 都可见——谁在何时改了过滤/放了锁一目了然。时间戳为 HH:MM:SS（本地时）。

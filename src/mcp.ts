@@ -757,6 +757,11 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
   const dropped = { count: 0, filtered: 0 };
 
 /** 311①：运行时快照落盘（serveHttp 内全量版——可见 transports/dropped/coopLocks） */
+  const opsLog: Array<{ ts: string; op: string; target: string }> = [];  // 356①：操作日志（最近 20 条环形）
+  const pushOps = (op: string, target: string): void => {
+    opsLog.push({ ts: new Date().toISOString().slice(11, 19), op, target });
+    if (opsLog.length > 20) opsLog.shift();
+  };
   function writeRuntimeSnapshotInner(): void {
     const locks = [...coopLocks.entries()].map(([tool, l]) => ({ tool, holder: l.clientId, since: new Date(l.since).toISOString().slice(11, 19) }));
     const sessions = [...transports.entries()].filter(([sid]) => sid !== 'pending').map(([sid, e]) => ({
@@ -765,9 +770,9 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
       session: sid.slice(-8),
       filters: e.filters ?? [],
     }));
-    writeRuntimeSnapshot({ count: sessions.length, sessions, locks, droppedBroadcasts: dropped.count, filteredBroadcasts: dropped.filtered });
+    writeRuntimeSnapshot({ count: sessions.length, sessions, locks, ops: [...opsLog].reverse(), droppedBroadcasts: dropped.count, filteredBroadcasts: dropped.filtered });
   }
-  const writeRuntimeSnapshot = (partial: Partial<{ count: number; sessions: unknown[]; locks: unknown[]; droppedBroadcasts: number; filteredBroadcasts: number }> = {}) => {
+  const writeRuntimeSnapshot = (partial: Partial<{ count: number; sessions: unknown[]; locks: unknown[]; ops: unknown[]; droppedBroadcasts: number; filteredBroadcasts: number }> = {}) => {
     try {
       const cur = readRuntimeSnapshotFile();
       fs.writeFileSync(path.join(HOME, 'mcp-runtime.json'), JSON.stringify({ ts: new Date().toISOString(), running: true, ...cur, ...partial }, null, 2));
@@ -828,6 +833,7 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
           if (!entry) { res.writeHead(404, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'session-not-found' })); return; }
           const ft = Array.isArray(parsed.filters) ? parsed.filters.map(String) : [];
           entry.filters = ft.length > 0 ? ft : undefined;
+          pushOps('filters', `${sid.slice(-8)} → [${ft.join(', ')}]`);
           writeRuntimeSnapshotInner();
           res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, session: sid, filters: entry.filters ?? [] }));
         } catch { res.writeHead(400).end(); }
@@ -847,6 +853,7 @@ export async function serveHttp(port = 31800, host = '127.0.0.1'): Promise<numbe
           const tool = String(parsed.tool ?? '');
           if (!tool || !coopLocks.has(tool)) { res.writeHead(404, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'lock-not-found' })); return; }
           coopLocks.delete(tool);
+          pushOps('unlock', tool);
           writeRuntimeSnapshotInner();
           res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, released: tool }));
         } catch { res.writeHead(400).end(); }

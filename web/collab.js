@@ -37,7 +37,8 @@ export function showCollab() {
         <tbody>${(snap.sessions ?? []).map((s2) => `<tr><td>${esc(s2.clientId)}</td><td>${esc(String(s2.connectedAt).slice(11, 19))}</td><td><input class="collab-filter" data-csession="${esc(s2.session)}" value="${esc((s2.filters ?? []).join(', '))}" placeholder="全收（逗号分隔前缀）" aria-label="过滤前缀"></td></tr>`).join('') || '<tr><td colspan="3" class="ps-empty">无</td></tr>'}</tbody></table>
         <table style="margin-top:12px"><thead><tr><th>持有的锁</th><th>持有者</th><th>自</th><th></th></tr></thead>
         <tbody>${(snap.locks ?? []).map((l) => `<tr><td>${esc(l.tool)}</td><td>${esc(l.holder)}</td><td>${esc(l.since)}</td><td><button class="ghost mini" data-cunlock="${esc(l.tool)}">释放</button></td></tr>`).join('') || '<tr><td colspan="4" class="ps-empty">无锁在持</td></tr>'}</tbody></table>
-        <div class="help" style="margin-top:12px">频控丢弃 ${snap.droppedBroadcasts ?? 0} 条 · 过滤拦截 ${snap.filteredBroadcasts ?? 0} 条</div>`;
+        <div class="help" style="margin-top:12px">频控丢弃 ${snap.droppedBroadcasts ?? 0} 条 · 过滤拦截 ${snap.filteredBroadcasts ?? 0} 条</div>
+        ${(snap.ops ?? []).length ? `<h3 class="sec-title" style="margin-top:12px">最近操作</h3><table><thead><tr><th>时间</th><th>操作</th><th>目标</th></tr></thead><tbody>${snap.ops.map((o) => `<tr><td>${esc(o.ts)}</td><td>${esc(o.op)}</td><td>${esc(o.target)}</td></tr>`).join('')}</tbody></table>` : ''}`;
       // 312③⑤ 操作面（341 重写时补回）：过滤输入回车提交 + 锁释放按钮
       body.querySelectorAll('.collab-filter').forEach((inp) => {
         inp.addEventListener('keydown', (ev) => {

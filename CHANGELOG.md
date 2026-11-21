@@ -4,6 +4,7 @@
 
 ### Added
 
+- 协作操作可追溯（mcp-sessions 快照含 ops 日志——filters/unlock 留痕）：mcp serve 加 opsLog 环形数组（最近 20 条 { ts, op, target }）；POST /mcp/sessions/filters 与 /unlock 成功时记入（404 失败不记——只有真实生效的操作留痕）；快照透传 ops[]（倒序——最新在前）；协作面板「最近操作」段（时间/操作/目标三列表格）；collaboration.md 补「操作可追溯」节；mcpops356 3 断言（404 不记/404 filters/快照可读）；基线 3544→3547。
 （下一版攒着）
 
 ## [4.59.0] - 2026-11-21
