@@ -6017,7 +6017,7 @@ async function showDashboard() {
           <div class="dash-tile"><span class="dt-name">${d.plugins.count} / ${d.plugins.actions}</span><span>${t('dash220Plug')}</span></div>
         </div>
         ${histHtml}
-        <div id="dashSignalCard" class="ps-head" style="margin-top:14px"><h3 class="sec-title">使用信号</h3><span class="sub">安装热度 · 执行热度（每 30 秒刷新）· <a href="#/watch">去监控</a></span></div>
+        <div id="dashSignalCard" class="ps-head" style="margin-top:14px"><h3 class="sec-title">使用信号</h3><span class="sub">安装热度 · 执行热度（每 30 秒刷新）· <a href="#/watch">去监控</a> · <span id="dashSignalWin" class="sub">窗口：<a href="#" data-sigwin="0">全部</a> / <a href="#" data-sigwin="20">最近 20</a> / <a href="#" data-sigwin="50">最近 50</a></span></div>
         <div id="dashSignalBody" class="ps-empty" role="status">读取中…</div>
         <div class="actions">
           <button class="ghost" id="dashDoctor">${t('dash220GoDoc')}</button>
@@ -6035,7 +6035,7 @@ async function showDashboard() {
       const body = document.getElementById('dashSignalBody');
       if (!body || mode !== 'dashboard') { clearInterval(signalTimer); signalTimer = null; return; }
       try {
-        const [mk, st] = await Promise.all([api('/api/market-stats'), api('/api/stats/top-actions?n=5')]);
+        const [mk, st] = await Promise.all([api('/api/market-stats'), api(`/api/stats/top-actions?n=5${(window.__sigWin ?? 0) > 0 ? `&window=${window.__sigWin}` : ''}`)]);
         const instRows = Object.entries(mk?.stats ?? {}).sort((a, b) => (b[1]?.installs ?? 0) - (a[1]?.installs ?? 0)).slice(0, 5)
           .map(([id, v]) => `<tr><td>🔥 ${esc(String(v.installs ?? 0))}</td><td>${esc(id)}</td></tr>`).join('');
         const execRows = (st?.top ?? []).map((x) => `<tr><td>×${esc(String(x.count))}${x.fail ? ` <span class="sub">（败 ${x.fail}）</span>` : ''}</td><td><a href="#/" data-sigact="${encodeURIComponent(x.key)}" title="打开动作详情">${esc(x.key)}</a></td></tr>`).join('');
@@ -6062,6 +6062,15 @@ async function showDashboard() {
         if (pl && act) openDetail(pl, act);
       } catch { /* 已卸载或拉取失败——留在原地 */ }
     }); });
+    // 365①③：窗口切换（active 高亮 + 刷新保持当前窗口）
+    document.querySelectorAll('[data-sigwin]').forEach((aEl) => {
+      aEl.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        window.__sigWin = Number(aEl.getAttribute('data-sigwin') ?? 0);
+        document.querySelectorAll('[data-sigwin]').forEach((x) => { x.style.fontWeight = String(window.__sigWin) === x.getAttribute('data-sigwin') ? '700' : ''; });
+        void renderSignal();
+      });
+    });
     clearInterval(signalTimer);
     signalTimer = setInterval(renderSignal, 30000);
     void renderSignal();
