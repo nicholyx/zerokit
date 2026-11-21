@@ -1272,7 +1272,14 @@ async function runChainAction(
             continue;
           }
           const { importZeroCol: importZC } = await import('./arrowIpc.ts');
-          const zcObj: import('./arrowIpc.ts').ZeroColFile = { format: 'zerocol', formatVersion: 1, createdAt: new Date().toISOString(), checksum: '', columns: zcS.columns, data: zcS.data ?? '' };
+          const zcObj = {
+          format: 'zerocol' as const,
+          formatVersion: 1,
+          createdAt: new Date().toISOString(),
+          checksum: '',
+          columns: (zcS.columns ?? []).map((c) => ({ ...c, type: c.type as 'string' | 'int' | 'double' })),
+          data: zcS.data ?? '',
+        };
           const allCols = importZC(zcObj);
           const colDec = allCols.find((c2) => c2.name === c.name);
           const strs = (colDec?.values ?? []).map((v) => String(v));
@@ -1281,9 +1288,12 @@ async function runChainAction(
             const freq = new Map<string, number>();
             for (const v of strs) freq.set(v, (freq.get(v) ?? 0) + 1);
             const sortedF = [...freq.entries()].sort((a, b) => b[1] - a[1]);
-            oneS.top_value = sortedF[0][0];
-            oneS.top_count = sortedF[0][1];
-            oneS.top_ratio = Math.round((sortedF[0][1] / strs.length) * 1000) / 1000;
+            const bestS = sortedF[0];
+            if (bestS) {
+              oneS.top_value = bestS[0];
+              oneS.top_count = bestS[1];
+              oneS.top_ratio = Math.round((bestS[1] / strs.length) * 1000) / 1000;
+            }
           }
           statsOut[c.name] = oneS;
           off += c.bytes;
