@@ -31,6 +31,15 @@
 | **代理劫持回环** | Node fetch 若走代理（env 或系统），127.0.0.1 请求被代理截获返回 HTML | 测试进程顶部删 proxy env；CDP fetch 一律 localhost | 341 |
 | **降级一致性** | CI 无 Chrome 时降级源码级断言——**断言数必须与本地 CDP 版一致**，否则基线护栏拦截（3513<3517 差 4 实战） | 降级路径补齐同数断言 | 342 |
 
+## 配置同步 / 工具面（342-347 战役补遗）
+
+| 坑 | 判据 | 修复 | 战役 |
+|---|---|---|---|
+| **持久化只写不读** | restoreWatches 定义了却从未被调用——79 轮的 watch.json 持久化只写不读，重启页面监控全丢 | 接通进 load() boot 链；写侧字段（chain/lastChainRun）读侧必须同步重建 | 342 |
+| **恢复条目被翻页误杀** | boot 时无 detail 上下文 → 恢复的监控首轮 tick 即 stopWatch | `__restored` 首轮宽限标记 | 342 |
+| **ops 白名单与功能脱节** | stats ops 加 "top" 但白名单过滤没同步——opsHasTop 恒 false，新功能静默走旧报错 | **ops 白名单必须与功能同步扩展**；新 op 加白名单才算落地 | 345 |
+| **typecheck 假绿** | `npm run typecheck` 在 node_modules 无 typescript bin 时静默通过（command not found 但 exit 0） | 本地跑之前先 `npm install --no-save typescript`；CI typecheck job 才是真防线 | 345/347 |
+
 ## 通用
 
 - Node ≥ 22.18（项目硬规则）；`execFileSync(process.execPath, [...])` 在三平台行为一致。
