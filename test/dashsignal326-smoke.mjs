@@ -86,9 +86,14 @@ if (CHROME) {
       await send2('Page.navigate', { url: `http://localhost:${PORT2}/` });
       await new Promise((r) => setTimeout(r, 4000));
       await send2('Runtime.evaluate', { expression: `location.hash = '#/dashboard'` });
-      await new Promise((r) => setTimeout(r, 3000));
-      const card = await send2('Runtime.evaluate', { expression: `document.getElementById('dashSignalBody')?.innerText.slice(0, 200) ?? 'NO-EL'`, returnByValue: true });
-      const cv = String(card?.result?.result?.value ?? '');
+      // 352：轮询等元素（boot 慢时固定 sleep 不够）
+      let cv = '';
+      for (let i = 0; i < 20; i++) {
+        const probe = await send2('Runtime.evaluate', { expression: `document.getElementById('dashSignalBody')?.innerText.slice(0, 200) ?? 'NO-EL'`, returnByValue: true });
+        cv = String(probe?.result?.result?.value ?? '');
+        if (cv !== 'NO-EL' && cv.length > 3) break;
+        await new Promise((r) => setTimeout(r, 800));
+      }
       check('①② CDP 卡片真渲染（含安装或执行数据）', cv.includes('🔥') || cv.includes('×') || cv.includes('暂无'), cv.slice(0, 80));
       ws2.close();
     } else {

@@ -231,7 +231,9 @@ function liveRefreshWatchPanel() {
       const sub = row.querySelector('.sub');
       if (sub) {
         const statsBrief = w.lastChainRun?.stats ? Object.entries(w.lastChainRun.stats).slice(0, 1).map(([col, o]) => `${col} max=${o.max ?? '-'}`).join('') : '';
-        sub.innerHTML = `${w.runs} 次采样 · ${w.changes} 次变更${w.changes > 0 && w.samples.length ? ' · 上次变化 ' + relTime(w.samples.at(-1)?.ts ?? Date.now()) : ''}${w.chain ? ` · <span class="chain-badge" title="${w.lastChainRun?.stats ? esc(Object.entries(w.lastChainRun.stats).map(([col, o]) => `${col}: max=${o.max ?? '-'} avg=${o.avg ?? '-'} count=${o.count ?? '-'}`).join(' · ')) : '尚无统计（触发一次带 builtin.zerocol-stats 的链路后显示）'}">⛓ ${esc(w.chain)} ${w.lastChainRun ? (w.lastChainRun.ok ? '✓' : '✗') : '（待触发）'}${statsBrief ? ` ${esc(statsBrief)}` : ''}</span> · <a href="#/dashboard" data-sig="${esc(w.chain)}" title="看首页使用信号卡片">看统计</a>` : ''}${trendHtml(w)}`;
+        // 352①：数据集行数（各列 count 取 max——无 window 时即全表行数）
+        const rowsN = w.lastChainRun?.stats ? Math.max(...Object.values(w.lastChainRun.stats).map((o) => o.count ?? 0)) : 0;
+        sub.innerHTML = `${w.runs} 次采样 · ${w.changes} 次变更${rowsN > 0 ? ` · 数据集 ${rowsN} 行` : ''}${w.changes > 0 && w.samples.length ? ' · 上次变化 ' + relTime(w.samples.at(-1)?.ts ?? Date.now()) : ''}${w.chain ? ` · <span class="chain-badge" title="${w.lastChainRun?.stats ? esc(Object.entries(w.lastChainRun.stats).map(([col, o]) => `${col}: max=${o.max ?? '-'} avg=${o.avg ?? '-'} count=${o.count ?? '-'}`).join(' · ')) : '尚无统计（触发一次带 builtin.zerocol-stats 的链路后显示）'}">⛓ ${esc(w.chain)} ${w.lastChainRun ? (w.lastChainRun.ok ? '✓' : '✗') : '（待触发）'}${statsBrief ? ` ${esc(statsBrief)}` : ''}</span> · <a href="#/dashboard" data-sig="${esc(w.chain)}" title="看首页使用信号卡片">看统计</a>` : ''}${trendHtml(w)}`;
         // 327②：⛓ 徽标 hover title 带最近统计数字（title 属性——不挤行内）
       }
       // ④ sparkline 点阵（最近 10 次成败）
@@ -272,7 +274,7 @@ function showWatchPanel() {
     <div class="run-row watch-row">
       <span class="badge ${stateCls}">${stateMark}</span>
       <span class="run-when">${esc(w.title)}（每 ${esc(intervalLabel(w.interval))}）</span>
-      <span class="sub">${w.runs} 次采样 · ${w.changes} 次变更${w.changes > 0 && w.samples.length ? ' · 上次变化 ' + relTime(lastSample?.ts ?? Date.now()) : ''}${w.chain ? ` · <span class="chain-badge" title="${w.lastChainRun?.stats ? esc(Object.entries(w.lastChainRun.stats).map(([col, o]) => `${col}: max=${o.max ?? '-'} avg=${o.avg ?? '-'} count=${o.count ?? '-'}`).join(' · ')) : '尚无统计'}">⛓ ${esc(w.chain)} ${w.lastChainRun ? (w.lastChainRun.ok ? '✓' : '✗') : '（待触发）'}</span> · <a href="#/dashboard" data-sig="${esc(w.chain)}" title="看首页使用信号卡片">看统计</a>` : ''}${trendHtml(w)}</span>
+      <span class="sub">${w.runs} 次采样 · ${w.changes} 次变更${(() => { const rn = w.lastChainRun?.stats ? Math.max(...Object.values(w.lastChainRun.stats).map((o) => o.count ?? 0)) : 0; return rn > 0 ? ` · 数据集 ${rn} 行` : ''; })()}${w.changes > 0 && w.samples.length ? ' · 上次变化 ' + relTime(lastSample?.ts ?? Date.now()) : ''}${w.chain ? ` · <span class="chain-badge" title="${w.lastChainRun?.stats ? esc(Object.entries(w.lastChainRun.stats).map(([col, o]) => `${col}: max=${o.max ?? '-'} avg=${o.avg ?? '-'} count=${o.count ?? '-'}`).join(' · ')) : '尚无统计'}">⛓ ${esc(w.chain)} ${w.lastChainRun ? (w.lastChainRun.ok ? '✓' : '✗') : '（待触发）'}</span> · <a href="#/dashboard" data-sig="${esc(w.chain)}" title="看首页使用信号卡片">看统计</a>` : ''}${trendHtml(w)}</span>
       <span class="watch-spark">${(w.samples ?? []).slice(-10).map((sm) => `<i class="${sm.ok ? 'ok' : 'bad'}"${Number.isFinite(sm.ms) ? ` title="${esc(relTime(sm.ts))} · 耗时 ${fmtElapsed(sm.ms)}"` : ''}></i>`).join('')}</span>
       <span class="watch-summary">${esc(summary)}</span>
       ${failReason ? `<span class="bad watch-fail-reason">失败原因：${esc(failReason)}</span>` : ''}

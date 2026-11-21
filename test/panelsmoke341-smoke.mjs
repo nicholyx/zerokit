@@ -44,6 +44,7 @@ if (!CHROME) {
   check('降级② watch 读回接通（restoreWatches 进 load）', app.includes('await restoreWatches()'), '');
   check('降级② 首渲行带 ⛓（chain-badge 在 showWatchPanel 模板）', fs.readFileSync(path.join(ROOT, 'web', 'watchtimers.js'), 'utf8').includes('chain-badge'), '');
   check('降级③ 深链路由（applyHash + hashchange 双侧 #/collab）', (app.match(/#\/collab/g) ?? []).length >= 2, '');
+  check('352① 降级：数据集行数显示（watchtimers 含 rowsN）', fs.readFileSync(path.join(ROOT, 'web', 'watchtimers.js'), 'utf8').includes('数据集 ${rowsN} 行'), '');
   try { process.kill(-child.pid, 'SIGTERM'); } catch { child.kill(); }
   try { fs.rmSync(home, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }); } catch { /* */ }
   console.log(`\n${'='.repeat(60)}\n通过 ${pass} / ${pass + fail}`);
@@ -141,6 +142,8 @@ r2 = await send('Runtime.evaluate', { expression: `document.body.innerText.inclu
 check('② 看统计链接渲染', r2?.result?.result?.value === true, '');
 r2 = await send('Runtime.evaluate', { expression: `document.body.innerText.includes('趋势：本周')`, returnByValue: true });
 check('② 趋势段渲染（本周 N 次）', r2?.result?.result?.value === true, '');
+let rr = await send('Runtime.evaluate', { expression: `document.body.innerText.includes('数据集')`, returnByValue: true });
+check('352① 数据集行数显示（数据集 M 行）', rr?.result?.result?.value === true, '');
 await send('Runtime.evaluate', { expression: `location.hash = '#/collab'` });
 await new Promise((r) => setTimeout(r, 2500));
 let r3 = await send('Runtime.evaluate', { expression: `document.body.innerText.includes('协作') || document.body.innerText.includes('mcp serve')`, returnByValue: true });
