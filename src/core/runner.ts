@@ -1283,7 +1283,7 @@ async function runChainAction(
           const allCols = importZC(zcObj);
           const colDec = allCols.find((c2) => c2.name === c.name);
           const strs = (colDec?.values ?? []).map((v) => String(v));
-          const oneS: Record<string, unknown> = { count: strs.length };
+          const oneS: Record<string, number | string | null> = { count: strs.length };
           if (ops.includes('top') && strs.length > 0) {
             const freq = new Map<string, number>();
             for (const v of strs) freq.set(v, (freq.get(v) ?? 0) + 1);
