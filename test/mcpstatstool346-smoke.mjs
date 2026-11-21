@@ -51,6 +51,13 @@ check('② 统计返回（rows=3 + min/max）', call2.includes('"rows":3') && ca
 const call3 = await call(A.sid, 4, 'zerokit_stats', { file: 'ts-data', column: 'nope', ops: 'min' });
 check('③ 列不存在错误', call3.includes('不存在') || call3.includes('nope'), call3.slice(0, 80));
 
+// 351①：rows 恒全表（ts-data 3 行）
+{
+  const c = await client('c2');
+  const t = await call(c.sid, 20, 'zerokit_stats', { file: 'ts-data', column: 'value', ops: 'count' });
+  check('351① zerokit_stats rows 恒全表（rows:3）', t.includes('"rows":3'), t.slice(0, 90));
+}
+
 // ③ 缺参数
 const call4 = await call(A.sid, 5, 'zerokit_stats', { column: 'x' });
 check('③ 缺 file 参数错误', call4.includes('file'), call4.slice(0, 80));
@@ -62,3 +69,4 @@ function finish() {
   console.log(`\n${'='.repeat(60)}\n通过 ${pass} / ${pass + fail}`);
   process.exit(fail > 0 ? 1 : 0);
 }
+// 351①：MCP zerokit_stats rows 也恒全表

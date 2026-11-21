@@ -1283,6 +1283,7 @@ async function runChainAction(
           const allCols = importZC(zcObj);
           const colDec = allCols.find((c2) => c2.name === c.name);
           const strs = (colDec?.values ?? []).map((v) => String(v));
+          rows = Math.max(rows, strs.length);  // 351①：string 列也算总行数
           const oneS: Record<string, number | string | null> = { count: strs.length };
           if (ops.includes('top') && strs.length > 0) {
             const freq = new Map<string, number>();
@@ -1301,7 +1302,7 @@ async function runChainAction(
         }
         let vals: number[] = [];
         if (target) {
-          rows = target.count;
+          rows = Math.max(rows, target.count);  // 351①：rows 恒全表行数（多列取最大——不受 window 影响）
           for (let i = 0; i < target.count; i++) {
             vals.push(target.type === 'int' ? Number(buf.readBigInt64LE(off + i * 8)) : buf.readDoubleLE(off + i * 8));
           }

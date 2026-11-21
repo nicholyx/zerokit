@@ -61,7 +61,7 @@ title = "m"
 description = "m"
 type = "chain"
 risk = "read"
-template = "s.top={m.data.stats.status.top_value}"
+template = "s.top={m.data.stats.status.top_value} rows={m.data.rows}"
 
 [[action.step]]
 use = "builtin.zerocol-stats"
@@ -93,6 +93,10 @@ const r3 = run(['run', 'st.multi']);
 check('② 多列形态（status.top 直取）', r3.status === 0 && (r3.stdout + '').includes('s.top=ok'), (r3.stdout + r3.stderr).slice(0, 80));
 const r4 = run(['run', 'st.empty']);
 check('④ 空列边界（top_value null 或空——不炸）', r4.status === 0, (r4.stdout + r4.stderr).slice(0, 80));
+
+// 351①：复数形态 data.rows 恒全表（不受 window 影响）
+const rm = run(['run', 'st.multi']);
+check('351① 复数形态 rows 恒全表（=6）', rm.status === 0 && (rm.stdout + '').includes('rows=6'), (rm.stdout + rm.stderr).slice(0, 100));
 
 // ⑤ 回归：315/320 行为不回退（min/max/avg 仍工作）
 const r5 = run(['run', 'st.num-top']);
