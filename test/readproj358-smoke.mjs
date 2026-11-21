@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 let pass = 0, fail = 0;
@@ -13,7 +13,7 @@ console.log('readproj358-smoke');
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'rp358-'));
 const env = { ...process.env, ZEROKIT_HOME: home };
 spawnSync(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'plugin', 'bundled'], { cwd: ROOT, env, encoding: 'utf8', timeout: 120000 });
-const { exportZeroCol } = await import(path.join(ROOT, 'src/core/arrowIpc.ts').replace('file://', ''));
+const { exportZeroCol } = await import(pathToFileURL(path.join(ROOT, 'src/core/arrowIpc.ts')).href);
 fs.mkdirSync(path.join(home, 'data'), { recursive: true });
 fs.writeFileSync(path.join(home, 'data', 'wide.zerocol.json'), JSON.stringify(exportZeroCol([
   { name: 'ts', type: 'string', values: ['a', 'b'] },
