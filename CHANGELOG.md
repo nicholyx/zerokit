@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.59.0] - 2026-11-21
+
+### Added
+
 - watch 面板数据集行数展示（351 rows 恒全表的 UI 消费端——监控语义完善）：有 chain 的监控条目行「N 次采样」旁加「· 数据集 M 行」（M=lastChainRun.stats 各列 count 取 max——无 window 时即全表行数；无 chain 条目保持原形态）；liveRefresh 与首渲两处同构（352 判据：动态字段与首渲不分裂）；dashsignal326 CDP 卡片等待改「轮询元素出现」（boot 慢时固定 sleep 不够——偶发 NO-EL 根修）；panelsmoke341 +2 断言（CDP 路径 + 降级路径各一）；基线 3543→3544。
 - stats rows 恒全表（监控语义完善——总行数跨形态统一）：`{s.data.rows}` 恒为全表行数——复数形态此前恒 0（rows 只在单数分支赋值）、string 列分支不计行——修为**三形态统一**（单数/复数/string 均更新 rows=Max(当前, 列全表行数)；window 只裁 vals 不影响 rows）；MCP zerokit_stats 的 rows 返回同步统一；模板示例入 data-pipelines.md（`{s.data.rows}` 用法）；statstop345 6 断言（+rows 复数形态=6）+ mcpstatstool346 5 断言（+rows:3）；基线 3541→3543。
 - 文档巡检第二季（331 先例延续——341-349 十轮积累后的全面体检）：①内链校验（docs/ 全部相对链接存在性——0 失效）；②**i18n whitelist 正则级审计**（1469 行逐行 re.compile 全仓试配——**真死 81 行清除**，1392 行保留；无-match 行用「去转义字面量子串」二次确认防误杀）；③平台判据落盘复核（341-349 新增 8 条全落盘——CDP 五条已有，**补「配置同步/工具面」四条**：restoreWatches 只写不读/恢复条目翻页误杀/ops 白名单与功能脱节/typecheck 假绿）；④活文档过时计数扫描（0 处——50/60 里程碑历史节保留）；docaudit350 4 断言；基线 3537→3541。
@@ -93,12 +99,5 @@
 ### Added
 
 - v4 线健康快照（323 轮定盘星——真实信号驱动阶段前的横切收束）：docs/reference/v4-health-snapshot.md——技术基线指纹（181 文件级/基线以 assertion-baseline.json 为准/内建步 4 件套/组合拳 2 条/lint 9 线）；测试主题分布五档（内核 127/数据 18/协作 15/UI 11/稳定性 9——按文件名前缀自动归类）；v4 线 36 轮清单（288-323 轮号-版本-主题对照表）；**顺带发现并记录已知债务**：overview「已完成」清单自 v4 中期起插入守卫静默跳过（anchor find -1 → if 守卫跳过），轮次行只更新「最后更新」——快照文档承担轮次清单职责；**快照与精确断言数解耦**（写死数字会与 sync-counts 每轮 +1 形成追数死循环——首轮快照 3455→3460 三次追赶后改为「以 baseline 文件为准」表述）；v4snap323 5 断言；基线 3455→3460。
-（下一版攒着）
-
-## [4.34.0] - 2026-11-20
-
-### Added
-
-- 协作面组合拳回顾（与 321 数据组合拳对偶——六能力单场景串验）：collabcombo322 7 断言——① B 声明 filterTools 排除 sysinfo → A 调它被滤（filteredBroadcasts≥1 且 B 流无 sysinfo）→ A 调 demochain 命中（B 收 tool-call）；③ 1s 连调两次第二次被节流（dropped +1）且 presence joined 不受影响；② A 持慢写锁 1.5s → 快照 locks 含 holder → B busy-locked → A 完成释放（**299 判据复现**：mutate 需 mcp allow 授权才走到锁——测试先 allow）；④ 快照三块同刻互证（sessions≥2 + filtered≥1 + dropped≥1）；基线 3448→3455。协作六能力（广播/摘要/频控/过滤/锁/快照）单场景收官回归。
 （下一版攒着）
 

@@ -2,6 +2,13 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [4.34.0] - 2026-11-20
+
+### Added
+
+- 协作面组合拳回顾（与 321 数据组合拳对偶——六能力单场景串验）：collabcombo322 7 断言——① B 声明 filterTools 排除 sysinfo → A 调它被滤（filteredBroadcasts≥1 且 B 流无 sysinfo）→ A 调 demochain 命中（B 收 tool-call）；③ 1s 连调两次第二次被节流（dropped +1）且 presence joined 不受影响；② A 持慢写锁 1.5s → 快照 locks 含 holder → B busy-locked → A 完成释放（**299 判据复现**：mutate 需 mcp allow 授权才走到锁——测试先 allow）；④ 快照三块同刻互证（sessions≥2 + filtered≥1 + dropped≥1）；基线 3448→3455。协作六能力（广播/摘要/频控/过滤/锁/快照）单场景收官回归。
+（下一版攒着）
+
 ## [4.33.0] - 2026-11-20
 
 ### Added
