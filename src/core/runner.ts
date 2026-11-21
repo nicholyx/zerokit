@@ -1279,6 +1279,29 @@ async function runChainAction(
         return fail('chain-read-missing', `${label} 文件不存在：${inPathS}`);
       }
       const zcS = JSON.parse(fsModS.readFileSync(inPathS, 'utf8')) as { format?: string; columns?: Array<{ name: string; type: string; count: number; bytes: number }>; data?: string };
+      // 366①③：where 预解析（「列=值」——与 read 同语义；行掩码后所有列同步筛）
+      const whereS = typeof item.step.params['where'] === 'string' ? String(item.step.params['where']) : '';
+      let whereMask: boolean[] | null = null;
+      if (whereS) {
+        const eq = whereS.indexOf('=');
+        const wcol = eq > 0 ? whereS.slice(0, eq).trim() : '';
+        const wval = eq > 0 ? whereS.slice(eq + 1).trim() : '';
+        const wtarget = wcol ? zcS.columns?.find((c) => c.name === wcol) : undefined;
+        if (!wtarget) {
+          return fail('chain-stats-bad-column', `${label} 列 "${wcol}" 不存在（有：${(zcS.columns ?? []).map((c) => c.name).join('、')}）`);
+        }
+        const { importZeroCol: importZW } = await import('./arrowIpc.ts');
+        const zcW = {
+          format: 'zerocol' as const,
+          formatVersion: 1 as const,
+          createdAt: new Date().toISOString(),
+          checksum: '',
+          columns: (zcS.columns ?? []).map((c) => ({ ...c, type: c.type as 'string' | 'int' | 'double' })),
+          data: zcS.data ?? '',
+        };
+        const wvals = importZW(zcW).find((c2) => c2.name === wcol)?.values ?? [];
+        whereMask = wvals.map((v) => String(v) === wval);
+      }
       if (zcS.format !== 'zerocol' || !Array.isArray(zcS.columns)) {
         return fail('chain-read-bad-format', `${label} 不是 zerocol 文件`);
       }
@@ -1309,7 +1332,8 @@ async function runChainAction(
         };
           const allCols = importZC(zcObj);
           const colDec = allCols.find((c2) => c2.name === c.name);
-          const strs = (colDec?.values ?? []).map((v) => String(v));
+          let strs = (colDec?.values ?? []).map((v) => String(v));
+          if (whereMask) strs = strs.filter((_, i2) => whereMask[i2] === true);  // 366②：string 列同步筛
           rows = Math.max(rows, strs.length);  // 351①：string 列也算总行数
           const oneS: Record<string, number | string | null> = { count: strs.length };
           if (ops.includes('top') && strs.length > 0) {
@@ -1333,6 +1357,8 @@ async function runChainAction(
           for (let i = 0; i < target.count; i++) {
             vals.push(target.type === 'int' ? Number(buf.readBigInt64LE(off + i * 8)) : buf.readDoubleLE(off + i * 8));
           }
+          // 366②③：where 掩码筛行（先 where 后 window——筛选行内取尾 N 行）
+          if (whereMask) vals = vals.filter((_, i2) => whereMask[i2] === true);
           // 320②③：窗口取尾 N 行（count = 窗口内行数；N ≥ 行数时取全表）
           if (windowN > 0) vals = vals.slice(-windowN);
           const one: Record<string, number> = {};
