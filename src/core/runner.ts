@@ -1211,9 +1211,25 @@ async function runChainAction(
       } catch (e) {
         return fail('chain-read-bad-format', `${label} 列数据解码失败：${(e as Error).message}`);
       }
+      // 360①：where 行过滤（「列=值」单条件，字符串精确匹配；列不存在报错与 stats 同文案）
+      const whereRaw = typeof item.step.params['where'] === 'string' ? String(item.step.params['where']) : '';
+      let filtered = cols;
+      if (whereRaw) {
+        const eq = whereRaw.indexOf('=');
+        const wcol = eq > 0 ? whereRaw.slice(0, eq).trim() : '';
+        const wval = eq > 0 ? whereRaw.slice(eq + 1).trim() : '';
+        const wtarget = wcol ? cols.find((c) => c.name === wcol) : undefined;
+        if (!wtarget) {
+          return fail('chain-read-bad-column', `${label} 列 "${wcol}" 不存在（有：${cols.map((c) => c.name).join('、')}）`);
+        }
+        // 原地对每列按 where 条件裁行（索引基于原始全表——wtarget.values 未动）
+        for (const c of filtered) {
+          c.values = c.values.filter((_, i2) => String(wtarget.values[i2]) === wval);
+        }
+      }
       // 358①②：columns 投影（逗号分隔——只输出指定列，列序按参数序；列不存在报错）
       const colsParam = typeof item.step.params['columns'] === 'string' ? String(item.step.params['columns']) : '';
-      let projected = cols;
+      let projected = filtered;
       if (colsParam) {
         const wanted = colsParam.split(',').map((x) => x.trim()).filter(Boolean);
         const missing = wanted.filter((w) => !cols.some((c) => c.name === w));
