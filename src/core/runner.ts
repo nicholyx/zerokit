@@ -1274,7 +1274,7 @@ async function runChainAction(
           const { importZeroCol: importZC } = await import('./arrowIpc.ts');
           const zcObj = {
           format: 'zerocol' as const,
-          formatVersion: 1,
+          formatVersion: 1 as const,
           createdAt: new Date().toISOString(),
           checksum: '',
           columns: (zcS.columns ?? []).map((c) => ({ ...c, type: c.type as 'string' | 'int' | 'double' })),
