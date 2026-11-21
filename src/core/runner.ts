@@ -1398,9 +1398,12 @@ async function runChainAction(
       }
       // 315④：单数形态保持 309 平铺兼容（data.stats.min 直取）；复数形态分组（data.stats.列名.min）
       const flat = wanted.length === 1 && columnSingle ? statsOut[wanted[0]!] : undefined;
+      // 369①②③：where 摘要——统计结果自带筛选条件（消费端可追溯 avg=700 是哪来的；无 where 不加——向后兼容）
+      const statsObj = flat ? { ...flat, [wanted[0]!]: flat } : statsOut;
+      if (whereS) (statsObj as Record<string, unknown>)['_where'] = whereS;
       const statsData = flat
-        ? { stats: { ...flat, [wanted[0]!]: flat }, rows }
-        : { stats: statsOut, rows };
+        ? { stats: statsObj, rows }
+        : { stats: statsObj, rows };
       const statsResult: RunResult = {
         ok: true, exitCode: 0, stdout: `${wanted.join('/')} 统计：${JSON.stringify(statsOut)}`, stderr: '',
         ms: Date.now() - started, truncated: false, data: statsData,

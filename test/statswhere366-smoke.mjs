@@ -36,7 +36,7 @@ title = "e"
 description = "e"
 type = "chain"
 risk = "read"
-template = "avg={s.data.stats.ms.avg} count={s.data.stats.ms.count} top={s.data.stats.level.top_value}"
+template = "avg={s.data.stats.ms.avg} count={s.data.stats.ms.count} top={s.data.stats.level.top_value} w={s.data.stats._where}"
 
 [[action.step]]
 use = "builtin.zerocol-stats"
@@ -74,8 +74,9 @@ spawnSync(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'plugin', 'add', dir
 const r1 = run(['run', 'sw.erravg']);
 // error 行 ms=500,900 → avg=700；count=2；level top=error（筛选后只有 error）
 check('①② where 筛选统计（avg=700 count=2 top=error）', r1.status === 0 && (r1.stdout + '').includes('avg=700') && (r1.stdout + '').includes('count=2') && (r1.stdout + '').includes('top=error'), (r1.stdout + r1.stderr).slice(0, 120));
+check('369①② _where 摘要可引用（w=level=error）', r1.status === 0 && (r1.stdout + '').includes('w=level=error'), (r1.stdout + r1.stderr).slice(0, 120));
 const r2 = run(['run', 'sw.plain']);
-check('④ 无 where 行为不变（avg=357.5 count=4 全表）', r2.status === 0 && (r2.stdout + '').includes('count=4'), (r2.stdout + r2.stderr).slice(0, 90));
+check('④ 无 where 行为不变（count=4 全表 + 无 _where 泄漏——向后兼容）', r2.status === 0 && (r2.stdout + '').includes('count=4') && !(r2.stdout + '').includes('level=error'), (r2.stdout + r2.stderr).slice(0, 120));
 const r3 = run(['run', 'sw.bad']);
 check('① 列不存在报错（nope——与 read 同文案）', r3.status !== 0 && (r3.stdout + r3.stderr + '').includes('nope'), (r3.stdout + r3.stderr).slice(0, 90));
 const r4 = run(['run', 'sw.erravg']);

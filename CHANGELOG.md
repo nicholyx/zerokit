@@ -4,6 +4,7 @@
 
 ### Added
 
+- stats _where 摘要（366 的可追溯补完——统计结果自带筛选条件）：带 where 的统计输出 data.stats._where（筛选条件原文）；模板 {s.data.stats._where} 可引用（消费端拿到 avg=700 知道是 error 行不是全表）；单数/复数形态都带；无 where 不输出该字段（向后兼容——模板引用不存在字段会炸的严格语义反而保证了误用即发现）；data-pipelines.md 补「筛选可追溯」说明；statswhere366 5 断言（+_where 引用 w=level=error / 无 where 无泄漏）；基线 3570→3571。
 （下一版攒着）
 
 ## [4.77.0] - 2026-11-22
