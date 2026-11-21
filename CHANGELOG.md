@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.72.0] - 2026-11-22
+
+### Added
+
 - stats median/p90 分位数（监控尾部语义——avg 被长尾拉高，P90 才是 SLA 语义）：ops 加 median（偶数行取中间两值平均）与 p90（90 分位线性插值）；**白名单同步**（355 判据兑现——白名单与功能同 commit）；window 组合正常（最近 N 行的分位）；309 的「非法 ops」断言样例 median→bogus（median 现已合法——旧断言用真非法值）；data-pipelines.md 补分位数示例；statstop345 7 断言（+median=3/p90）；基线 3559→3560。
 - zerocol-read where 行过滤（读侧行筛选——与 358 列投影组成完整读侧投影面）：read params 加 where（「列=值」单条件字符串精确匹配；列不存在报错与 stats 同文案）；筛选后 _rows 为匹配行数、_all 只含匹配行；**与 columns 可组合（先 where 后投影——错误行只看 msg 一眼可查）**；无 where 行为不变（全表——向后兼容）；审查期修掉双重过滤 bug（原地过滤后 map 再过滤一次会索引错位）；data-pipelines.md 补行筛选示例；readwhere360 4 断言（筛选 rows=2/组合/全表兼容/列不存在）；基线 3555→3559。
 - zerocol-export rename（写侧列改名——与 358 读侧投影对称）：export params 加 rename（「旧名:新名」逗号分隔多条；旧名不存在忽略该条）；rename 后下游 stats/read 按新名引用（列元数据一致）；无 rename 行为不变（向后兼容）；data-pipelines.md 补写侧改名示例（与 358 读侧投影并列成对）；exportrename359 4 断言（改名生效/数据集列名/无 rename 兼容/幂等）；基线 3551→3555。
@@ -97,12 +103,5 @@
 ### Added
 
 - 安装计数读侧消费（真实信号驱动第一轮——信号看得见）：doctor 报告加 signal 字段（plugins/totalInstalls/hasData——json 出口 + 人读行「N 个插件有安装记录（累计 M 次）」；空/缺是 info 级不算 error，提示 zkit plugin install 后会有数据）；UI 市场面板热度徽标独立化（未装插件也显示 🔥N——原先只在已装徽标内）；热度排序入口（面板头「🔥 按热度排」toggle 按钮 + renderEntries 排序链替换 entries 渲染链四点）；signalread324 6 断言（有/无数据两态 + exit 0 + json 字段 + 徽标独立 + 排序入口）；基线 3460→3466。306 写侧 → 324 读侧，安装计数闭环。
-（下一版攒着）
-
-## [4.35.0] - 2026-11-20
-
-### Added
-
-- v4 线健康快照（323 轮定盘星——真实信号驱动阶段前的横切收束）：docs/reference/v4-health-snapshot.md——技术基线指纹（181 文件级/基线以 assertion-baseline.json 为准/内建步 4 件套/组合拳 2 条/lint 9 线）；测试主题分布五档（内核 127/数据 18/协作 15/UI 11/稳定性 9——按文件名前缀自动归类）；v4 线 36 轮清单（288-323 轮号-版本-主题对照表）；**顺带发现并记录已知债务**：overview「已完成」清单自 v4 中期起插入守卫静默跳过（anchor find -1 → if 守卫跳过），轮次行只更新「最后更新」——快照文档承担轮次清单职责；**快照与精确断言数解耦**（写死数字会与 sync-counts 每轮 +1 形成追数死循环——首轮快照 3455→3460 三次追赶后改为「以 baseline 文件为准」表述）；v4snap323 5 断言；基线 3455→3460。
 （下一版攒着）
 
