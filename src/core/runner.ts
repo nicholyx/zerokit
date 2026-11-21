@@ -1267,7 +1267,7 @@ async function runChainAction(
       if (!file || wanted.length === 0) {
         return fail('chain-stats-bad-params', `${label} 需要 file（data_dir 文件名）与 column/columns（列名，columns 逗号分隔可多列）`);
       }
-      const ops = opsRaw.split(',').map((x) => x.trim()).filter((x) => ['min', 'max', 'avg', 'count', 'top'].includes(x));
+      const ops = opsRaw.split(',').map((x) => x.trim()).filter((x) => ['min', 'max', 'avg', 'count', 'top', 'median', 'p90'].includes(x));  // 361①②：median/p90（白名单与功能同步——355 判据）
       if (ops.length === 0) {
         return fail('chain-stats-bad-params', `${label} ops 只支持 min/max/avg/count（逗号分隔）`);
       }
@@ -1350,6 +1350,20 @@ async function runChainAction(
               one.top_value = sortedN[0][0];
               one.top_count = sortedN[0][1];
               one.top_ratio = Math.round((sortedN[0][1] / vals.length) * 1000) / 1000;
+            }
+          }
+          // 361①③：median（偶数行取中间两值平均）与 p90（线性插值）——尾部/SLA 语义
+          if ((ops.includes('median') || ops.includes('p90')) && vals.length > 0) {
+            const sortedV = [...vals].sort((a, b) => a - b);
+            const n = sortedV.length;
+            if (ops.includes('median')) {
+              const mid = n % 2 === 1 ? sortedV[(n - 1) / 2]! : (sortedV[n / 2 - 1]! + sortedV[n / 2]!) / 2;
+              one.median = Math.round(mid * 1000) / 1000;
+            }
+            if (ops.includes('p90')) {
+              const pos = (n - 1) * 0.9;
+              const lo = Math.floor(pos), hi = Math.ceil(pos);
+              one.p90 = Math.round((sortedV[lo]! + (sortedV[hi]! - sortedV[lo]!) * (pos - lo)) * 1000) / 1000;
             }
           }
           statsOut[c.name] = one;

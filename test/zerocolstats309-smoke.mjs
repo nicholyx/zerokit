@@ -58,7 +58,7 @@ template = "x"
 [[action.step]]
 use = "builtin.zerocol-stats"
 as  = "s"
-params = { file = "ts-data", column = "value", ops = "median" }
+params = { file = "ts-data", column = "value", ops = "bogus" }
 `);
 spawnSync(process.execPath, [path.join(ROOT, 'src/cli.ts'), 'plugin', 'add', dir], { cwd: ROOT, env, encoding: 'utf8' });
 const r2 = run(['run', 'statstest.stats-string']);

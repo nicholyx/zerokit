@@ -56,6 +56,19 @@ as  = "n"
 params = { file = "num-data", column = "value", ops = "top,count" }
 
 [[action]]
+id = "tail"
+title = "t"
+description = "t"
+type = "chain"
+risk = "read"
+template = "med={t.data.stats.value.median} p90={t.data.stats.value.p90} rows={t.data.rows}"
+
+[[action.step]]
+use = "builtin.zerocol-stats"
+as  = "t"
+params = { file = "num-data", column = "value", ops = "median,p90" }
+
+[[action]]
 id = "multi"
 title = "m"
 description = "m"
@@ -95,6 +108,10 @@ const r4 = run(['run', 'st.empty']);
 check('④ 空列边界（top_value null 或空——不炸）', r4.status === 0, (r4.stdout + r4.stderr).slice(0, 80));
 
 // 351①：复数形态 data.rows 恒全表（不受 window 影响）
+// 361①③：median/p90（num-data 4 行 3,3,7,3 → median=3）
+const rt = run(['run', 'st.tail']);
+check('361①③ median=3（偶数行取中间两值平均）+ p90', rt.status === 0 && (rt.stdout + '').includes('med=3') && (rt.stdout + '').includes('p90='), (rt.stdout + rt.stderr).slice(0, 100));
+
 const rm = run(['run', 'st.multi']);
 check('351① 复数形态 rows 恒全表（=6）', rm.status === 0 && (rm.stdout + '').includes('rows=6'), (rm.stdout + rm.stderr).slice(0, 100));
 
