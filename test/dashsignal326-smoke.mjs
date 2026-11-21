@@ -64,6 +64,17 @@ if (CHROME) {
       try { tgt = JSON.parse(t).find((x) => (x.webSocketDebuggerUrl ?? '').includes('/devtools/page/')); if (tgt) break; } catch { /* */ }
       await new Promise((r) => setTimeout(r, 800));
     }
+    if (!tgt) {
+      try { spawnSync('pkill', ['-f', 'remote-debugging-port']); } catch { /* */ }
+      await new Promise((r) => setTimeout(r, 800));
+      const chrome2b = spawn(CHROME, ['--headless=new', '--no-sandbox', '--disable-gpu', `--remote-debugging-port=${49600 + (process.pid % 300)}`, '--user-data-dir=' + fs.mkdtempSync(path.join(os.tmpdir(), 'ds-chrome-b-')), '--no-first-run', 'about:blank'], { stdio: 'ignore', detached: true });
+      await new Promise((r) => setTimeout(r, 4000));
+      for (let i = 0; i < 8; i++) {
+        const t = await fetch(`http://localhost:${49600 + (process.pid % 300)}/json/list`).then((r) => r.text()).catch(() => '');
+        try { tgt = JSON.parse(t).find((x) => (x.webSocketDebuggerUrl ?? '').includes('/devtools/page/')); if (tgt) break; } catch { /* */ }
+        await new Promise((r) => setTimeout(r, 800));
+      }
+    }
     if (tgt) {
       const ws2 = new WebSocket(tgt.webSocketDebuggerUrl);
       let seq = 0; const pend = new Map();
