@@ -1211,17 +1211,28 @@ async function runChainAction(
       } catch (e) {
         return fail('chain-read-bad-format', `${label} 列数据解码失败：${(e as Error).message}`);
       }
-      const rowCount = cols[0]?.values.length ?? 0;
+      // 358①②：columns 投影（逗号分隔——只输出指定列，列序按参数序；列不存在报错）
+      const colsParam = typeof item.step.params['columns'] === 'string' ? String(item.step.params['columns']) : '';
+      let projected = cols;
+      if (colsParam) {
+        const wanted = colsParam.split(',').map((x) => x.trim()).filter(Boolean);
+        const missing = wanted.filter((w) => !cols.some((c) => c.name === w));
+        if (missing.length > 0) {
+          return fail('chain-read-bad-column', `${label} 列 "${missing[0]}" 不存在（有：${cols.map((c) => c.name).join('、')}）`);
+        }
+        projected = wanted.map((w) => cols.find((c) => c.name === w)!);
+      }
+      const rowCount = projected[0]?.values.length ?? 0;
       // data 形态：每列名 → 值数组（首行另给标量捷径：{ 列名 } = 第一行——后续 {alias.data.value} 直接取首行）
       const dataObj: Record<string, unknown> = {};
-      for (const c of cols) dataObj[c.name] = c.values;
+      for (const c of projected) dataObj[c.name] = c.values;
       const firstRow: Record<string, unknown> = {};
-      for (const c of cols) firstRow[c.name] = c.values[0];
+      for (const c of projected) firstRow[c.name] = c.values[0];
       const readResult: RunResult = {
-        ok: true, exitCode: 0, stdout: `已读回 ${inPath}（${rowCount} 行，${cols.length} 列）`, stderr: '',
+        ok: true, exitCode: 0, stdout: `已读回 ${inPath}（${rowCount} 行，${projected.length} 列${colsParam ? `，投影自 ${cols.length}` : ''}）`, stderr: '',
         ms: Date.now() - started, truncated: false,
-        data: { ...firstRow, _rows: rowCount, _columns: cols.length, _all: dataObj, _file: inPath },
-        argv: [], command: `zerocol-read ← ${inPath}`,
+        data: { ...firstRow, _rows: rowCount, _columns: projected.length, _all: dataObj, _file: inPath },
+        argv: [], command: `zerocol-read ← ${inPath}${colsParam ? ` (columns=${colsParam})` : ''}`,
       };
       results.set(item.step.as, readResult);
       outputs.push({ alias: item.step.as, result: readResult });

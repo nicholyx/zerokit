@@ -82,7 +82,7 @@ params = {
 
 **统计快捷方式（309 轮）**：`builtin.zerocol-stats` 直接出 min/max/avg/count——
 `params = { file = "ts-data", column = "value", ops = "min,max,avg,count" }`，
-结果 `{alias.data.stats.min}` 模板直取（int/double 列专用）。多列一次统计：`columns = "value,duration"` → 分组取 `{alias.data.stats.duration.min}`（315 轮；string 列多列形态静默跳过）。窗口统计：`window = 3` 只算每列最近 3 行——监控语义（异常恢复后告警可复位，320 轮）。字符串列频次：`ops = "top"` 出最高频值/次数/占比（错误状态占比一目了然，345 轮）。总行数：`{s.data.rows}` 恒为全表行数（不受 window 裁剪影响，单/复数/string 列形态统一，351 轮）。
+结果 `{alias.data.stats.min}` 模板直取（int/double 列专用）。多列一次统计：`columns = "value,duration"` → 分组取 `{alias.data.stats.duration.min}`（315 轮；string 列多列形态静默跳过）。窗口统计：`window = 3` 只算每列最近 3 行——监控语义（异常恢复后告警可复位，320 轮）。字符串列频次：`ops = "top"` 出最高频值/次数/占比（错误状态占比一目了然，345 轮）。总行数：`{s.data.rows}` 恒为全表行数（不受 window 裁剪影响，单/复数/string 列形态统一，351 轮）。读侧投影：`builtin.zerocol-read` 加 `columns = "value,ts"` 只输出指定列（列序按参数序；宽表只看两列时输出与心智负担都小，358 轮）。
 
 ```toml
 [[action.step]]
