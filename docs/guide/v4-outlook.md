@@ -252,3 +252,34 @@ mcp-runtime.json 快照 + #/collab 面板（会话/锁/频控三块）+ 操作�
 ### 判据遗产（v4 线换来的永久性规则）
 
 299 Chrome 严格度语义炸弹 → web-strict-check；304 Windows file:// → pathToFileURL 判据；324+325 单 try 绑架 → 独立 try；331 spawn npm.cmd → 纯读绕过；335 追数死循环 → 快照与精确数解耦。全部落 platform-pitfalls.md 或对应守护测试。
+
+
+## 60 版本里程碑（第三百四十八轮，2026-11-21）
+
+### 十轮分层（338-347，50→60）
+
+| 层 | 轮段 | 轮数 | 交付主线 |
+|---|---|---|---|
+| 烟测制度 | 341-343 | 3 | CDP 三面板烟测挖七真 bug + 342 清偿三深 bug + pre-push 制度化 |
+| 数据消费 | 344-346 | 3 | 326 双路径周检 + stats top-frequency（字符串列）+ MCP zerokit_stats 工具面 |
+| 维护节奏 | 338-340/347 | 4 | 桌面烟测年检（v4.50.0）+ 依赖周检/月度例跑（sdk 1.12 + typecheck 判据） |
+
+### 信号面五层全景（定稿）
+
+| 层 | 轮 | 交付 |
+|---|---|---|
+| 写侧 | 306 | market-stats.json（安装计数 + last30d 时间戳） |
+| API | 324/325 | /api/market-stats + /api/stats/top-actions（doctor signal 双独立 try） |
+| UI | 326/336 | dashboard 信号卡片（双列表 + 30d 增量徽标）+ watch 趋势段（335） |
+| 导航 | 327 | watch ↔ dashboard 互跳 |
+| MCP | 346 | zerokit_stats 工具（AI 客户端同源查询） |
+
+CLI --trend（334）与 stats 窗口（320）为配套消费端。数据消费闭环：写→存→查→看→跳，五层各一，全同源。
+
+### 量化（v4.50 → v4.60）
+
+断言 3510→3533、测试文件 193→197、minor 50→60。烟测体系从无到有（CDP 三面板 + pre-push + 判据五条）。判据遗产新增：345 ops 白名单同步 / typecheck 本地化 / CDP host 校验 / 降级一致性。
+
+### 路线图复核（十轮后）
+
+v5.0.0 三候选（opt-in 上报 / DSL 进阶 / 桌面启用）十轮内**无真实诉求信号**——「维护节奏是稳态不是等待态」结论再确认。v4.6x 继续：月度例跑、烟测年检、按需小增强。
