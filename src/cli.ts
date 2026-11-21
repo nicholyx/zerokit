@@ -4118,6 +4118,18 @@ function cmdStats(args: string[]): number {
     const cutoff = Date.now() - span;
     all = all.filter((r) => Date.parse(r.ts ?? '') >= cutoff);
   }
+  // 364①②：--tail N——最近 N 次执行窗口（与 320 链路 window / 361 分位打通——实时 SLA 视图）
+  let tailNote = '';
+  const tailIdx = args.indexOf('--tail');
+  if (tailIdx >= 0) {
+    const n = Math.max(1, Math.min(1000, Math.floor(Number(args[tailIdx + 1] ?? 0) || 0)));
+    if (n <= 0) {
+      process.stderr.write(c.red('✗ --tail 格式：--tail 20（1-1000 的整数）\n'));
+      return 2;
+    }
+    all = all.slice(-n);
+    tailNote = `（最近 ${n} 次）`;
+  }
   const stats = actionStats(all);
   // 第一百二十轮⑥：--action <插件.动作> 单动作视图
   const actIdx = args.indexOf('--action');
@@ -4129,7 +4141,7 @@ function cmdStats(args: string[]): number {
       return 1;
     }
     const fmt = (v: number | undefined | null) => (v == null ? '—' : v >= 1000 ? (v / 1000).toFixed(1) + 's' : Math.round(v) + 'ms');
-    process.stdout.write(`${one.key}：${one.count} 次，成功 ${one.count - one.failCount}（${Math.round(((one.count - one.failCount) / Math.max(1, one.count)) * 100)}%）\n`);
+    process.stdout.write(`${one.key}${tailNote}：${one.count} 次，成功 ${one.count - one.failCount}（${Math.round(((one.count - one.failCount) / Math.max(1, one.count)) * 100)}%）\n`);
     process.stdout.write(`  耗时：p50 ${fmt(one.p50Ms)} · p95 ${fmt(one.p95Ms)} · 最慢 ${fmt(one.maxMs)}\n`);
     if (one.lastTs) process.stdout.write(c.dim(`  最近一次执行：${one.lastTs}\n`));
     return 0;
@@ -4139,11 +4151,12 @@ function cmdStats(args: string[]): number {
     return 0;
   }
   if (args.includes('--json')) {
-    process.stdout.write(JSON.stringify({ actions: stats }, null, 2) + '\n');
+    process.stdout.write(JSON.stringify({ ...(tailNote ? { window: tailNote.slice(1, -1) } : {}), actions: stats }, null, 2) + '\n');
     return 0;
   }
   // 第九十二轮⑤：概览行——总次数/成功率/最常用 top5/最慢 top5（数据都有，就差摆出来）
   {
+    if (tailNote) process.stdout.write(c.cyan(`⏱ 窗口视图 ${tailNote.slice(1, -1)}\n`));
     const total = stats.reduce((s, x) => s + x.count, 0);
     const fail = stats.reduce((s, x) => s + x.failCount, 0);
     const rate = total === 0 ? 0 : Math.round(((total - fail) / total) * 100);
