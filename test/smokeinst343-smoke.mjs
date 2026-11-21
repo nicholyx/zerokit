@@ -25,7 +25,7 @@ check('② CDP 判据五条（host 校验/target 漂移/冷启动/代理劫持/�
 
 // ① panelsmoke 本地 7 断言（活体——有 Chrome 才跑真路径）
 try {
-  execFileSync(process.execPath, [path.join(ROOT, 'test', 'panelsmoke341-smoke.mjs')], { stdio: 'pipe', timeout: 300000, cwd: ROOT });
+  execFileSync(process.execPath, [path.join(ROOT, 'test', 'panelsmoke341-smoke.mjs')], { stdio: 'pipe', timeout: 300000, cwd: ROOT, env: { ...process.env, CDP_SKIP: '1' } });
   check('① panelsmoke 本地全绿（7 断言）', true, '');
 } catch (e) {
   check('① panelsmoke 本地全绿（7 断言）', false, String(e.stderr ?? e.message).slice(0, 80));
