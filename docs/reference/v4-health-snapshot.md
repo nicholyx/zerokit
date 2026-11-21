@@ -1,6 +1,6 @@
 # v4 线健康快照（323 轮初版，337 轮刷新至 v4.50.0——2026-11-20）
 
-> v4 线快照：323 轮初版（36 轮定盘星），337 轮刷新（49 轮 / v4.50.0 里程碑）。
+> v4 线快照：323 轮初版（36 轮定盘星），337 轮刷新（v4.50.0），348 轮刷新（v4.60.0）。
 > 注：overview「已完成」清单自 v4 中期起未再逐轮追加行（插入守卫静默跳过——已知债务），
 > 本快照承担 v4 线轮次清单职责。
 
@@ -8,8 +8,8 @@
 
 | 指标 | 值 |
 |---|---|
-| 测试文件 | 192 个 |
-| 断言基线 | 以 scripts/assertion-baseline.json 为准（3506 级——后续轮次自然增长，不在本页追数字） |
+| 测试文件 | 197 个 |
+| 断言基线 | 以 scripts/assertion-baseline.json 为准（3533 级——后续轮次自然增长，不在本页追数字） |
 | 内建步 | 4 件套（pipe / export / read / stats 多列+window） |
 | 组合拳回归 | 2 条（数据 combo321 / 协作 collabcombo322）+ 月度例跑清单（dep-hygiene） |
 | lint 审计线 | 9 线（含 web-strict-check） |
@@ -19,13 +19,13 @@
 
 | 主题 | 文件数 |
 |---|---|
-| 内核与其它（plugin/cli/run/core） | 129 |
+| 内核与其它（plugin/cli/run/core） | 130 |
 | 数据工作流（zerocol/pipe/chain/dataflow/watch） | 19 |
 | 协作面（mcp/broadcast/collab/presence） | 16 |
 | UI/浏览器（ui/web/cdp/panel） | 12 |
-| 稳定性（lint/perf/strict/platform） | 10 |
+| 稳定性（lint/perf/strict/platform） | 11 |
 
-## ③ v4 线轮次清单（36 轮详单——337 轮起增量见 v4-outlook 50 版本里程碑节）
+## ③ v4 线轮次清单（36 轮详单——增量见 v4-outlook 50/60 版本里程碑节）
 
 > 路线图定稿：v4.5x 维护节奏（月度例跑/积压清零/烟测年检）；v5.0.0 三候选真实诉求触发（详见 v4-outlook「里程碑路线图定稿」）。
 
