@@ -1250,6 +1250,9 @@ async function runChainAction(
         });
         for (const c of filtered) c.values = idx.map((i2) => c.values[i2]);
       }
+      // 390①②：limit（where/sort 之后取头 N 行——「最近 5 条」= sort desc + limit 5 直达）
+      const limitN = typeof item.step.params['limit'] === 'number' ? Math.max(1, Math.floor(item.step.params['limit'] as number)) : 0;
+      if (limitN > 0) for (const c of filtered) c.values = c.values.slice(0, limitN);
       // 358①②：columns 投影（逗号分隔——只输出指定列，列序按参数序；列不存在报错）
       const colsParam = typeof item.step.params['columns'] === 'string' ? String(item.step.params['columns']) : '';
       let projected = filtered;
