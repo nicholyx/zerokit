@@ -4,6 +4,7 @@
 
 ### Added
 
+- stats distinct 基数统计（去重计数——error code 有几种、user 有几个的多样性语义）：ops 加 distinct（该列不同值个数——数值与 string 列都支持）；白名单同步（355 判据）；**与 where/window 组合**（筛选/窗口内基数——distinct 在 vals 生效后计算）；string 列 gate 放行（distinct 与 top/count 同列合法）；data-pipelines.md 补基数统计示例；statsdistinct394 3 断言（code 3 种/ms 4 种/window=3 内 3 种）；基线 3594→3597。
 （下一版攒着）
 
 ## [5.0.0] - 2026-11-22

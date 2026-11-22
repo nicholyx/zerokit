@@ -1302,7 +1302,7 @@ async function runChainAction(
           if (ci > 0) percolMap.set(pair.slice(0, ci).trim(), pair.slice(ci + 1).trim().split('|').map((x) => x.trim()).filter(Boolean));
         }
       }
-      const opsGlobal = opsRaw.split(',').map((x) => x.trim()).filter((x) => ['min', 'max', 'avg', 'count', 'top', 'median', 'p90'].includes(x));  // 361①② + 379① 改名（percol 覆盖用）
+      const opsGlobal = opsRaw.split(',').map((x) => x.trim()).filter((x) => ['min', 'max', 'avg', 'count', 'top', 'median', 'p90', 'distinct'].includes(x));  // 361①② + 379① + 394② distinct（白名单同步——355 判据）
       if (opsGlobal.length === 0 && percolMap.size === 0) {
         return fail('chain-stats-bad-params', `${label} ops 只支持 min/max/avg/count（逗号分隔）`);
       }
@@ -1353,7 +1353,7 @@ async function runChainAction(
         const ops = percolMap.has(c.name) ? percolMap.get(c.name)! : opsGlobal;
         if (target && target.type === 'string') {
           // 345①④：top op——utf8 解码统计最高频值（单数无 top 时保持 315 明确报错）
-          if (!(ops.includes('top') || ops.includes('count'))) {
+          if (!(ops.includes('top') || ops.includes('count') || ops.includes('distinct'))) {  // 394①：distinct 也放行 string 列
             if (columnSingle && wanted.length === 1) {
               return fail('chain-stats-bad-column', `${label} 列 "${c.name}" 是 string——统计只支持 int/double 数值列（或 ops 带 top/count）`);
             }
@@ -1375,6 +1375,7 @@ async function runChainAction(
           if (whereMask) strs = strs.filter((_, i2) => whereMask[i2] === true);  // 366②：string 列同步筛
           rows = Math.max(rows, strs.length);  // 351①：string 列也算总行数
           const oneS: Record<string, number | string | null> = { count: strs.length };
+          if (ops.includes('distinct')) oneS.distinct = new Set(strs).size;  // 394①：string 列基数
           if (ops.includes('top') && strs.length > 0) {
             const freq = new Map<string, number>();
             for (const v of strs) freq.set(v, (freq.get(v) ?? 0) + 1);
@@ -1418,6 +1419,7 @@ async function runChainAction(
             }
           }
           // 361①③：median（偶数行取中间两值平均）与 p90（线性插值）——尾部/SLA 语义
+          if (ops.includes('distinct')) one.distinct = new Set(vals.map((v) => String(v))).size;  // 394①③：去重基数（where/window 已在 vals 生效）
           if ((ops.includes('median') || ops.includes('p90')) && vals.length > 0) {
             const sortedV = [...vals].sort((a, b) => a - b);
             const n = sortedV.length;
