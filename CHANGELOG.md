@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.86.0] - 2026-11-22
+
+### Added
+
 - MCP zerokit_stats 加 where/window 参数（366/320 语义对 AI 客户端开放——工具面与链路内建步完全同构）：inputSchema 加 where（「列=值」筛选统计）与 window（最近 N 行——先 where 后 window）；builtinStats 支持掩码+窗口（数值列与 string 列同步筛）；CLI cmdTools 元数据同步（331 同源判据——两处 schema 一致）；mcpstatstool346 8 断言（+where avg=500/+window=1/+schema 含新参）；基线 3575→3578。
 （下一版攒着）
 
@@ -100,12 +106,5 @@
 ### Added
 
 - watch↔dashboard 信号导航（使用信号导航收口）：watch 面板条目加「看统计」链接（#/dashboard 直达首页信号卡片——监控→触发→结果→统计一条线点到底）；⛓ 徽标升级 span + hover title（title 属性带最近统计数字 max/avg/count——不挤行内；无统计时提示触发带 stats 的链路）；dashboard 信号卡片反向导航「去监控」（空态引导 + 卡片头双入口）；signav327 3 断言（入口/徽标 title/反向导航）；基线 3474→3477。监控到信号的导航双向往返。
-（下一版攒着）
-
-## [4.38.0] - 2026-11-20
-
-### Added
-
-- UI 首页使用信号卡片（信号第三面——双信号可视化收口）：dashboard tiles 下加「使用信号」卡片——左安装 top（🔥N 插件名）/ 右执行 top（×N 动作名 + 败次数）双列 grid；空态引导（「装一个插件/跑一次动作后这里会有数据」）；执行项点击跳动作详情（fetch /api/plugins 找 plugin+action 对调 openDetail——无缓存依赖，已卸载静默留原地）；30s 自动刷新 + 离开面板 clearInterval；顺带补 95 轮判据（td 空占位 ps-empty 也带 role=status——polish95 抓出）；6 条中文 whitelist 登记；dashsignal326 5 断言（双列/空态/跳转/刷新/双端点联测——安装 1 + 执行 gen×3 卡片可渲染）；基线 3469→3474。信号三面齐：写（306/审计）→ API（324/325）→ UI（326）。
 （下一版攒着）
 
