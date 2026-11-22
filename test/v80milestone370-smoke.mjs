@@ -14,7 +14,7 @@ check('① 十轮分层（数据四件套 6 / UI 消费 / 维护+发布 4）', [
 check('② 数据面能力矩阵（read×2 / export×1 / stats×4 / rows——8 行全景）', ['columns', 'where', 'rename', 'window', 'median/p90', '_where', 'rows'].every((k) => seg.includes(k)) && seg.includes('三端同构'), '');
 check('③ 路线图三审（终审确认）', seg.includes('路线图三审') && seg.includes('终审确认'), '');
 const snap = fs.readFileSync(path.join(ROOT, 'docs', 'reference', 'v4-health-snapshot.md'), 'utf8');
-check('④ 快照刷新（205 个/3571 级/370 轮）', snap.includes('205 个') && snap.includes('3571') && snap.includes('370 轮'), '');
+check('④ 快照刷新（outlook 80 节锚 3533；快照 400 轮合并分次标记——改锚 337/348/370 行）', ol.includes('断言 3510→3533') && snap.includes('337/348/370'), '');
 
 console.log(`\n${'='.repeat(60)}\n通过 ${pass} / ${pass + fail}`);
 process.exit(fail > 0 ? 1 : 0);
