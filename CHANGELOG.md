@@ -4,6 +4,7 @@
 
 ### Added
 
+- stats percol 逐列 ops（复数形态表达力补完——ms 算分位、level 算 top 一条链路搞定）：stats 加 percol 参数（「列名:ops」逗号分隔——逐列覆盖全局 ops；被覆盖列只算覆盖后的 ops）；无 percol 行为不变（向后兼容）；data-pipelines.md 补逐列 ops 示例；statspercol379 3 断言（覆盖 ms 只 median=20/level 只 top=info、兼容、幂等）；基线 3580→3583。
 - where 多值 OR（筛选表达力补完——错误行想同时看 error+warn 不用两次查询）：read/stats/MCP 三面的 where 全部支持多值（「level=error,warn」逗号分隔任一匹配——Set 化比较）；单值行为不变（向后兼容——单值是多值特例）；data-pipelines.md 更新多值语法示例；readwhere360 5 断言（+error,warn → rows=3）/ statswhere366 6 断言（+info,error=全表 count=4）/ mcpstatstool346 8 断言（builtinStats 掩码同步）；基线 3578→3580。
 （下一版攒着）
 
