@@ -86,6 +86,14 @@ else
   fail=1
 fi
 
+# 第四百零一轮：恒真断言护栏（400 复盘后续三条之一）——398 清掉的懒恒真不可回退
+if node scripts/true-assert-scan.mjs; then
+  :
+else
+  echo "FAIL  恒真断言护栏（新增 check(…, true)）—— node scripts/true-assert-scan.mjs 看详情"
+  fail=1
+fi
+
 # 第一百四十六轮⑦：U+FFFD 扫描进 lint（多轮中文写入事故的机器化）
 if python3 - <<'FFFD'
 import pathlib, sys
