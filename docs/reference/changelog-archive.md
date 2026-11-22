@@ -2,6 +2,13 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [4.37.0] - 2026-11-20
+
+### Added
+
+- 动作执行热度 Top（信号第二面——「装了」不等于「在用」）：zkit stats --top N 参数化（92 轮「最常用」行升级，1-20 条；成功/失败分列已在耗时表）；doctor signal 扩展 executions 维度（总次数 + topAction「gen×3」形态）+ 人读行升级「使用信号：安装侧 · 执行 N 次（最常用 X）」；**修 signal 块单 try 绑架坑**（market-stats 缺失时 JSON.parse 抛错把执行数也归零——拆独立 try，实测坑）；GET /api/stats/top-actions?n=（UI 可消费；白名单+openapi；含 count/fail 分列）；topactions325 3 断言（stats --top 2 gen×3 排首 / doctor executions+topAction / 端点 total=4 top[0] count=3）；基线 3466→3469。
+（下一版攒着）
+
 ## [4.36.0] - 2026-11-20
 
 ### Added
