@@ -69,6 +69,19 @@ as  = "a"
 params = { file = "log" }
 
 [[action]]
+id = "multi"
+title = "m"
+description = "m"
+type = "chain"
+risk = "read"
+template = "rows={m.data._rows}"
+
+[[action.step]]
+use = "builtin.zerocol-read"
+as  = "m"
+params = { file = "log", where = "level=error,warn" }
+
+[[action]]
 id = "bad"
 title = "b"
 description = "b"
@@ -89,6 +102,8 @@ const r2 = run(['run', 'rw.combo']);
 check('③ where+columns 组合（rows=2 cols=1）', r2.status === 0 && (r2.stdout + '').includes('rows=2') && (r2.stdout + '').includes('cols=1'), (r2.stdout + r2.stderr).slice(0, 90));
 const r3 = run(['run', 'rw.all']);
 check('③ 无 where 行为不变（rows=4 全表）', r3.status === 0 && (r3.stdout + '').includes('rows=4'), (r3.stdout + r3.stderr).slice(0, 80));
+const rm2 = run(['run', 'rw.multi']);
+check('378① read where 多值 OR（error,warn → rows=3）', rm2.status === 0 && (rm2.stdout + '').includes('rows=3'), (rm2.stdout + rm2.stderr).slice(0, 90));
 const r4 = run(['run', 'rw.bad']);
 check('① 列不存在报错（nope）', r4.status !== 0 && (r4.stdout + r4.stderr + '').includes('nope'), (r4.stdout + r4.stderr).slice(0, 90));
 
