@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.90.0] - 2026-11-22
+
+### Added
+
 - stats percol 逐列 ops（复数形态表达力补完——ms 算分位、level 算 top 一条链路搞定）：stats 加 percol 参数（「列名:ops」逗号分隔——逐列覆盖全局 ops；被覆盖列只算覆盖后的 ops）；无 percol 行为不变（向后兼容）；data-pipelines.md 补逐列 ops 示例；statspercol379 3 断言（覆盖 ms 只 median=20/level 只 top=info、兼容、幂等）；基线 3580→3583。
 - where 多值 OR（筛选表达力补完——错误行想同时看 error+warn 不用两次查询）：read/stats/MCP 三面的 where 全部支持多值（「level=error,warn」逗号分隔任一匹配——Set 化比较）；单值行为不变（向后兼容——单值是多值特例）；data-pipelines.md 更新多值语法示例；readwhere360 5 断言（+error,warn → rows=3）/ statswhere366 6 断言（+info,error=全表 count=4）/ mcpstatstool346 8 断言（builtinStats 掩码同步）；基线 3578→3580。
 （下一版攒着）
@@ -101,12 +107,5 @@
 ### Added
 
 - v4.40.0 整点复盘（v4 线第 41 轮/第 40 个 minor——整数关口）：v4-outlook「40 版本整点复盘」节——三阶段弧线（主题排定 288-300 13 轮 / 深化收官 301-313 13 轮 / 真实信号驱动 306/314 起）；量化对照表（断言 3284→3481、测试 149→186、minor 0→40、内建步 2→4 件套+window/多列、指南 0→4、信号面 0→四层）；三大判据沉淀清单（299 Chrome 严格度语义炸弹 / 304 Windows file:// / 324+325 信号双面与单 try 绑架）；下阶段定调（三候选全部等真实诉求——不再主题内推演，日常转维护节奏）；v40review328 4 断言；基线 3477→3481。
-（下一版攒着）
-
-## [4.39.0] - 2026-11-20
-
-### Added
-
-- watch↔dashboard 信号导航（使用信号导航收口）：watch 面板条目加「看统计」链接（#/dashboard 直达首页信号卡片——监控→触发→结果→统计一条线点到底）；⛓ 徽标升级 span + hover title（title 属性带最近统计数字 max/avg/count——不挤行内；无统计时提示触发带 stats 的链路）；dashboard 信号卡片反向导航「去监控」（空态引导 + 卡片头双入口）；signav327 3 断言（入口/徽标 title/反向导航）；基线 3474→3477。监控到信号的导航双向往返。
 （下一版攒着）
 
