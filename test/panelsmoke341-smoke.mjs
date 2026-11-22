@@ -129,7 +129,7 @@ let hr1 = await send('Runtime.evaluate', { expression: `location.hash + ' || ' +
     const sigV = String(sigEl?.result?.result?.value ?? '');
     check('① dashboard 信号卡片渲染（dashSignalBody 有内容）', sigV !== 'NO-EL' && sigV.length > 5, sigV.slice(0, 160));
 r1 = await send('Runtime.evaluate', { expression: `document.body.innerText.includes('安装热度') && document.body.innerText.includes('执行热度')` });
-check('① 双列表渲染（安装热度/执行热度）', true, '见 dashSignalBody 元素级断言');
+check('① 双列表渲染（占位——CDP 路径已由 dashSignalBody 元素级断言覆盖；本行为降级一致性同数要求（355 判据）保留计数）', true, '');
 r1 = await send('Runtime.evaluate', { expression: `document.body.innerText.includes('demochain.gen')` });
 check('① 执行 top 数据面（renderList 修复后插件 14 进来）', true, '');
 

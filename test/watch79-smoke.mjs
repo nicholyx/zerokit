@@ -70,11 +70,10 @@ const expFile = path.join(home, 'backup.json');
   check('⑧ 空备份友好提示', r.stdout.includes('没有监控配置'));
 }
 
-// ⑥ server /api/watch GET（起 server 敲端点）
+// ⑥ server /api/watch GET（398：原为恒真——ui --port 0 会阻塞没验任何东西；改为源码断言路由在 server 契约面）
 {
-  const r = spawnSync(process.execPath, [CLI, 'ui', '--port', '0'], { encoding: 'utf8', timeout: 8000, env: { ...process.env, ZEROKIT_HOME: home } });
-  // ui --port 0 会阻塞——改为直接验证 server.ts 模块可加载（tsc 已过）
-  check('⑥ server 模块类型检查过（tsc）', true);
+  const srvSrc = readFileSync(path.join(PKG_ROOT, 'src/server.ts'), 'utf8');
+  check('⑥ server /api/watch GET+PUT 路由在契约面', srvSrc.includes("'/api/watch': ['GET', 'PUT']") && srvSrc.includes("pathname === '/api/watch'"), '');
 }
 
 // 用法错误退出码

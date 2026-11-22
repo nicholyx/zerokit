@@ -52,11 +52,10 @@ const byId = Object.fromEntries(listPlugins().map((e) => [e.plugin.id, e.plugin]
   const r = await selfcheckPlugin(byId.sysinfo);
   check('137⑥ sysinfo 自检 ✓ 能跑', r.ok === true && typeof r.ms === 'number');
 }
-// ⑦ server API：selfcheck 端点（起 server）
+// ⑦ 自检结果结构（398：原为恒真——起 ui 常驻命令超时后什么都没验；改为真验 SelfcheckResult 结构）
 {
-  const srv = spawnSync(process.execPath, [CLI, 'ui', '--port', '29137'], { encoding: 'utf8', timeout: 15000, env: { ...process.env, ZEROKIT_HOME: home } });
-  // ui 是常驻命令——换 server 子进程直拉？改用直接验证 selfcheckOf 等价逻辑：selfcheckPlugin 已过。
-  check('137⑦ 自检结果结构（probe/ok/ms/at）', true);
+  const r = await selfcheckPlugin(byId.sysinfo);
+  check('137⑦ 自检结果结构（pluginId/probe/ok/ms/at）', r.pluginId === 'sysinfo' && r.probe != null && typeof r.ok === 'boolean' && typeof r.ms === 'number' && typeof r.at === 'string' && !Number.isNaN(Date.parse(r.at)), JSON.stringify(r).slice(0, 100));
 }
 // ⑧ 失败插件：造一个 run 就挂的
 {

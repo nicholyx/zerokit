@@ -38,8 +38,12 @@ check('134⑥ 下一步交叉链', design.includes('**下一步**') && design.in
 const overview = readFileSync(path.join(PKG_ROOT, 'docs/reference/overview.md'), 'utf8');
 check('134⑦ overview deep 完成度行', overview.includes('deep 层五篇齐了'));
 
-// ⑧ 本文件即测试（自证 ≥6：当前 8 项）
-check('134⑧ 断言数 ≥6', true);
+// ⑧ 本文件即测试（398：原为恒真——改为真数本文件的 check( 调用数）
+{
+  const self = readFileSync(fileURLToPath(import.meta.url), 'utf8');
+  const n = (self.match(/^\s*check\(/gm) ?? []).length;
+  check('134⑧ 断言数 ≥6（实数）', n >= 6, `n=${n}`);
+}
 
 // ⑨ check-docs 引用链接都有效（跑真巡检）
 import { spawnSync } from 'node:child_process';

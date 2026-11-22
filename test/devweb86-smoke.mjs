@@ -55,9 +55,9 @@ writeFileSync(path.join(devDir, 'web', 'index.html'), '<!doctype html><meta char
 
 // ⑧ dev caller 审计 source: dev（通过 server api 跑一次 dev caller——CLI 直接构造太绕，验证审计结构可含 source 字段）
 {
-  const { audit } = await import('../src/core/audit.ts');
-  const { writeAudit } = await import('../src/core/audit.ts').catch(() => ({ }));
-  check('⑧ Caller 类型含 dev（tsc 已过+审计 base 含 source）', true);
+  // 398①：补真断言（原为恒真；原注释「审计 base 含 source」有误——Caller 类型与写入点都在 runner.ts）
+  const runnerSrc = readFileSync(path.join(PKG_ROOT, 'src/core/runner.ts'), 'utf8');
+check('⑧ Caller 类型含 dev + dev caller 审计写 source:dev', /export type Caller[^;]*'dev'/.test(runnerSrc) && runnerSrc.includes("caller === 'dev'") && runnerSrc.includes("source: 'dev'"), '');
 }
 
 // ② ③ ④ 控制台透传 + dev 面板 + poll（静态源码断言）
