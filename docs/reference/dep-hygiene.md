@@ -33,4 +33,5 @@
 | 2026-11-21（357 轮周检） | audit 0 / verify-remote main 对齐（c3e68b8） / outdated 无新增 | 本轮无动作（周检干净；Unreleased 1 条——协作 ops 日志，攒到下个功能轮一起发版） |
 | 2026-11-22（363 轮周检） | audit 0 / verify-remote main 对齐（71bfbc1） / outdated 无新增 | 本轮无动作（v4.72.0 发布后例行——5 条积压已清） |
 | 2026-11-22（368 轮周检） | audit 0 / verify-remote main 对齐（0308729） / outdated 无新增 | 本轮无动作（v4.77.0 发布后例行——3 条积压已清） |
+| 2026-11-22（373 轮周检） | audit 0 / verify-remote main 对齐（eee40bc） / outdated 无新增 | 本轮无动作（v4.82.0 发布后例行）；附带 welcome80 探针降级判据（3 连败=平台抖动——权威面 mcp-smoke） |
 | 2026-11-20（331 轮 11 月例跑） | @hono/node-server 2.1.4→2.1.10 + hono 4.13.19（GHSA-qv5m/GHSA-jpvv moderate——传递依赖，零直用） | `npm audit fix --omit=dev`（需官方 registry；jlc mirror 不支持 audit endpoint）→ 0 vulnerabilities |
