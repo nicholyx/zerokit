@@ -4,6 +4,7 @@
 
 ### Added
 
+- export select 写侧选列（append 模式的列级追加——旧文件 10 列只追加 2 列，其余保留旧值）：export 加 select（逗号分隔列名——只写声明的这些列；**select 列不在 columns 声明中报错**）；append 合并语义：select 内的列追加新值，**旧文件多出的列整列保留旧值 + 新行 null 占位**；无 select 行为不变（向后兼容）；data-pipelines.md 补写侧选列示例（与 359 rename 并列）；exportselect384 3 断言（select append a=[1,2]/c 旧值保留/报错）；基线 3583→3586。
 （下一版攒着）
 
 ## [4.90.0] - 2026-11-22
