@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+
+（下一版攒着）
+
+## [5.2.0] - 2026-11-23
+
 ### Fixed
 
 - 恒真断言清理（397 盘点的收尾——check(..., true) 29 处分类处置）：**4 处懒恒真补成真断言**——devweb86⑧（Caller 含 dev + dev caller 写 source:dev——原注释指向 audit.ts 有误，类型与写入点实在 runner.ts）、docs134⑧（self-referential 恒真改为实数本文件 check( 调用数）、selfcheck137⑦（起 ui 常驻命令超时后什么都没验→真验 SelfcheckResult 结构 pluginId/probe/ok/ms/at）、watch79⑥（ui --port 0 阻塞没验任何东西→源码断言 /api/watch GET+PUT 路由在契约面）；**2 处合法占位显式标注**（smokeinst343④ .git/hooks 不入 CI、panelsmoke341① 降级一致性同数——355 判据）；其余为合法平台占位（win 无 bash/无 Chrome/降级路径）不动。
@@ -103,12 +109,5 @@
 - 面板烟测制度化（341/342 挖七 bug 后——真渲染验证进日常流程）：scripts/pre-push-smoke.sh（web/src 有改动才跑——panelsmoke 三面板 + cdp-smoke 12 面板两个真渲染验证；无改动秒跳过）；.git/hooks/pre-push 幂等安装（无 husky——exec 脚本）；CDP 判据五条落 platform-pitfalls（DevTools host 校验拒 127.0.0.1→localhost / target 类型漂移按 /devtools/page/ 挑 / 冷启动 20×800ms 重试+pkill 残实例 / 代理劫持回环删 proxy env / **降级一致性**——CI 降级断言数必须与本地 CDP 版同数否则基线拦截 3513<3517 实战）；smokeinst343 5 断言（脚本存在可执行/跳过路径/判据五条/panelsmoke 活体 7 断言）；基线 3517→3522。
 - 341 遗留两已知问题清偿（watch 读回 + collab 深链——挖出三个更深的真 bug）：①**restoreWatches 定义了却从未被调用**（79 轮的 watch.json 持久化只写不读——重启页面监控全丢！接通进 load() boot 链）②**读回漏 chain/lastChainRun 字段**（295 写侧有读侧漏——补进 reg 条目重建）③**恢复条目被「翻页自动停」误杀**（boot 时无 detail 上下文 → 首轮 tick 即 stopWatch——加 __restored 首轮宽限标记）；collab 深链根因确认 = 341①（deps 未传）已随上轮修复消失；watch 面板**首渲行也带 ⛓/看统计/趋势段**（此前只有 liveRefresh 动态字段有——首渲与动态同构）；CDP 排障终章：Chrome 111+ 的 DevTools host 校验拒 127.0.0.1 → fetch URL 换 localhost（200+HTML 假响应的真相）；panelsmoke341 升级 7 断言全绿（三面板完整验证）；基线 3514→3517。
 - 三面板运行时烟测（CDP 真渲染——首抓四个真 bug 全修）：panelsmoke341 起 ui server + headless Chrome CDP 抓 dashboard/watch/collab 三面板——**首跑即抓出四个潜伏真 bug**：①collab.js 工厂声明 deps 却没传参（showCollab 运行时 ReferenceError——311 轮以来 #/collab 从未真实渲染过）②dashboard 信号卡片点击绑定放在 renderSignal 函数外的 try 块顶层（body 局部变量引用——ReferenceError）③④panels.js renderList 的 deps 漏注入 perfStats 与 renderListInner（243 轮迁出遗漏——**每个全新环境首页都炸**「加载失败：perfStats」，老环境因缓存幸存）——四处全修后插件列表/信号卡片/双列表真实渲染验证通过；CDP 排障判据沉淀（代理劫持 127.0.0.1 fetch / chrome target 选 /devtools/page/ / 冷启动重试）；watch 写盘条目读回与 #/collab 深链时序留 342（已知问题记录）；panelsmoke341 4 断言；基线 3510→3514。
-（下一版攒着）
-
-## [4.50.0] - 2026-11-20
-
-### Added
-
-- v4.50.0 里程碑（第 50 个 minor——整数关口）：v4-outlook「50 版本里程碑」节——四层全景表（核心落地 288-300×13 / 深化收官 301-313×13 / 信号驱动×8 / 维护节奏×15，轮段+轮数+主线）；量化（断言→3506、文件→192、minor 50、指南 5 份、信号面五层）；**里程碑路线图定稿**（v4.5x 维护节奏三判据：月度例跑/积压清零/烟测年检；v5.0.0 触发条件三选一即启——「维护节奏」是稳态不是等待态）；判据遗产五条汇总（299/304/324+325/331/335）；健康快照刷新（192 文件/3506 级/主题分布新值/内建步含 stats 多列+window/路线图指针）；v4snap323 断言随刷新对齐；v50milestone337 4 断言；基线 3507→3510。
 （下一版攒着）
 
