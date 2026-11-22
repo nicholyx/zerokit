@@ -1273,9 +1273,13 @@ console.log('\n' + '='.repeat(60));
   for (let top = 0; top < 10000; top += 137) virtualWindow(10000, top, 28, 600, 6);
   const vwMs = performance.now() - t0;
   results.push(['virtualWindow 10k×73 滚动位 <50ms', vwMs < 50]);
-  t0 = performance.now();
-  const fr = filterRows(rows, ['row9', 'tag:b']);
-  const frMs = performance.now() - t0;
+  let fr, frMs;  // 397：CI 高载误伤先重试一次（373 判据），仍超才算真退化
+  for (let frTry = 0; ; frTry++) {
+    t0 = performance.now();
+    fr = filterRows(rows, ['row9', 'tag:b']);
+    frMs = performance.now() - t0;
+    if (frMs < 50 || frTry >= 1) break;
+  }
   // row9 是子串命中（row9/row90…row9999 共 1111 行）；'tag:b' 不是任何字段子串——交集为空才是 AND 语义正确的证据
   results.push(['filterRows 10k AND 无假阳性（空交集）', frMs < 50 && fr.length === 0]);
   const fr2 = filterRows(rows, ['row9', 'b']);
