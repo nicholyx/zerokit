@@ -1476,13 +1476,30 @@ async function runChainAction(
             const oldByName = new Map(oldCols.map((c) => [c.name, c]));
             const oldRows = Math.max(0, ...oldCols.map((c) => c.values.length));
             const newRows = Math.max(0, ...cols.map((c) => c.values.length));
-            finalCols = cols.map((c) => {
+            // 384①②：select——只导出声明的这些列（select 内的列追加新值；旧文件多出的列保留旧值+新行 null 占位）
+            const selectRaw = typeof item.step.params['select'] === 'string' ? String(item.step.params['select']) : '';
+            const selectSet = selectRaw ? new Set(selectRaw.split(',').map((x) => x.trim()).filter(Boolean)) : null;
+            if (selectSet) {
+              for (const w of selectSet) {
+                if (!cols.some((c) => c.name === w)) {
+                  return fail('chain-export-bad-column', `${label} select 列 "${w}" 不在 columns 声明中（有：${cols.map((c) => c.name).join('、')}）`);
+                }
+              }
+            }
+            const mergedNew = cols.map((c) => {
               const oc = oldByName.get(c.name);
               const oldVals = oc?.values ?? [];
-              // 旧行对齐：该列旧值不足 oldRows 的部分（含整列缺失）补 null 占位
               const paddedOld = [...oldVals, ...Array.from({ length: oldRows - oldVals.length }, () => null)];
-              return { ...c, values: [...paddedOld, ...c.values].slice(-(oldRows + newRows)) };
+              // select 模式：未选中的列不追加新值（新行 null 占位）
+              const newVals = !selectSet || selectSet.has(c.name) ? c.values : Array.from({ length: newRows }, () => null);
+              return { ...c, values: [...paddedOld, ...newVals].slice(-(oldRows + newRows)) };
             });
+            // 旧文件有、声明中没有的列：整列保留旧值 + 新行 null（select 语义的另一半）
+            const extraOld = selectSet ? oldCols.filter((oc) => !mergedNew.some((c) => c.name === oc.name)).map((oc) => ({
+              name: oc.name, type: oc.type as 'int' | 'double' | 'string',
+              values: [...oc.values, ...Array.from({ length: newRows }, () => null)].slice(-(oldRows + newRows)),
+            })) : [];
+            finalCols = [...mergedNew, ...extraOld];
           }
         } catch { /* 旧文件坏——当空表 */ }
       }
