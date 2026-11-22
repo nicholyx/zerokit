@@ -1269,8 +1269,17 @@ async function runChainAction(
       if (!file || wanted.length === 0) {
         return fail('chain-stats-bad-params', `${label} 需要 file（data_dir 文件名）与 column/columns（列名，columns 逗号分隔可多列）`);
       }
-      const ops = opsRaw.split(',').map((x) => x.trim()).filter((x) => ['min', 'max', 'avg', 'count', 'top', 'median', 'p90'].includes(x));  // 361①②：median/p90（白名单与功能同步——355 判据）
-      if (ops.length === 0) {
+      // 379①：percol（「列名:ops」逗号分隔——复数形态逐列覆盖全局 ops）
+      const percolRaw = typeof item.step.params['percol'] === 'string' ? String(item.step.params['percol']) : '';
+      const percolMap = new Map<string, string[]>();
+      if (percolRaw) {
+        for (const pair of percolRaw.split(',').map((x) => x.trim()).filter(Boolean)) {
+          const ci = pair.indexOf(':');
+          if (ci > 0) percolMap.set(pair.slice(0, ci).trim(), pair.slice(ci + 1).trim().split('|').map((x) => x.trim()).filter(Boolean));
+        }
+      }
+      const opsGlobal = opsRaw.split(',').map((x) => x.trim()).filter((x) => ['min', 'max', 'avg', 'count', 'top', 'median', 'p90'].includes(x));  // 361①② + 379① 改名（percol 覆盖用）
+      if (opsGlobal.length === 0 && percolMap.size === 0) {
         return fail('chain-stats-bad-params', `${label} ops 只支持 min/max/avg/count（逗号分隔）`);
       }
       const pathModuleS = await import('node:path');
@@ -1316,6 +1325,8 @@ async function runChainAction(
       let rows = 0;
       for (const c of zcS.columns) {
         const target = wanted.includes(c.name) ? c : undefined;
+        // 379②：percol 覆盖（该列用自己的 ops——如 level:top）
+        const ops = percolMap.has(c.name) ? percolMap.get(c.name)! : opsGlobal;
         if (target && target.type === 'string') {
           // 345①④：top op——utf8 解码统计最高频值（单数无 top 时保持 315 明确报错）
           if (!(ops.includes('top') || ops.includes('count'))) {
