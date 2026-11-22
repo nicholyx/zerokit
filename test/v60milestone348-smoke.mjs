@@ -14,7 +14,7 @@ check('① 十轮分层（烟测制度/数据消费/维护节奏 + 341-343/344-3
 check('① 信号五层全景（写侧/API/UI/导航/MCP）', ['写侧', 'API', 'UI', '导航', 'MCP'].every((k) => seg.includes(k)), '');
 check('③ 路线图复核（无真实诉求信号 + 稳态结论再确认）', seg.includes('无真实诉求信号') && seg.includes('再确认'), '');
 const snap = fs.readFileSync(path.join(ROOT, 'docs', 'reference', 'v4-health-snapshot.md'), 'utf8');
-check('④ 快照刷新（60→80 时点对照——outlook 量化节锚 3510→3533；快照查 348 轮标记不变项）', ol.includes('断言 3510→3533') && snap.includes('348 轮'), '');
+check('④ 快照刷新（outlook 量化节锚 3510→3533 不变文本；快照 400 轮合并了分次标记——改锚 337/348/370 行）', ol.includes('3510→3533') && snap.includes('337/348/370'), '');
 
 console.log(`\n${'='.repeat(60)}\n通过 ${pass} / ${pass + fail}`);
 process.exit(fail > 0 ? 1 : 0);
