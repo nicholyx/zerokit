@@ -38,6 +38,14 @@ v4.40.0 aarch64.dmg 实测（macOS arm64 本机）：
 | MacOS 二进制 | ✅ Mach-O 64-bit arm64 |
 | 卸载清理 | ✅ detach + /tmp 清理 |
 
+### 闭环验证：v4.95.0（第三百八十五轮，2026-11-22——发布轮）
+
+| 检查项 | 结果 |
+|---|---|
+| sha256 与 release digest | ✅ a530cbba…（两侧一致） |
+| Info.plist | ✅ 4.95.0 |
+| **包内 selectRaw(384)×2** | ✅ export select 随包下发 |
+
 ### 年检追加：v4.90.0（第三百八十二轮，2026-11-22）
 
 | 检查项 | 结果 |
