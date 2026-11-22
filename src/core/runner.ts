@@ -1229,6 +1229,27 @@ async function runChainAction(
           c.values = c.values.filter((_, i2) => wsetR.has(String(wtarget.values[i2])));
         }
       }
+      // 387①②③：sort 排序（「列名」升序 / 「列名:desc」降序——先 where 后 sort，排序后首行语义由用户掌控）
+      const sortRaw = typeof item.step.params['sort'] === 'string' ? String(item.step.params['sort']) : '';
+      if (sortRaw) {
+        const sc = sortRaw.lastIndexOf(':');
+        const isDesc = sortRaw.endsWith(':desc');
+        const scol = isDesc ? sortRaw.slice(0, sc) : sortRaw;
+        const starget = filtered.find((c) => c.name === scol.trim());
+        if (!starget) {
+          return fail('chain-read-bad-column', `${label} 列 "${scol}" 不存在（有：${cols.map((c) => c.name).join('、')}）`);
+        }
+        const idx = (starget.values ?? []).map((_, i2) => i2);  // 387：行索引（此前误用列数组的索引——两列时只排 [0,1]）
+        idx.sort((a, b) => {
+          const va = starget.values[a], vb = starget.values[b];
+          const na = typeof va === 'number' ? va : Number(va), nb = typeof vb === 'number' ? vb : Number(vb);
+          const cmp = (Number.isFinite(na) && Number.isFinite(nb) && String(va) !== String(vb) && typeof va === typeof vb)
+            ? na - nb
+            : String(va).localeCompare(String(vb));
+          return isDesc ? -cmp : cmp;
+        });
+        for (const c of filtered) c.values = idx.map((i2) => c.values[i2]);
+      }
       // 358①②：columns 投影（逗号分隔——只输出指定列，列序按参数序；列不存在报错）
       const colsParam = typeof item.step.params['columns'] === 'string' ? String(item.step.params['columns']) : '';
       let projected = filtered;

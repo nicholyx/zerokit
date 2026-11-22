@@ -4,6 +4,7 @@
 
 ### Added
 
+- read sort 行序控制（读侧最后一块拼图——排序后首行语义由用户掌控）：read params 加 sort（「列名」升序 / 「列名:desc」降序；列不存在报错）；数值列按数值、string 列按字典序；**与 where/columns 组合（先 where 后 sort——筛选行内排序）**；排序后首行捷径 {r.data.列} 与 _all 同步重排；审查期抓掉行索引 bug（idx 误用列数组索引——两列时只排 [0,1]；改为行索引全排）；dashsignal326 boot 门控加固（readyState 轮询替代固定 4s——全量偶发 NO-EL 根修）；data-pipelines.md 补行序控制示例；readsort387 5 断言；基线 3586→3591。
 （下一版攒着）
 
 ## [4.95.0] - 2026-11-22

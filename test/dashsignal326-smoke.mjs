@@ -86,11 +86,15 @@ if (CHROME) {
       await send2('Runtime.enable');
       await send2('Page.enable');
       await send2('Page.navigate', { url: `http://localhost:${PORT2}/` });
-      await new Promise((r) => setTimeout(r, 4000));
+      for (let i = 0; i < 25; i++) {
+        const ready = await send2('Runtime.evaluate', { expression: `typeof location.hash === 'string' && document.readyState === 'complete'`, returnByValue: true });
+        if (ready?.result?.result?.value === true) break;
+        await new Promise((r) => setTimeout(r, 500));
+      }
       await send2('Runtime.evaluate', { expression: `location.hash = '#/dashboard'` });
       // 352：轮询等元素（boot 慢时固定 sleep 不够）
       let cv = '';
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i < 45; i++) {
         const probe = await send2('Runtime.evaluate', { expression: `document.getElementById('dashSignalBody')?.innerText.slice(0, 200) ?? 'NO-EL'`, returnByValue: true });
         cv = String(probe?.result?.result?.value ?? '');
         if (cv !== 'NO-EL' && cv.length > 3) break;
