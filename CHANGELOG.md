@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.95.0] - 2026-11-22
+
+### Added
+
 - export select 写侧选列（append 模式的列级追加——旧文件 10 列只追加 2 列，其余保留旧值）：export 加 select（逗号分隔列名——只写声明的这些列；**select 列不在 columns 声明中报错**）；append 合并语义：select 内的列追加新值，**旧文件多出的列整列保留旧值 + 新行 null 占位**；无 select 行为不变（向后兼容）；data-pipelines.md 补写侧选列示例（与 359 rename 并列）；exportselect384 3 断言（select append a=[1,2]/c 旧值保留/报错）；基线 3583→3586。
 （下一版攒着）
 
@@ -101,12 +107,5 @@
 - 11 月依赖卫生月度例跑（dep-hygiene 清单首跑——四步留痕）：步骤 1 dep-audit 四项全过；步骤 2 outdated 分拣（@types/node 26 与 typescript 7 维持观望——运行时/生态未跟）；**步骤 3 抓出 2 条 moderate 公告并当轮修复**（@hono/node-server 2.1.4→2.1.10 + hono 4.13.19——GHSA-qv5m-9pm6-hqp3 WebSocket ECONNRESET 崩溃 + GHSA-jpvv-r467-5p4w 路径绕过；传递依赖零直用，npm audit fix --omit=dev 安全升）——0 vulnerabilities；判据补丁：npm audit 必须 --registry=官方源（jlc 镜像 NOT_IMPLEMENTED）；步骤 4 历史表追加 11 月例跑行；monthlyaudit333 5 断言；基线 3489→3494。
 - 桌面安装包烟测（v4.40.0 aarch64.dmg 实测——「下载→装→跑」路径首次验证的只读部分）：gh release 下载 dmg 到 /tmp → sha256 与 release digest 对齐（be0b0156…两侧一致）→ hdiutil 只读挂载 → app 结构核查全过（Info.plist dev.zerokit.desktop/4.40.0、MacOS 二进制 Mach-O arm64、Resources 内嵌 web/plugins/src/node_modules）→ detach 清理；烟测记录入 updater-readiness.md 附录（「实际安装+启动」留首个真实桌面用户——避免破坏本机环境）；dmgsmoke328 3 断言（资产命名判据/Info.plist 源/烟测记录在档）；基线 3485→3489。
 - 依赖卫生巡检清单（维护节奏第二轮——例行巡检标准化）：docs/reference/dep-hygiene.md——月度巡检四步（dep-audit 基线 / npm outdated 三档处理【patch 直合、major 评估、停更留 issue】/ npm audit 公告 / dependabot 评论留评估结论）+ 判据四条（lockfile 一致 / 主版本先查引用面——329 sdk 1.8 一行兜底案例 / @types/node 跟运行时 / typescript 7 观望）+ 历史处理记录表；本轮实跑：sdk 1.8→1.11、tauri-cli 2.12.6 minor 直合，@types/node 26 与 typescript 7 观望；dephyg330 4 断言（活体审计全过/清单判据/历史记录/导航）；基线 3485→3485（文档轮断言数由守护测试自证）。
-（下一版攒着）
-
-## [4.40.0] - 2026-11-20
-
-### Added
-
-- v4.40.0 整点复盘（v4 线第 41 轮/第 40 个 minor——整数关口）：v4-outlook「40 版本整点复盘」节——三阶段弧线（主题排定 288-300 13 轮 / 深化收官 301-313 13 轮 / 真实信号驱动 306/314 起）；量化对照表（断言 3284→3481、测试 149→186、minor 0→40、内建步 2→4 件套+window/多列、指南 0→4、信号面 0→四层）；三大判据沉淀清单（299 Chrome 严格度语义炸弹 / 304 Windows file:// / 324+325 信号双面与单 try 绑架）；下阶段定调（三候选全部等真实诉求——不再主题内推演，日常转维护节奏）；v40review328 4 断言；基线 3477→3481。
 （下一版攒着）
 
