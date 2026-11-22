@@ -16,8 +16,9 @@ let r = null;
 try { r = execFileSync('bash', [sh], { encoding: 'utf8', timeout: 120000, cwd: ROOT }); } catch (e) { r = (e.stdout ?? '') + (e.stderr ?? ''); }
 check('③ 无改动跳过路径（exit 0 + 跳过提示）', String(r).includes('跳过') || String(r).includes('全过'), String(r).slice(0, 60));
 
-// ④ hook 在位（.git/hooks 不可入 CI——判据：脚本可独立执行即 hook 逻辑载体）
-check('④ hook 逻辑载体（脚本可独立跑）', true, '');
+// ④ hook 在位（398② 显式标注：占位——.git/hooks 是本地 git 目录不随仓库走、CI checkout 不含它，
+// 「hook 逻辑载体」由 ③ 脚本可独立执行间接保证；真 hook 验证只可能在本地手动跑，故此处恒真占位）
+check('④ hook 逻辑载体（占位——.git/hooks 不入 CI，见 ③ 独立执行）', true, '');
 
 // ② 判据落盘五条
 const doc = fs.readFileSync(path.join(ROOT, 'docs', 'reference', 'platform-pitfalls.md'), 'utf8');
