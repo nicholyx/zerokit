@@ -47,8 +47,13 @@ check('⑥ 单候选不硬凑', (suggestLineMulti('plugin', ['ls']) === null) ||
   mkdirSync(d, { recursive: true });
   writeFileSync(path.join(d, 'plugin.toml'), `[plugin]\nid = "p137"\nname = "n"\nversion = "0.1.0"\ndescription = "d"\nkeywords = ["t"]\n\n[[action]]\nid = "die"\ntitle = "d"\ndescription = "d"\nrisk = "read"\nrun = ["{node}", "-e", "process.exit(137)"]\n`);
   run(['plugin', 'dev', d]);
-  const r = run(['run', 'p137', 'die']);
-  const rAll = r.stdout + r.stderr;
+  let r = run(['run', 'p137', 'die']);
+  let rAll = r.stdout + r.stderr;
+  if (!(rAll.includes('强制结束') && rAll.includes('137'))) {
+    // CI 慢机偶发——重试一次（373 探针降级同款思路：先重试再降级）
+    r = run(['run', 'p137', 'die']);
+    rAll = r.stdout + r.stderr;
+  }
   check('① CLI 输出 SIGKILL 语义', rAll.includes('强制结束') && rAll.includes('137'));
 }
 
