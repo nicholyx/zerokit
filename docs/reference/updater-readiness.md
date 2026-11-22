@@ -38,6 +38,16 @@ v4.40.0 aarch64.dmg 实测（macOS arm64 本机）：
 | MacOS 二进制 | ✅ Mach-O 64-bit arm64 |
 | 卸载清理 | ✅ detach + /tmp 清理 |
 
+### 年检追加：v5.0.0（第三百九十二轮，2026-11-22——主版本进位安装包）
+
+| 检查项 | 结果 |
+|---|---|
+| sha256 与 release digest | ✅ 3a6cb9c9…（与 391 闭环一致——release 未变） |
+| 挂载 + Info.plist | ✅ dev.zerokit.desktop / 5.0.0 / arm64 |
+| limitN(390) 复核 | ✅ ×2（391 闭环一致） |
+| HEAD 侧新滞后 | 无（391 闭环 PR 即最新——纯文档） |
+| 清理 | ✅ |
+
 ### 闭环验证：v5.0.0（第三百九十一轮，2026-11-22——百 minor 大关）
 
 | 检查项 | 结果 |
