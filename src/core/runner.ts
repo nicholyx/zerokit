@@ -1667,7 +1667,7 @@ export function confirmPolicy(risk: RiskLevel): ConfirmPolicy {
 
 
 /** 346②：zerocol 统计（MCP zerokit_stats 工具与 chain 内建步共用——参数同构） */
-export async function builtinStats(args: { file: string; column: string; ops: string[] }): Promise<{ stats: Record<string, unknown>; rows: number }> {
+export async function builtinStats(args: { file: string; column: string; ops: string[]; where?: string; window?: number }): Promise<{ stats: Record<string, unknown>; rows: number }> {
   const { readFileSync } = await import('node:fs');
   const { join } = await import('node:path');
   const { DATA_DIR } = (() => { try { return { DATA_DIR: HOME + '/data' }; } catch { return { DATA_DIR: HOME + '/data' }; } })();
@@ -1681,6 +1681,20 @@ export async function builtinStats(args: { file: string; column: string; ops: st
   if (!target) {
     throw new Error(`列 "${args.column}" 不存在（有：${raw.columns.map((c) => c.name).join('、')}）`);
   }
+  // 374②：where 掩码（与内建步同语义——「列=值」精确匹配）
+  let mask: boolean[] | null = null;
+  if (args.where) {
+    const eq = args.where.indexOf('=');
+    const wcol = eq > 0 ? args.where.slice(0, eq).trim() : '';
+    const wval = eq > 0 ? args.where.slice(eq + 1).trim() : '';
+    const wtarget = wcol ? raw.columns?.find((c) => c.name === wcol) : undefined;
+    if (!wtarget) {
+      throw new Error(`列 "${wcol}" 不存在（有：${(raw.columns ?? []).map((c) => c.name).join('、')}）`);
+    }
+    const { importZeroCol: importZW } = await import('./arrowIpc.ts');
+    const wvals = importZW({ format: 'zerocol', formatVersion: 1, createdAt: '', checksum: '', columns: (raw.columns ?? []).map((c) => ({ ...c, type: c.type as 'string' | 'int' | 'double' })), data: raw.data ?? '' }).find((c2) => c2.name === wcol)?.values ?? [];
+    mask = wvals.map((v) => String(v) === wval);
+  }
   const statsOut: Record<string, unknown> = {};
   if (target.type === 'string') {
     // 345 top-frequency（string 列）
@@ -1688,7 +1702,8 @@ export async function builtinStats(args: { file: string; column: string; ops: st
     const { importZeroCol } = await import('./arrowIpc.ts');
     const allCols = importZeroCol({ format: 'zerocol', formatVersion: 1, createdAt: '', checksum: '', columns: (raw.columns ?? []).map((c) => ({ ...c, type: c.type as 'string' | 'int' | 'double' })), data: raw.data ?? '' });
     const colDec = allCols.find((c) => c.name === args.column);
-    const strs = (colDec?.values ?? []).map((v) => String(v));
+    let strs = (colDec?.values ?? []).map((v) => String(v));
+    if (mask) strs = strs.filter((_, i2) => mask![i2] === true);  // 374② where
     const freq = new Map<string, number>();
     for (const v of strs) freq.set(v, (freq.get(v) ?? 0) + 1);
     const sorted = [...freq.entries()].sort((a, b) => b[1] - a[1]);
@@ -1709,6 +1724,10 @@ export async function builtinStats(args: { file: string; column: string; ops: st
   for (let i = 0; i < target.count; i++) {
     vals.push(target.type === 'int' ? Number(buf.readBigInt64LE(off + i * 8)) : buf.readDoubleLE(off + i * 8));
   }
+  const valsF = vals.filter((_, i2) => (mask ? mask[i2] === true : true));  // 374② where
+  const valsW = args.window && args.window > 0 ? valsF.slice(-args.window) : valsF;  // 374② window（先 where 后 window）
+  vals.length = 0;
+  vals.push(...valsW);
   const one: Record<string, number> = {};
   for (const op of args.ops) {
     if (op === 'count') one.count = vals.length;

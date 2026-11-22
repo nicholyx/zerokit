@@ -51,6 +51,22 @@ check('② 统计返回（rows=3 + min/max）', call2.includes('"rows":3') && ca
 const call3 = await call(A.sid, 4, 'zerokit_stats', { file: 'ts-data', column: 'nope', ops: 'min' });
 check('③ 列不存在错误', call3.includes('不存在') || call3.includes('nope'), call3.slice(0, 80));
 
+// 374②：where/window 参数（造 mix 数据：level=info/error，ms 不同）
+{
+  const { exportZeroCol } = await import('file://' + path.join(ROOT, 'src', 'core', 'arrowIpc.ts'));
+  fs.writeFileSync(path.join(home, 'data', 'mix.zerocol.json'), JSON.stringify(exportZeroCol([
+    { name: 'level', type: 'string', values: ['info', 'error'] },
+    { name: 'ms', type: 'int', values: [10, 500] },
+  ])));
+  const c3 = await client('c3');
+  const t3 = await call(c3.sid, 30, 'zerokit_stats', { file: 'mix', column: 'ms', ops: 'avg,count', where: 'level=error' });
+  check('374② where 筛选（avg=500 count=1——只 error 行）', t3.includes('500') && t3.includes('"count":1'), t3.slice(0, 100));
+  const t4 = await call(c3.sid, 31, 'zerokit_stats', { file: 'mix', column: 'ms', ops: 'max', window: 1 });
+  check('374② window=1（max=500——尾 1 行）', t4.includes('500'), t4.slice(0, 90));
+  const tl2 = await fetch(BASE, { method: 'POST', headers: { ...H, 'mcp-session-id': c3.sid }, body: JSON.stringify({ jsonrpc: '2.0', id: 32, method: 'tools/list' }) }).then((r) => r.text());
+  check('374① schema 含 where/window（tools/list）', tl2.includes('where') && tl2.includes('window'), '');
+}
+
 // 351①：rows 恒全表（ts-data 3 行）
 {
   const c = await client('c2');
