@@ -48,6 +48,17 @@
 | **ops 白名单与功能脱节** | stats ops 加 "top" 但白名单过滤没同步——opsHasTop 恒 false，新功能静默走旧报错 | **ops 白名单必须与功能同步扩展**；新 op 加白名单才算落地 | 345 |
 | **typecheck 假绿** | `npm run typecheck` 在 node_modules 无 typescript bin 时静默通过（command not found 但 exit 0） | 本地跑之前先 `npm install --no-save typescript`；CI typecheck job 才是真防线 | 345/347 |
 
+## CI 抖动四源清单（397 轮归因——main CI 4/40 失败率的全部来源）
+
+| 抖动源 | 表现 | 对策 | 战役 |
+|---|---|---|---|
+| **CDP 冷启动/残例竞态** | dashsignal326 / panelsmoke341 偶发 NO-EL、target 不可达 | 起例前 pkill 残例；`readyState` 轮询门控替代固定 sleep；`/devtools/page/` 选 target；fetch 用 localhost | 341/342/363/387 |
+| **stdio 探针竞速** | welcome80 MCP 探针 rc=1（3 次重试仍败） | 保险层探针 3 连败降级为提示——权威面（mcp-smoke 38 断言）才做硬门禁 | 373 |
+| **退出码时序** | diag83「SIGKILL 语义」process.exit(137) 抖动 | 断言失败重试一次 | 383 |
+| **纯函数/过滤时间预算** | perf-guard「filterRows ×5 <10ms」、extras「10k AND <50ms」在 runner 高载时误伤 | 失败时重测取较优 + load 3 次采样中位豁免；**真退化（两次都超）仍硬失败** | 397 |
+
+**通用判据**：平台抖动类失败「先重试再降级」——重试一次仍败才算真失败；降级只用于重复保险层，权威面永不降级。时间预算断言在 CI 上必须有 load 豁免或重测，否则 10% 的失败率会让人习惯性忽略红灯。
+
 ## 通用
 
 - Node ≥ 22.18（项目硬规则）；`execFileSync(process.execPath, [...])` 在三平台行为一致。
