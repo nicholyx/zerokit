@@ -2,6 +2,18 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [4.58.0] - 2026-11-21
+
+### Added
+
+- MCP zerokit_stats 工具（zerocol-stats 的 MCP 面——AI 客户端可直接查数据集统计）：tools/list 加 zerokit_stats（file/column/ops 参数与 chain 内建步同构）；CallTool 分流调 builtinStats 导出函数（复用 345 统计逻辑——含 string top-frequency）；错误面与 chain-stats-* 同文案（缺参/列不存在/ops 非法）；**CLI cmdTools 同步加 zerokit_statsTool**（331 判据「CLI 与 server 同源」——二波① tools --plugin 断言抓出 builtinStatsTool 错进过滤分支——修为无条件分支才加入）；mcp-smoke serverPath 默认 src/mcp.ts（直接跑不传参不炸）；mcpstatstool346 4 断言（tools/list/统计返回/列不存在/缺参）；基线 3533→3530→3533（346 增 4 + mcp-smoke 修 −4+38→38）。
+- stats top-frequency（数据消费端第三块——字符串列可统计了）：ops 加 "top"（出现次数最高值/次数/占比 top_value/top_count/top_ratio）；数值列 top=mode（最高频数值）；string 列带 top 合法（importZeroCol 解码 utf8——字节操作复用内核路径，341 判据兑现）；多列形态带 top 的 string 参与统计（315 的静默跳过收敛为分形态）；空列/单值列边界（null/占比 1.0）；**单数形态平铺+分组双写**（模板任取 stats.min 或 stats.列名.min——317 兼容不破坏）；ops 白名单含 top（旧 gate 报错的根因——白名单过滤把 top 丢掉致 opsHasTop=false）；statstop345 5 断言；基线 3524→3529。
+- 信号面板周检（344 轮——dashboard 信号卡片数据链完整回归）：dashsignal326 升级双路径（本地 CDP 真渲染卡片：Chrome headless 起 ui server + dashboard 渲染 + dashSignalBody 元素级抓取；CI 降级源码断言补 2 与 CDP 同数——与 panelsmoke341 降级一致性模式同款）；活体验证市场安装计数（installs=1+last30d 数组）与执行热度 Top（gen×3）双端点数据真实进卡片；执行项跳转 openDetail 链路源码级固化；dashsignal326 7 断言（CDP 路径 6 + 降级 2）；基线 3522→3524。
+- 面板烟测制度化（341/342 挖七 bug 后——真渲染验证进日常流程）：scripts/pre-push-smoke.sh（web/src 有改动才跑——panelsmoke 三面板 + cdp-smoke 12 面板两个真渲染验证；无改动秒跳过）；.git/hooks/pre-push 幂等安装（无 husky——exec 脚本）；CDP 判据五条落 platform-pitfalls（DevTools host 校验拒 127.0.0.1→localhost / target 类型漂移按 /devtools/page/ 挑 / 冷启动 20×800ms 重试+pkill 残实例 / 代理劫持回环删 proxy env / **降级一致性**——CI 降级断言数必须与本地 CDP 版同数否则基线拦截 3513<3517 实战）；smokeinst343 5 断言（脚本存在可执行/跳过路径/判据五条/panelsmoke 活体 7 断言）；基线 3517→3522。
+- 341 遗留两已知问题清偿（watch 读回 + collab 深链——挖出三个更深的真 bug）：①**restoreWatches 定义了却从未被调用**（79 轮的 watch.json 持久化只写不读——重启页面监控全丢！接通进 load() boot 链）②**读回漏 chain/lastChainRun 字段**（295 写侧有读侧漏——补进 reg 条目重建）③**恢复条目被「翻页自动停」误杀**（boot 时无 detail 上下文 → 首轮 tick 即 stopWatch——加 __restored 首轮宽限标记）；collab 深链根因确认 = 341①（deps 未传）已随上轮修复消失；watch 面板**首渲行也带 ⛓/看统计/趋势段**（此前只有 liveRefresh 动态字段有——首渲与动态同构）；CDP 排障终章：Chrome 111+ 的 DevTools host 校验拒 127.0.0.1 → fetch URL 换 localhost（200+HTML 假响应的真相）；panelsmoke341 升级 7 断言全绿（三面板完整验证）；基线 3514→3517。
+- 三面板运行时烟测（CDP 真渲染——首抓四个真 bug 全修）：panelsmoke341 起 ui server + headless Chrome CDP 抓 dashboard/watch/collab 三面板——**首跑即抓出四个潜伏真 bug**：①collab.js 工厂声明 deps 却没传参（showCollab 运行时 ReferenceError——311 轮以来 #/collab 从未真实渲染过）②dashboard 信号卡片点击绑定放在 renderSignal 函数外的 try 块顶层（body 局部变量引用——ReferenceError）③④panels.js renderList 的 deps 漏注入 perfStats 与 renderListInner（243 轮迁出遗漏——**每个全新环境首页都炸**「加载失败：perfStats」，老环境因缓存幸存）——四处全修后插件列表/信号卡片/双列表真实渲染验证通过；CDP 排障判据沉淀（代理劫持 127.0.0.1 fetch / chrome target 选 /devtools/page/ / 冷启动重试）；watch 写盘条目读回与 #/collab 深链时序留 342（已知问题记录）；panelsmoke341 4 断言；基线 3510→3514。
+（下一版攒着）
+
 ## [4.50.0] - 2026-11-20
 
 ### Added
