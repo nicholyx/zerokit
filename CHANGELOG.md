@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.98.0] - 2026-11-22
+
+### Added
+
 - read sort 行序控制（读侧最后一块拼图——排序后首行语义由用户掌控）：read params 加 sort（「列名」升序 / 「列名:desc」降序；列不存在报错）；数值列按数值、string 列按字典序；**与 where/columns 组合（先 where 后 sort——筛选行内排序）**；排序后首行捷径 {r.data.列} 与 _all 同步重排；审查期抓掉行索引 bug（idx 误用列数组索引——两列时只排 [0,1]；改为行索引全排）；dashsignal326 boot 门控加固（readyState 轮询替代固定 4s——全量偶发 NO-EL 根修）；data-pipelines.md 补行序控制示例；readsort387 5 断言；基线 3586→3591。
 （下一版攒着）
 
@@ -98,15 +104,5 @@
 ### Added
 
 - watch 面板趋势列（执行热度可视进监控视图——与 334 CLI --trend 对偶）：条目子行追加趋势段——samples[] 按时间戳分窗（本周 7d vs 上周 7-14d）采样次数对比，箭头 ↑+N / ↓-N / →持平；数据不足两周显示「数据积累中（N 天）」；与 ⛓ 徽标、「看统计」链接并列呈现不互斥（liveRefresh 与首渲两处同用 trendHtml——watchtrend335 逻辑手跑断言「本周 2 / 上周 1 → ↑+1」+ 5 断言）；基线 3497→3502。监控视图从「现在状态」到「趋势方向」。
-（下一版攒着）
-
-## [4.47.0] - 2026-11-20
-
-### Added
-
-- 执行热度周环比（stats --trend——趋势可见）：本周（7d）vs 上周（前 7d）分窗统计，每动作箭头标记 ↑+N / ↓-N / →持平，新入榜动作标「新」（top 8）；--trend 开关默认关（保持现有输出形态）；中途吞了 92 轮「最常用」行（334 插入 anchor 撞行）——**全量测试当场抓回已修**（guard 体系有效性实证）；trendstats334 3 断言（分窗输出/新标记/默认关）；基线 3494→3497。
-- 11 月依赖卫生月度例跑（dep-hygiene 清单首跑——四步留痕）：步骤 1 dep-audit 四项全过；步骤 2 outdated 分拣（@types/node 26 与 typescript 7 维持观望——运行时/生态未跟）；**步骤 3 抓出 2 条 moderate 公告并当轮修复**（@hono/node-server 2.1.4→2.1.10 + hono 4.13.19——GHSA-qv5m-9pm6-hqp3 WebSocket ECONNRESET 崩溃 + GHSA-jpvv-r467-5p4w 路径绕过；传递依赖零直用，npm audit fix --omit=dev 安全升）——0 vulnerabilities；判据补丁：npm audit 必须 --registry=官方源（jlc 镜像 NOT_IMPLEMENTED）；步骤 4 历史表追加 11 月例跑行；monthlyaudit333 5 断言；基线 3489→3494。
-- 桌面安装包烟测（v4.40.0 aarch64.dmg 实测——「下载→装→跑」路径首次验证的只读部分）：gh release 下载 dmg 到 /tmp → sha256 与 release digest 对齐（be0b0156…两侧一致）→ hdiutil 只读挂载 → app 结构核查全过（Info.plist dev.zerokit.desktop/4.40.0、MacOS 二进制 Mach-O arm64、Resources 内嵌 web/plugins/src/node_modules）→ detach 清理；烟测记录入 updater-readiness.md 附录（「实际安装+启动」留首个真实桌面用户——避免破坏本机环境）；dmgsmoke328 3 断言（资产命名判据/Info.plist 源/烟测记录在档）；基线 3485→3489。
-- 依赖卫生巡检清单（维护节奏第二轮——例行巡检标准化）：docs/reference/dep-hygiene.md——月度巡检四步（dep-audit 基线 / npm outdated 三档处理【patch 直合、major 评估、停更留 issue】/ npm audit 公告 / dependabot 评论留评估结论）+ 判据四条（lockfile 一致 / 主版本先查引用面——329 sdk 1.8 一行兜底案例 / @types/node 跟运行时 / typescript 7 观望）+ 历史处理记录表；本轮实跑：sdk 1.8→1.11、tauri-cli 2.12.6 minor 直合，@types/node 26 与 typescript 7 观望；dephyg330 4 断言（活体审计全过/清单判据/历史记录/导航）；基线 3485→3485（文档轮断言数由守护测试自证）。
 （下一版攒着）
 
