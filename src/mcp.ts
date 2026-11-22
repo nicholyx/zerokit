@@ -367,7 +367,7 @@ function buildMcpServer(): Server {
       name: 'zerokit_stats',
       title: 'zerokit · 数据集统计',
       description: '读取 data_dir 下的 zerocol 数据集并统计：file=文件名、column=列名、ops=min/max/avg/count/top 逗号分隔。返回 top_value/top_count/top_ratio 等结构化统计。',
-      inputSchema: { type: 'object' as const, properties: { file: { type: 'string' }, column: { type: 'string' }, ops: { type: 'string' } }, required: ['file', 'column'] },
+      inputSchema: { type: 'object' as const, properties: { file: { type: 'string' }, column: { type: 'string' }, ops: { type: 'string' }, where: { type: 'string', description: '筛选条件「列=值」（与链路同语义——先筛行再统计）' }, window: { type: 'number', description: '最近 N 行窗口（先 where 后 window）' } }, required: ['file', 'column'] },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     }];
     const pluginTools = collectTools().map(({ plugin, action }) => ({
@@ -508,7 +508,9 @@ function buildMcpServer(): Server {
       }
       try {
         const mod = await import('./core/runner.ts');
-        const result2 = await mod.builtinStats({ file, column, ops: ops2 });
+        const whereM = String(args2['where'] ?? '');
+          const winM = Number(args2['window'] ?? 0) || 0;
+          const result2 = await mod.builtinStats({ file, column, ops: ops2, ...(whereM ? { where: whereM } : {}), ...(winM > 0 ? { window: winM } : {}) });
         return {
           content: [{ type: 'text', text: `${column} 统计：${JSON.stringify(result2.stats)}` }],
           structuredContent: { stats: result2.stats, rows: result2.rows },
@@ -1281,7 +1283,7 @@ function cmdTools(args: string[]): number {
     description: '读取 data_dir 下的 zerocol 数据集并统计：file=文件名、column=列名、ops=min/max/avg/count/top。返回结构化统计。',
     risk: 'read',
     params: [] as never[],
-    inputSchema: { type: 'object' as const, properties: { file: { type: 'string' }, column: { type: 'string' }, ops: { type: 'string' } }, required: ['file', 'column'] },
+    inputSchema: { type: 'object' as const, properties: { file: { type: 'string' }, column: { type: 'string' }, ops: { type: 'string' }, where: { type: 'string' }, window: { type: 'number' } }, required: ['file', 'column'] },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   };
   // 第七十一轮⑧：--risk <级别> 按风险过滤（read / mutate / destructive）
