@@ -1,0 +1,102 @@
+[
+  {
+    "file": "broadcastsummary293-smoke.mjs",
+    "name": "⑤ gen 调用成功（或跳过——非硬性）",
+    "count": 1
+  },
+  {
+    "file": "cdp-smoke.mjs",
+    "name": "12 面板扫描（无 Chrome 环境——结构占位）",
+    "count": 1
+  },
+  {
+    "file": "cdp-smoke.mjs",
+    "name": "console-error = 0（无 Chrome 环境——结构占位）",
+    "count": 1
+  },
+  {
+    "file": "cdp-smoke.mjs",
+    "name": "回归流程自身（无 Chrome 环境——结构占位）",
+    "count": 1
+  },
+  {
+    "file": "completion159-smoke.mjs",
+    "name": "win 结构占位（271 恒定计数）",
+    "count": 5
+  },
+  {
+    "file": "contract-v1-smoke.mjs",
+    "name": "cache stats 不支持 --json（文档外命令，跳过）",
+    "count": 1
+  },
+  {
+    "file": "match-smoke.mjs",
+    "name": "内容嗅探（${cases.length} 个用例）全部正确",
+    "count": 1
+  },
+  {
+    "file": "panelsmoke341-smoke.mjs",
+    "name": "① 双列表渲染（占位——CDP 路径已由 dashSignalBody 元素级断言覆盖；本行为降级一致性同数要求（355 判据）保留计数）",
+    "count": 1
+  },
+  {
+    "file": "panelsmoke341-smoke.mjs",
+    "name": "① 执行 top 数据面（renderList 修复后插件 14 进来）",
+    "count": 1
+  },
+  {
+    "file": "pipe91-smoke.mjs",
+    "name": "⑧ zsh 语法（本机无 zsh——结构占位）",
+    "count": 1
+  },
+  {
+    "file": "relchain161-smoke.mjs",
+    "name": "⑥ shellcheck（本机无，CI 兜底）",
+    "count": 1
+  },
+  {
+    "file": "relchain161-smoke.mjs",
+    "name": "⑥b C locale 分支拒执行（Windows 无 bash，跳过）",
+    "count": 1
+  },
+  {
+    "file": "relchain161-smoke.mjs",
+    "name": "⑥b C locale 干跑（Windows 无 bash，跳过）",
+    "count": 1
+  },
+  {
+    "file": "settings-smoke.mjs",
+    "name": "存储：文件权限（win 无 0600 语义——结构占位）",
+    "count": 1
+  },
+  {
+    "file": "share168-smoke.mjs",
+    "name": "① mutate 包里无 result（win 路径形态差异——结构占位）",
+    "count": 1
+  },
+  {
+    "file": "share168-smoke.mjs",
+    "name": "⑦ mutate 重放要 --yes（win 路径形态差异——结构占位）",
+    "count": 1
+  },
+  {
+    "file": "smokeinst343-smoke.mjs",
+    "name": "① panelsmoke 本地全绿（7 断言）",
+    "count": 1
+  },
+  {
+    "file": "smokeinst343-smoke.mjs",
+    "name": "④ hook 逻辑载体（占位——.git/hooks 不入 CI，见 ③ 独立执行）",
+    "count": 1
+  },
+  {
+    "file": "timers138-smoke.mjs",
+    "name": "⑦ 现在跑一次（run 无任务时建了再跑或报错）",
+    "count": 1
+  },
+  {
+    "file": "welcome80-smoke.mjs",
+    "name": "⑦ MCP 探针（平台抖动降级——权威面见 mcp-smoke）",
+    "count": 1
+  }
+]
