@@ -4,6 +4,7 @@
 
 ### Added
 
+- where 多值 OR（筛选表达力补完——错误行想同时看 error+warn 不用两次查询）：read/stats/MCP 三面的 where 全部支持多值（「level=error,warn」逗号分隔任一匹配——Set 化比较）；单值行为不变（向后兼容——单值是多值特例）；data-pipelines.md 更新多值语法示例；readwhere360 5 断言（+error,warn → rows=3）/ statswhere366 6 断言（+info,error=全表 count=4）/ mcpstatstool346 8 断言（builtinStats 掩码同步）；基线 3578→3580。
 （下一版攒着）
 
 ## [4.86.0] - 2026-11-22

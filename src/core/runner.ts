@@ -1224,7 +1224,9 @@ async function runChainAction(
         }
         // 原地对每列按 where 条件裁行（索引基于原始全表——wtarget.values 未动）
         for (const c of filtered) {
-          c.values = c.values.filter((_, i2) => String(wtarget.values[i2]) === wval);
+          // 378①：多值 OR（level=error,warn 任一匹配）
+          const wsetR = new Set(String(wval).split(',').map((x) => x.trim()).filter(Boolean));
+          c.values = c.values.filter((_, i2) => wsetR.has(String(wtarget.values[i2])));
         }
       }
       // 358①②：columns 投影（逗号分隔——只输出指定列，列序按参数序；列不存在报错）
@@ -1300,7 +1302,9 @@ async function runChainAction(
           data: zcS.data ?? '',
         };
         const wvals = importZW(zcW).find((c2) => c2.name === wcol)?.values ?? [];
-        whereMask = wvals.map((v) => String(v) === wval);
+        // 378①：多值 OR（逗号分隔任一匹配——level=error,warn）
+        const wset = new Set(wval.split(',').map((x) => x.trim()).filter(Boolean));
+        whereMask = wvals.map((v) => wset.has(String(v)));
       }
       if (zcS.format !== 'zerocol' || !Array.isArray(zcS.columns)) {
         return fail('chain-read-bad-format', `${label} 不是 zerocol 文件`);
@@ -1693,7 +1697,9 @@ export async function builtinStats(args: { file: string; column: string; ops: st
     }
     const { importZeroCol: importZW } = await import('./arrowIpc.ts');
     const wvals = importZW({ format: 'zerocol', formatVersion: 1, createdAt: '', checksum: '', columns: (raw.columns ?? []).map((c) => ({ ...c, type: c.type as 'string' | 'int' | 'double' })), data: raw.data ?? '' }).find((c2) => c2.name === wcol)?.values ?? [];
-    mask = wvals.map((v) => String(v) === wval);
+    // 378③：多值 OR（MCP 面同步）
+    const wsetB = new Set(String(wval).split(',').map((x) => x.trim()).filter(Boolean));
+    mask = wvals.map((v) => wsetB.has(String(v)));
   }
   const statsOut: Record<string, unknown> = {};
   if (target.type === 'string') {

@@ -44,6 +44,19 @@ as  = "s"
 params = { file = "mix", columns = "ms,level", ops = "avg,count,top", where = "level=error" }
 
 [[action]]
+id = "orw"
+title = "o"
+description = "o"
+type = "chain"
+risk = "read"
+template = "avg={o.data.stats.ms.avg} count={o.data.stats.ms.count}"
+
+[[action.step]]
+use = "builtin.zerocol-stats"
+as  = "o"
+params = { file = "mix", columns = "ms", ops = "avg,count", where = "level=info,error" }
+
+[[action]]
 id = "plain"
 title = "p"
 description = "p"
@@ -75,6 +88,8 @@ const r1 = run(['run', 'sw.erravg']);
 // error 行 ms=500,900 → avg=700；count=2；level top=error（筛选后只有 error）
 check('①② where 筛选统计（avg=700 count=2 top=error）', r1.status === 0 && (r1.stdout + '').includes('avg=700') && (r1.stdout + '').includes('count=2') && (r1.stdout + '').includes('top=error'), (r1.stdout + r1.stderr).slice(0, 120));
 check('369①② _where 摘要可引用（w=level=error）', r1.status === 0 && (r1.stdout + '').includes('w=level=error'), (r1.stdout + r1.stderr).slice(0, 120));
+const ro = run(['run', 'sw.orw']);
+check('378② stats where 多值 OR（info,error=全表 avg=357.5 count=4）', ro.status === 0 && (ro.stdout + '').includes('count=4'), (ro.stdout + ro.stderr).slice(0, 90));
 const r2 = run(['run', 'sw.plain']);
 check('④ 无 where 行为不变（count=4 全表 + 无 _where 泄漏——向后兼容）', r2.status === 0 && (r2.stdout + '').includes('count=4') && !(r2.stdout + '').includes('level=error'), (r2.stdout + r2.stderr).slice(0, 120));
 const r3 = run(['run', 'sw.bad']);
