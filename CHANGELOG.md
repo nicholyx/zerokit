@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [4.82.0] - 2026-11-22
+
+### Added
+
 - v4.80.0 里程碑（第 80 个 minor——数据面收束盘点）：v4-outlook「80 版本里程碑」节——十轮分层（数据四件套 358/359/360/361/366/369×6 / UI 消费 365×1 / 维护+发布 362-364/367/368×4）；**数据面能力矩阵定稿**（read columns·where / export rename / stats window·median·p90·where·_where / 全家族 rows——8 行参数全景 + CLI --tail 与 UI 窗口切换三端同构标注）；路线图三审（v5.0.0 三候选二十余轮无真实诉求——「维护节奏是稳态」终审确认）；健康快照刷新（205 文件/3571 级/370 轮标记）；v4snap323 与 v60milestone348 历史断言对齐（快照数字与断言解耦判据延续——历史断言锚 outlook 量化节不变文本）；v80milestone370 4 断言；基线 3571→3575。
 - stats _where 摘要（366 的可追溯补完——统计结果自带筛选条件）：带 where 的统计输出 data.stats._where（筛选条件原文）；模板 {s.data.stats._where} 可引用（消费端拿到 avg=700 知道是 error 行不是全表）；单数/复数形态都带；无 where 不输出该字段（向后兼容——模板引用不存在字段会炸的严格语义反而保证了误用即发现）；data-pipelines.md 补「筛选可追溯」说明；statswhere366 5 断言（+_where 引用 w=level=error / 无 where 无泄漏）；基线 3570→3571。
 （下一版攒着）
@@ -100,12 +106,5 @@
 ### Added
 
 - UI 首页使用信号卡片（信号第三面——双信号可视化收口）：dashboard tiles 下加「使用信号」卡片——左安装 top（🔥N 插件名）/ 右执行 top（×N 动作名 + 败次数）双列 grid；空态引导（「装一个插件/跑一次动作后这里会有数据」）；执行项点击跳动作详情（fetch /api/plugins 找 plugin+action 对调 openDetail——无缓存依赖，已卸载静默留原地）；30s 自动刷新 + 离开面板 clearInterval；顺带补 95 轮判据（td 空占位 ps-empty 也带 role=status——polish95 抓出）；6 条中文 whitelist 登记；dashsignal326 5 断言（双列/空态/跳转/刷新/双端点联测——安装 1 + 执行 gen×3 卡片可渲染）；基线 3469→3474。信号三面齐：写（306/审计）→ API（324/325）→ UI（326）。
-（下一版攒着）
-
-## [4.37.0] - 2026-11-20
-
-### Added
-
-- 动作执行热度 Top（信号第二面——「装了」不等于「在用」）：zkit stats --top N 参数化（92 轮「最常用」行升级，1-20 条；成功/失败分列已在耗时表）；doctor signal 扩展 executions 维度（总次数 + topAction「gen×3」形态）+ 人读行升级「使用信号：安装侧 · 执行 N 次（最常用 X）」；**修 signal 块单 try 绑架坑**（market-stats 缺失时 JSON.parse 抛错把执行数也归零——拆独立 try，实测坑）；GET /api/stats/top-actions?n=（UI 可消费；白名单+openapi；含 count/fail 分列）；topactions325 3 断言（stats --top 2 gen×3 排首 / doctor executions+topAction / 端点 total=4 top[0] count=3）；基线 3466→3469。
 （下一版攒着）
 
