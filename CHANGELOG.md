@@ -14,6 +14,7 @@
 
 ### Fixed
 
+- 抖动第五源修复（flaky-stats 样本 15 run / 1 失败——b98d562 归因）：bcastfilter298 的 demochain 广播被**默认节流 2000ms** 丢弃——测试等 2600ms 后发第二次 tool-call，CI 慢机实际间隔可缩到 <2000ms → B 永远收不到（397 四源清单外的**跨请求节流竞态**）；节流余量 2600→3200ms（>2000 窗口 +50%）；platform-pitfalls 四源清单升级**五源**（标题与表格同步）。
 - .zerokit-source.json 漂移治理（404 收尾线索深查出的存量红线违规）：`plugins/quick/.zerokit-source.json` 自 119 轮入库——**HEAD 版本含本机绝对路径 `/Users/liangyuxiang/...`**（「不提交本机路径」一票否决红线，guard146 只查 Markdown 没查入库 JSON，存量漏网）；且 `type:dev/path/installedAt` 全是本机安装现场（scaffold README 自己都建议加 .gitignore——quick 当初漏了）。修复：从 git 移除（保留本地）+ `.gitignore` 加 `plugins/*/.zerokit-source.json`；**guard146 红线扩到入库 JSON**（`git ls-files *.json` 扫 `/Users/` `D:` `C:\` 一票否决——自测 staged 一个含路径的 evil JSON 被当场拦下 exit=1，清理后恢复）；guard146-smoke +2 断言（红线扩 JSON / gitignore 兜底），顺带把补断言时自己差点写出的 `|| true` 恒真改成 node --check 真语法断言——401 护栏自查通过；基线 3602→3605。
 
 ## [5.4.0] - 2026-11-23
