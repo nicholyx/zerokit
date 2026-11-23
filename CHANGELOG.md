@@ -6,6 +6,12 @@
 
 （下一版攒着）
 
+## [5.12.1] - 2026-11-24
+
+### Added
+
+（下一版攒着）
+
 ### Changed
 
 
@@ -123,12 +129,5 @@
 - main CI 抖动治理（4/40 失败率≈10% 全量归因——每类靠重跑绕过从未系统处理）：**四源清单**——①CDP 冷启动/残例竞态（341/342/363/387 已修）②stdio 探针竞速（373 已修）③退出码时序（383 已修）④**纯函数/过滤时间预算**（本轮：perf-guard 重测取较优 + load 3 次采样中位豁免；extras filterRows 失败重试一次——**真退化两次都超仍硬失败**，重试只救环境不救代码）；「先重试再降级」通用判据 + 「权威面永不降级」边界落 platform-pitfalls「CI 抖动四源清单」节；perf-guard load 单点改 3 次中位（runner 调度尖峰漏判豁免修复）。
 ### Added
 
-（下一版攒着）
-
-## [5.1.0] - 2026-11-23
-
-### Added
-
-- stats distinct 基数统计（去重计数——error code 有几种、user 有几个的多样性语义）：ops 加 distinct（该列不同值个数——数值与 string 列都支持）；白名单同步（355 判据）；**与 where/window 组合**（筛选/窗口内基数——distinct 在 vals 生效后计算）；string 列 gate 放行（distinct 与 top/count 同列合法）；data-pipelines.md 补基数统计示例；statsdistinct394 3 断言（code 3 种/ms 4 种/window=3 内 3 种）；基线 3594→3597。
 （下一版攒着）
 
