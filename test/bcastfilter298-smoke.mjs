@@ -47,7 +47,9 @@ await new Promise((r) => setTimeout(r, 900));
 check('③ sysinfo 被过滤（B 不收 tool-call）', !(bText.includes('sysinfo__overview')) || !bText.includes('tool-call'), `bText=${bText.slice(0, 100)}`);
 
 // A 再调 demochain（B 应收）——等节流窗口过后发，收流用轮询（Windows 时序余量）
-await new Promise((r) => setTimeout(r, 2600));
+// 408：2600→3200ms——默认节流 2000ms，CI 慢机上两次请求间隔实测可缩到 <2000ms
+// （b98d562 run：demochain 广播被节流丢弃，B 永远收不到 → hit=false 偶发）
+await new Promise((r) => setTimeout(r, 3200));
 await fetch(BASE, { method: 'POST', headers: { ...H, 'mcp-session-id': A.sid }, body: JSON.stringify({ jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'demochain__gen', arguments: {} } }) });
 let hit = false;
 for (let i = 0; i < 20; i++) {
