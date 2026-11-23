@@ -24,7 +24,7 @@ const src = readFileSync(SH, 'utf8');
 }
 // ③ 事故判据固化
 {
-  check('③ CI-FAIL 即停（v1.59.1 事故）', /if \[\[ "\$f" -gt 0 \]\]/.test(src) && src.includes('绝不继续'));
+  check('③ CI-FAIL 即停（v1.59.1 事故——423 起 abandoned 容忍后仍硬失败于非 abandoned）', /if \[\[ "\$f" -gt "\$fa" \]\]/.test(src) && src.includes('绝不继续') && src.includes("grep -v abandoned"));
   check('③ merge 复核（state=MERGED）', src.includes('--json state --jq .state'));
   check('③ tag 双确认', src.includes('git cat-file -t "$SHA"') && src.includes('ls-remote --tags origin "v$VER"'));
   check('③ tag 幂等保护（已存在即拒）', src.includes('远端已存在'));
