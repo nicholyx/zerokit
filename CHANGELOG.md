@@ -4,6 +4,12 @@
 
 ### Added
 
+（下一版攒着）
+
+## [5.4.0] - 2026-11-23
+
+### Added
+
 - 抖动治理数据验收基建（400 复盘「后续三条」之二落地）：scripts/flaky-stats.mjs 统计口径固化——**严格按 createdAt 切分**（本轮实证人工按行序 awk 切分会误判：gh run list 只保证整体倒序，锚点 commit 不在窗口内就整段算错——第一遍把 397 之前的 4 个失败误算成「之后」，时间戳切分纠正为 397 后 8 run 零失败）；基线落盘 platform-pitfalls：**治理前 106 run / 9 失败 = 8.5%**，治理后 8 run / 0 失败（样本不足不终判）；待办标记——满 40 run 后重跑终判，<3% 才算压降证实，未达标回四源清单找第五源。
 （下一版攒着）
 
@@ -96,15 +102,5 @@
 - zerocol-export rename（写侧列改名——与 358 读侧投影对称）：export params 加 rename（「旧名:新名」逗号分隔多条；旧名不存在忽略该条）；rename 后下游 stats/read 按新名引用（列元数据一致）；无 rename 行为不变（向后兼容）；data-pipelines.md 补写侧改名示例（与 358 读侧投影并列成对）；exportrename359 4 断言（改名生效/数据集列名/无 rename 兼容/幂等）；基线 3551→3555。
 - zerocol-read columns 投影（读侧列裁剪——宽表只看部分列时输出与心智负担都小）：read params 加 columns（逗号分隔，只输出指定列，**列序按参数序**）；列不存在报错与 stats 同文案（「列 x 不存在（有：…）」）；无 columns 时行为不变（全列——向后兼容）；stdout 附「投影自 N」提示；data-pipelines.md 补读侧投影示例；readproj358 4 断言（投影 _columns=2/无 columns 全列 3/列不存在报错/列序按参数）；基线 3547→3551。
 - 协作操作可追溯（mcp-sessions 快照含 ops 日志——filters/unlock 留痕）：mcp serve 加 opsLog 环形数组（最近 20 条 { ts, op, target }）；POST /mcp/sessions/filters 与 /unlock 成功时记入（404 失败不记——只有真实生效的操作留痕）；快照透传 ops[]（倒序——最新在前）；协作面板「最近操作」段（时间/操作/目标三列表格）；collaboration.md 补「操作可追溯」节；mcpops356 3 断言（404 不记/404 filters/快照可读）；基线 3544→3547。
-（下一版攒着）
-
-## [4.59.0] - 2026-11-21
-
-### Added
-
-- watch 面板数据集行数展示（351 rows 恒全表的 UI 消费端——监控语义完善）：有 chain 的监控条目行「N 次采样」旁加「· 数据集 M 行」（M=lastChainRun.stats 各列 count 取 max——无 window 时即全表行数；无 chain 条目保持原形态）；liveRefresh 与首渲两处同构（352 判据：动态字段与首渲不分裂）；dashsignal326 CDP 卡片等待改「轮询元素出现」（boot 慢时固定 sleep 不够——偶发 NO-EL 根修）；panelsmoke341 +2 断言（CDP 路径 + 降级路径各一）；基线 3543→3544。
-- stats rows 恒全表（监控语义完善——总行数跨形态统一）：`{s.data.rows}` 恒为全表行数——复数形态此前恒 0（rows 只在单数分支赋值）、string 列分支不计行——修为**三形态统一**（单数/复数/string 均更新 rows=Max(当前, 列全表行数)；window 只裁 vals 不影响 rows）；MCP zerokit_stats 的 rows 返回同步统一；模板示例入 data-pipelines.md（`{s.data.rows}` 用法）；statstop345 6 断言（+rows 复数形态=6）+ mcpstatstool346 5 断言（+rows:3）；基线 3541→3543。
-- 文档巡检第二季（331 先例延续——341-349 十轮积累后的全面体检）：①内链校验（docs/ 全部相对链接存在性——0 失效）；②**i18n whitelist 正则级审计**（1469 行逐行 re.compile 全仓试配——**真死 81 行清除**，1392 行保留；无-match 行用「去转义字面量子串」二次确认防误杀）；③平台判据落盘复核（341-349 新增 8 条全落盘——CDP 五条已有，**补「配置同步/工具面」四条**：restoreWatches 只写不读/恢复条目翻页误杀/ops 白名单与功能脱节/typecheck 假绿）；④活文档过时计数扫描（0 处——50/60 里程碑历史节保留）；docaudit350 4 断言；基线 3537→3541。
-- v4.60.0 里程碑（第 60 个 minor——第二次整数关口）：v4-outlook「60 版本里程碑」节——十轮分层（烟测制度 341-343×3 / 数据消费 344-346×3 / 维护节奏 338-340+347×4）；**信号面五层全景定稿表**（写侧 306 / API 324-325 / UI 326+336 / 导航 327 / MCP 346——写→存→查→看→跳闭环全同源）；量化（断言→3533、文件→197、minor 60；烟测体系从无到有；判据遗产新增 ops 白名单同步/typecheck 本地化/CDP host 校验/降级一致性）；路线图复核（v5.0.0 三候选十轮内无真实诉求——「稳态不是等待态」再确认）；健康快照刷新（197 文件/3533 级/主题分布新值/348 轮标记）；v4snap323 与 v50milestone337 断言随刷新对齐（337 历史断言改锚 outlook 量化节不变文本——快照数字与断言解耦的 335 判据延续）；v60milestone348 4 断言；基线 3533→3537。
 （下一版攒着）
 
