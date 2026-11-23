@@ -6,6 +6,12 @@
 
 （下一版攒着）
 
+## [5.12.0] - 2026-11-24
+
+### Added
+
+（下一版攒着）
+
 ### Changed
 
 - CI 并发取消策略评估落地（422 归因的第六源——实为消抖特性非缺陷）：ci.yml 已有 concurrency（group=ref, cancel-in-progress），abandoned 语义即「过时 run 被取消」；**消费侧修正**——release-chain.sh 的 poll 把 abandoned 视为过时继续轮询（真正的 fail 仍硬失败，v1.59.1 防线不变），CI 总览不再因消抖误报 CI-FAIL；六源清单升级（第六源标记为「消抖特性」）+ 判据落 platform-pitfalls。
@@ -114,14 +120,5 @@
 ### Added
 
 - stats distinct 基数统计（去重计数——error code 有几种、user 有几个的多样性语义）：ops 加 distinct（该列不同值个数——数值与 string 列都支持）；白名单同步（355 判据）；**与 where/window 组合**（筛选/窗口内基数——distinct 在 vals 生效后计算）；string 列 gate 放行（distinct 与 top/count 同列合法）；data-pipelines.md 补基数统计示例；statsdistinct394 3 断言（code 3 种/ms 4 种/window=3 内 3 种）；基线 3594→3597。
-（下一版攒着）
-
-## [5.0.0] - 2026-11-22
-
-> **v5.0.0 = 版本号自然进位（v4.99 之后），非路线图「v5 大改」**——发布链不变、无破坏性变更；路线图 v5 主题（opt-in 上报 / DSL 进阶 / 桌面启用）继续等真实诉求触发。
-
-### Added
-
-- read limit 取头 N 行（读侧四轴补完——「最近 5 条」语义直达）：read params 加 limit（正整数——**where/sort 之后**截取头 N 行；_rows 为截断后行数）；与 sort desc 组合（「最近 5 条」= sort ts:desc + limit 5 直达——此前要在模板层切片）；无 limit 行为不变（向后兼容）；data-pipelines.md 补取头 N 行示例；readlimit390 3 断言（desc+limit 首行=500 rows=2/全表兼容/asc+limit）；基线 3591→3594。
 （下一版攒着）
 
