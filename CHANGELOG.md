@@ -6,6 +6,12 @@
 
 （下一版攒着）
 
+## [5.7.0] - 2026-11-23
+
+### Added
+
+（下一版攒着）
+
 ### Fixed
 
 - 入库现场残留审计（405 红线治理的全仓复核——git ls-files 扫 /Users/liangyuxiang、installedAt、D:\ 全量）：命中全部为合法引用（代码逻辑运行时写入落用户数据目录/帮助文案里的 Windows 示例路径/判据文档事故记录），**真违规 0 处**；405 的 guard146 红线扩入库 JSON 保持现状（按字符串值开头判定不误伤帮助文案）；.zerokit-source.json 已 gitignore 兜底——本机现场残留清零，审计结论落 platform-pitfalls。
@@ -102,13 +108,5 @@
 ### Added
 
 - MCP zerokit_stats 加 where/window 参数（366/320 语义对 AI 客户端开放——工具面与链路内建步完全同构）：inputSchema 加 where（「列=值」筛选统计）与 window（最近 N 行——先 where 后 window）；builtinStats 支持掩码+窗口（数值列与 string 列同步筛）；CLI cmdTools 元数据同步（331 同源判据——两处 schema 一致）；mcpstatstool346 8 断言（+where avg=500/+window=1/+schema 含新参）；基线 3575→3578。
-（下一版攒着）
-
-## [4.82.0] - 2026-11-22
-
-### Added
-
-- v4.80.0 里程碑（第 80 个 minor——数据面收束盘点）：v4-outlook「80 版本里程碑」节——十轮分层（数据四件套 358/359/360/361/366/369×6 / UI 消费 365×1 / 维护+发布 362-364/367/368×4）；**数据面能力矩阵定稿**（read columns·where / export rename / stats window·median·p90·where·_where / 全家族 rows——8 行参数全景 + CLI --tail 与 UI 窗口切换三端同构标注）；路线图三审（v5.0.0 三候选二十余轮无真实诉求——「维护节奏是稳态」终审确认）；健康快照刷新（205 文件/3571 级/370 轮标记）；v4snap323 与 v60milestone348 历史断言对齐（快照数字与断言解耦判据延续——历史断言锚 outlook 量化节不变文本）；v80milestone370 4 断言；基线 3571→3575。
-- stats _where 摘要（366 的可追溯补完——统计结果自带筛选条件）：带 where 的统计输出 data.stats._where（筛选条件原文）；模板 {s.data.stats._where} 可引用（消费端拿到 avg=700 知道是 error 行不是全表）；单数/复数形态都带；无 where 不输出该字段（向后兼容——模板引用不存在字段会炸的严格语义反而保证了误用即发现）；data-pipelines.md 补「筛选可追溯」说明；statswhere366 5 断言（+_where 引用 w=level=error / 无 where 无泄漏）；基线 3570→3571。
 （下一版攒着）
 
