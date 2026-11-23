@@ -54,7 +54,7 @@
 |---|---|---|---|
 | **Fixed 段正则取全文第一个** | 写 Fixed 条目时 `re.search(r'### Fixed\n\n')` 匹配到**已发布版本**的 Fixed 段——条目静默插进旧版本 | 写 Unreleased 条目前先 `s.find('[Unreleased]')`，锚点行号必须 > Unreleased 行号且 < 下一个 `\n## [`；或者直接先定位 Unreleased 段再段内找段头 | 405（308 同款复发） |
 
-## CI 抖动五源清单（397 归因四源 + 408 补第五源）
+## CI 抖动六源清单（397 归因四源 + 408 第五源 + 422 第六源——第六源实为消抖特性非缺陷）
 
 | 抖动源 | 表现 | 对策 | 战役 |
 |---|---|---|---|
@@ -63,6 +63,7 @@
 | **退出码时序** | diag83「SIGKILL 语义」process.exit(137) 抖动 | 断言失败重试一次 | 383 |
 | **纯函数/过滤时间预算** | perf-guard「filterRows ×5 <10ms」、extras「10k AND <50ms」在 runner 高载时误伤 | 失败时重测取较优 + load 3 次采样中位豁免；**真退化（两次都超）仍硬失败** | 397 |
 | **跨请求节流竞态** | bcastfilter298：两次 tool-call 间隔测试等 2600ms，CI 慢机实际间隔可缩到 <2000ms（默认节流窗）→ demochain 广播被丢弃、B 永远收不到 | 节流相关测试的等待 > 窗口 +50% 余量（2600→3200ms） | 408 |
+| **并发 run 互相取消（abandoned）** | release merge 后同时触发 chore 分支 CI 与 main CI，chore 的 R_TEST 被 main 新 run 抢占而 abandoned → CI 总览判 fail | **结论：这不是缺陷——concurrency 消抖本来就该取消过时 run**。对策在消费侧：release-chain.sh 的 poll 把 abandoned（pass 计数不增）视为过时而继续轮询 main 的 run，而非报 CI-FAIL | 422 |
 
 ### 入库现场残留审计（412 轮——405 红线治理的全仓复核）
 
