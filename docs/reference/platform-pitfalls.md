@@ -48,6 +48,12 @@
 | **ops 白名单与功能脱节** | stats ops 加 "top" 但白名单过滤没同步——opsHasTop 恒 false，新功能静默走旧报错 | **ops 白名单必须与功能同步扩展**；新 op 加白名单才算落地 | 345 |
 | **typecheck 假绿** | `npm run typecheck` 在 node_modules 无 typescript bin 时静默通过（command not found 但 exit 0） | 本地跑之前先 `npm install --no-save typescript`；CI typecheck job 才是真防线 | 345/347 |
 
+## CHANGELOG 锚点误插（405 轮事故——308 老坑复发）
+
+| 坑 | 表现 | 对策 | 战役 |
+|---|---|---|---|
+| **Fixed 段正则取全文第一个** | 写 Fixed 条目时 `re.search(r'### Fixed\n\n')` 匹配到**已发布版本**的 Fixed 段——条目静默插进旧版本 | 写 Unreleased 条目前先 `s.find('[Unreleased]')`，锚点行号必须 > Unreleased 行号且 < 下一个 `\n## [`；或者直接先定位 Unreleased 段再段内找段头 | 405（308 同款复发） |
+
 ## CI 抖动四源清单（397 轮归因——main CI 4/40 失败率的全部来源）
 
 | 抖动源 | 表现 | 对策 | 战役 |
