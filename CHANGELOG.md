@@ -6,6 +6,10 @@
 
 （下一版攒着）
 
+### Changed
+
+- 抖动治理终判口径固化（39 run / 代码面 2.6%）：flaky-stats **内置平台面剔分**（非 success 的非聚合 job 全 cancelled → 平台面；聚合 job「CI 总览」排除——它会被子 job 连带判 failure）；当前分类：b98d562=第五源已修（408 修复后代码面 0 失败）、33d4998=平台面 cancelled（三 attempt 日志 blob 不存在=从未启动，rerun 无效——**不要无限 rerun**，下一 commit 的 run 做健康证据）；终判线改为**代码面 <3%**（当前 2.6% ✓，差 1 run 满 40 出正式终判）。
+
 ## [5.12.0] - 2026-11-24
 
 ### Added
