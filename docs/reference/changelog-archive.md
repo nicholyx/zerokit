@@ -2,6 +2,17 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [4.72.0] - 2026-11-22
+
+### Added
+
+- stats median/p90 分位数（监控尾部语义——avg 被长尾拉高，P90 才是 SLA 语义）：ops 加 median（偶数行取中间两值平均）与 p90（90 分位线性插值）；**白名单同步**（355 判据兑现——白名单与功能同 commit）；window 组合正常（最近 N 行的分位）；309 的「非法 ops」断言样例 median→bogus（median 现已合法——旧断言用真非法值）；data-pipelines.md 补分位数示例；statstop345 7 断言（+median=3/p90）；基线 3559→3560。
+- zerocol-read where 行过滤（读侧行筛选——与 358 列投影组成完整读侧投影面）：read params 加 where（「列=值」单条件字符串精确匹配；列不存在报错与 stats 同文案）；筛选后 _rows 为匹配行数、_all 只含匹配行；**与 columns 可组合（先 where 后投影——错误行只看 msg 一眼可查）**；无 where 行为不变（全表——向后兼容）；审查期修掉双重过滤 bug（原地过滤后 map 再过滤一次会索引错位）；data-pipelines.md 补行筛选示例；readwhere360 4 断言（筛选 rows=2/组合/全表兼容/列不存在）；基线 3555→3559。
+- zerocol-export rename（写侧列改名——与 358 读侧投影对称）：export params 加 rename（「旧名:新名」逗号分隔多条；旧名不存在忽略该条）；rename 后下游 stats/read 按新名引用（列元数据一致）；无 rename 行为不变（向后兼容）；data-pipelines.md 补写侧改名示例（与 358 读侧投影并列成对）；exportrename359 4 断言（改名生效/数据集列名/无 rename 兼容/幂等）；基线 3551→3555。
+- zerocol-read columns 投影（读侧列裁剪——宽表只看部分列时输出与心智负担都小）：read params 加 columns（逗号分隔，只输出指定列，**列序按参数序**）；列不存在报错与 stats 同文案（「列 x 不存在（有：…）」）；无 columns 时行为不变（全列——向后兼容）；stdout 附「投影自 N」提示；data-pipelines.md 补读侧投影示例；readproj358 4 断言（投影 _columns=2/无 columns 全列 3/列不存在报错/列序按参数）；基线 3547→3551。
+- 协作操作可追溯（mcp-sessions 快照含 ops 日志——filters/unlock 留痕）：mcp serve 加 opsLog 环形数组（最近 20 条 { ts, op, target }）；POST /mcp/sessions/filters 与 /unlock 成功时记入（404 失败不记——只有真实生效的操作留痕）；快照透传 ops[]（倒序——最新在前）；协作面板「最近操作」段（时间/操作/目标三列表格）；collaboration.md 补「操作可追溯」节；mcpops356 3 断言（404 不记/404 filters/快照可读）；基线 3544→3547。
+（下一版攒着）
+
 ## [4.59.0] - 2026-11-21
 
 ### Added
