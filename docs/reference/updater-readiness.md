@@ -38,6 +38,14 @@ v4.40.0 aarch64.dmg 实测（macOS arm64 本机）：
 | MacOS 二进制 | ✅ Mach-O 64-bit arm64 |
 | 卸载清理 | ✅ detach + /tmp 清理 |
 
+### 闭环验证：v5.6.0（第四百一十轮，2026-11-23——验收/工具发布轮）
+
+| 检查项 | 结果 |
+|---|---|
+| sha256 与 release digest | ✅ （两侧一致，release download 二次重试成功——assets 端点偶发 i/o timeout 与此前一致） |
+| Info.plist | ✅ 5.6.0 |
+| 包内对照 | 408/409 全为 test/ + scripts/ 改动——资源面预期无 diff（runner.ts 同构核对 ✓，399 语义） |
+
 ### 闭环验证：v5.5.0（第四百零七轮，2026-11-23——红线治理发布轮）
 
 | 检查项 | 结果 |
