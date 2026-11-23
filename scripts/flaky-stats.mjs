@@ -23,5 +23,22 @@ const sel = rows.filter((r) => (mode === 'after' ? r.createdAt >= cut : r.create
 const fails = sel.filter((r) => r.conclusion === 'failure');
 const rate = sel.length ? ((fails.length / sel.length) * 100).toFixed(1) : 'n/a';
 console.log(`${mode} ${cut}：${sel.length} 个 main run，失败 ${fails.length}（${rate}%）`);
-for (const f of fails) console.log(`  ✗ ${f.headSha.slice(0, 7)} ${f.createdAt} run ${f.databaseId}`);
+// 425：平台面剔分——run 判 failure 但其非 success 的 job 全是 cancelled = GitHub 平台面
+// （job 从未在 runner 启动，日志 blob 不存在），不是代码缺陷。终判看「代码面」失败率。
+const jobs = (id) => JSON.parse(execFileSync('gh', ['api', `repos/nicholyx/zerokit/actions/runs/${id}/jobs`], { encoding: 'utf8', env }));
+const platform = [];
+const code = [];
+for (const f of fails) {
+  let isPlatform = false;
+  try {
+    const js = jobs(f.databaseId).jobs ?? [];
+    // 排除聚合 job「CI 总览」——它被子 job 的 cancelled 连带判 failure，不代表代码缺陷
+    const notOk = js.filter((j) => j.conclusion !== 'success' && j.conclusion !== 'skipped' && !(j.name ?? '').includes('总览'));
+    isPlatform = notOk.length > 0 && notOk.every((j) => j.conclusion === 'cancelled');
+  } catch { /* jobs 拉不到按代码面计（保守） */ }
+  (isPlatform ? platform : code).push(f);
+  console.log(`  ✗ ${f.headSha.slice(0, 7)} ${f.createdAt} run ${f.databaseId}  [${isPlatform ? '平台面 cancelled' : '代码面'}]`);
+}
+const codeRate = sel.length ? ((code.length / sel.length) * 100).toFixed(1) : 'n/a';
+console.log(`  代码面失败 ${code.length}（${codeRate}%）· 平台面 cancelled ${platform.length}（不计入压降判定）`);
 if (mode === 'after' && sel.length < 40) console.log(`  （样本 ${sel.length} < 40——不足以终判，待积累）`);
