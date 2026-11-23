@@ -2,6 +2,15 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [5.0.0] - 2026-11-22
+
+> **v5.0.0 = 版本号自然进位（v4.99 之后），非路线图「v5 大改」**——发布链不变、无破坏性变更；路线图 v5 主题（opt-in 上报 / DSL 进阶 / 桌面启用）继续等真实诉求触发。
+
+### Added
+
+- read limit 取头 N 行（读侧四轴补完——「最近 5 条」语义直达）：read params 加 limit（正整数——**where/sort 之后**截取头 N 行；_rows 为截断后行数）；与 sort desc 组合（「最近 5 条」= sort ts:desc + limit 5 直达——此前要在模板层切片）；无 limit 行为不变（向后兼容）；data-pipelines.md 补取头 N 行示例；readlimit390 3 断言（desc+limit 首行=500 rows=2/全表兼容/asc+limit）；基线 3591→3594。
+（下一版攒着）
+
 ## [4.98.0] - 2026-11-22
 
 ### Added
