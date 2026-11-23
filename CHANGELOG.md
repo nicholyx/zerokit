@@ -6,6 +6,12 @@
 
 （下一版攒着）
 
+## [5.11.0] - 2026-11-23
+
+### Added
+
+（下一版攒着）
+
 ### Changed
 
 - 抖动治理进度更新（flaky-stats 样本 33 run / 1 失败 = 3.0%——正好贴 <3% 终判线，差 7 run 满 40；408 第五源修复后连续 0 失败）。
@@ -113,12 +119,5 @@
 ### Added
 
 - read limit 取头 N 行（读侧四轴补完——「最近 5 条」语义直达）：read params 加 limit（正整数——**where/sort 之后**截取头 N 行；_rows 为截断后行数）；与 sort desc 组合（「最近 5 条」= sort ts:desc + limit 5 直达——此前要在模板层切片）；无 limit 行为不变（向后兼容）；data-pipelines.md 补取头 N 行示例；readlimit390 3 断言（desc+limit 首行=500 rows=2/全表兼容/asc+limit）；基线 3591→3594。
-（下一版攒着）
-
-## [4.98.0] - 2026-11-22
-
-### Added
-
-- read sort 行序控制（读侧最后一块拼图——排序后首行语义由用户掌控）：read params 加 sort（「列名」升序 / 「列名:desc」降序；列不存在报错）；数值列按数值、string 列按字典序；**与 where/columns 组合（先 where 后 sort——筛选行内排序）**；排序后首行捷径 {r.data.列} 与 _all 同步重排；审查期抓掉行索引 bug（idx 误用列数组索引——两列时只排 [0,1]；改为行索引全排）；dashsignal326 boot 门控加固（readyState 轮询替代固定 4s——全量偶发 NO-EL 根修）；data-pipelines.md 补行序控制示例；readsort387 5 断言；基线 3586→3591。
 （下一版攒着）
 
