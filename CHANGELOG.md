@@ -6,6 +6,10 @@
 
 （下一版攒着）
 
+### Fixed
+
+- .zerokit-source.json 漂移治理（404 收尾线索深查出的存量红线违规）：`plugins/quick/.zerokit-source.json` 自 119 轮入库——**HEAD 版本含本机绝对路径 `/Users/liangyuxiang/...`**（「不提交本机路径」一票否决红线，guard146 只查 Markdown 没查入库 JSON，存量漏网）；且 `type:dev/path/installedAt` 全是本机安装现场（scaffold README 自己都建议加 .gitignore——quick 当初漏了）。修复：从 git 移除（保留本地）+ `.gitignore` 加 `plugins/*/.zerokit-source.json`；**guard146 红线扩到入库 JSON**（`git ls-files *.json` 扫 `/Users/` `D:` `C:\` 一票否决——自测 staged 一个含路径的 evil JSON 被当场拦下 exit=1，清理后恢复）；guard146-smoke +2 断言（红线扩 JSON / gitignore 兜底），顺带把补断言时自己差点写出的 `|| true` 恒真改成 node --check 真语法断言——401 护栏自查通过；基线 3602→3605。
+
 ## [5.4.0] - 2026-11-23
 
 ### Added
@@ -25,7 +29,6 @@
 
 ### Fixed
 
-- .zerokit-source.json 漂移治理（404 收尾线索深查出的存量红线违规）：`plugins/quick/.zerokit-source.json` 自 119 轮入库——**HEAD 版本含本机绝对路径 `/Users/liangyuxiang/...`**（「不提交本机路径」一票否决红线，guard146 只查 Markdown 没查入库 JSON，存量漏网）；且 `type:dev/path/installedAt` 全是本机安装现场（scaffold README 自己都建议加 .gitignore——quick 当初漏了）。修复：从 git 移除（保留本地）+ `.gitignore` 加 `plugins/*/.zerokit-source.json`；**guard146 红线扩到入库 JSON**（`git ls-files *.json` 扫 `/Users/` `D:` `C:\` 一票否决——自测 staged 一个含路径的 evil JSON 被当场拦下 exit=1，清理后恢复）；guard146-smoke +2 断言（红线扩 JSON / gitignore 兜底），顺带把补断言时自己差点写出的 `|| true` 恒真改成 node --check 真语法断言——401 护栏自查通过；基线 3602→3605。
 - 恒真断言清理（397 盘点的收尾——check(..., true) 29 处分类处置）：**4 处懒恒真补成真断言**——devweb86⑧（Caller 含 dev + dev caller 写 source:dev——原注释指向 audit.ts 有误，类型与写入点实在 runner.ts）、docs134⑧（self-referential 恒真改为实数本文件 check( 调用数）、selfcheck137⑦（起 ui 常驻命令超时后什么都没验→真验 SelfcheckResult 结构 pluginId/probe/ok/ms/at）、watch79⑥（ui --port 0 阻塞没验任何东西→源码断言 /api/watch GET+PUT 路由在契约面）；**2 处合法占位显式标注**（smokeinst343④ .git/hooks 不入 CI、panelsmoke341① 降级一致性同数——355 判据）；其余为合法平台占位（win 无 bash/无 Chrome/降级路径）不动。
 - main CI 抖动治理（4/40 失败率≈10% 全量归因——每类靠重跑绕过从未系统处理）：**四源清单**——①CDP 冷启动/残例竞态（341/342/363/387 已修）②stdio 探针竞速（373 已修）③退出码时序（383 已修）④**纯函数/过滤时间预算**（本轮：perf-guard 重测取较优 + load 3 次采样中位豁免；extras filterRows 失败重试一次——**真退化两次都超仍硬失败**，重试只救环境不救代码）；「先重试再降级」通用判据 + 「权威面永不降级」边界落 platform-pitfalls「CI 抖动四源清单」节；perf-guard load 单点改 3 次中位（runner 调度尖峰漏判豁免修复）。
 ### Added
