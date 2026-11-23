@@ -107,12 +107,14 @@ if (cl.includes(`## [${ver}] - `)) die(`版本 [${ver}] 的段已存在于 CHANG
 // Added 会把 Fixed 留在原地，落进新版本段外——自检计数 6≠3 就是这么来的）。
 // 第一百二十七轮修正：只要求 [Unreleased] 下有任意分类段且含条目——
 // 纯 Changed/Fixed 的轮次（维护轮）同样要能归档，不该被 Added 铁律挡住
-const mUnrel = /## \[Unreleased\]\n\n### (?:Added|Changed|Deprecated|Removed|Fixed|Security)\n\n(?:- [^\n]*\n)/.exec(cl);
-if (!mUnrel) die('[Unreleased] 段没有任何分类条目——没有可归档的内容，拒绝执行');
+// 407 修正：判定改为「Unreleased 段内任意分类段含条目」——原正则要求第一个分类段紧跟条目，
+// 当 Added 只有占位而条目在后面的 Fixed 段（406 修复锚点误插后的合法形态）会被误判「无可归档」。
 const unrelStart = cl.indexOf('## [Unreleased]');
 const unrelEndRaw = cl.indexOf('\n## [', unrelStart + 5);
 const unrelEnd = unrelEndRaw === -1 ? cl.length : unrelEndRaw;
 const unrelBody = cl.slice(unrelStart, unrelEnd);           // 含 ### Added 与后续 ### Fixed 等全部段
+const mUnrel = /### (?:Added|Changed|Deprecated|Removed|Fixed|Security)\n\n(?:- [^\n]*\n)/.exec(unrelBody);
+if (!mUnrel) die('[Unreleased] 段没有任何分类条目——没有可归档的内容，拒绝执行');
 const entryCount = (unrelBody.match(/^- /gm) || []).length;
 if (entryCount === 0) die('[Unreleased] 条目数为 0');
 const entries = unrelBody.replace(/^## \[Unreleased\]\n+/, '').replace(/\n+$/, '');
