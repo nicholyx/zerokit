@@ -6,6 +6,12 @@
 
 （下一版攒着）
 
+## [5.10.0] - 2026-11-23
+
+### Added
+
+（下一版攒着）
+
 ### Changed
 
 - 抖动治理进度更新（flaky-stats 样本 30 run / 1 失败 = 3.3%——逼近 <3% 终判线，差 10 run 满 40；408 第五源修复后连续 0 失败）。
@@ -110,12 +116,5 @@
 ### Added
 
 - read sort 行序控制（读侧最后一块拼图——排序后首行语义由用户掌控）：read params 加 sort（「列名」升序 / 「列名:desc」降序；列不存在报错）；数值列按数值、string 列按字典序；**与 where/columns 组合（先 where 后 sort——筛选行内排序）**；排序后首行捷径 {r.data.列} 与 _all 同步重排；审查期抓掉行索引 bug（idx 误用列数组索引——两列时只排 [0,1]；改为行索引全排）；dashsignal326 boot 门控加固（readyState 轮询替代固定 4s——全量偶发 NO-EL 根修）；data-pipelines.md 补行序控制示例；readsort387 5 断言；基线 3586→3591。
-（下一版攒着）
-
-## [4.95.0] - 2026-11-22
-
-### Added
-
-- export select 写侧选列（append 模式的列级追加——旧文件 10 列只追加 2 列，其余保留旧值）：export 加 select（逗号分隔列名——只写声明的这些列；**select 列不在 columns 声明中报错**）；append 合并语义：select 内的列追加新值，**旧文件多出的列整列保留旧值 + 新行 null 占位**；无 select 行为不变（向后兼容）；data-pipelines.md 补写侧选列示例（与 359 rename 并列）；exportselect384 3 断言（select append a=[1,2]/c 旧值保留/报错）；基线 3583→3586。
 （下一版攒着）
 
