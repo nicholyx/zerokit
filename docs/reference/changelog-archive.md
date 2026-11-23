@@ -2,6 +2,16 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [5.2.0] - 2026-11-23
+
+### Fixed
+
+- 恒真断言清理（397 盘点的收尾——check(..., true) 29 处分类处置）：**4 处懒恒真补成真断言**——devweb86⑧（Caller 含 dev + dev caller 写 source:dev——原注释指向 audit.ts 有误，类型与写入点实在 runner.ts）、docs134⑧（self-referential 恒真改为实数本文件 check( 调用数）、selfcheck137⑦（起 ui 常驻命令超时后什么都没验→真验 SelfcheckResult 结构 pluginId/probe/ok/ms/at）、watch79⑥（ui --port 0 阻塞没验任何东西→源码断言 /api/watch GET+PUT 路由在契约面）；**2 处合法占位显式标注**（smokeinst343④ .git/hooks 不入 CI、panelsmoke341① 降级一致性同数——355 判据）；其余为合法平台占位（win 无 bash/无 Chrome/降级路径）不动。
+- main CI 抖动治理（4/40 失败率≈10% 全量归因——每类靠重跑绕过从未系统处理）：**四源清单**——①CDP 冷启动/残例竞态（341/342/363/387 已修）②stdio 探针竞速（373 已修）③退出码时序（383 已修）④**纯函数/过滤时间预算**（本轮：perf-guard 重测取较优 + load 3 次采样中位豁免；extras filterRows 失败重试一次——**真退化两次都超仍硬失败**，重试只救环境不救代码）；「先重试再降级」通用判据 + 「权威面永不降级」边界落 platform-pitfalls「CI 抖动四源清单」节；perf-guard load 单点改 3 次中位（runner 调度尖峰漏判豁免修复）。
+### Added
+
+（下一版攒着）
+
 ## [5.1.0] - 2026-11-23
 
 ### Added
