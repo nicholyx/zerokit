@@ -65,14 +65,21 @@ const die = (msg) => { console.error(`FAIL  ${msg}`); bad = 1; };
   if (ov && sh) console.log(`OK    文档数字同步（${smokeFiles} 文件 / ${ov.asserts} 断言，两处一致）`);
 }
 
-// ---- ⑥ docs 绝对路径引用 ----
+// ---- ⑥ 绝对路径红线（docs Markdown + 入库 JSON——405 扩：.zerokit-source.json 带本机 path 入库是 119 轮起的存量违规）----
 {
   const docs = readdirSync(path.join(ROOT, 'docs'), { recursive: true }).filter((f) => String(f).endsWith('.md'));
   for (const f of docs) {
     const t = readFileSync(path.join(ROOT, 'docs', String(f)), 'utf8');
-    // ](/Users/... 或 ](D:/... 或 ](C:\（反斜杠形态）
     const abs = /\]\((\/(?:Users|home|private|tmp)\/|D:[\\/]|C:\\)[^)]*\)/.exec(t);
     if (abs) die(`${f}：引用了本机绝对路径 ${abs[0].slice(0, 60)}…（红线：不提交本机路径）`);
+  }
+  // 405②：入库 JSON（git ls-files 的 *.json）里出现 /Users/ /home/ D:\ C:\ 一票否决
+  const { execFileSync } = await import('node:child_process');
+  const tracked = execFileSync('git', ['ls-files', '*.json'], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
+  for (const f of tracked) {
+    let t = '';
+    try { t = readFileSync(path.join(ROOT, f), 'utf8'); } catch { continue; }
+    if (/"(?:\/(?:Users|home|private|tmp)\/|[A-Z]:[\\/])/.test(t)) die(`${f}：入库 JSON 含本机绝对路径（红线——安装来源记录等本机现场不入库）`);
   }
 }
 

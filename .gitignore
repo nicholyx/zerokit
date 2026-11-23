@@ -2,6 +2,8 @@ node_modules/
 /dist/
 *.log
 .zerokit/
+# 插件安装来源记录（本机现场——type/path/installedAt 都是安装时写入；scaffold README 模板同款建议）
+plugins/*/.zerokit-source.json
 # Tauri 构建产物
 apps/desktop/src-tauri/target/
 # 注意：apps/desktop/dist/ **不是**构建产物，是手写的「正在启动内核…」占位页，
