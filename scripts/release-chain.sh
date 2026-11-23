@@ -48,8 +48,12 @@ ci_poll_merge() { # ci_poll_merge <PR> —— 轮询 CI + merge + 复核
     f="$(echo "$out" | grep -cE '\bfail\b' || true)"
     p="$(echo "$out" | grep -cE 'pending' || true)"
     echo "  poll$i pass=$n fail=$f pending=$p"
-    if [[ "$f" -gt 0 ]]; then
-      echo "CI-FAIL（PR #${pr}）："; echo "$out" | grep fail | head -3
+    # 423：abandoned（被并发新 run 取消）不算失败——那是消抖在工作，
+    # 该 run 已过时，继续轮询后续（真正的 fail 仍硬失败，v1.59.1 事故防线不变）
+    local fa
+    fa="$(echo "$out" | grep -cE '\bfail\b.*abandoned|abandoned.*\bfail\b' || true)"
+    if [[ "$f" -gt "$fa" ]]; then
+      echo "CI-FAIL（PR #${pr}）："; echo "$out" | grep fail | grep -v abandoned | head -3
       return 1                      # CI-FAIL 绝不继续（v1.59.1 事故：fail 后 merge 循环空转、tag 打错提交）
     fi
     # 第一百七十二轮④：两条路径都判「绿」——12/12 全绿，或 11/12+MERGEABLE
