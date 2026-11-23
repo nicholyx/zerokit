@@ -6,6 +6,10 @@
 
 （下一版攒着）
 
+### Fixed
+
+- 入库现场残留审计（405 红线治理的全仓复核——git ls-files 扫 /Users/liangyuxiang、installedAt、D:\ 全量）：命中全部为合法引用（代码逻辑运行时写入落用户数据目录/帮助文案里的 Windows 示例路径/判据文档事故记录），**真违规 0 处**；405 的 guard146 红线扩入库 JSON 保持现状（按字符串值开头判定不误伤帮助文案）；.zerokit-source.json 已 gitignore 兜底——本机现场残留清零，审计结论落 platform-pitfalls。
+
 ## [5.6.0] - 2026-11-23
 
 ### Added

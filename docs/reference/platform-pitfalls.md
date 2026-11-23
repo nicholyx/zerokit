@@ -64,6 +64,10 @@
 | **纯函数/过滤时间预算** | perf-guard「filterRows ×5 <10ms」、extras「10k AND <50ms」在 runner 高载时误伤 | 失败时重测取较优 + load 3 次采样中位豁免；**真退化（两次都超）仍硬失败** | 397 |
 | **跨请求节流竞态** | bcastfilter298：两次 tool-call 间隔测试等 2600ms，CI 慢机实际间隔可缩到 <2000ms（默认节流窗）→ demochain 广播被丢弃、B 永远收不到 | 节流相关测试的等待 > 窗口 +50% 余量（2600→3200ms） | 408 |
 
+### 入库现场残留审计（412 轮——405 红线治理的全仓复核）
+
+全仓 `git ls-files` 扫 `/Users/liangyuxiang`、`installedAt`、`D:\`：命中全部为**合法引用**——代码里的安装现场逻辑（sources/registry/update 的 installedAt 运行时写入，落用户数据目录不入库）、文档/帮助文案里的 Windows 示例路径（filesearch 的 `D:\work,E:\downloads` 是教用户怎么填参数）、判据文档引用（CHANGELOG/dep-hygiene 的 405 事故记录）。**真违规 0 处**。405 的「guard146 红线扩入库 JSON」保持现状——它按「字符串值以 /Users 等开头」判定，不会误伤帮助文案；`.zerokit-source.json` 已 gitignore 兜底。结论：本机现场残留已清零，无新增处置。
+
 ### 数据验收（403 轮——统计口径固化）
 
 用 `node scripts/flaky-stats.mjs <ISO时间>` 统计（**严格按 createdAt 切分**——本轮实证：人工按行序 awk 切分会误判，`gh run list` 只保证整体倒序，锚点 commit 不在窗口内就整段算错；我第一遍把 397 之前的 4 个失败误算成「之后」）。
