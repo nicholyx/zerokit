@@ -88,5 +88,22 @@ console.log('guard146-smoke');
   check('⑩ lint.sh 接线 guard146', l.includes('guard146.mjs'));
 }
 
+// ⑪ 405：绝对路径红线扩到入库 JSON——.zerokit-source.json 带本机 path 入库是 119 轮起的存量违规
+{
+  const g = readFileSync(path.join(PKG_ROOT, 'scripts', 'guard146.mjs'), 'utf8');
+  check('⑪ 红线扩入库 JSON（git ls-files *.json 扫 /Users 等绝对路径）', g.includes("['ls-files', '*.json']") && g.includes('入库 JSON 含本机绝对路径'), '');
+  // 该文件已不入库（.gitignore 兜住本机现场）
+  const gi = readFileSync(path.join(PKG_ROOT, '.gitignore'), 'utf8');
+  check('⑪ .zerokit-source.json 不再入库（gitignore + 未跟踪）', gi.includes('plugins/*/.zerokit-source.json'), '');
+}
+// ⑫ .gitignore 判据自证：guard146 的 ⑥ 块是独立块（不破坏既有结构）
+{
+  const g = readFileSync(path.join(PKG_ROOT, 'scripts', 'guard146.mjs'), 'utf8');
+  // 真·语法断言：node --check 通过才是语法正确（花括号计数法在块内字符串含 { 时会误判，弃用）
+  let nc = -1;
+  try { nc = spawnSync(process.execPath, ['--check', path.join(PKG_ROOT, 'scripts', 'guard146.mjs')]).status; } catch { nc = -1; }
+  check('⑫ guard146 语法（node --check）', nc === 0, `exit=${nc}`);
+}
+
 console.log(`\n通过 ${pass} / ${pass + fail}`);
 process.exit(fail > 0 ? 1 : 0);
