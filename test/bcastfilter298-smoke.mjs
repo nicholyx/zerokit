@@ -49,7 +49,15 @@ check('③ sysinfo 被过滤（B 不收 tool-call）', !(bText.includes('sysinfo
 // A 再调 demochain（B 应收）——等节流窗口过后发，收流用轮询（Windows 时序余量）
 // 408：2600→3200ms——默认节流 2000ms，CI 慢机上两次请求间隔实测可缩到 <2000ms
 // （b98d562 run：demochain 广播被节流丢弃，B 永远收不到 → hit=false 偶发）
-await new Promise((r) => setTimeout(r, 3200));
+// 426：固定 sleep 的边界补全——节流窗从服务端第一次广播时刻起算，测试从发出起等；
+// Windows runner 上 sysinfo 处理可超 1200ms，3200 仍不够（PR #1265 Windows run 实证）。
+// 改为「等到第一次广播确已发生（filteredBroadcasts ≥1）再等满窗口」——不靠猜处理耗时。
+for (let i = 0; i < 40; i++) {
+  const snap = await fetch(`http://127.0.0.1:${PORT}/mcp/sessions`, { headers: { 'x-zerokit-token': TOKEN } }).then((r) => r.json()).catch(() => ({}));
+  if ((snap.filteredBroadcasts ?? 0) >= 1) break;
+  await new Promise((r) => setTimeout(r, 300));
+}
+await new Promise((r) => setTimeout(r, 2400));  // 节流窗 2000ms + 20% 余量（从广播时刻起算）
 await fetch(BASE, { method: 'POST', headers: { ...H, 'mcp-session-id': A.sid }, body: JSON.stringify({ jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'demochain__gen', arguments: {} } }) });
 let hit = false;
 for (let i = 0; i < 20; i++) {
