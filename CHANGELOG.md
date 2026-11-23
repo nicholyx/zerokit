@@ -6,6 +6,12 @@
 
 （下一版攒着）
 
+## [5.6.0] - 2026-11-23
+
+### Added
+
+（下一版攒着）
+
 
 
 ### Fixed
@@ -100,14 +106,5 @@
 
 - v4.80.0 里程碑（第 80 个 minor——数据面收束盘点）：v4-outlook「80 版本里程碑」节——十轮分层（数据四件套 358/359/360/361/366/369×6 / UI 消费 365×1 / 维护+发布 362-364/367/368×4）；**数据面能力矩阵定稿**（read columns·where / export rename / stats window·median·p90·where·_where / 全家族 rows——8 行参数全景 + CLI --tail 与 UI 窗口切换三端同构标注）；路线图三审（v5.0.0 三候选二十余轮无真实诉求——「维护节奏是稳态」终审确认）；健康快照刷新（205 文件/3571 级/370 轮标记）；v4snap323 与 v60milestone348 历史断言对齐（快照数字与断言解耦判据延续——历史断言锚 outlook 量化节不变文本）；v80milestone370 4 断言；基线 3571→3575。
 - stats _where 摘要（366 的可追溯补完——统计结果自带筛选条件）：带 where 的统计输出 data.stats._where（筛选条件原文）；模板 {s.data.stats._where} 可引用（消费端拿到 avg=700 知道是 error 行不是全表）；单数/复数形态都带；无 where 不输出该字段（向后兼容——模板引用不存在字段会炸的严格语义反而保证了误用即发现）；data-pipelines.md 补「筛选可追溯」说明；statswhere366 5 断言（+_where 引用 w=level=error / 无 where 无泄漏）；基线 3570→3571。
-（下一版攒着）
-
-## [4.77.0] - 2026-11-22
-
-### Added
-
-- stats where 筛选统计（与 read 同语义——先筛行再统计，少一步中间文件）：stats params 加 where（「列=值」——报错与 read/stats 列检查同文案）；**行掩码同步筛所有列**（数值列与 string 列都对齐——where=level=error 后 avg 只算 error 行、level top=error）；与 window 组合（先 where 后 window——筛选行内取尾 N 行）；无 where 行为不变（向后兼容）；data-pipelines.md 补筛选统计示例；statswhere366 4 断言（avg=700 count=2 top=error/全表兼容/列报错/幂等）；基线 3566→3570。
-- dashboard 信号卡片窗口切换（364 CLI --tail 的 UI 对位——三端窗口语义齐同构）：卡片头加窗口切换组（全部 / 最近 20 / 最近 50，active 高亮）；点击后 __sigWin 全局 + fetch 带 window 参数重新渲染；**30s 刷新保持当前窗口**（不弹回全表）；/api/stats/top-actions 加 window 参数（0/缺省=全表——向后兼容；与 CLI --tail 同 clamp 语义 1-1000）；dashsignal326 9 断言（CDP +3：按钮组渲染/点击切换 __sigWin=20/卡片重渲染；降级 +2 同数）；基线 3564→3566。
-- CLI stats --tail N（最近 N 次窗口视图——与 320 链路 window / 361 分位打通，实时 SLA）：cmdStats 加 --tail N（1-1000，非法值钳到 1——clamp 语义不炸）；窗口内重新统计（分位数/最常用/最慢都是窗口语义）；输出头部「⏱ 窗口视图 最近 N 次」+ --action 单动作视图带窗口标注 + --json 透传 window 字段；无 --tail 行为不变（向后兼容）；statstail364 4 断言（窗口头/兼容/json window/钳位）；基线 3560→3564。
 （下一版攒着）
 
