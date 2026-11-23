@@ -6,6 +6,12 @@
 
 （下一版攒着）
 
+## [5.7.1] - 2026-11-23
+
+### Added
+
+（下一版攒着）
+
 ### Changed
 
 - 抖动治理进度更新（flaky-stats 样本 23 run / 1 失败 = 4.3%——408 第五源修复后连续 0 失败；仍 <40 run 未终判；样本更新随纯文档轮顺手记录，不专门立轮）。
@@ -105,12 +111,5 @@
 
 - stats percol 逐列 ops（复数形态表达力补完——ms 算分位、level 算 top 一条链路搞定）：stats 加 percol 参数（「列名:ops」逗号分隔——逐列覆盖全局 ops；被覆盖列只算覆盖后的 ops）；无 percol 行为不变（向后兼容）；data-pipelines.md 补逐列 ops 示例；statspercol379 3 断言（覆盖 ms 只 median=20/level 只 top=info、兼容、幂等）；基线 3580→3583。
 - where 多值 OR（筛选表达力补完——错误行想同时看 error+warn 不用两次查询）：read/stats/MCP 三面的 where 全部支持多值（「level=error,warn」逗号分隔任一匹配——Set 化比较）；单值行为不变（向后兼容——单值是多值特例）；data-pipelines.md 更新多值语法示例；readwhere360 5 断言（+error,warn → rows=3）/ statswhere366 6 断言（+info,error=全表 count=4）/ mcpstatstool346 8 断言（builtinStats 掩码同步）；基线 3578→3580。
-（下一版攒着）
-
-## [4.86.0] - 2026-11-22
-
-### Added
-
-- MCP zerokit_stats 加 where/window 参数（366/320 语义对 AI 客户端开放——工具面与链路内建步完全同构）：inputSchema 加 where（「列=值」筛选统计）与 window（最近 N 行——先 where 后 window）；builtinStats 支持掩码+窗口（数值列与 string 列同步筛）；CLI cmdTools 元数据同步（331 同源判据——两处 schema 一致）；mcpstatstool346 8 断言（+where avg=500/+window=1/+schema 含新参）；基线 3575→3578。
 （下一版攒着）
 
