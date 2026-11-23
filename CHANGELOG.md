@@ -6,6 +6,12 @@
 
 （下一版攒着）
 
+## [5.8.0] - 2026-11-23
+
+### Added
+
+（下一版攒着）
+
 ### Changed
 
 - 抖动治理进度更新（flaky-stats 样本 27 run / 1 失败 = 3.7%——已逼近 <3% 终判线；408 第五源修复后连续 0 失败；仍 <40 run，下轮有望终判）。
@@ -107,13 +113,5 @@
 ### Added
 
 - export select 写侧选列（append 模式的列级追加——旧文件 10 列只追加 2 列，其余保留旧值）：export 加 select（逗号分隔列名——只写声明的这些列；**select 列不在 columns 声明中报错**）；append 合并语义：select 内的列追加新值，**旧文件多出的列整列保留旧值 + 新行 null 占位**；无 select 行为不变（向后兼容）；data-pipelines.md 补写侧选列示例（与 359 rename 并列）；exportselect384 3 断言（select append a=[1,2]/c 旧值保留/报错）；基线 3583→3586。
-（下一版攒着）
-
-## [4.90.0] - 2026-11-22
-
-### Added
-
-- stats percol 逐列 ops（复数形态表达力补完——ms 算分位、level 算 top 一条链路搞定）：stats 加 percol 参数（「列名:ops」逗号分隔——逐列覆盖全局 ops；被覆盖列只算覆盖后的 ops）；无 percol 行为不变（向后兼容）；data-pipelines.md 补逐列 ops 示例；statspercol379 3 断言（覆盖 ms 只 median=20/level 只 top=info、兼容、幂等）；基线 3580→3583。
-- where 多值 OR（筛选表达力补完——错误行想同时看 error+warn 不用两次查询）：read/stats/MCP 三面的 where 全部支持多值（「level=error,warn」逗号分隔任一匹配——Set 化比较）；单值行为不变（向后兼容——单值是多值特例）；data-pipelines.md 更新多值语法示例；readwhere360 5 断言（+error,warn → rows=3）/ statswhere366 6 断言（+info,error=全表 count=4）/ mcpstatstool346 8 断言（builtinStats 掩码同步）；基线 3578→3580。
 （下一版攒着）
 
