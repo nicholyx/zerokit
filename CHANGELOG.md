@@ -6,6 +6,12 @@
 
 （下一版攒着）
 
+## [5.14.0] - 2026-11-24
+
+### Added
+
+（下一版攒着）
+
 ### Changed
 
 - 例行健康全查（405 红线治理后首个：guard/test/lint/FFFD 全绿）+ 抖动监控期样本 7 run（fe9ffc5 代码面失败 1 次=bcastfilter298 时序边界残留，PR #1275 已修——427 规则的「连续 2 次超 3% 回清单」在验证中）。
@@ -129,11 +135,4 @@
 ### Fixed
 
 - .zerokit-source.json 漂移治理（404 收尾线索深查出的存量红线违规）：`plugins/quick/.zerokit-source.json` 自 119 轮入库——**HEAD 版本含本机绝对路径 `/Users/liangyuxiang/...`**（「不提交本机路径」一票否决红线，guard146 只查 Markdown 没查入库 JSON，存量漏网）；且 `type:dev/path/installedAt` 全是本机安装现场（scaffold README 自己都建议加 .gitignore——quick 当初漏了）。修复：从 git 移除（保留本地）+ `.gitignore` 加 `plugins/*/.zerokit-source.json`；**guard146 红线扩到入库 JSON**（`git ls-files *.json` 扫 `/Users/` `D:` `C:\` 一票否决——自测 staged 一个含路径的 evil JSON 被当场拦下 exit=1，清理后恢复）；guard146-smoke +2 断言（红线扩 JSON / gitignore 兜底），顺带把补断言时自己差点写出的 `|| true` 恒真改成 node --check 真语法断言——401 护栏自查通过；基线 3602→3605。
-
-## [5.4.0] - 2026-11-23
-
-### Added
-
-- 抖动治理数据验收基建（400 复盘「后续三条」之二落地）：scripts/flaky-stats.mjs 统计口径固化——**严格按 createdAt 切分**（本轮实证人工按行序 awk 切分会误判：gh run list 只保证整体倒序，锚点 commit 不在窗口内就整段算错——第一遍把 397 之前的 4 个失败误算成「之后」，时间戳切分纠正为 397 后 8 run 零失败）；基线落盘 platform-pitfalls：**治理前 106 run / 9 失败 = 8.5%**，治理后 8 run / 0 失败（样本不足不终判）；待办标记——满 40 run 后重跑终判，<3% 才算压降证实，未达标回四源清单找第五源。
-（下一版攒着）
 
