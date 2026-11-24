@@ -46,6 +46,15 @@ v4.40.0 aarch64.dmg 实测（macOS arm64 本机）：
 | Info.plist | ✅ 5.6.0 |
 | 包内对照 | 408/409 全为 test/ + scripts/ 改动——资源面预期无 diff（runner.ts 同构核对 ✓，399 语义） |
 
+### 闭环验证：v5.14.1（第四百三十四轮，2026-11-24——changelog-add 规范化发布轮）
+
+| 检查项 | 结果 |
+|---|---|
+| sha256 与 release digest | ✅ 900aa009（前次误读）→ 实际以 digest 为准（两侧一致） |
+| Info.plist | ✅ 5.14.1 |
+| 发布链事故 | 立项时 release-prep 拒发——433 去重后「### Changed」与条目间残留双空行；changelog-add 加写入前规范化（防呆）+ 本体修正后一次通过 |
+| 包内对照 | 433/434 为 chore/fix(scripts)——资源面预期无 diff（runner.ts 数据面符号同构核对 ✓） |
+
 ### 闭环验证：v5.14.0（第四百三十一轮，2026-11-24——例行全查发布轮）
 
 | 检查项 | 结果 |
