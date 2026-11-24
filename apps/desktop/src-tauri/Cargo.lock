@@ -5061,7 +5061,7 @@ dependencies = [
 
 [[package]]
 name = "zerokit-desktop"
-version = "5.15.1"
+version = "5.15.2"
 dependencies = [
  "serde",
  "serde_json",
