@@ -6,6 +6,12 @@
 
 （下一版攒着）
 
+## [5.16.0] - 2026-11-25
+
+### Added
+
+（下一版攒着）
+
 ### Changed
 
 - 抖动治理进度更新（监控期 32 run / 代码面失败 1 = fe9ffc5 那次 bcast 时序残留，PR #1275 已修——修复后连续全绿，「连续 2 次超 3% 回清单」未触发，继续观察）。
@@ -125,14 +131,4 @@
 ### Fixed
 
 - bcastfilter298 时序根因修正（PR #1265 Windows run 抓到 408 修复的边界残留）：节流窗从**服务端第一次广播时刻**起算，测试从**发出**起等固定 3200ms——Windows runner 上 sysinfo 处理可超 1200ms，第二次到达时距第一次广播 <2000ms 仍被丢。改为**等到 filteredBroadcasts ≥1（第一次广播确已发生）再等 2400ms（窗口+20%）**——不靠猜处理耗时；本地连跑 3 次全绿。
-
-## [5.12.0] - 2026-11-24
-
-### Added
-
-（下一版攒着）
-
-### Changed
-
-- CI 并发取消策略评估落地（422 归因的第六源——实为消抖特性非缺陷）：ci.yml 已有 concurrency（group=ref, cancel-in-progress），abandoned 语义即「过时 run 被取消」；**消费侧修正**——release-chain.sh 的 poll 把 abandoned 视为过时继续轮询（真正的 fail 仍硬失败，v1.59.1 防线不变），CI 总览不再因消抖误报 CI-FAIL；六源清单升级（第六源标记为「消抖特性」）+ 判据落 platform-pitfalls。
 
