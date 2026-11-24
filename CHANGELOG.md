@@ -6,6 +6,12 @@
 
 （下一版攒着）
 
+## [5.15.0] - 2026-11-24
+
+### Added
+
+（下一版攒着）
+
 ### Changed
 
 - 依赖周检（416 轮后历经 8 轮发布补检）：audit 官方源 0 vulnerabilities；verify-remote main 对齐（远端确认 ad197a2——v5.14.1 发布后例行）；outdated 无新增。历史表追加。
@@ -125,18 +131,4 @@
 ### Fixed
 
 - 入库现场残留审计（405 红线治理的全仓复核——git ls-files 扫 /Users/liangyuxiang、installedAt、D:\ 全量）：命中全部为合法引用（代码逻辑运行时写入落用户数据目录/帮助文案里的 Windows 示例路径/判据文档事故记录），**真违规 0 处**；405 的 guard146 红线扩入库 JSON 保持现状（按字符串值开头判定不误伤帮助文案）；.zerokit-source.json 已 gitignore 兜底——本机现场残留清零，审计结论落 platform-pitfalls。
-
-## [5.6.0] - 2026-11-23
-
-### Added
-
-（下一版攒着）
-
-
-
-### Fixed
-
-- 抖动第五源修复（flaky-stats 样本 15 run / 1 失败——b98d562 归因）：bcastfilter298 的 demochain 广播被**默认节流 2000ms** 丢弃——测试等 2600ms 后发第二次 tool-call，CI 慢机实际间隔可缩到 <2000ms → B 永远收不到（397 四源清单外的**跨请求节流竞态**）；节流余量 2600→3200ms（>2000 窗口 +50%）；platform-pitfalls 四源清单升级**五源**（标题与表格同步）
-
-- changelog-add 写条目工具（308/405/408 三次「锚点误插已发布段」人工事故的机器化根治）：node scripts/changelog-add.mjs <分类> '条目'——只在 [Unreleased] 段内操作（先切出段再找分类段，绝不匹配已发布版本）；新段按分类顺序插入；占位行自动替换；changelogadd409 4 断言（占位替换/段内新建/旧段不动/追加空行分隔）。
 
