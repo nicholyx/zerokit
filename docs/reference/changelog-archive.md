@@ -2,6 +2,16 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [5.5.0] - 2026-11-23
+
+### Added
+
+（下一版攒着）
+
+### Fixed
+
+- .zerokit-source.json 漂移治理（404 收尾线索深查出的存量红线违规）：`plugins/quick/.zerokit-source.json` 自 119 轮入库——**HEAD 版本含本机绝对路径 `/Users/liangyuxiang/...`**（「不提交本机路径」一票否决红线，guard146 只查 Markdown 没查入库 JSON，存量漏网）；且 `type:dev/path/installedAt` 全是本机安装现场（scaffold README 自己都建议加 .gitignore——quick 当初漏了）。修复：从 git 移除（保留本地）+ `.gitignore` 加 `plugins/*/.zerokit-source.json`；**guard146 红线扩到入库 JSON**（`git ls-files *.json` 扫 `/Users/` `D:` `C:\` 一票否决——自测 staged 一个含路径的 evil JSON 被当场拦下 exit=1，清理后恢复）；guard146-smoke +2 断言（红线扩 JSON / gitignore 兜底），顺带把补断言时自己差点写出的 `|| true` 恒真改成 node --check 真语法断言——401 护栏自查通过；基线 3602→3605。
+
 ## [5.4.0] - 2026-11-23
 
 ### Added
