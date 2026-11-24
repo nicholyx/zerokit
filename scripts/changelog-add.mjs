@@ -43,6 +43,9 @@ if (hi >= 0) {
   seg = seg.slice(0, at) + `\n${head}\n${line}\n` + seg.slice(at);
 }
 // 占位行清理：该段有条目后去掉「（下一版攒着）」
+// 434：规范化——段头与首条目之间只允许一个空行（去重/删除残留的双空行会让
+// release-prep 的「段头紧跟条目」判定失配）
+seg = seg.replace(new RegExp(`(### ${section}\n)\n+(- )`, 'g'), '$1\n$2');
 seg = seg.replace(new RegExp(`(### ${section}\\n\\n)(?:（下一版攒着）\\n\\n?)`), '$1');
 fs.writeFileSync(CL, s.slice(0, start) + seg + s.slice(end));
 console.log(`OK    已插入 [Unreleased] → ${section}（${line.slice(0, 40)}…）`);
