@@ -6,6 +6,12 @@
 
 （下一版攒着）
 
+## [5.15.5] - 2026-11-24
+
+### Added
+
+（下一版攒着）
+
 ### Changed
 
 - 抖动治理进度更新（监控期 29 run / 代码面失败 1 = fe9ffc5 那次 bcast 时序残留，PR #1275 已修——修复后连续全绿，「连续 2 次超 3% 回清单」未触发，继续观察）。
@@ -125,14 +131,4 @@
 ### Changed
 
 - CI 并发取消策略评估落地（422 归因的第六源——实为消抖特性非缺陷）：ci.yml 已有 concurrency（group=ref, cancel-in-progress），abandoned 语义即「过时 run 被取消」；**消费侧修正**——release-chain.sh 的 poll 把 abandoned 视为过时继续轮询（真正的 fail 仍硬失败，v1.59.1 防线不变），CI 总览不再因消抖误报 CI-FAIL；六源清单升级（第六源标记为「消抖特性」）+ 判据落 platform-pitfalls。
-
-## [5.11.0] - 2026-11-23
-
-### Added
-
-（下一版攒着）
-
-### Changed
-
-- 抖动治理进度更新（flaky-stats 样本 33 run / 1 失败 = 3.0%——正好贴 <3% 终判线，差 7 run 满 40；408 第五源修复后连续 0 失败）。
 
