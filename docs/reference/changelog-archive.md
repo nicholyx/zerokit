@@ -2,6 +2,16 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [5.13.0] - 2026-11-24
+
+### Added
+
+（下一版攒着）
+
+### Changed
+
+- 抖动治理监控周期启动（426 终判后新周期从终判 PR merge 2026-11-23T22:22Z 起从零累计）：首检 1 run / 代码面 0 失败；监控命令 node scripts/flaky-stats.mjs 2026-11-23T22:22:04Z 落 platform-pitfalls——代码面连续 2 次超 3% 即回五源清单复盘，平台面 cancelled 持续剔除不计入。
+
 ## [5.12.1] - 2026-11-24
 
 ### Added
