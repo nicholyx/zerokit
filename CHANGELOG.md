@@ -6,6 +6,10 @@
 
 （下一版攒着）
 
+### Fixed
+
+- mcp-smoke 二波③ search 慢盘抖动重试（v5.20.0 release Windows CI 偶发 37/38：collectTools 一次读插件目录不完整→hits=0 输出「命中 0」，同 run --json 断言独立调用即过——纯抖动；本地三连跑全绿；加一次重试，373 stdio 探针同判据）。
+
 ## [5.20.0] - 2026-11-25
 
 ### Added

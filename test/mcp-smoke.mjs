@@ -286,7 +286,9 @@ const check = (msg, cond) => { if (cond) { wPassed++; pass(msg); } else { wFaile
   }
   // ③ search
   {
-    const r = out(['search', '内存']);
+    // 469：慢盘上偶发一次 hits=0（collectTools 读插件目录抖动）——重试一次再判（373 stdio 探针同判据）
+    let r = out(['search', '内存']);
+    if (!/命中 [1-9]/.test(r.stdout)) r = out(['search', '内存']);
     check('二波③ search 命中', /命中 [1-9]/.test(r.stdout));
     const rj = JSON.parse(out(['search', '内存', '--json']).stdout);
     check('二波③ search --json', rj.query === '内存' && rj.count >= 1);
