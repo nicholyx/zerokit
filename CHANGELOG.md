@@ -6,6 +6,10 @@
 
 （下一版攒着）
 
+### Changed
+
+- 依赖周检（435 轮后例行）：audit 官方源 0 vulnerabilities；verify-remote main 对齐（远端确认 0526403——v5.18.1 发布后例行）；outdated 无新增。新监控期进度 18 run / 修复后全绿。历史表追加。
+
 ## [5.18.1] - 2026-11-25
 
 ### Added
