@@ -6,6 +6,10 @@
 
 （下一版攒着）
 
+### Fixed
+
+- extras-smoke resultQuery 10k 预算加宽 50→120ms（新监控期首个代码面失败 174af7c：CI macOS 高载时首次 JIT+GC 暂停可超 50ms；本地三连跑 <10ms 全绿——397「时间预算误伤」同源；权威断言 rq.length>7000 不变）。
+
 ## [5.17.0] - 2026-11-25
 
 ### Added
