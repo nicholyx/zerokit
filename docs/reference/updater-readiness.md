@@ -46,6 +46,15 @@ v4.40.0 aarch64.dmg 实测（macOS arm64 本机）：
 | Info.plist | ✅ 5.6.0 |
 | 包内对照 | 408/409 全为 test/ + scripts/ 改动——资源面预期无 diff（runner.ts 同构核对 ✓，399 语义） |
 
+### 闭环验证：v5.20.0（第四百六十九轮，2026-11-25——监控条目发布轮 + search 抖动修复）
+
+| 检查项 | 结果 |
+|---|---|
+| sha256 与 release digest | ✅ （两侧一致） |
+| Info.plist | ✅ 5.20.0 |
+| 发布链 | release PR 的 Windows CI 一次 mcp-smoke 37/38（二波③ search——collectTools 慢盘偶发一次 hits=0，同 run --json 独立调用即过）——PR #1378 加重试后 main（26502a8）全绿做健康证据 |
+| 包内对照 | 468 纯 docs 改动——资源面预期无 diff（runner.ts 数据面符号同构核对 ✓） |
+
 ### 闭环验证：v5.19.1（第四百六十七轮，2026-11-25——监控条目发布轮）
 
 | 检查项 | 结果 |
