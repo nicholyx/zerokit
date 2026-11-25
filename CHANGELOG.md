@@ -6,6 +6,10 @@
 
 （下一版攒着）
 
+### Changed
+
+- 第三监控周期进度更新（6 run / 代码面 0 失败：cf4f83a 整体 fail 为 macos 平台面 cancelled——非聚合 job 全 cancelled、剔分不计，「连续 2 次超 3% 回清单」未触发）。
+
 ## [5.23.0] - 2026-11-26
 
 ### Added
