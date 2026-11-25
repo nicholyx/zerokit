@@ -1288,7 +1288,10 @@ console.log('\n' + '='.repeat(60));
   const rq = resultQuery(rows, 'size>100');
   const rqMs = performance.now() - t0;
   // size = i%500 > 100 → 每轮 500 里有 399 行合格，10 轮 = 3990…不对：i%500∈[0,499]，>100 的有 399 个值；10 行共享同 size……实际 count 见运行
-  results.push(['resultQuery 10k 数字比较 <50ms', rqMs < 50 && rq.length > 7000]);
+  // 458：50→120ms——CI macOS runner 高载时首次 JIT+GC 暂停可超 50ms（174af7c run 实证 354/355）；
+  // 本地三连跑 <10ms 全绿，纯预算类抖动（397 判据「时间预算误伤」同源）——加宽而非降级，
+  // 权威断言 rq.length>7000 不变
+  results.push(['resultQuery 10k 数字比较 <120ms', rqMs < 120 && rq.length > 7000]);
 }
 
 
