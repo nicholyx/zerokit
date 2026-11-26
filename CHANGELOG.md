@@ -6,6 +6,12 @@
 
 （下一版攒着）
 
+## [5.34.0] - 2026-11-27
+
+### Added
+
+（下一版攒着）
+
 ### Fixed
 
 - actionlint 下载 504 抖动修复（第四监控周期首个代码面失败 3d0aedd：工作流静态检查 job 的 actionlint 从 GitHub releases CDN 下载遇 504→tar 断流 exit 2——纯网络抖动非 YAML 问题；安装步骤加三层防护：curl --retry 3 --retry-all-errors + 外层 3 次退避 10/20/30s + 落盘再解压）。
@@ -119,14 +125,4 @@
 ### Changed
 
 - 第三监控周期进度更新（15 run / 代码面 0 失败：仅 cf4f83a 平台面 cancelled 剔分不计——「连续 2 次超 3% 回清单」未触发）。
-
-## [5.24.1] - 2026-11-26
-
-### Added
-
-（下一版攒着）
-
-### Changed
-
-- 第三监控周期进度更新（12 run / 代码面 0 失败：仅 cf4f83a 平台面 cancelled 剔分不计——「连续 2 次超 3% 回清单」未触发）。
 
