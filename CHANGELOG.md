@@ -6,6 +6,10 @@
 
 （下一版攒着）
 
+### Fixed
+
+- actionlint 下载 504 抖动修复（第四监控周期首个代码面失败 3d0aedd：工作流静态检查 job 的 actionlint 从 GitHub releases CDN 下载遇 504→tar 断流 exit 2——纯网络抖动非 YAML 问题；安装步骤加三层防护：curl --retry 3 --retry-all-errors + 外层 3 次退避 10/20/30s + 落盘再解压）。
+
 ## [5.33.0] - 2026-11-27
 
 ### Added
