@@ -122,6 +122,7 @@
 | 505 轮第四周期启动 | 新周期从 c7cd44a（2026-11-26T12:09Z）从零累计 | 0 | 首读 4 run / 代码面 0 失败——开局干净；监控命令 `node scripts/flaky-stats.mjs 2026-11-26T12:09:10Z`（规则不变） |
 | 507 轮第四周期更新 | 7 run | 0 | **代码面 0 失败——「连续 2 次」未触发** |
 | 511 轮第四周期更新 | 13 run | 1（3d0aedd=**actionlint CDN 504**，509 已加重试+退避） | 修复后后续 run 全绿，「连续 2 次」未触发 |
+| 513 轮第四周期更新 | 16 run | 1（仍为 3d0aedd 那一次——**修复后后续 run 持续全绿**） | 6.3%（含该次失败；修复后子样本 0%）——「连续 2 次」未触发 |
 
 **终判口径修正（425 轮，已固化进 flaky-stats 脚本）**：整体失败率被 GitHub 平台面 cancelled 污染（33d4998：macos job 三次 attempt 日志 blob 均 BlobNotFound = 从未启动，rerun 无效，下一 commit 即绿）——flaky-stats 现自动剔分（非 success 的非聚合 job 全是 cancelled → 平台面；**聚合 job「CI 总览」被排除**——它会被子 job cancelled 连带判 failure）。当前 39 run：代码面失败 1（2.6%，即 b98d562=第五源，408 修复后 0）· 平台面 1（不计入）。判据：三 attempt 无日志 blob 即平台面，**不要无限 rerun**（423 轮实证）；下一 commit 的 run 做健康证据。
 
