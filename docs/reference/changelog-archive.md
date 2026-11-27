@@ -2,6 +2,16 @@
 
 > 早期版本的全部条目。近期版本见根目录 [CHANGELOG.md](../../CHANGELOG.md)。
 
+## [5.36.1] - 2026-11-27
+
+### Added
+
+（下一版攒着）
+
+### Changed
+
+- 依赖周检（464 轮后历经多轮发布补检）：audit 官方源 0 vulnerabilities；verify-remote main 对齐（远端确认 0573a13——v5.35.1 发布后例行）；outdated 无新增。历史表追加。
+
 ## [5.36.0] - 2026-11-27
 
 ### Added
