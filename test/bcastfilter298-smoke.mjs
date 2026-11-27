@@ -54,10 +54,12 @@ check('③ sysinfo 被过滤（B 不收 tool-call）', !(bText.includes('sysinfo
 // 改为「等到第一次广播确已发生（filteredBroadcasts ≥1）再等满窗口」——不靠猜处理耗时。
 // 428：循环扩到 60×500=30s——广播发生在 tool 执行完成后（mcp.ts L679-686），
 // Windows 慢机上 sysinfo 全量扫描可超 12s（40×300 原窗口）——超时即回到 426 前的老 bug
-for (let i = 0; i < 60; i++) {
+// 534：窗口 30s→120s（150×800ms）——Windows CI 全量挤兑时 sysinfo 执行可 > 30s
+// （422/469/534 三次同断言失败实证：信号等待窗口本身不足）；800ms 粒度减轮询请求压力
+for (let i = 0; i < 150; i++) {
   const snap = await fetch(`http://127.0.0.1:${PORT}/mcp/sessions`, { headers: { 'x-zerokit-token': TOKEN } }).then((r) => r.json()).catch(() => ({}));
   if ((snap.filteredBroadcasts ?? 0) >= 1) break;
-  await new Promise((r) => setTimeout(r, 500));
+  await new Promise((r) => setTimeout(r, 800));
 }
 await new Promise((r) => setTimeout(r, 2400));  // 节流窗 2000ms + 20% 余量（从广播时刻起算）
 await fetch(BASE, { method: 'POST', headers: { ...H, 'mcp-session-id': A.sid }, body: JSON.stringify({ jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'demochain__gen', arguments: {} } }) });
