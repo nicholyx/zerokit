@@ -61,10 +61,14 @@ for (let i = 0; i < 150; i++) {
   if ((snap.filteredBroadcasts ?? 0) >= 1) break;
   await new Promise((r) => setTimeout(r, 800));
 }
+// 556：③ 的等待窗口 20×400=8s 在 Windows 全量挤兑下不够（556-PR1603 第 4 次同断言偶发实证——
+// demochain__gen 的执行+广播在挤兑时可 > 8s）。扩到 75×400=30s。
+// 注意：2400ms 节流等待必须保留——sysinfo 与 demochain 广播同为 notifications/message，
+// 共享 lastBroadcast 节流键（mcp.ts L803），删掉它 demochain 广播会被节流丢弃（本地三连实证）。
 await new Promise((r) => setTimeout(r, 2400));  // 节流窗 2000ms + 20% 余量（从广播时刻起算）
 await fetch(BASE, { method: 'POST', headers: { ...H, 'mcp-session-id': A.sid }, body: JSON.stringify({ jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'demochain__gen', arguments: {} } }) });
 let hit = false;
-for (let i = 0; i < 20; i++) {
+for (let i = 0; i < 75; i++) {
   if (bText.includes('demochain__gen') && bText.includes('tool-call')) { hit = true; break; }
   await new Promise((r) => setTimeout(r, 400));
 }
