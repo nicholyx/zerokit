@@ -14,3 +14,4 @@ apps/desktop/src-tauri/target/
 # tauri-build 自己生成的只有 gen/schemas/：
 apps/desktop/src-tauri/gen/schemas/
 .cdp-profile-*/
+zerokit-功能总览/
